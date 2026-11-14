@@ -70,6 +70,8 @@ if (-not $SkipCooked) {
     & powershell -ExecutionPolicy Bypass -File (Join-Path $PackageTree 'scripts\package.ps1') -Configuration Development | Select-Object -Last 3
     if ($LASTEXITCODE -ne 0) { throw 'package failed' }
     Push-Location $PackageTree; try { if (git status --porcelain) { throw 'the package tree changed during the package build' } } finally { Pop-Location }
+    # The static dependency check: every DLL the shipped binaries need, shipped or part of Windows.
+    & python (Join-Path $PSScriptRoot 'dep-check.py') (Join-Path $PackageTree 'Saved\Package\Windows') (Join-Path $PackageTree 'Saved\Package\dependencies.md')
     # The cooked gate: Dragon and Ocean Drive in the cooked game, the shader and name checks.
     & powershell -ExecutionPolicy Bypass -File (Join-Path $PackageTree 'scripts\release-test.ps1') -Cooked -ShowWindow -Cases 'cooked-drive' | Select-Object -Last 5
     # One timed quiet run: the cooked Dragon drive again, its report must say quiet (no other load).
