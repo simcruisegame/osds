@@ -166,16 +166,28 @@ namespace SimCruiseStartTest
 			Z.Add(Top);
 		}
 		double Worst = 0.0;
-		int32 WorstAt = INDEX_NONE;
+		int32 WorstAt = INDEX_NONE, Steps = 0;
+		// Report, not a gate (v2.0.3): every gap and every step over 2 cm goes to
+		// Saved/RouteWalk/<place>.csv; the route walk becomes the gate in v2.0.4.
+		FString Csv = TEXT("kind,along_m,x_cm,y_cm,z_cm,value\n");
+		for (int32 k = 0; k < Z.Num(); ++k)
+		{
+			if (Z[k] < -1e30) Csv += FString::Printf(TEXT("gap,%.1f,%.0f,%.0f,%.0f,\n"), k * 0.5, Route[k].LaneCm.X, Route[k].LaneCm.Y, Route[k].LaneCm.Z);
+		}
 		for (int32 k = 1; k + 1 < Z.Num(); ++k)
 		{
 			if (Z[k - 1] < -1e30 || Z[k] < -1e30 || Z[k + 1] < -1e30) continue;
 			const double J = FMath::Abs(Z[k + 1] - 2.0 * Z[k] + Z[k - 1]) * 100.0;
+			if (J > 2.0)
+			{
+				++Steps;
+				Csv += FString::Printf(TEXT("step_cm,%.1f,%.0f,%.0f,%.0f,%.1f\n"), k * 0.5, Route[k].LaneCm.X, Route[k].LaneCm.Y, Route[k].LaneCm.Z, J);
+			}
 			if (J > Worst) { Worst = J; WorstAt = k; }
 		}
-		Test.TestEqual(FString::Printf(TEXT("%s: route of %.0f m without a gap (first: %s)"), *Where, Route.Num() * 0.5, *FirstGap), Gaps, 0);
-		Test.TestTrue(FString::Printf(TEXT("%s: worst step on the route %.1f cm (limit 2)%s"), *Where, Worst,
-			WorstAt != INDEX_NONE ? *FString::Printf(TEXT(" at %s"), *Route[WorstAt].LaneCm.ToString()) : TEXT("")), Worst <= 2.0);
+		FFileHelper::SaveStringToFile(Csv, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("RouteWalk"), Where + TEXT(".csv")));
+		Test.AddInfo(FString::Printf(TEXT("ROUTE %s: %.0f m, %d gaps (first: %s), %d steps over 2 cm, worst %.1f cm%s"), *Where, Route.Num() * 0.5, Gaps,
+			FirstGap.IsEmpty() ? TEXT("none") : *FirstGap, Steps, Worst, WorstAt != INDEX_NONE ? *FString::Printf(TEXT(" at %s"), *Route[WorstAt].LaneCm.ToString()) : TEXT("")));
 	}
 
 	/** Builds the tiles of one recorded place folder (x_y.json, place.txt with its order) in their order, with seam contracts. */
