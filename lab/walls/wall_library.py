@@ -1,4 +1,4 @@
-"""The wall and roof library (scan contract GENR, v2.0.4): photographs of US wall and roof materials made
+﻿"""The wall and roof library (scan contract GENR, v2.0.4): photographs of US wall and roof materials made
 once, offline, on the development PC's GPU, with Stable Diffusion XL base 1.0 (CreativeML Open RAIL++-M:
 use allowed under its use restrictions; Stability AI claims no rights in the output). No runtime GPU:
 the game ships the textures, and per building the scan picks a key (material, style, region, era, use)
@@ -62,6 +62,9 @@ ENTRIES = [
     # Metal.
     ("wall", "metal", "corrugated_galvanized", "corrugated galvanized steel wall, vertical ribs, light rust stains", "rural,farm,industrial", "1900-2025"),
     ("wall", "metal", "ribbed_panel_painted", "painted ribbed steel wall panel, R-panel profile, light grey", "industrial,farm", "1970-2025"),
+    # Glass and storefront (offices, retail ground floors).
+    ("wall", "glass", "curtain_wall", "modern glass curtain wall, blue-green tinted panes in a grid of aluminium mullions, no reflections of objects", "city", "1960-2025"),
+    ("wall", "glass", "storefront", "shop front of large glass panes in dark aluminium frames, with a low brick base below", "all", "1950-2025"),
     # Roofs.
     ("roof", "shingle", "asphalt_3tab", "grey three-tab asphalt shingle roof, granular surface, straight courses", "all", "1950-2000"),
     ("roof", "shingle", "asphalt_architectural", "dark weathered-wood architectural asphalt shingle roof, layered tabs", "all", "1990-2025"),
@@ -88,6 +91,13 @@ ENTRIES = [
 ]
 SEED0 = 20261115
 
+# Building uses each wall material is typical for (the scan matches them with NSI occupancy and OSM building=*).
+USES = {"brick": "house,apartments,retail,office,civic,religious,industrial", "stucco": "house,apartments,retail,office",
+        "siding": "house,apartments,farm,garage", "log": "house,farm", "concrete": "retail,office,industrial,civic,garage",
+        "stone": "house,civic,religious", "metal": "industrial,farm,garage,retail", "glass": "office,retail"}
+# NSI construction classes (bldgtype) each material belongs to: W wood, M masonry, C concrete, S steel, H manufactured.
+NSI = {"brick": "M", "stucco": "W,M", "siding": "W,H", "log": "W", "concrete": "C,M", "stone": "M", "metal": "S", "glass": "S,C"}
+
 
 def records():
     out = []
@@ -95,7 +105,9 @@ def records():
         common = {"wall": WALL, "roof": ROOF, "ground": GROUND}[surface]
         out.append({"index": i, "key": f"{surface}/{material}/{style}", "surface": surface, "material": material, "style": style,
                     "regions": regions.split(","), "era": era, "prompt": f"{subject}, {common}", "seed": SEED0 + i,
-                    "tint": "neutral" if material in ("stucco", "siding") and "natural" not in style else "natural"})
+                    "tint": "neutral" if material in ("stucco", "siding") and "natural" not in style else "natural",
+                    "uses": USES.get(material, "").split(",") if surface == "wall" else [],
+                    "nsi_bldgtype": NSI.get(material, "").split(",") if surface == "wall" else []})
     return out
 
 
