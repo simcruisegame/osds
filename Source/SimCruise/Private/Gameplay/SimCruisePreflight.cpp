@@ -842,6 +842,7 @@ void ASimCruisePreflight::MeasureTick(ASimCruisePlayerController* Player, float 
 		double Lon = 0.0, Lat = 0.0;
 		if (Stream) Stream->GetFrame().WorldCmToLonLat(CarCm, Lon, Lat);
 		SurfaceLatLon.Add(FVector2d(Lat, Lon));
+		Review.SetPosition(Lat, Lon, Pawn->GetActorRotation().Yaw, PathM);
 	}
 	OffRoadNow = bUnderRoad ? 0.f : OffRoadNow + DeltaSeconds;
 	Stats.OffRoadSeconds = FMath::Max(Stats.OffRoadSeconds, OffRoadNow);
