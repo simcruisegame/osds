@@ -57,6 +57,14 @@ The owner's criteria for v2.0.3 (2026-11-14, 23:31Z): the whole game looks as re
 - **The owner's faults.** Every fault the owner reported in this release, with the frame from the same spot and view after the fix, side by side with the owner's own frame (rule 8 of "How we look").
 - **Early reviews.** Each candidate branch that turns green gets the new-method review early, visible, traffic off (release-10 for the look; release-11 for the bridges), so the final test finds few new faults.
 
+**The installer gate** (the owner, 2026-11-14: "someone can download the installer from github on any pc and it installs the game and dependencies and they can play it"), after the cooked package (part 13, about 60 min):
+
+1. Build the installer from the cooked Shipping package (`package.ps1 -Configuration Shipping -Zip`, `installer.ps1`).
+2. Test it on the cleanest Windows we can get on this PC: Windows Sandbox if the feature is on (`Get-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM`, an elevated query; nobody turns a Windows feature on without asking, it can need a restart), else a new local Windows user with no Unreal, no developer tools and no game data.
+3. As a user would: take the installer file under its GitHub name from a local copy (no release page), install, first start, the dependency steps (the Visual C++ runtime, DirectX, any first-run map or model download), drive one place with the controller, quit, uninstall.
+4. Check what the uninstall leaves: only the saved preferences may stay (name them); list every other file left under `Program Files`, `%LOCALAPPDATA%\SimCruise` and the Start menu.
+5. Write an honest minimum PC (GPU, video memory, RAM, disk, Windows version, internet for the map data), what happens below it (a clear message, or a crash), and what we could not test (AMD and Intel GPUs, Windows 10 against 11, no internet).
+
 About 7 hours from the GO, most of it GPU time on one PC; other lanes' GPU work waits (`C:\aiwork\GPU-BUSY`, `GPU-QUEUE`). A P1 in parts 2-6 stops the cooked part until the owner decides. The report has a summary, the per-team reports, the review md with its tables, and `known-faults.md`.
 
 ## A re-test
