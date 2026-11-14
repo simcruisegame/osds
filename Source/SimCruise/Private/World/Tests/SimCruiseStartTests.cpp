@@ -121,6 +121,61 @@ namespace SimCruiseStartTest
 		const FVector2d Road = R.St[P.Station].T * static_cast<double>(P.Dir);
 		const double Error = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector2d::DotProduct(Road, Fwd), -1.0, 1.0)));
 		Test.TestTrue(FString::Printf(TEXT("%s: heading %.1f degrees off the road (< 5)"), *Where, Error), Error < 5.0);
+		// The drive judge's own edge (ASimCruisePreflight's nearest aligned line and its half width,
+		// docs/team/release-test.md "The drive judge: road edge and run-off"): the car's middle 1.5 m
+		// inside, on the start's own ribbon.
+		int32 JudgeTile = INDEX_NONE, JudgeRibbon = INDEX_NONE;
+		const double Past = SimCruiseStartPick::JudgePastEdgeM(Tiles, P.LocationCm, P.Rotation.Yaw, &JudgeTile, &JudgeRibbon);
+		Test.TestTrue(FString::Printf(TEXT("%s: %.2f m past the judge's edge (<= -1.5)"), *Where, Past), Past <= -1.5 + 1e-3);
+		Test.TestTrue(FString::Printf(TEXT("%s: the judge's line is the start's road"), *Where), JudgeTile == P.Tile && JudgeRibbon == P.Ribbon);
+	}
+
+	/**
+	 * The drive robot's route from a start (its own rule), 800 m or to a dead end, walked every
+	 * 0.5 m in its lane over the drawn road: no gap (no road face, or one 0.5 m off the lane) and no
+	 * step (the top's second difference) over 2 cm.
+	 */
+	void WalkRoute(FAutomationTestBase& Test, const FString& Where, const TArray<FSimCruiseStartTile>& Tiles, const FSimCruiseStartPose& P)
+	{
+		const TArray<SimCruiseStartPick::FRouteSample> Route = SimCruiseStartPick::RouteSamples(Tiles, P, 800.0, 0.5);
+		TMap<int32, TSharedPtr<SimCruiseRoadCheck::FTopSurface>> Tops;
+		TArray<double> Z;
+		int32 Gaps = 0;
+		FString FirstGap;
+		for (const SimCruiseStartPick::FRouteSample& S : Route)
+		{
+			// The tile under the sample (a lane near a seam may lie in the next tile).
+			double Top = 0.0;
+			bool bFace = false;
+			for (int32 t = 0; t < Tiles.Num() && !bFace; ++t)
+			{
+				const FVector2d L((S.LaneCm.X - Tiles[t].OriginCm.X) / 100.0, (S.LaneCm.Y - Tiles[t].OriginCm.Y) / 100.0);
+				if (!Tiles[t].Build || L.X < 0.0 || L.Y < 0.0 || L.X > Tiles[t].Build->TileSizeM || L.Y > Tiles[t].Build->TileSizeM) continue;
+				TSharedPtr<SimCruiseRoadCheck::FTopSurface>& G = Tops.FindOrAdd(t);
+				if (!G.IsValid()) G = MakeShared<SimCruiseRoadCheck::FTopSurface>(*Tiles[t].Build);
+				double H = 0.0;
+				// A deck more than 1 m over the lane is a bridge across, not this road.
+				if (G->Top(L, H) && H - S.LaneCm.Z / 100.0 < 1.0) { Top = H; bFace = true; }
+			}
+			if (!bFace || FMath::Abs(Top - S.LaneCm.Z / 100.0) > 0.5)
+			{
+				if (Gaps++ == 0) FirstGap = FString::Printf(TEXT("%s (%s)"), *S.LaneCm.ToString(), bFace ? *FString::Printf(TEXT("road %.2f m off the lane"), Top - S.LaneCm.Z / 100.0) : TEXT("no road face"));
+				Z.Add(TNumericLimits<double>::Lowest());
+				continue;
+			}
+			Z.Add(Top);
+		}
+		double Worst = 0.0;
+		int32 WorstAt = INDEX_NONE;
+		for (int32 k = 1; k + 1 < Z.Num(); ++k)
+		{
+			if (Z[k - 1] < -1e30 || Z[k] < -1e30 || Z[k + 1] < -1e30) continue;
+			const double J = FMath::Abs(Z[k + 1] - 2.0 * Z[k] + Z[k - 1]) * 100.0;
+			if (J > Worst) { Worst = J; WorstAt = k; }
+		}
+		Test.TestEqual(FString::Printf(TEXT("%s: route of %.0f m without a gap (first: %s)"), *Where, Route.Num() * 0.5, *FirstGap), Gaps, 0);
+		Test.TestTrue(FString::Printf(TEXT("%s: worst step on the route %.1f cm (limit 2)%s"), *Where, Worst,
+			WorstAt != INDEX_NONE ? *FString::Printf(TEXT(" at %s"), *Route[WorstAt].LaneCm.ToString()) : TEXT("")), Worst <= 2.0);
 	}
 
 	/** Builds the tiles of one recorded place folder (x_y.json, place.txt with its order) in their order, with seam contracts. */
@@ -219,6 +274,7 @@ bool FSimCruiseStartRecordedTest::RunTest(const FString& Parameters)
 			const TArray<FSimCruiseStartPose> Picks = SimCruiseStartPick::Candidates(Tiles, FString(), StartCm, 900.0, 1e10, 1);
 			if (!TestTrue(FString::Printf(TEXT("%s: a start"), *Place), Picks.Num() > 0)) continue;
 			SimCruiseStartTest::CheckStart(*this, Place, Tiles, Picks[0]);
+			SimCruiseStartTest::WalkRoute(*this, Place, Tiles, Picks[0]);
 			++Starts;
 		}
 	}
