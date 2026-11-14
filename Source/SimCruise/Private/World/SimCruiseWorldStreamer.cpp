@@ -65,7 +65,8 @@ void ASimCruiseWorldStreamer::BeginPlay()
 	Atlas = MakeShared<FSimCruiseAtlasClient, ESPMode::ThreadSafe>(Config);
 	Inbox = MakeShared<FInbox, ESPMode::ThreadSafe>();
 	// Moving traffic: scenery and obstacles, so drawn runs only (headless checks keep the roads empty).
-	if (FApp::CanEverRender() && GetWorld())
+	// Out of the game for now: no traffic actor, no traffic cars, no cost per frame.
+	if (ASimCruiseTraffic::IsEnabled() && FApp::CanEverRender() && GetWorld())
 	{
 		FActorSpawnParameters Params;
 		Params.ObjectFlags |= RF_Transient;
