@@ -24,7 +24,8 @@ namespace
 	// The pixel belongs to the nearest mirror; the glass is that plane (or sphere), not the
 	// model's own surface, so the view is the one a driver who set the mirrors sees.
 	// Fwd/Right/Up: the capture camera's axes; TanHalf: tan of half its horizontal field of
-	// view; Aspect: width / height. The silvering reflects about 85 %, without colour.
+	// view; Aspect: width / height. Silvering about 85 % behind glass; shown at 70 % (the main view is
+	// exposed for the cabin, so the glass read too bright: release review 2026-11-14).
 	const TCHAR* MirrorCode = TEXT(R"HLSL(
 float3 n = normalize(N);
 if (dot(n, V) < 0.0) n = -n;
@@ -50,10 +51,10 @@ if (HasCapture > 0.5 && z > 0.05)
 	uv = float2(0.5 + 0.5 * uv.x, 0.5 - 0.5 * uv.y * Aspect);
 	if (all(uv > 0.0) && all(uv < 1.0))
 	{
-		col = Texture2DSampleLevel(Tex, TexSampler, uv, 0).rgb;
+		col = Texture2DSample(Tex, TexSampler, uv).rgb; // mip-mapped: a small glass no longer aliases
 	}
 }
-return col * 0.85;
+return col * 0.7; // silvered glass about 85 %, and a driver adapted to the shaded cabin
 )HLSL");
 }
 
