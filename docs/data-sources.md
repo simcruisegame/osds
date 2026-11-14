@@ -12,7 +12,7 @@ The table lists what the map helper (`helper/atlas.mjs`, shipped as `tools/atlas
 | Ground elevation | Mapzen/Tilezen Terrarium tiles; USGS 3DEP 1/3-arc-second and 1 m products (The National Map) | US public domain | At runtime |
 | Aerial imagery | USGS The National Map imagery; USDA NAIP (Hawaii, low-vegetation detection); USDA Forest Service Alaska orthophotos | US public domain | At runtime; offline-start imagery bundled |
 | Recent surface colour | Copernicus Sentinel-2 L2A via Element 84 Earth Search | Copernicus Sentinel data terms (free, attribution) | At runtime, optional |
-| Tree canopy heights | WRI/Meta High Resolution Canopy Height Maps v2 | CC BY 4.0 | At runtime |
+| Tree canopy heights | WRI/Meta High Resolution Canopy Height Maps v2 (CHMv2); the helper reads one 512-pixel block per zoom-16 cell straight from the public AWS bucket `dataforgood-fb-data` (`forests/v2/global/dinov3_global_chm_v2_ml3/`, no account), one request at a time, cached 365 days; crowns are segmented from it (`canopy --segment`) | CC BY 4.0 | At runtime |
 | Forest type, shrub cover | USGS/USDA LANDFIRE EVT; MRLC NLCD and RCMAP; USDA Rangeland Analysis Platform | US public domain | At runtime |
 | City street trees | City of Lincoln NE and City of Cambridge MA inventories | City open-data terms; PDDL 1.0 (Cambridge) | At runtime |
 | Building heights, roofs, extra footprints | Overture Maps buildings (OSM, Microsoft ML, Esri Community Maps); Esri's OSM North America replica | ODbL 1.0; CC BY 4.0 for Esri entries | At runtime |
