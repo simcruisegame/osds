@@ -5,7 +5,8 @@
 # in Saved (not in git).
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\record-start-places.ps1 [-Only key,key]
-param([string[]]$Only = @())
+# ... -Place us-bigsur-ca,36.3715,-121.9019   (one place not in the list, e.g. Bixby Bridge)
+param([string[]]$Only = @(), [string]$Place = '')
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $Out = Join-Path $Root 'Saved\StartPlaces'
@@ -13,6 +14,7 @@ $Cache = Join-Path $env:LOCALAPPDATA 'SimCruise\map-cache'
 $Bun = (Get-Command bun -ErrorAction SilentlyContinue).Source
 if (-not $Bun) { throw 'bun is not on PATH (the map helper runs on it)' }
 $Places = Get-Content (Join-Path $Root 'data\test-places.json') -Raw | ConvertFrom-Json
+if ($Place) { $k, $a, $o = $Place.Split(','); $Places = @([pscustomobject]@{ key = $k; lat = $a; lon = $o }); $Only = @() }
 foreach ($P in $Places) {
     if ($Only.Count -gt 0 -and $Only -notcontains $P.key) { continue }
     $Lat = [double]$P.lat; $Lon = [double]$P.lon

@@ -1042,6 +1042,9 @@ bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 	TArray<FString> Roots = { FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces")) };
 	const FString Probe = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_PROBE_DIR"));
 	if (!Probe.IsEmpty()) Roots.Add(Probe);
+	// SIMCRUISE_PLACES=us-detroit-mi,us-doraville-ga: only those places.
+	TArray<FString> Only;
+	FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_PLACES")).ParseIntoArray(Only, TEXT(","), true);
 	FString Md = TEXT("# Bridge spans changed by the clearance rule\n\nOne line per span: lifted (to the clearance shown) or de-decked (no parapets; the roads join). Tile/ribbon stand in for the way id, which the tile data does not carry.\n");
 	int32 NumPlaces = 0, Faults = 0, Spans = 0;
 	for (const FString& Root : Roots)
@@ -1050,6 +1053,7 @@ bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 		IFileManager::Get().FindFiles(Dirs, *FPaths::Combine(Root, TEXT("*")), false, true);
 		for (const FString& Place : Dirs)
 		{
+			if (Only.Num() > 0 && !Only.Contains(Place)) continue;
 			FSimCruiseWorldFrame Frame;
 			TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
 			FVector StartCm;
