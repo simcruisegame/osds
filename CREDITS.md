@@ -23,18 +23,18 @@ Licences were checked at each maker's own page on 14 November 2026.
 Some licences need the credit where the player sees the data, not only in a file. The game shows:
 
 - **On the map and in the route planner:** "© OpenStreetMap contributors" in the corner of each map (`SimCruiseAtlasUI.cpp`, `SimCruiseRoutePlanner.cpp`).
-- **On the road atlas page:** one line that names OpenStreetMap (ODbL), OpenFreeMap and OpenMapTiles, Photon, USGS 3DEP and Mapzen, USGS NAIP and The National Map, the WRI and Meta canopy height map (CC BY 4.0), Overture Maps, and "full list in DATA-SOURCES.md".
+- **On the road atlas page:** one line that names OpenStreetMap (ODbL), OpenFreeMap and OpenMapTiles, Photon, USGS 3DEP and Mapzen, USGS NAIP and The National Map, the WRI and Meta canopy height map (CC BY 4.0), Overture Maps, and "full list in DATA-SOURCES.md"; under it, "Weather by Open-Meteo (CC BY 4.0) · aircraft by adsb.lol (ODbL)" (since 2.0.3).
 - **In the install folder:** `LICENSE.txt`, `DATA-SOURCES.md`, `CREDITS.txt` (each car model's credit) and `licenses/` (`scripts/package.ps1`).
 
 | Licence | What it needs in the game | Sources under it |
 |---|---|---|
 | ODbL 1.0 | "© OpenStreetMap contributors" where the map data is seen, and a way to find the licence | OpenStreetMap (roads, buildings, routes, place facts), Overture Maps, Photon search results, adsb.lol aircraft |
-| CC BY 4.0 | The maker's name, the licence and a link, in a manner that fits the medium | WRI and Meta canopy heights, Open-Meteo weather, Esri Community Maps buildings (through Overture), the Sketchfab cars, ESA WorldCover (training only) |
+| CC BY 4.0 | The maker's name, the licence and a link, in a manner that fits the medium | WRI and Meta canopy heights, Open-Meteo weather, the Köppen-Geiger climate classes (Beck et al.), Esri Community Maps buildings (through Overture), the Sketchfab cars, ESA WorldCover (training only) |
 | ODC-BY 1.0 | Credit to the database maker when you use or share it | Satlas model weights (testing) |
 | CC BY-SA | Credit and the same licence for adapted works | The place photographs listed in [Credits.txt](Credits.txt), the Detectron2 weights (development tool) |
 | US public domain | Nothing required; USGS, USDA and NOAA ask for credit as a courtesy | USGS, USDA, NOAA, NASA, FHWA, US Army Corps of Engineers data |
 
-**Gaps to close** (the code has not changed yet): the road atlas line does not name **Open-Meteo** (CC BY 4.0; Open-Meteo asks for "Weather data by Open-Meteo.com" with a link) or **adsb.lol** (ODbL), and the live aircraft and weather have no credit near them on the screen. One short line on the road atlas page, for example "Weather data by Open-Meteo.com (CC BY 4.0) · aircraft from adsb.lol (ODbL)", closes both.
+The gap found on 14 November 2026 (Open-Meteo and adsb.lol not named in the game) is closed in 2.0.3 by the second road atlas line. The Köppen-Geiger climate classes are credited in `DATA-SOURCES.md`, `licenses/Credits.txt` and `licenses/Koppen-Geiger (CC BY 4.0).txt` in the install folder.
 
 ## AI models
 
@@ -69,6 +69,7 @@ An earlier scene model, DDRNet23-Slim trained on Cityscapes, was removed because
 | Aerial photographs | [USDA NAIP](https://naip-usdaonline.hub.arcgis.com/) and USGS The National Map imagery; USDA Forest Service (Alaska) | US public domain | USDA Farm Production and Conservation; U.S. Geological Survey |
 | Tree canopy heights | [WRI and Meta, High Resolution Canopy Height Maps v2](https://registry.opendata.aws/dataforgood-fb-forestsv2/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Version 2 High Resolution Canopy Height Maps by WRI and Meta |
 | Forest type and shrub cover | USGS/USDA LANDFIRE EVT; MRLC NLCD and RCMAP; USDA ARS Rangeland Analysis Platform | US public domain | LANDFIRE; MRLC; USDA ARS |
+| Climate class for each place (season, grass, trees) | Köppen-Geiger 1991-2020 maps by Hylke E. Beck and others, [Scientific Data 10, 724 (2023)](https://doi.org/10.1038/s41597-023-02549-6), bundled as a 0.05 degree grid in `data/climate/` ([`licenses/Koppen-Geiger (CC BY 4.0).txt`](licenses/Koppen-Geiger%20(CC%20BY%204.0).txt)) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Beck, H.E. et al. (2023), High-resolution (1 km) Köppen-Geiger maps for 1901-2099 |
 | Recent surface colour (optional) | Copernicus Sentinel-2 L2A, through Element 84 Earth Search | Copernicus Sentinel data terms (free, with credit) | Contains modified Copernicus Sentinel data |
 | Snow cover | NASA NSIDC DAAC, MODIS MOD10A1 v61, through NASA GIBS | Free, with credit | NASA NSIDC DAAC |
 | City street trees | City of Lincoln, Nebraska; City of Cambridge, Massachusetts | City open-data terms; PDDL 1.0 (Cambridge) | City of Lincoln; City of Cambridge |
@@ -148,7 +149,6 @@ Licence texts for all of these are in [`licenses/`](licenses/).
 
 These are named in our research notes, but no code in the game or its tools uses them now. When one is used, it moves into the tables above with its credit:
 
-- Köppen-Geiger climate maps by Beck et al. (CC BY 4.0). The game uses rough latitude bands now.
 - USDA Forest Service TreeMap.
 - ambientCG materials (CC0).
 
