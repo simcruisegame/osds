@@ -29,6 +29,27 @@ The owner saw faults in our frames that our checks passed (2026-11-14: building 
 - At the cut-off, all lanes merge into one candidate (a commit or tag such as `rc-v2.0.3`, or `docs/team/cycles/rc.txt`). Then `scripts\release-test.ps1` tests that commit once. Do not start it on a commit that is not the candidate.
 - One GPU test at a time on the PC: the script takes the `Global\SimCruiseGpuTest` lock for each launch (`scripts\EditorLock.ps1 -GpuTest`). Other GPU tests wait. The lock holder is in `%LOCALAPPDATA%\SimCruise\gpu-test-lock.txt`.
 
+## The final test of v2.0.3
+
+The owner (2026-11-14): "2.0.3 should look real and be bug free, test thoroughly" and "drive real". The final candidate has the fine detail, building walls with doors and shopfronts, and bridges at their real height above the roads below. This is the one thorough test; it runs once, on that candidate, visible, at Ultra, traffic off. `scripts\final-test.ps1` chains the editor part and the cooked part; the review steps are done by people (and a blind reviewer) in the order below.
+
+| # | Part | What | Tool | About |
+|---|---|---|---|---|
+| 1 | Build and unit tests | The candidate plus the test-only commits; `check.ps1 -Tier fast`, the pre-flight and vehicle tests (`SimCruise.Gameplay.Preflight.*`, `SimCruise.Vehicle.*` incl. the cards against the published figures) | `final-test.ps1` | 25 min |
+| 2 | Full Ultra test | Ocean Drive, Dragon, Nebraska, Big Sur, each with the 2001 Miata, the '65 Mustang and the Corvette, plus the seeded random US places; the cases (standstill, speed, fallback, eye on and off) | `release-test.ps1 -ShowWindow` | 100 min |
+| 3 | Bridges | Bixby (both approaches), Detroit Woodward over I-75 (north and south), Doraville Northcrest Road over I-285: deck smooth (no `deck-not-smooth`), grade, no step, parapets, the height above the road below, the car over the deck at speed with no hit, stuck or wheels off | `bridge-check.ps1 -ShowWindow` | 25 min |
+| 4 | Drive real | Per car: the cockpit review at rest (wheel, gauges, mirrors, steering ratio and lock to lock against the car data); a keen run on the Dragon at the car's limit (`-SimCruisePreflightKeen`); the step-steer and the cards from the vehicle benches (headless; an in-game step-steer is not automated yet); feel notes from the videos: body roll in the bends, pitch on braking and on the throttle, the wheels' motion against the car data | `cockpit-review.ps1`, `launch-review.ps1 -ExtraArgs:-SimCruisePreflightKeen`, `check.ps1` | 40 min |
+| 5 | Slow look | Detroit Woodward at 10 km/h beside the buildings: doors, shopfronts, wall tops, window rows, signs | `detail-review.ps1` (detroit-slow) | 10 min |
+| 6 | Controller and names | Every menu with the pad only; the HUD and menu texts searched for the owner's name; the car's display name | `pad-review.ps1` | 10 min |
+| 7 | Post-processing | Photo sheets, event clips, strips, the video scan, the blind folders | `detail-review.ps1 -PostOnly` | 25 min |
+| 8 | Review | "How we look" 1-6: fresh eyes on full-size frames, the blind reviewer on every place, the photo compare, the video and motion review, the checklist, the table "found by the new method only" | people | 90 min |
+| 9 | Cooked package | From the exact candidate hash, no local changes (a worktree of its own) | `package.ps1 -Configuration Development` | 50 min |
+| 10 | Cooked gate | Dragon and Ocean Drive in the cooked game: longest frame 0.5 s or less, no "Preparing Shaders", the owner-name search of the package | `release-test.ps1 -Cooked -Cases cooked-drive` | 15 min |
+| 11 | Timed quiet run | One cooked Dragon drive with nothing else running; its report must not say NOT QUIET | `release-test.ps1 -Cooked -Places dragon` | 10 min |
+| 12 | Known faults | Every fault from this release (the test escapes, the blind reviews, the owner's reports) with its state: fixed and verified (frame or run path), open (owner lane), or accepted (who accepted it, why) | report `known-faults.md` | 20 min |
+
+About 7 hours from the GO, most of it GPU time on one PC; other lanes' GPU work waits (`C:\aiwork\GPU-BUSY`, `GPU-QUEUE`). A P1 in parts 2-6 stops the cooked part until the owner decides. The report has a summary, the per-team reports, the review md with its tables, and `known-faults.md`.
+
 ## A re-test
 
 After fixes, test only what failed:
