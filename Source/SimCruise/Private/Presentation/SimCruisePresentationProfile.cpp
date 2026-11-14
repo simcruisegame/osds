@@ -177,6 +177,7 @@ bool SimCruisePresentationProfiles::Load(const FString& CarId, FSimCruiseCarPres
 		for (const TSharedPtr<FJsonValue>& V : *Banks) Sound.BankOfEvent.Add(FMath::Clamp(static_cast<int32>(V->AsNumber()), 0, 1));
 		J.TryGetNumberField(TEXT("near_gain"), Sound.NearGain);
 		J.TryGetNumberField(TEXT("far_gain"), Sound.FarGain);
+		J.TryGetNumberField(TEXT("cabin_engine_distance_m"), Sound.CabinEngineDistanceM);
 		J.TryGetStringField(TEXT("source"), Sound.Source);
 		OutProfile.EngineSound = Sound;
 	}

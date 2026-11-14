@@ -181,6 +181,9 @@ struct FSimCruiseCarPresentationProfile
 		TArray<int32> BankOfEvent;
 		double NearGain = 1.0;
 		double FarGain = 0.62;
+		/** Engine (intake) to the driver's ear, m: 2 for a front engine ahead of the dash; a mid engine
+		 *  behind the seats is nearer and its intake louder in the cabin (inverse distance). */
+		double CabinEngineDistanceM = 2.0;
 		FString Source;
 	};
 	TOptional<FEngineSound> EngineSound;
