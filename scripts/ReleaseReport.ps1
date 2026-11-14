@@ -12,6 +12,9 @@
 
 . (Join-Path $PSScriptRoot 'ViewerWatch.ps1')
 
+# The world lane's start-pick fallback warning (the start fell back to an old pose): a FAIL for the place.
+$script:StartFallbackPattern = 'start.?pick.{0,40}fall.?back|fell back to the (old|previous) pose'
+
 $script:Teams = [ordered]@{
     driving = 'Driving (physics, the robot judge, steering ratio)'
     cockpit = 'Cockpit (steering wheel, gauges)'
@@ -194,6 +197,8 @@ function Write-ReleaseReports {
 
         # Release: the launch itself.
         if ($Crash) { Add-Finding 'release' 'P0' $R '-' "$Rel\crash\" 'the game crashed' }
+        $Fallback = if (Test-Path $Log) { Select-String -Path $Log -Pattern $script:StartFallbackPattern | Select-Object -First 1 } else { $null }
+        if ($Fallback) { Add-Finding 'world' 'P1' $R '0 s' "$Rel\game.log" "the start pick fell back: $(($Fallback.Line -replace '^\[.*?\]\[.*?\]', '').Trim())" }
         if ($Hung) { Add-Finding 'release' 'P0' $R '-' "$Rel\game.log" 'the game hung and was stopped' }
         if (-not $Pre) { Add-Finding 'release' 'P0' $R '-' "$Rel\game.log" 'no result: the drive did not happen' }
         if ($Engine.Count) { Add-Finding 'release' 'P1' $R '-' "$Rel\game.log" "$($Engine.Count) engine errors, first: $(($Engine[0].Line -replace '^\[.*?\]\[.*?\]', '').Trim())" }
@@ -256,7 +261,7 @@ function Write-ReleaseReports {
         if ($Shots.Count) { $Frames['world'] += "$Rel\review\$($Shots[0].Name) (start)" }
         if (Test-Path (Join-Path $D 'sheet.png')) { $Frames['picture'] += "$Rel\sheet.png" }
 
-        $Verdict = if (-not $Pre -or $Crash -or $Hung) { 'FAIL' } elseif ($Pre.result -eq 'PASS' -and (-not $Ck -or $Ck.result -eq 'PASS') -and $Valid) { 'PASS' } else { 'FAIL' }
+        $Verdict = if (-not $Pre -or $Crash -or $Hung -or $Fallback) { 'FAIL' } elseif ($Pre.result -eq 'PASS' -and (-not $Ck -or $Ck.result -eq 'PASS') -and $Valid) { 'PASS' } else { 'FAIL' }
         $Table += "| $($R.Plan.Name) | $($R.Plan.Car) | $Verdict$(if (-not $Valid) { ' (NOT VALID FOR SIGN-OFF)' }) | $(if ($Pre) { $Pre.reasons } else { 'no result' }) | $(if ($Ck) { $Ck.result } else { '-' }) | $(if ($View) { $View.Matches[0].Groups[1].Value } else { '-' }) | $(if ($Pre) { $Pre.frame_p95_ms } else { '-' }) | $($R.Minutes) | $(if ($Visible) { 'windowed (visible)' } else { 'off screen' })$(if ($Disturb.Count) { ', DISTURBED' }) | [review]($Rel/review.md) |"
     }
     # Findings a step of the run made itself (the package text check): {Team; Sev; Place; Car; Time; Evidence; What}.
