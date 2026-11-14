@@ -764,7 +764,12 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			// The pedal opens the throttle plate; the cylinders fill by how much air that opening
 			// passes against what the engine draws at this speed (SimCruiseDynamics::EngineLoad).
 			const double Load = SimCruiseDynamics::EngineLoad(Car, Throttle, Rpm);
-			double Torque = Rpm < Car.FuelCutSpeedRpm ? (SimCruiseDynamics::SampleEngineTorqueNm(Car, Rpm) + Friction) * Load : 0.0;
+			// The cylinders burn the air they take in: a naturally aspirated engine's indicated torque
+			// (the published brake torque plus its friction) follows the air's density, against the
+			// 1.225 kg/m3 the cars are calibrated in. Denver's 1600 m takes about 15 % (the rule of
+			// thumb, about 3 % per 1000 ft); a turbo holds its boost.
+			const double AirCharge = Car.bTurbocharged ? 1.0 : FMath::Clamp(AirDensityKgPerM3 / 1.225, 0.5, 1.2);
+			double Torque = Rpm < Car.FuelCutSpeedRpm ? (SimCruiseDynamics::SampleEngineTorqueNm(Car, Rpm) + Friction) * AirCharge * Load : 0.0;
 			double Drag = Friction * (Rpm > Car.IdleSpeedRpm ? 1.0 : 0.5);
 			// A closed throttle also pumps against manifold vacuum; at full throttle that loss is
 			// already in the published curve.
