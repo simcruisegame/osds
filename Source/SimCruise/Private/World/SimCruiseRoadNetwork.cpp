@@ -28,8 +28,6 @@ namespace
 	constexpr double PlanEndM = 6.0;          // chain ends keep their exact point and direction
 	constexpr double ContractBlendM = 10.0;   // a seam end takes the neighbour's direction and width over this
 	constexpr double BoundaryEps = 1e-3;      // m: a point this near the edge lies on it
-	constexpr double DeckEndJunctionM = 15.0; // a road at the deck's level this near a span end is a junction at the abutment
-	constexpr double LevelGapM = 2.0;         // a deck and a road this far apart in height are two levels: no join
 	constexpr double DeckFaceWindowM = 2.5;   // a deck within this of a road under it stands its parapet or slab in a car's way (0.85 over, 1.2 under the deck)
 
 	// Kerb evidence (RoadSurface.gd classify_edges).
@@ -1210,20 +1208,12 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 				{
 					const FVector2d P = St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW);
 					FSimCruiseRoadHit Hit;
-					// Two levels (a deck over a road, a road under a deck) never join.
-					auto OtherLevel = [&](const FSimCruiseRoadHit& H)
-					{
-						if (!Ribbons.IsValidIndex(H.Ribbon)) return false;
-						const FSimCruiseRibbon& O = Ribbons[H.Ribbon];
-						const bool bOtherDeck = O.St[H.Station].bBridge || (O.St.IsValidIndex(H.Station + 1) && O.St[H.Station + 1].bBridge);
-						return BridgeRuleOn() && (St.bBridge || bOtherDeck) && FMath::Abs(H.Height - St.Column(c)) > LevelGapM;
-					};
-					if (FindCarriageway(P, Hit, r) && !OtherLevel(Hit))
+					if (FindCarriageway(P, Hit, r))
 					{
 						Snap[c][i] = Hit.Height; Snapped[c][i] = true;
 						Sum += Hit.Height - St.Column(c); ++Num;
 					}
-					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM) && !OtherLevel(Hit))
+					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM))
 					{
 						// Just outside the other carriageway: never above its edge, so this
 						// ribbon's quads cannot stand proud of the road it runs into.
@@ -1318,7 +1308,7 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 				for (const double L : { St.HalfW + 0.2, 0.5 * (St.HalfW + Outer), Outer })
 				{
 					FSimCruiseRoadHit Hit;
-					if (FindCarriageway(St.C + St.R * (Sign * L), Hit, r, Margin) && (!BridgeRuleOn() || FMath::Abs(Hit.Height - H) < LevelGapM)) { bCut = true; break; }
+					if (FindCarriageway(St.C + St.R * (Sign * L), Hit, r, Margin)) { bCut = true; break; }
 				}
 				Ribbon.Sides[s].Cut[i] = bCut ? 1 : 0;
 			}
@@ -1446,14 +1436,6 @@ bool FSimCruiseRoadNetwork::DeckFaceClear(int32 RibbonIndex, int32 I, double Fra
 	const FSimCruiseRibbon& Rb = Ribbons[RibbonIndex];
 	const FSimCruiseRibbonStation& A = Rb.St[I];
 	const FSimCruiseRibbonStation& B = Rb.St[I + 1];
-	// The span this piece belongs to (the parapets run one station past each end).
-	int32 Lo = A.bBridge ? I : I + 1, Hi = Lo;
-	while (Lo > 0 && Rb.St[Lo - 1].bBridge) --Lo;
-	while (Hi + 1 < Rb.St.Num() && Rb.St[Hi + 1].bBridge) ++Hi;
-	// A road at the deck's level near a span end joins it at the abutment (Old Coast Road at
-	// Bixby Bridge's north end): the bridge stays as it was there.
-	const double MidS = 0.5 * (A.S + B.S);
-	if (FMath::Min(MidS - Rb.St[Lo].S, Rb.St[Hi].S - MidS) < DeckEndJunctionM) return true;
 	for (const double T : { 0.0, 0.5, 1.0 })
 	{
 		const FVector2d C = FMath::Lerp(A.C, B.C, T);

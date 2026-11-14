@@ -251,10 +251,10 @@ public:
 	bool ParapetAt(int32 RibbonIndex, int32 I, int32 Edge) const;
 	/** Whether the deck's slab (its underside) stands from station I to I + 1: not over a road within 2.5 m under it. */
 	bool DeckUndersideAt(int32 RibbonIndex, int32 I) const;
-	/** Neither ParapetAt nor DeckUndersideAt finds a road at the deck's level at lateral Frac x HalfW (+ OutM outward); a span end's 15 m keeps its faces (abutment junctions). */
+	/** Neither ParapetAt nor DeckUndersideAt finds a road at the deck's level at lateral Frac x HalfW (+ OutM outward) . */
 	bool DeckFaceClear(int32 RibbonIndex, int32 I, double Frac, double OutM) const;
 
-	/** The bridge rule (level checks in the join, parapets and slab left out over a road at the deck's level): off with SIMCRUISE_NO_BRIDGE_RULE=1, for before/after numbers. */
+	/** The bridge rule (parapets and slab left out over a road at the deck's level): off with SIMCRUISE_NO_BRIDGE_RULE=1, for before/after numbers. */
 	static bool BridgeRuleOn();
 
 	/** Project P onto segment (Ribbon, I..I+1). */
