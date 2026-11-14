@@ -45,7 +45,8 @@ namespace SimCruiseRoadCheck
 		/** The highest road-layer face at tile metres P (false: no road face there). */
 		bool Top(const FVector2d& P, double& OutHeightM) const;
 	private:
-		TArray<FVector3d> A, B, C;
+		// Floats (tile metres): a tile keeps this for its life (the start pick), about 36 bytes a face.
+		TArray<FVector3f> A, B, C;
 		TMap<FIntPoint, TArray<int32>> Cells;
 	};
 

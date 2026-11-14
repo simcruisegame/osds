@@ -1333,6 +1333,9 @@ namespace SimCruiseTileBuilder
 			USimCruiseWorldResources::BuildMipChain(B.Mask, SimCruiseGroundMask::Size, SimCruiseGroundMask::Size, true, B.MaskMips);
 		}
 
+		// The road faces for the start pick, before an install empties the layers.
+		B.RoadTops = MakeShared<const SimCruiseRoadCheck::FTopSurface, ESPMode::ThreadSafe>(B);
+
 		B.BuildMs = (FPlatformTime::Seconds() - Started) * 1000.0;
 		// -SimCruiseScan / -SimCruiseScanView: the tile scan (rules only for now), from the disk cache
 		// or baked here on the worker; the view writes its class map to Saved/Scan/view.

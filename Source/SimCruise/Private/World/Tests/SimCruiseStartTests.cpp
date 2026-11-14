@@ -73,6 +73,21 @@ bool FSimCruiseStartOnRoadTest::RunTest(const FString& Parameters)
 	// The ahead walk: from Main Street's middle eastward to its end (~250 m), not past it.
 	const double East = SimCruiseStartPick::AheadM(Tiles, Best.Tile, Best.Ribbon, B->Roads.Ribbons[Best.Ribbon].St[B->Roads.Ribbons[Best.Ribbon].St.Num() / 2].S, 1, 5000.0);
 	TestTrue(FString::Printf(TEXT("ahead to the road's end: %.0f m"), East), East > 150.0 && East < 400.0);
+	// An installed tile hands its layers' triangles to the collision and empties them
+	// (ASimCruiseWorldTile::Install): the pick must find the same start on it. With the emptied
+	// road layer it found none in the game and the nearest-road rule put the car at the bank
+	// (Welch, WV, release-4 check 7dad4f6), while this test, on a build never installed, passed.
+	TestTrue(TEXT("the build keeps its road faces for the pick"), B->RoadTops.IsValid());
+	for (FSimCruiseMeshData& L : B->Layers)
+	{
+		L.Positions.Empty(); L.Normals.Empty(); L.Colors.Empty(); L.Indices.Empty(); L.UV0.Empty(); L.UV1.Empty();
+	}
+	FString WhyNone;
+	const TArray<FSimCruiseStartPose> Installed = SimCruiseStartPick::Candidates(Tiles, FString(), Near, 900.0, 1e10, 24, &WhyNone);
+	if (TestTrue(FString::Printf(TEXT("start candidates on an installed tile (%s)"), *WhyNone), Installed.Num() > 0))
+	{
+		TestTrue(TEXT("the same start as before the install"), FVector::Dist(Installed[0].LocationCm, Best.LocationCm) < 1.0 && FMath::Abs(Installed[0].Rotation.Yaw - Best.Rotation.Yaw) < 0.1);
+	}
 	return true;
 }
 
@@ -517,6 +532,264 @@ bool FSimCruiseReleaseFaultProbe::RunTest(const FString& Parameters)
 									: FString::Printf(TEXT(" %.3f/%.3f(r%d rank %d)"), St.Column(c), Other, OtherR, B.Roads.Ribbons[OtherR].Rank);
 							}
 						}
+					}
+				}
+			}
+		}
+		// The drive robot's route from the release run's own start ("placed x y" and "placedyaw deg"):
+		// for samples between "routefrom" and "routeto" metres along it, the lane, the road face
+		// under it, and every other carriageway within the car's width (1.2 m each side) whose
+		// surface stands 0.15-4.5 m above the lane: a face the car's body would hit.
+		{
+			double Yaw = 1e10, From = 0.0, To = 0.0;
+			for (const FString& L : Lines)
+			{
+				TArray<FString> Wd;
+				L.ParseIntoArrayWS(Wd);
+				if (Wd.Num() >= 2 && Wd[0] == TEXT("placedyaw")) Yaw = FCString::Atod(*Wd[1]);
+				if (Wd.Num() >= 3 && Wd[0] == TEXT("route")) { From = FCString::Atod(*Wd[1]); To = FCString::Atod(*Wd[2]); }
+			}
+			if (Yaw < 1e9 && Placed.X < 1e29 && To > From)
+			{
+				// The start ribbon and station under the placed point, the way the yaw points.
+				FSimCruiseStartPose Start;
+				double BestD = 6.0;
+				for (int32 t = 0; t < Tiles.Num(); ++t)
+				{
+					const FSimCruiseTileBuild& B = *Tiles[t].Build;
+					const FVector2d Lc = (Placed - FVector2d(Tiles[t].OriginCm.X, Tiles[t].OriginCm.Y)) / 100.0;
+					for (int32 r = 0; r < B.Roads.Ribbons.Num(); ++r)
+					{
+						const FSimCruiseRibbon& R = B.Roads.Ribbons[r];
+						if (R.bService) continue;
+						for (int32 i = 0; i < R.St.Num(); ++i)
+						{
+							const double D = FVector2d::Distance(R.St[i].C, Lc);
+							if (D >= BestD) continue;
+							BestD = D;
+							const FVector2d H(FMath::Cos(FMath::DegreesToRadians(Yaw)), FMath::Sin(FMath::DegreesToRadians(Yaw)));
+							Start.Tile = t; Start.Ribbon = r; Start.Station = i; Start.Dir = FVector2d::DotProduct(R.St[i].T, H) >= 0.0 ? 1 : -1;
+						}
+					}
+				}
+				const TArray<SimCruiseStartPick::FRouteSample> Route = Start.Tile != INDEX_NONE ? SimCruiseStartPick::RouteSamples(Tiles, Start, To + 5.0, 0.5) : TArray<SimCruiseStartPick::FRouteSample>();
+				Text += FString::Printf(TEXT("\n  route from the release start (%s): %d samples"), Start.Tile != INDEX_NONE ? TEXT("found") : TEXT("NOT FOUND"), Route.Num());
+				TMap<int32, TSharedPtr<SimCruiseRoadCheck::FTopSurface>> Tops;
+				for (int32 k = FMath::FloorToInt(From / 0.5); k < Route.Num() && k * 0.5 <= To; ++k)
+				{
+					const SimCruiseStartPick::FRouteSample& S = Route[k];
+					const FSimCruiseStartTile& T = Tiles[S.Tile];
+					const FVector2d L((S.LaneCm.X - T.OriginCm.X) / 100.0, (S.LaneCm.Y - T.OriginCm.Y) / 100.0);
+					TSharedPtr<SimCruiseRoadCheck::FTopSurface>& G = Tops.FindOrAdd(S.Tile);
+					if (!G.IsValid()) G = MakeShared<SimCruiseRoadCheck::FTopSurface>(*T.Build);
+					double Top = 0.0;
+					const bool bTop = G->Top(L, Top);
+					FString Faces;
+					// The lane's sideways direction from the next sample.
+					const FVector2d Ahead = k + 1 < Route.Num() ? FVector2d(Route[k + 1].LaneCm - S.LaneCm).GetSafeNormal() : FVector2d(1.0, 0.0);
+					const FVector2d Side(-Ahead.Y, Ahead.X);
+					for (const double Off : { -1.2, -0.6, 0.6, 1.2 })
+					{
+						const FVector2d Q = L + Side * Off;
+						TArray<TPair<int32, int32>> Segs;
+						T.Build->Roads.GatherSegments(Q, 15.0, Segs);
+						for (const TPair<int32, int32>& Sg : Segs)
+						{
+							const FSimCruiseRoadHit H = T.Build->Roads.Project(Sg.Key, Sg.Value, Q);
+							if (FMath::Abs(H.Lateral) > H.HalfW || FMath::Abs(H.Along) > 0.01) continue;
+							const double Up = H.Height - S.LaneCm.Z / 100.0;
+							if (Up > 0.15 && Up < 4.5) Faces += FString::Printf(TEXT(" [r%d %s %.2f m up at %+.1f m]"), Sg.Key, *T.Build->Roads.Ribbons[Sg.Key].Class, Up, Off);
+						}
+					}
+					if (k % 4 == 0 || !Faces.IsEmpty() || !bTop)
+					{
+						Text += FString::Printf(TEXT("\n    %.1f m: tile %d_%d (%.1f, %.1f) lane %.2f, top %s%s"), k * 0.5, TileIds[S.Tile].X, TileIds[S.Tile].Y, L.X, L.Y,
+							S.LaneCm.Z / 100.0, bTop ? *FString::Printf(TEXT("%.2f"), Top) : TEXT("NONE"), *Faces);
+					}
+				}
+
+				// Every solid thing within 3 m of the path that reaches the car's body (0.15-1.3 m over
+				// the lane there): bridge parapets and piers (ASimCruiseBridges builds them from the
+				// bridge spans: parapet 0.85 m over the deck edge, its outer face down 1.2 m to the
+				// deck's underside), and the tile's own collision (terrain and concrete over the lane
+				// under the car's width or ahead; building and prop faces within 3 m). Traffic and
+				// trees are actors the test does not build: see the run's log and frames for them.
+				const int32 K0 = FMath::Max(0, FMath::FloorToInt(From / 0.5));
+				const int32 K1 = FMath::Min(Route.Num() - 1, FMath::FloorToInt(To / 0.5));
+				struct FObstacle { FString What; int32 FirstK = -1; int32 NearK = -1; double NearD = 1e9; double Lo = 0.0; double Hi = 0.0; };
+				TMap<FString, FObstacle> Obstacles;
+				auto Note = [&](const FString& Key, const FString& What, int32 k, double D, double Lo, double Hi)
+				{
+					const double Lane = Route[k].LaneCm.Z / 100.0;
+					if (D > 3.0 || Hi < Lane + 0.15 || Lo > Lane + 1.3) return;
+					FObstacle& O = Obstacles.FindOrAdd(Key);
+					if (O.FirstK < 0) { O.What = What; O.FirstK = k; }
+					if (D < O.NearD) { O.NearD = D; O.NearK = k; O.Lo = Lo - Lane; O.Hi = Hi - Lane; }
+				};
+				auto SegDist = [](const FVector2d& P, const FVector2d& A, const FVector2d& B)
+				{
+					const FVector2d D = B - A;
+					const double T = D.SizeSquared() > 1e-12 ? FMath::Clamp(FVector2d::DotProduct(P - A, D) / D.SizeSquared(), 0.0, 1.0) : 0.0;
+					return FVector2d::Distance(P, A + D * T);
+				};
+				TSet<int32> RouteTiles;
+				for (int32 k = K0; k <= K1; ++k) RouteTiles.Add(Route[k].Tile);
+				for (const int32 t : RouteTiles)
+				{
+					const FSimCruiseStartTile& T = Tiles[t];
+					const FSimCruiseTileBuild& B = *T.Build;
+					auto Local = [&](int32 k) { return FVector2d((Route[k].LaneCm.X - T.OriginCm.X) / 100.0, (Route[k].LaneCm.Y - T.OriginCm.Y) / 100.0); };
+					// Bridges: the same spans, parapets and piers as SimCruiseBridges.cpp.
+					for (int32 r = 0; r < B.Roads.Ribbons.Num(); ++r)
+					{
+						const FSimCruiseRibbon& R = B.Roads.Ribbons[r];
+						const int32 N = R.St.Num();
+						for (int32 a = 0; a < N; ++a)
+						{
+							if (!R.St[a].bBridge) continue;
+							int32 e = a;
+							while (e + 1 < N && R.St[e + 1].bBridge) ++e;
+							const int32 A = FMath::Max(a - 1, 0), Z = FMath::Min(e + 1, N - 1);
+							double SincePier = 35.0 * 0.5;
+							for (int32 j = A; j < Z; ++j)
+							{
+								const FSimCruiseRibbonStation& S0 = R.St[j];
+								const FSimCruiseRibbonStation& S1 = R.St[j + 1];
+								for (int32 Edge = -1; Edge <= 1; Edge += 2)
+								{
+									const FVector2d M0 = S0.C + S0.R * (Edge * (S0.HalfW + 0.2)), M1 = S1.C + S1.R * (Edge * (S1.HalfW + 0.2));
+									const double Z0 = S0.Height(Edge * S0.HalfW), Z1 = S1.Height(Edge * S1.HalfW);
+									const double Lo = FMath::Min(Z0, Z1) - 1.2, Hi = FMath::Max(Z0, Z1) + 0.85;
+									for (int32 k = K0; k <= K1; ++k)
+									{
+										if (Route[k].Tile != t) continue;
+										Note(FString::Printf(TEXT("t%d r%d span %d edge %d"), t, r, a, Edge),
+											FString::Printf(TEXT("bridge parapet: ribbon %d (%s%s) span from station %d, %s edge, deck edge %.2f m, parapet from %.2f to %.2f m"),
+												r, *R.Class, R.Name.IsEmpty() ? TEXT("") : *(TEXT(" ") + R.Name), a, Edge < 0 ? TEXT("left") : TEXT("right"), Z0, Lo, Hi),
+											k, FMath::Max(0.0, SegDist(Local(k), M0, M1) - 0.2), Lo, Hi);
+									}
+								}
+								SincePier += S1.S - S0.S;
+								if (SincePier >= 35.0 && j > A && j + 1 < Z)
+								{
+									SincePier = 0.0;
+									const double Top = S0.HC - 1.2;
+									const double Ground = B.TerrainHeightAt(FVector2d(FMath::Clamp(S0.C.X, 0.0, B.TileSizeM), FMath::Clamp(S0.C.Y, 0.0, B.TileSizeM)));
+									if (Top - Ground > 4.0)
+									{
+										const double HalfR = FMath::Max(S0.HalfW * 0.6, 2.0);
+										for (int32 k = K0; k <= K1; ++k)
+										{
+											if (Route[k].Tile != t) continue;
+											const FVector2d D = Local(k) - S0.C;
+											const double Dx = FMath::Max(0.0, FMath::Abs(FVector2d::DotProduct(D, S0.T)) - 0.6);
+											const double Dy = FMath::Max(0.0, FMath::Abs(FVector2d::DotProduct(D, S0.R)) - HalfR);
+											Note(FString::Printf(TEXT("t%d r%d pier %d"), t, r, j), FString::Printf(TEXT("bridge pier: ribbon %d (%s) at station %d"), r, *R.Class, j),
+												k, FMath::Sqrt(Dx * Dx + Dy * Dy), Ground - 1.0, Top);
+										}
+									}
+								}
+							}
+							a = e;
+						}
+					}
+					// The tile's collision layers.
+					const TPair<ESimCruiseTileLayer, const TCHAR*> Layers[] = {
+						{ ESimCruiseTileLayer::Terrain, TEXT("terrain") }, { ESimCruiseTileLayer::Concrete, TEXT("concrete") },
+						{ ESimCruiseTileLayer::Building, TEXT("building") }, { ESimCruiseTileLayer::Props, TEXT("prop") } };
+					FBox2d Box(ForceInit);
+					for (int32 k = K0; k <= K1; ++k) if (Route[k].Tile == t) Box += Local(k);
+					Box = Box.ExpandBy(3.0);
+					for (const TPair<ESimCruiseTileLayer, const TCHAR*>& Ly : Layers)
+					{
+						const FSimCruiseMeshData& M = B.Layer(Ly.Key);
+						// Terrain and concrete are ground: they count under the car's width only (they
+						// rise beside every cut); buildings and props count within 3 m.
+						const bool bGround = Ly.Key == ESimCruiseTileLayer::Terrain || Ly.Key == ESimCruiseTileLayer::Concrete;
+						const double Reach = bGround ? 0.9 : 3.0;
+						for (int32 i = 0; i + 2 < M.Indices.Num(); i += 3)
+						{
+							const FVector3d P0 = FVector3d(M.Positions[M.Indices[i]]) / 100.0, P1 = FVector3d(M.Positions[M.Indices[i + 1]]) / 100.0, P2 = FVector3d(M.Positions[M.Indices[i + 2]]) / 100.0;
+							const FBox2d Tb(TArray<FVector2d>{ FVector2d(P0), FVector2d(P1), FVector2d(P2) });
+							if (!Tb.Intersect(Box)) continue;
+							const double Lo = FMath::Min3(P0.Z, P1.Z, P2.Z), Hi = FMath::Max3(P0.Z, P1.Z, P2.Z);
+							const FVector2d A(P0), Bv(P1), C(P2);
+							for (int32 k = K0; k <= K1; ++k)
+							{
+								if (Route[k].Tile != t) continue;
+								const FVector2d P = Local(k);
+								if (!Tb.ExpandBy(Reach).IsInside(P)) continue;
+								// Inside the triangle: distance 0, else to its nearest edge.
+								const double D1 = (Bv - A) ^ (P - A), D2 = (C - Bv) ^ (P - Bv), D3 = (A - C) ^ (P - C);
+								const bool bIn = (D1 >= 0 && D2 >= 0 && D3 >= 0) || (D1 <= 0 && D2 <= 0 && D3 <= 0);
+								const double D = bIn ? 0.0 : FMath::Min3(SegDist(P, A, Bv), SegDist(P, Bv, C), SegDist(P, C, A));
+								if (D > Reach) continue;
+								double ZLo = Lo, ZHi = Hi;
+								if (bGround)
+								{
+									// The ground's height at the nearest point, not the triangle's range.
+									const FVector3d N = FVector3d::CrossProduct(P1 - P0, P2 - P0);
+									if (FMath::Abs(N.Z) < 1e-6) continue;
+									const FVector2d Q = bIn ? P : P; // near enough at under 0.9 m
+									ZHi = ZLo = P0.Z - (N.X * (Q.X - P0.X) + N.Y * (Q.Y - P0.Y)) / N.Z;
+									ZHi = FMath::Clamp(ZHi, Lo, Hi);
+									ZLo = ZHi - 0.01;
+								}
+								const FVector2d Cen = (A + Bv + C) / 3.0;
+								Note(FString::Printf(TEXT("t%d %s %d_%d"), t, Ly.Value, FMath::FloorToInt(Cen.X / 5.0), FMath::FloorToInt(Cen.Y / 5.0)),
+									FString::Printf(TEXT("%s near (%.1f, %.1f) tile %d_%d"), Ly.Value, Cen.X, Cen.Y, TileIds[t].X, TileIds[t].Y), k, D, ZLo, ZHi);
+							}
+						}
+					}
+				}
+				TArray<FObstacle> List;
+				Obstacles.GenerateValueArray(List);
+				List.Sort([](const FObstacle& A, const FObstacle& B) { return A.NearK < B.NearK; });
+				Text += FString::Printf(TEXT("\n  solid things within 3 m of the path at body height, %.0f-%.0f m: %d"), From, To, List.Num());
+				for (int32 i = 0; i < FMath::Min(60, List.Num()); ++i)
+				{
+					const FObstacle& O = List[i];
+					Text += FString::Printf(TEXT("\n    nearest %.2f m at %.1f m along (first within 3 m at %.1f m), %+.2f to %+.2f m over the lane: %s"),
+						O.NearD, O.NearK * 0.5, O.FirstK * 0.5, O.Lo, O.Hi, *O.What);
+				}
+			}
+		}
+		// Roads crossing within 80 m of a point labelled "crossing...": every pair of centre lines
+		// that cross there, with both heights and bridge flags; a crossing between 0.3 and 4.5 m
+		// apart is neither a junction nor an overpass (the upper road's edge is a wall for the lower).
+		for (const FPoint& Pt : Points)
+		{
+			if (!Pt.Label.StartsWith(TEXT("crossing"))) continue;
+			const FVector W = Pt.Lat > 1e8 ? FVector(Pt.Lat - 1e9, Pt.Lon, 0.0) : Frame.LonLatToWorldCm(Pt.Lon, Pt.Lat);
+			for (int32 t = 0; t < Tiles.Num(); ++t)
+			{
+				const FSimCruiseTileBuild& B = *Tiles[t].Build;
+				const FVector2d Local = (FVector2d(W.X, W.Y) - FVector2d(Tiles[t].OriginCm.X, Tiles[t].OriginCm.Y)) / 100.0;
+				if (Local.X < -80.0 || Local.Y < -80.0 || Local.X > B.TileSizeM + 80.0 || Local.Y > B.TileSizeM + 80.0) continue;
+				const TArray<FSimCruiseRibbon>& Rs = B.Roads.Ribbons;
+				for (int32 a = 0; a < Rs.Num(); ++a)
+				for (int32 b = a + 1; b < Rs.Num(); ++b)
+				for (int32 i = 0; i + 1 < Rs[a].St.Num(); ++i)
+				{
+					const FVector2d P0 = Rs[a].St[i].C, P1 = Rs[a].St[i + 1].C;
+					if (FVector2d::Distance(P0, Local) > 80.0) continue;
+					for (int32 j = 0; j + 1 < Rs[b].St.Num(); ++j)
+					{
+						const FVector2d Q0 = Rs[b].St[j].C, Q1 = Rs[b].St[j + 1].C;
+						const FVector2d D1 = P1 - P0, D2 = Q1 - Q0;
+						const double Den = D1.X * D2.Y - D1.Y * D2.X;
+						if (FMath::Abs(Den) < 1e-9) continue;
+						const double U = ((Q0.X - P0.X) * D2.Y - (Q0.Y - P0.Y) * D2.X) / Den;
+						const double V = ((Q0.X - P0.X) * D1.Y - (Q0.Y - P0.Y) * D1.X) / Den;
+						if (U < 0.0 || U > 1.0 || V < 0.0 || V > 1.0) continue;
+						const double Ha = FMath::Lerp(Rs[a].St[i].HC, Rs[a].St[i + 1].HC, U), Hb = FMath::Lerp(Rs[b].St[j].HC, Rs[b].St[j + 1].HC, V);
+						const FVector2d X = P0 + D1 * U;
+						const double Dh = FMath::Abs(Ha - Hb);
+						Text += FString::Printf(TEXT("\n  %s: tile %d_%d (%.1f, %.1f) %.0f m from the point: ribbon %d %s (%s%s) %.2f m x ribbon %d %s (%s%s) %.2f m: %.2f m apart%s"),
+							*Pt.Label, TileIds[t].X, TileIds[t].Y, X.X, X.Y, FVector2d::Distance(X, Local),
+							a, *Rs[a].Name, *Rs[a].Class, (Rs[a].St[i].bBridge || Rs[a].St[i + 1].bBridge) ? TEXT(", bridge") : TEXT(""), Ha,
+							b, *Rs[b].Name, *Rs[b].Class, (Rs[b].St[j].bBridge || Rs[b].St[j + 1].bBridge) ? TEXT(", bridge") : TEXT(""), Hb,
+							Dh, (Dh > 0.3 && Dh < 4.5) ? TEXT("  <-- NEITHER JUNCTION NOR OVERPASS") : TEXT(""));
 					}
 				}
 			}

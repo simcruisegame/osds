@@ -95,5 +95,5 @@ namespace SimCruiseStartPick
 	SIMCRUISE_API TArray<FRouteSample> RouteSamples(const TArray<FSimCruiseStartTile>& Tiles, const FSimCruiseStartPose& Start, double LengthM, double StepM);
 
 	SIMCRUISE_API TArray<FSimCruiseStartPose> Candidates(const TArray<FSimCruiseStartTile>& Tiles, const FString& RoadName, const FVector& NearCm,
-		double RadiusM, double PreferredYawDeg, int32 MaxCandidates = 24);
+		double RadiusM, double PreferredYawDeg, int32 MaxCandidates = 24, FString* OutWhyNone = nullptr);
 }

@@ -548,6 +548,7 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 		return false;
 	}
 	const bool bFirstPlacement = !bCarPlaced;
+	Stream->HoldRoadTops();
 	if (bFirstPlacement)
 	{
 		Stream->SetFocus(StartCm, FVector::ZeroVector);
@@ -625,7 +626,17 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 	// none passes, the nearest-road rule as before.
 	auto PickStart = [&](const FString& Name, double RadiusM) -> bool
 	{
-		const TArray<FSimCruiseStartPose> Picks = Stream->FindStartCandidates(Name, StartCm, RadiusM, PreferredYaw);
+		bStartByNearestRoad = false;
+		FString WhyNone;
+		const TArray<FSimCruiseStartPose> Picks = Stream->FindStartCandidates(Name, StartCm, RadiusM, PreferredYaw, &WhyNone);
+		// Never silent: a start by the old nearest-road rule is the fault the release test sees
+		// (Welch, WV, nose at the bank, when the pick saw no road faces on installed tiles).
+		if (Picks.IsEmpty())
+		{
+			// One fixed string the release judge fails on: "SimCruise START FALLBACK: start pick found no candidate".
+			UE_LOG(LogSimCruiseDrive, Warning, TEXT("SimCruise START FALLBACK: start pick found no candidate%s within %.0f m (%s); the nearest-road rule places the car"),
+				Name.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" on %s"), *Name), RadiusM, *WhyNone);
+		}
 		for (const FSimCruiseStartPose& Pick : Picks)
 		{
 			FString Why;
@@ -639,8 +650,14 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 			UE_LOG(LogSimCruiseDrive, Display, TEXT("Start: %.0f m from the start point, %.0f m of road ahead"), Pick.DistanceM, Pick.AheadM);
 			return true;
 		}
+		if (!Picks.IsEmpty())
+		{
+			UE_LOG(LogSimCruiseDrive, Warning, TEXT("SimCruise START FALLBACK: start pick found no candidate the ground trace confirms (%d left out); the nearest-road rule places the car"), Picks.Num());
+		}
+		bStartByNearestRoad = true;
 		return Stream->FindRoadPoseFacing(Name, StartCm, RadiusM, PreferredYaw, Ground, Heading);
 	};
+	bStartByNearestRoad = false;
 	const bool bNamed = !StartRoadName.IsEmpty() && PickStart(StartRoadName, NamedRadiusM);
 	if (!bNamed && !StartRoadName.IsEmpty())
 	{

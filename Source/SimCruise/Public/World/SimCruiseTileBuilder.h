@@ -136,6 +136,8 @@ namespace SimCruiseAerialCache
 	SIMCRUISE_API TSharedPtr<const FSimCruiseAerialImage, ESPMode::ThreadSafe> Load(const FString& Key, const FString& Path);
 }
 
+namespace SimCruiseRoadCheck { struct FTopSurface; }
+
 struct SIMCRUISE_API FSimCruiseTileBuild
 {
 	FIntPoint Tile = FIntPoint::ZeroValue;
@@ -170,6 +172,15 @@ struct SIMCRUISE_API FSimCruiseTileBuild
 
 	/** The tile scan (SimCruiseScan), when -SimCruiseScan or -SimCruiseScanView asks for it (no reader uses it yet). */
 	TSharedPtr<const struct FSimCruiseTileScan, ESPMode::ThreadSafe> Scan;
+
+	/**
+	 * The road layer's faces, binned (SimCruiseRoadCheck::FTopSurface), made on the worker. An
+	 * installed tile hands its layers' triangles to the collision and empties them
+	 * (ASimCruiseWorldTile::Install), so the start pick reads the road faces here: with the
+	 * emptied layer it found no road under any start and the game fell back to the nearest
+	 * road (Welch, WV, nose at the bank, v2.0.3 release-4).
+	 */
+	TSharedPtr<const SimCruiseRoadCheck::FTopSurface, ESPMode::ThreadSafe> RoadTops;
 
 	/** Palms to instance on this tile. */
 	TArray<FSimCruisePalmInstance> PalmInstances;

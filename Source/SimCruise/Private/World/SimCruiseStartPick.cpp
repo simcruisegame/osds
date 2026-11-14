@@ -16,6 +16,8 @@ namespace
 	thread_local TMap<const FSimCruiseTileBuild*, TSharedPtr<SimCruiseRoadCheck::FTopSurface>>* GTops = nullptr;
 	const SimCruiseRoadCheck::FTopSurface& TopsFor(const FSimCruiseTileBuild& B, TSharedPtr<SimCruiseRoadCheck::FTopSurface>& Local)
 	{
+		// The build's own (made on the worker): an installed tile's road layer is empty.
+		if (B.RoadTops.IsValid()) return *B.RoadTops;
 		if (GTops)
 		{
 			TSharedPtr<SimCruiseRoadCheck::FTopSurface>& Entry = GTops->FindOrAdd(&B);
@@ -274,9 +276,12 @@ bool SimCruiseStartPick::OnCarriageway(const TArray<FSimCruiseStartTile>& Tiles,
 }
 
 TArray<FSimCruiseStartPose> SimCruiseStartPick::Candidates(const TArray<FSimCruiseStartTile>& Tiles, const FString& RoadName, const FVector& NearCm,
-	double RadiusM, double PreferredYawDeg, int32 MaxCandidates)
+	double RadiusM, double PreferredYawDeg, int32 MaxCandidates, FString* OutWhyNone)
 {
 	TArray<FSimCruiseStartPose> Out;
+	// Why stations in reach were left out, for the log when none is left.
+	int32 InReach = 0, NumJunction = 0, NumEdge = 0, NumCurve = 0, NumCurveAhead = 0, NumRoom = 0, NumFootprint = 0, NumJudgeEdge = 0, NumJudgeLine = 0;
+	FString FirstFootprint;
 	// The road faces of each tile, binned once for this call.
 	TMap<const FSimCruiseTileBuild*, TSharedPtr<SimCruiseRoadCheck::FTopSurface>> TopCache;
 	GTops = &TopCache;
@@ -308,24 +313,25 @@ TArray<FSimCruiseStartPose> SimCruiseStartPick::Candidates(const TArray<FSimCrui
 			for (int32 i = 1; i + 1 < Ribbon.St.Num(); ++i)
 			{
 				const FSimCruiseRibbonStation& St = Ribbon.St[i];
-				if (NearJunction[i]) continue;
 				const double D = FVector2d::Distance(World(Tiles[t], St.C), Near);
 				if (D > RadiusM) continue;
+				++InReach;
+				if (NearJunction[i]) { ++NumJunction; continue; }
 				// 25 m or more inside the tile: the seam's road ends meet the next tile's there.
-				if (St.C.X < 25.0 || St.C.Y < 25.0 || St.C.X > B->TileSizeM - 25.0 || St.C.Y > B->TileSizeM - 25.0) continue;
+				if (St.C.X < 25.0 || St.C.Y < 25.0 || St.C.X > B->TileSizeM - 25.0 || St.C.Y > B->TileSizeM - 25.0) { ++NumEdge; continue; }
 				// A straight piece: under 15 degrees of turn over 12 m each way (the car faces the road
 				// within a few degrees wherever it stands on it).
 				const FVector2d Back = Ribbon.St[StationAt(Ribbon, St.S - 12.0)].T, Fore = Ribbon.St[StationAt(Ribbon, St.S + 12.0)].T;
-				if (FVector2d::DotProduct(Back, Fore) < FMath::Cos(FMath::DegreesToRadians(15.0))) continue;
+				if (FVector2d::DotProduct(Back, Fore) < FMath::Cos(FMath::DegreesToRadians(15.0))) { ++NumCurve; continue; }
 				for (const int32 Way : { 1, -1 })
 				{
 					if (St.Travel != 0 && St.Travel != Way) continue;
 					// The road ahead of the nose is straight too: under 10 degrees of turn over the next
 					// 20 m (the drawn road curving away from the car's heading).
-					if (FVector2d::DotProduct(St.T, Ribbon.St[StationAt(Ribbon, St.S + 20.0 * Way)].T) < FMath::Cos(FMath::DegreesToRadians(10.0))) continue;
+					if (FVector2d::DotProduct(St.T, Ribbon.St[StationAt(Ribbon, St.S + 20.0 * Way)].T) < FMath::Cos(FMath::DegreesToRadians(10.0))) { ++NumCurveAhead; continue; }
 					bool bEnd = false;
 					const double Room = FMath::Abs(SimCruiseTrafficModel::NextDecisionS(Ribbon, Way, St.S, -1e9, bEnd) - St.S);
-					if (Room < 25.0) continue;
+					if (Room < 25.0) { ++NumRoom; continue; }
 					FSimCruiseStartPose Pose;
 					Pose.Tile = t; Pose.Ribbon = r; Pose.Station = i; Pose.Dir = Way; Pose.DistanceM = D;
 					const FVector2d Dir = St.T * static_cast<double>(Way);
@@ -334,14 +340,15 @@ TArray<FSimCruiseStartPose> SimCruiseStartPick::Candidates(const TArray<FSimCrui
 					const FVector2d P = St.C + St.R * L;
 					Pose.LocationCm = Tiles[t].OriginCm + FVector(P.X * 100.0, P.Y * 100.0, Ribbon.CarriagewayHeight(i, L) * 100.0);
 					Pose.Rotation = FRotator(0.0, FMath::RadiansToDegrees(FMath::Atan2(Dir.Y, Dir.X)), 0.0);
-					if (!OnCarriageway(Tiles, Pose, nullptr, &Pose.CheckCm)) continue;
+					FString Why;
+					if (!OnCarriageway(Tiles, Pose, &Why, &Pose.CheckCm)) { if (NumFootprint++ == 0) FirstFootprint = Why; continue; }
 					// The drive judge's own edge (its nearest aligned line and that line's half width):
 					// the car's middle 1.5 m or more inside it (a car's half width and 0.5 m), and that
 					// line is this ribbon (the robot's first route line is the start's road, not a cross
 					// street). Welch, WV passed the footprint check and still stood 2.0 m past it.
 					int32 JudgeTile = INDEX_NONE, JudgeRibbon = INDEX_NONE;
-					if (JudgePastEdgeM(Tiles, Pose.LocationCm, Pose.Rotation.Yaw, &JudgeTile, &JudgeRibbon) > -JudgeInsideM) continue;
-					if (JudgeTile != t || JudgeRibbon != r) continue;
+					if (JudgePastEdgeM(Tiles, Pose.LocationCm, Pose.Rotation.Yaw, &JudgeTile, &JudgeRibbon) > -JudgeInsideM) { ++NumJudgeEdge; continue; }
+					if (JudgeTile != t || JudgeRibbon != r) { ++NumJudgeLine; continue; }
 					Pose.AheadM = AheadM(Tiles, t, r, St.S, Way, WantedAheadM);
 					// Nearest first among the starts with a road ahead; a short road (a dead end in
 					// reach) only when there is no other; the requested heading where the road allows.
@@ -365,6 +372,11 @@ TArray<FSimCruiseStartPose> SimCruiseStartPick::Candidates(const TArray<FSimCrui
 		}
 		if (!bClose) Distinct.Add(P);
 		if (Distinct.Num() >= MaxCandidates) break;
+	}
+	if (OutWhyNone && Distinct.IsEmpty())
+	{
+		*OutWhyNone = FString::Printf(TEXT("%d tiles, %d stations in reach: %d near a junction, %d near the tile edge, %d on a curve, %d curve ahead, %d short of room, %d off the carriageway (first: %s), %d outside the judge's edge, %d on another judge line"),
+			Tiles.Num(), InReach, NumJunction, NumEdge, NumCurve, NumCurveAhead, NumRoom, NumFootprint, FirstFootprint.IsEmpty() ? TEXT("none") : *FirstFootprint, NumJudgeEdge, NumJudgeLine);
 	}
 	return Distinct;
 }

@@ -67,7 +67,7 @@ public:
 	 */
 	bool FindRoadPoseFacing(const FString& RoadName, const FVector& NearWorldCm, double SearchRadiusM, double PreferredYawDeg, FVector& OutLocationCm, FRotator& OutRotation) const;
 	/** Start places by SimCruiseStartPick's rules on the built tiles, best first. */
-	TArray<FSimCruiseStartPose> FindStartCandidates(const FString& RoadName, const FVector& NearWorldCm, double SearchRadiusM, double PreferredYawDeg) const;
+	TArray<FSimCruiseStartPose> FindStartCandidates(const FString& RoadName, const FVector& NearWorldCm, double SearchRadiusM, double PreferredYawDeg, FString* OutWhyNone = nullptr) const;
 
 	/** Tiles of this drive (since StartAt) that failed to load or build: no network, no helper, a bad document. */
 	int32 NumTilesFailed() const { return TilesFailed; }
@@ -81,7 +81,10 @@ public:
 	 * never build together), so a stall on the game thread then (the car's model) does not
 	 * hold the tiles back. Off: MaxConcurrentBuilds again.
 	 */
+	/** On while a start waits for its tiles. Off: the start pick is done, and the tiles free the road faces it read. */
 	void SetStartBoost(bool bOn);
+	/** A start waits (any placement, not only the first): tiles installed from now keep the road faces for the pick. */
+	void HoldRoadTops() { bStartPending = true; }
 	static constexpr int32 StartConcurrentBuilds = 5;
 
 	FSimCruiseWorldRebased OnRebased;
@@ -191,6 +194,9 @@ private:
 	TMap<FIntPoint, TObjectPtr<ASimCruiseWorldTile>> Tiles;
 
 	bool bHasFocus = false;
+	// A start is waiting for its tiles (the first from the beginning): installed tiles keep the
+	// road faces the start pick reads until SetStartBoost(false).
+	bool bStartPending = true;
 	FVector FocusCm = FVector::ZeroVector;
 	FVector FocusVelocity = FVector::ZeroVector;
 	bool bStarted = false;

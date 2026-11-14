@@ -75,6 +75,8 @@ public:
 
 	/** Where this drive is (the place last chosen). */
 	const FSimCruisePlace& GetPlace() const { return CurrentPlace; }
+	/** The car was placed by the nearest-road rule because the start pick found no start (a start fault for the release judge). */
+	bool StartedByNearestRoad() const { return bStartByNearestRoad; }
 
 	/** Latitude and longitude of a world position (false before the world starts). */
 	bool WorldToLonLat(const FVector& WorldCm, double& OutLon, double& OutLat) const;
@@ -126,6 +128,7 @@ private:
 
 	bool bWorldDrive = false;
 	bool bCarPlaced = false;
+	bool bStartByNearestRoad = false;
 	/** The player's car model was built while the start tiles loaded (once per place). */
 	bool bStartCarBuilt = false;
 	/** Traffic and parked-car models built so far while the start tiles load. */

@@ -24,6 +24,8 @@ struct SIMCRUISE_API FSimCruisePreflightStats
 	float OffRoadSeconds = 0.f;
 	/** The start fell back to the bundled place (the requested place did not load). */
 	bool bFellBack = false;
+	/** The start pick found no start and the nearest-road rule placed the car ("SimCruise START FALLBACK" in the log). */
+	bool bStartByNearestRoad = false;
 	/** The start's VIEWCHECK (when it ran). */
 	bool bViewCheckRan = false;
 	bool bViewCheckPassed = false;

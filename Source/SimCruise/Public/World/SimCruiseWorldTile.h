@@ -44,6 +44,8 @@ public:
 
 	FIntPoint GetTileId() const { return TileId; }
 	const FSimCruiseTileBuild* GetBuild() const { return Build.Get(); }
+	/** Frees the road faces kept for the start pick (FSimCruiseTileBuild::RoadTops) once the car is placed. */
+	void DropRoadTops() { if (Build.IsValid()) Build->RoadTops.Reset(); }
 	/** The named places' lettering on this tile. */
 	const TArray<TObjectPtr<UTextRenderComponent>>& GetSigns() const { return SignComponents; }
 

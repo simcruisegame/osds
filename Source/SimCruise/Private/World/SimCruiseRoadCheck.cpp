@@ -79,7 +79,9 @@ namespace SimCruiseRoadCheck
 	{
 		FTriangleGrid G;
 		BuildGrid(Build, G);
-		for (const FTriangleGrid::FTri& T : G.Tris) { A.Add(T.A); B.Add(T.B); C.Add(T.C); }
+		A.Reserve(G.Tris.Num()); B.Reserve(G.Tris.Num()); C.Reserve(G.Tris.Num());
+		for (const FTriangleGrid::FTri& T : G.Tris) { A.Add(FVector3f(T.A)); B.Add(FVector3f(T.B)); C.Add(FVector3f(T.C)); }
+		for (TPair<FIntPoint, TArray<int32>>& Cell : G.Cells) Cell.Value.Shrink();
 		Cells = MoveTemp(G.Cells);
 	}
 
@@ -98,7 +100,7 @@ namespace SimCruiseRoadCheck
 			const double L3 = 1.0 - L1 - L2;
 			constexpr double Eps = -1e-7;
 			if (L1 < Eps || L2 < Eps || L3 < Eps) continue;
-			const double Z = L1 * A[i].Z + L2 * B[i].Z + L3 * C[i].Z;
+			const double Z = L1 * double(A[i].Z) + L2 * double(B[i].Z) + L3 * double(C[i].Z);
 			if (!bAny || Z > OutHeightM) { OutHeightM = Z; bAny = true; }
 		}
 		return bAny;

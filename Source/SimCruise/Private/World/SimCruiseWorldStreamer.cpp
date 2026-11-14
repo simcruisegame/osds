@@ -119,6 +119,13 @@ void ASimCruiseWorldStreamer::StartAt(double LonDeg, double LatDeg, const FStrin
 
 void ASimCruiseWorldStreamer::SetStartBoost(bool bOn)
 {
+	// The road faces each build keeps for the start pick (2-3 MB a tile) are not needed once the
+	// car stands on the road: freed now, and on every tile installed until the next start.
+	bStartPending = bOn;
+	if (!bOn)
+	{
+		for (const TPair<FIntPoint, TObjectPtr<ASimCruiseWorldTile>>& Pair : Tiles) if (Pair.Value) Pair.Value->DropRoadTops();
+	}
 	const int32 Builds = bOn ? FMath::Max(MaxConcurrentBuilds, StartConcurrentBuilds) : FMath::Max(1, MaxConcurrentBuilds);
 	if (Manager.MaxInFlight == Builds) return;
 	Manager.MaxInFlight = Builds;
@@ -186,7 +193,7 @@ bool ASimCruiseWorldStreamer::FindRoadPose(const FString& RoadName, const FVecto
 	return FindRoadPoseFacing(RoadName, NearWorldCm, SearchRadiusM, TNumericLimits<double>::Max(), OutLocationCm, OutRotation);
 }
 
-TArray<FSimCruiseStartPose> ASimCruiseWorldStreamer::FindStartCandidates(const FString& RoadName, const FVector& NearWorldCm, double SearchRadiusM, double PreferredYawDeg) const
+TArray<FSimCruiseStartPose> ASimCruiseWorldStreamer::FindStartCandidates(const FString& RoadName, const FVector& NearWorldCm, double SearchRadiusM, double PreferredYawDeg, FString* OutWhyNone) const
 {
 	TArray<FSimCruiseStartTile> Built;
 	for (const auto& Pair : Tiles)
@@ -194,7 +201,7 @@ TArray<FSimCruiseStartPose> ASimCruiseWorldStreamer::FindStartCandidates(const F
 		const ASimCruiseWorldTile* Tile = Pair.Value;
 		if (Tile && Tile->GetBuild()) Built.Add({ Tile->GetActorLocation(), Tile->GetBuild() });
 	}
-	return SimCruiseStartPick::Candidates(Built, RoadName, NearWorldCm, SearchRadiusM, PreferredYawDeg);
+	return SimCruiseStartPick::Candidates(Built, RoadName, NearWorldCm, SearchRadiusM, PreferredYawDeg, 24, OutWhyNone);
 }
 
 bool ASimCruiseWorldStreamer::FindRoadPoseFacing(const FString& RoadName, const FVector& NearWorldCm, double SearchRadiusM, double PreferredYawDeg, FVector& OutLocationCm, FRotator& OutRotation) const
@@ -688,6 +695,7 @@ void ASimCruiseWorldStreamer::TickStreaming(float DeltaSeconds)
 			*SimCruiseTileName(TileId), B.Roads.Ribbons.Num(), B.Roads.NumStations(), B.MarkingQuads, B.StopSigns, B.NumTriangles(), B.ConditionedVertices,
 			B.MinHeightM, B.MaxHeightM, B.BuildMs, Aerial ? TEXT(", aerial") : TEXT(""));
 		Tile->Install(Result->Build.ToSharedRef(), Resources, Aerial, true);
+		if (!bStartPending) Tile->DropRoadTops();
 		Tiles.Add(TileId, Tile);
 		++TilesInstalled;
 		++Installed;

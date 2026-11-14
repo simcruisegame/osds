@@ -82,6 +82,7 @@ namespace SimCruisePreflightRules
 		if (S.DistanceM < MinDistanceM) R.Add(FString::Printf(TEXT("robot-moved-only-%.0fm"), S.DistanceM));
 		if (S.OffRoadSeconds > MaxOffRoadSeconds) R.Add(FString::Printf(TEXT("left-the-road-%.1fs"), S.OffRoadSeconds));
 		if (S.bFellBack) R.Add(TEXT("start-fell-back-to-bundled-place"));
+		if (S.bStartByNearestRoad) R.Add(TEXT("start-by-nearest-road-rule"));
 		if (S.bViewCheckRan && !S.bViewCheckPassed) R.Add(FString::Printf(TEXT("viewcheck-fail(%s)"), *S.ViewCheckReasons.Replace(TEXT(","), TEXT("+"))));
 		if (S.SkySamples >= 50 && S.SkyWhitePercent > MaxSkyWhitePercent) R.Add(FString::Printf(TEXT("white-sky-%.0f%%"), S.SkyWhitePercent));
 		if (S.TilePopIns > 0) R.Add(FString::Printf(TEXT("tile-pop-in-%d"), S.TilePopIns));
@@ -1078,6 +1079,7 @@ void ASimCruisePreflight::Finish()
 	if (Mode)
 	{
 		Place = Mode->GetPlace().Title;
+		Stats.bStartByNearestRoad = Mode->StartedByNearestRoad();
 		if (bRequestedStart)
 		{
 			// About 111 km a degree; a start 3 km off the asked point is another place.
