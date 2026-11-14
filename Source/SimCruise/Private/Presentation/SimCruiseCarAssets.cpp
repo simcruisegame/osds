@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Presentation/SimCruiseCarAssets.h"
+#include "Async/Async.h"
 
 #include "Engine/StaticMesh.h"
 #include "HAL/FileManager.h"
@@ -177,6 +178,121 @@ namespace SimCruiseCarAssetsPrivate
 	}
 }
 
+namespace SimCruiseCarAssetsPrivate
+{
+	/** The CPU part of a build (profile, car data, glTF, rig): no UObjects, safe on a worker thread. */
+	struct FPrepared
+	{
+		TSharedPtr<FSimCruiseBuiltCar> Car;
+		FSimCruiseRiggedCar Rigged;
+		FSimCruiseRigInputs Inputs;
+		double Start = 0.0;
+		double PrepareSeconds = 0.0;
+		bool bOk = false;
+		FString Error;
+	};
+
+	TSharedPtr<FPrepared> PrepareCar(const FString& CarId)
+	{
+		TSharedPtr<FPrepared> Out = MakeShared<FPrepared>();
+		FString OutError;
+		FSimCruiseRigInputs& Inputs = Out->Inputs;
+		FSimCruiseRiggedCar& Rigged = Out->Rigged;
+		const double Start = FPlatformTime::Seconds();
+		Out->Start = Start;
+		TSharedPtr<FSimCruiseBuiltCar> Car = MakeShared<FSimCruiseBuiltCar>();
+		Out->Car = Car;
+		Car->CarId = CarId;
+		if (!SimCruisePresentationProfiles::Load(CarId, Car->Profile, OutError))
+		{
+			{ Out->Error = OutError; return Out; }
+		}
+		// A driven car is fitted to its driving data; a car that only parks, to its profile's dimensions.
+		if (const TOptional<FSimCruiseCarPresentationProfile::FParkedDimensions>& Parked = Car->Profile.Parked; Parked.IsSet())
+		{
+			Inputs.WheelbaseM = Parked->WheelbaseM;
+			Inputs.FrontTrackM = Parked->FrontTrackM;
+			Inputs.RearTrackM = Parked->RearTrackM;
+			Inputs.TireRadiusM = Parked->TyreRadiusM;
+			Inputs.TireWidthM = Parked->TyreWidthM > 0.0 ? Parked->TyreWidthM : Inputs.TireWidthM;
+			Car->SteeringRatio = Car->Profile.SteeringRatio;
+		}
+		else
+		{
+			FSimCruiseCarDefinition Definition;
+			if (!FSimCruiseCarDefinitionLoader::LoadById(CarId, Definition, OutError))
+			{
+				{ Out->Error = OutError; return Out; }
+			}
+			Inputs = FSimCruiseRigInputs::FromCar(Definition);
+		}
+		const FString ModelPath = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), Car->Profile.ModelPath));
+		if (!SimCruiseGltf::Load(ModelPath, Car->Model, OutError))
+		{
+			{ Out->Error = OutError; return Out; }
+		}
+		FString RigError;
+		const bool bRigged = SimCruiseCarModelRig::Build(Car->Model, Car->Profile, Inputs, Rigged, RigError);
+		Car->Log = Rigged.Log;
+		if (bRigged && Car->Profile.WheelDesign.IsSet())
+		{
+			// The profile's wheel design replaces the model's rims and tyres; discs and calipers stay.
+			// Its own untextured materials: a bright silver-painted face, a polished lip, a dark cap.
+			auto AddMaterial = [&Car](const TCHAR* Name, const FLinearColor& Base, float Metallic, float Roughness)
+			{
+				FSimCruiseGltfMaterial M;
+				M.Name = Name;
+				M.BaseColorFactor = Base;
+				M.MetallicFactor = Metallic;
+				M.RoughnessFactor = Roughness;
+				return Car->Model.Materials.Add(M);
+			};
+			SimCruiseWheelBuilder::FMaterials Materials;
+			Materials.Face = AddMaterial(TEXT("simcruise_wheel_face"), FLinearColor(0.52f, 0.53f, 0.55f), 1.f, 0.38f);
+			Materials.Lip = AddMaterial(TEXT("simcruise_wheel_lip"), FLinearColor(0.91f, 0.91f, 0.92f), 1.f, 0.1f);
+			Materials.Cap = AddMaterial(TEXT("simcruise_wheel_cap"), FLinearColor(0.02f, 0.02f, 0.022f), 0.f, 0.45f);
+			// Plain rubber: the model's tyre material carries its own texture and sidewall detail, laid out for its UVs.
+			Materials.Tyre = AddMaterial(TEXT("simcruise_wheel_tyre"), FLinearColor(0.025f, 0.025f, 0.026f), 0.f, 0.85f);
+			for (int32 W = 0; W < 4; ++W)
+			{
+				SimCruiseWheelBuilder::FMaterials Own = Materials;
+				TArray<FSimCruiseRigSection> Kept;
+				for (FSimCruiseRigSection& Section : Rigged.Wheels[W].Sections)
+				{
+					if (Section.Role == ESimCruiseCarMaterialRole::BrakeDisc || Section.Role == ESimCruiseCarMaterialRole::BrakeCaliper) Kept.Add(MoveTemp(Section));
+				}
+				SimCruiseWheelBuilder::BuildMeshWheel(Car->Profile.WheelDesign, Inputs.TireRadiusM * 100.0, Inputs.TireWidthM * 100.0,
+					(W == 0 || W == 2) ? -1.0 : 1.0, Own, Kept);
+				Rigged.Wheels[W].Sections = MoveTemp(Kept);
+			}
+			Rigged.Log.Add(FString::Printf(TEXT("wheel design '%s': %.0fx%.1f in, %.1f in lip, %d spokes (%s)"), *Car->Profile.WheelDesign.Style,
+				Car->Profile.WheelDesign.RimDiameterIn, Car->Profile.WheelDesign.RimWidthIn, Car->Profile.WheelDesign.LipIn, Car->Profile.WheelDesign.Spokes,
+				*Car->Profile.WheelDesign.Source));
+			Car->Log = Rigged.Log;
+		}
+		if (!bRigged)
+		{
+			OutError = FString::Printf(TEXT("%s: could not fit %s: %s"), *CarId, *ModelPath, *RigError);
+			{ Out->Error = OutError; return Out; }
+		}
+		// Role areas split some author materials: their copies follow the model's own.
+		for (const FSimCruiseRiggedCar::FExtraMaterial& Extra : Rigged.ExtraMaterials)
+		{
+			FSimCruiseGltfMaterial Copy = Car->Model.Materials.IsValidIndex(Extra.Source) ? Car->Model.Materials[Extra.Source] : FSimCruiseGltfMaterial();
+			Copy.Name += FString(TEXT("#")) + SimCruiseCarMaterialRoles::ToString(Extra.Role);
+			Car->Model.Materials.Add(Copy);
+		}
+		// Geometry now lives in the rig parts; keep only materials and images.
+		Car->Model.Primitives.Empty();
+		Out->PrepareSeconds = FPlatformTime::Seconds() - Start;
+		Out->bOk = true;
+		return Out;
+	}
+
+	/** Builds started on a worker thread (PrepareAsync), by car. Game thread only. */
+	TMap<FString, TFuture<TSharedPtr<FPrepared>>> Pending;
+}
+
 TSharedPtr<FSimCruiseBuiltCar> SimCruiseCarAssets::Get(const FString& CarId, FString& OutError)
 {
 	using namespace SimCruiseCarAssetsPrivate;
@@ -184,92 +300,30 @@ TSharedPtr<FSimCruiseBuiltCar> SimCruiseCarAssets::Get(const FString& CarId, FSt
 	{
 		return *Found;
 	}
-	const double Start = FPlatformTime::Seconds();
-	TSharedPtr<FSimCruiseBuiltCar> Car = MakeShared<FSimCruiseBuiltCar>();
-	Car->CarId = CarId;
-	if (!SimCruisePresentationProfiles::Load(CarId, Car->Profile, OutError))
+	// The CPU part from a worker thread when PrepareAsync started it (it waits for it if still
+	// running), else here; then the meshes, which need the game thread.
+	TSharedPtr<FPrepared> Prepared;
+	if (TFuture<TSharedPtr<FPrepared>>* Running = Pending.Find(CarId))
 	{
-		return nullptr;
-	}
-	// A driven car is fitted to its driving data; a car that only parks, to its profile's dimensions.
-	FSimCruiseRigInputs Inputs;
-	if (const TOptional<FSimCruiseCarPresentationProfile::FParkedDimensions>& Parked = Car->Profile.Parked; Parked.IsSet())
-	{
-		Inputs.WheelbaseM = Parked->WheelbaseM;
-		Inputs.FrontTrackM = Parked->FrontTrackM;
-		Inputs.RearTrackM = Parked->RearTrackM;
-		Inputs.TireRadiusM = Parked->TyreRadiusM;
-		Inputs.TireWidthM = Parked->TyreWidthM > 0.0 ? Parked->TyreWidthM : Inputs.TireWidthM;
-		Car->SteeringRatio = Car->Profile.SteeringRatio;
+		const double WaitStart = FPlatformTime::Seconds();
+		Prepared = Running->Get();
+		Pending.Remove(CarId);
+		UE_LOG(LogSimCruiseCarAssets, Display, TEXT("%s: prepared on a worker thread in %.1f s (waited %.1f s for it)"), *CarId, Prepared ? Prepared->PrepareSeconds : 0.0, FPlatformTime::Seconds() - WaitStart);
 	}
 	else
 	{
-		FSimCruiseCarDefinition Definition;
-		if (!FSimCruiseCarDefinitionLoader::LoadById(CarId, Definition, OutError))
-		{
-			return nullptr;
-		}
-		Inputs = FSimCruiseRigInputs::FromCar(Definition);
+		Prepared = PrepareCar(CarId);
 	}
-	const FString ModelPath = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), Car->Profile.ModelPath));
-	if (!SimCruiseGltf::Load(ModelPath, Car->Model, OutError))
+	if (!Prepared || !Prepared->bOk)
 	{
+		OutError = Prepared ? Prepared->Error : FString(TEXT("no build"));
 		return nullptr;
 	}
-	FSimCruiseRiggedCar Rigged;
-	FString RigError;
-	const bool bRigged = SimCruiseCarModelRig::Build(Car->Model, Car->Profile, Inputs, Rigged, RigError);
-	Car->Log = Rigged.Log;
-	if (bRigged && Car->Profile.WheelDesign.IsSet())
-	{
-		// The profile's wheel design replaces the model's rims and tyres; discs and calipers stay.
-		// Its own untextured materials: a bright silver-painted face, a polished lip, a dark cap.
-		auto AddMaterial = [&Car](const TCHAR* Name, const FLinearColor& Base, float Metallic, float Roughness)
-		{
-			FSimCruiseGltfMaterial M;
-			M.Name = Name;
-			M.BaseColorFactor = Base;
-			M.MetallicFactor = Metallic;
-			M.RoughnessFactor = Roughness;
-			return Car->Model.Materials.Add(M);
-		};
-		SimCruiseWheelBuilder::FMaterials Materials;
-		Materials.Face = AddMaterial(TEXT("simcruise_wheel_face"), FLinearColor(0.52f, 0.53f, 0.55f), 1.f, 0.38f);
-		Materials.Lip = AddMaterial(TEXT("simcruise_wheel_lip"), FLinearColor(0.91f, 0.91f, 0.92f), 1.f, 0.1f);
-		Materials.Cap = AddMaterial(TEXT("simcruise_wheel_cap"), FLinearColor(0.02f, 0.02f, 0.022f), 0.f, 0.45f);
-		// Plain rubber: the model's tyre material carries its own texture and sidewall detail, laid out for its UVs.
-		Materials.Tyre = AddMaterial(TEXT("simcruise_wheel_tyre"), FLinearColor(0.025f, 0.025f, 0.026f), 0.f, 0.85f);
-		for (int32 W = 0; W < 4; ++W)
-		{
-			SimCruiseWheelBuilder::FMaterials Own = Materials;
-			TArray<FSimCruiseRigSection> Kept;
-			for (FSimCruiseRigSection& Section : Rigged.Wheels[W].Sections)
-			{
-				if (Section.Role == ESimCruiseCarMaterialRole::BrakeDisc || Section.Role == ESimCruiseCarMaterialRole::BrakeCaliper) Kept.Add(MoveTemp(Section));
-			}
-			SimCruiseWheelBuilder::BuildMeshWheel(Car->Profile.WheelDesign, Inputs.TireRadiusM * 100.0, Inputs.TireWidthM * 100.0,
-				(W == 0 || W == 2) ? -1.0 : 1.0, Own, Kept);
-			Rigged.Wheels[W].Sections = MoveTemp(Kept);
-		}
-		Rigged.Log.Add(FString::Printf(TEXT("wheel design '%s': %.0fx%.1f in, %.1f in lip, %d spokes (%s)"), *Car->Profile.WheelDesign.Style,
-			Car->Profile.WheelDesign.RimDiameterIn, Car->Profile.WheelDesign.RimWidthIn, Car->Profile.WheelDesign.LipIn, Car->Profile.WheelDesign.Spokes,
-			*Car->Profile.WheelDesign.Source));
-		Car->Log = Rigged.Log;
-	}
-	if (!bRigged)
-	{
-		OutError = FString::Printf(TEXT("%s: could not fit %s: %s"), *CarId, *ModelPath, *RigError);
-		return nullptr;
-	}
-	// Role areas split some author materials: their copies follow the model's own.
-	for (const FSimCruiseRiggedCar::FExtraMaterial& Extra : Rigged.ExtraMaterials)
-	{
-		FSimCruiseGltfMaterial Copy = Car->Model.Materials.IsValidIndex(Extra.Source) ? Car->Model.Materials[Extra.Source] : FSimCruiseGltfMaterial();
-		Copy.Name += FString(TEXT("#")) + SimCruiseCarMaterialRoles::ToString(Extra.Role);
-		Car->Model.Materials.Add(Copy);
-	}
-	// Geometry now lives in the rig parts; keep only materials and images.
-	Car->Model.Primitives.Empty();
+	const double Start = FPlatformTime::Seconds() - Prepared->PrepareSeconds;
+	const double FinishStart = FPlatformTime::Seconds();
+	TSharedPtr<FSimCruiseBuiltCar> Car = Prepared->Car;
+	FSimCruiseRiggedCar& Rigged = Prepared->Rigged;
+	const FSimCruiseRigInputs& Inputs = Prepared->Inputs;
 
 	BuildPart(*Car, Rigged.Body, Car->Body);
 	for (int32 W = 0; W < 4; ++W)
@@ -403,14 +457,21 @@ TSharedPtr<FSimCruiseBuiltCar> SimCruiseCarAssets::Get(const FString& CarId, FSt
 	}
 	Car->SteeringRatio = Car->Profile.SteeringRatio;
 	Car->BuildSeconds = FPlatformTime::Seconds() - Start;
-	Car->Log.Add(FString::Printf(TEXT("built in %.1f s (body %d triangles%s)"), Car->BuildSeconds, Car->Body.Triangles,
-		Car->Body.bNanite ? TEXT(", Nanite") : TEXT("")));
+	Car->Log.Add(FString::Printf(TEXT("built in %.1f s: %.1f s glTF and rig, %.1f s meshes (body %d triangles%s)"), Car->BuildSeconds, Prepared->PrepareSeconds,
+		FPlatformTime::Seconds() - FinishStart, Car->Body.Triangles, Car->Body.bNanite ? TEXT(", Nanite") : TEXT("")));
 	for (const FString& Line : Car->Log)
 	{
 		UE_LOG(LogSimCruiseCarAssets, Display, TEXT("%s: %s"), *CarId, *Line);
 	}
 	Cache.Add(CarId, Car);
 	return Car;
+}
+
+void SimCruiseCarAssets::PrepareAsync(const FString& CarId)
+{
+	using namespace SimCruiseCarAssetsPrivate;
+	if (CarId.IsEmpty() || Cache.Contains(CarId) || Pending.Contains(CarId)) return;
+	Pending.Add(CarId, Async(EAsyncExecution::ThreadPool, [CarId]() { return PrepareCar(CarId); }));
 }
 
 void SimCruiseCarAssets::ClearCache()

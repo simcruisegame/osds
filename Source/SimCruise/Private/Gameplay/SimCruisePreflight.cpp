@@ -411,6 +411,22 @@ void ASimCruisePreflight::Tick(float DeltaSeconds)
 	ASimCruiseGameMode* Mode = GetWorld()->GetAuthGameMode<ASimCruiseGameMode>();
 	ASimCruiseWorldStreamer* Stream = Mode ? Mode->GetStreamer() : nullptr;
 
+	// Until the drive starts the car stands on its parking brake: an automatic creeps in Drive, and a
+	// car placed on a slope rolls (the Mustang crept 3.7 m onto the grass bank at Welch, West
+	// Virginia, while the tiles and shaders finished). The cockpit test holds it itself while it runs.
+	if ((Stage == EStage::WaitReady || Stage == EStage::Settle) && Player && Pawn && !bHoldingParkingBrake)
+	{
+		bool bCockpitTestRunning = false;
+		for (TActorIterator<ASimCruiseCockpitTest> It(GetWorld()); It; ++It)
+		{
+			bCockpitTestRunning |= !It->IsFinished();
+		}
+		if (!bCockpitTestRunning)
+		{
+			bHoldingParkingBrake = true;
+			Player->InjectKey(EKeys::Gamepad_FaceButton_Right, true);
+		}
+	}
 	switch (Stage)
 	{
 	case EStage::WaitReady:
@@ -560,7 +576,12 @@ void ASimCruisePreflight::DriveTick(ASimCruisePlayerController* Player, float De
 	const FVector2d Car(CarCm.X, CarCm.Y);
 	const FVector2d Forward = FVector2d(Pawn->GetActorForwardVector().X, Pawn->GetActorForwardVector().Y).GetSafeNormal();
 	const double Speed = Player->GetTelemetry().BodyVelocityMps.X;
-	const double YawRate = FMath::DegreesToRadians(FMath::FindDeltaAngleDegrees(LastYawDeg, Pawn->GetActorRotation().Yaw)) / FMath::Max(DeltaSeconds, 1e-3f);
+	// The yaw rate from the frame's change of heading jumps with uneven frames and single-step
+	// contacts (50-196 deg/s spikes in the Dragon's hairpins), and the steering answered each one:
+	// the wheel sawed. A driver feels the car's turn smoothly: the rate, low-passed (0.1 s).
+	const double RawYawRate = FMath::DegreesToRadians(FMath::FindDeltaAngleDegrees(LastYawDeg, Pawn->GetActorRotation().Yaw)) / FMath::Max(DeltaSeconds, 1e-3f);
+	SmoothedYawRate += (FMath::Clamp(RawYawRate, -2.0, 2.0) - SmoothedYawRate) * (1.0 - FMath::Exp(-FMath::Max(DeltaSeconds, 0.f) / 0.1));
+	const double YawRate = SmoothedYawRate;
 	LastYawDeg = Pawn->GetActorRotation().Yaw;
 	GatherLines(Stream, CarCm);
 	const FCursor Here = FindCursor(Car, Forward);
@@ -609,7 +630,11 @@ void ASimCruisePreflight::DriveTick(ASimCruisePlayerController* Player, float De
 	const double WheelRad = FMath::Atan(Curvature * WheelbaseM);
 	const double RangeRad = WheelRad >= 0.0 ? Player->GetShaper().GetRangeRightRad() : Player->GetShaper().GetRangeLeftRad();
 	const double FeedForward = WheelRad / FMath::Max(FMath::Abs(RangeRad) > 0.01 ? FMath::Abs(RangeRad) : FullLockRad, 0.05);
-	Stick = FMath::Clamp(static_cast<float>(FeedForward + SteerIntegral + 0.4 * YawError), -1.f, 1.f);
+	const float WantStick = FMath::Clamp(static_cast<float>(FeedForward + SteerIntegral + 0.4 * YawError), -1.f, 1.f);
+	// A hand moves the stick at most about 4 full widths a second (lock to lock in half a second).
+	const float MaxStep = 4.f * FMath::Max(DeltaSeconds, 0.f);
+	Stick = LastStick + FMath::Clamp(WantStick - LastStick, -MaxStep, MaxStep);
+	LastStick = Stick;
 
 	// Speed: the road's limit, slower for the curves ahead and for a car ahead.
 	// The keen pace from the car's own grip (its published skidpad).

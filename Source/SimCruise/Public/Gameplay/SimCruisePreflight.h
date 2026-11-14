@@ -212,6 +212,9 @@ private:
 	float TelemetryClock = 0.f;
 	/** The robot holds the car on the parking brake while it waits (the brake trigger at rest selects reverse). */
 	bool bHoldingParkingBrake = false;
+	/** The robot's felt yaw rate (low-passed) and its last stick, for a smooth hand. */
+	double SmoothedYawRate = 0.0;
+	float LastStick = 0.f;
 	/** Every drive frame's real time (ms) and the path distance at the long ones. */
 	TArray<float> FrameMs;
 	/** The frame times the rules judge: after the warm-up, none a screenshot touched. */
