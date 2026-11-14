@@ -329,9 +329,11 @@ void FSimCruiseReviewRecorder::PrepareShot(ASimCruisePlayerController& Player, f
 	PendingSidecar = FString::Printf(TEXT("{\n  \"name\": \"%s\", \"t\": %.2f, \"event\": \"%s\", \"width\": %d, \"height\": %d,\n")
 		TEXT("  \"speed_unit\": \"%s\", \"speed_true\": %s, \"speed_needle\": %s, \"rpm_true\": %.0f, \"rpm_needle\": %s, \"gear\": %d,\n")
 		TEXT("  \"stick\": %s, \"rack_deg\": %s, \"road_wheel_deg\": %s, \"rim_deg\": %s,\n")
+		TEXT("  \"lat\": %.6f, \"lon\": %.6f, \"heading_deg\": %.1f, \"path_m\": %.1f,\n")
 		TEXT("  \"boxes\": {\"wheel\": %s, \"cluster\": %s, %s}\n}\n"),
 		*Name, DriveSeconds, *PendingName, W, H, Unit.IsEmpty() ? TEXT("none") : *Unit, *Num(TrueV), *Num(NeedleV), T.EngineSpeedRpm, *Num(NeedleRpm), T.Gear,
 		*Num(StickNow), *Num(FMath::RadiansToDegrees(Player.GetLastCommand().RackAngleRad)), *Num(WheelDeg), *Num(RimDeg),
+		PosLat, PosLon, PosHeadingDeg, PosPathM,
 		*WheelBox, *ClusterBox, *Mirrors);
 	PendingName = Name;
 	bPrepared = true;
