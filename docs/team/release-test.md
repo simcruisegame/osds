@@ -48,6 +48,15 @@ The owner (2026-11-14): "2.0.3 should look real and be bug free, test thoroughly
 | 11 | Timed quiet run | One cooked Dragon drive with nothing else running; its report must not say NOT QUIET | `release-test.ps1 -Cooked -Places dragon` | 10 min |
 | 12 | Known faults | Every fault from this release (the test escapes, the blind reviews, the owner's reports) with its state: fixed and verified (frame or run path), open (owner lane), or accepted (who accepted it, why) | report `known-faults.md` | 20 min |
 
+The owner's criteria for v2.0.3 (2026-11-14, 23:31Z): the whole game looks as real as we can make it, anywhere in the US; the cars drive realistically in every way; the UI and all controls work with an Xbox controller. The team's full list is in [cycles/v2.0.3.md](cycles/v2.0.3.md). So the final test also has:
+
+- **Grades per part.** Walls, bridges, street objects, trees, near ground, road surface, roofs, roadside, water, far land, sky, picture, cabin, car, driving feel, sound: each part gets a grade (A real, B close, C clearly a game, D wrong or broken) with a game frame next to a real photo of the same kind of spot (the aerial for the ground, trees, roofs and roadside; a licensed street-level photo where we have one). Pass: no part at D, and each part one grade or more above its baseline. The baseline is the release-10 (dfed34c) review of 2026-11-14 (`grades-baseline.md` in that review), as no earlier table exists.
+- **Random places under the same rules as the hero places.** Same drive length, same cars, the same review steps and grades; not a lighter check.
+- **Every Xbox controller control.** Menus and HUD (`pad-review.ps1`: every control reached and used with the pad), and driving: steer, throttle, brake, gears and paddles, handbrake, look, lens and view, pause, map. Each one by an injected pad input, with its effect seen in the log (telemetry) and in a frame. The driving pad pass is new test code (to write before the final test).
+- **Sound.** The game's own output is recorded during each review drive (the audio mixer's submix recording, a WAV in the run folder) and put on the video, so the engine note against the rpm, the tyres and the wind can be graded. New test code (to write before the final test).
+- **The owner's faults.** Every fault the owner reported in this release, with the frame from the same spot and view after the fix, side by side with the owner's own frame (rule 8 of "How we look").
+- **Early reviews.** Each candidate branch that turns green gets the new-method review early, visible, traffic off (release-10 for the look; release-11 for the bridges), so the final test finds few new faults.
+
 About 7 hours from the GO, most of it GPU time on one PC; other lanes' GPU work waits (`C:\aiwork\GPU-BUSY`, `GPU-QUEUE`). A P1 in parts 2-6 stops the cooked part until the owner decides. The report has a summary, the per-team reports, the review md with its tables, and `known-faults.md`.
 
 ## A re-test
