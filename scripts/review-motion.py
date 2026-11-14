@@ -17,8 +17,10 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 FPS = 10.0
-GRID_X, GRID_Y = 16, 9            # cells over the view
-VIEW = (0, 180, 1920, 640)        # the windscreen band at 1920x1080 (sky, road, buildings; not the dash)
+GRID_X, GRID_Y = 12, 6            # cells over the view
+# The windscreen between the A-pillars, above the dash (1920x1080, the Miata and the Corvette at the
+# driver's eye): one camera shift fits it; the side windows move differently and gave false pops.
+VIEW = (660, 230, 1380, 590)
 MIRROR = (1380, 285, 1790, 385)   # the inside mirror glass (Miata and Corvette at the driver's eye)
 
 def ffmpeg():
@@ -96,19 +98,50 @@ def scan(files, times, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     cw, ch = (VIEW[2] - VIEW[0]) // GRID_X, (VIEW[3] - VIEW[1]) // GRID_Y
     L = np.stack([lum(f, VIEW, (GRID_X * 8, GRID_Y * 8)) for f in files])            # frames x H x W
+    # Camera motion first: the whole view's shift between two frames (phase correlation), so a turn,
+    # a rocking car or a passing near object is not read as a pop (Doraville, 2026-11-14).
+    def shift(a, b):
+        A, B = np.fft.fft2(a - a.mean()), np.fft.fft2(b - b.mean())
+        R = A * np.conj(B); R /= np.abs(R) + 1e-6
+        r = np.fft.ifft2(R).real
+        dy, dx = np.unravel_index(np.argmax(r), r.shape)
+        if dy > r.shape[0] // 2: dy -= r.shape[0]
+        if dx > r.shape[1] // 2: dx -= r.shape[1]
+        return int(dy), int(dx)
+    D = np.zeros((len(files) - 1, GRID_Y, GRID_X), dtype=np.float32)
+    for i in range(len(files) - 1):
+        dy, dx = shift(L[i + 1], L[i])
+        prev = np.roll(L[i], (dy, dx), axis=(0, 1))
+        diff = np.abs(L[i + 1] - prev)
+        # The rows and columns the roll wrapped round are not compared.
+        if dy > 0: diff[:dy, :] = 0
+        if dy < 0: diff[dy:, :] = 0
+        if dx > 0: diff[:, :dx] = 0
+        if dx < 0: diff[:, dx:] = 0
+        D[i] = diff.reshape(GRID_Y, 8, GRID_X, 8).mean(axis=(1, 3))
     C = L.reshape(len(files), GRID_Y, 8, GRID_X, 8).mean(axis=(2, 4))                 # cell means
-    D = np.abs(np.diff(C, axis=0))                                                    # change per cell, frame to frame
     G = np.median(D.reshape(len(D), -1), axis=1)                                      # the view's usual change
     M = np.stack([lum(f, MIRROR, (64, 16)) for f in files])
     mirror_mean = M.mean(axis=(1, 2))
     mirror_change = np.abs(np.diff(M, axis=0)).mean(axis=(1, 2))
     found = []
+    # The inside mirror is checked on its own below; its cells are left out of the world scan.
+    def in_mirror(x, y):
+        x0, y0 = VIEW[0] + x * cw, VIEW[1] + y * ch
+        return x0 + cw > 1380 and x0 < 1920 and y0 + ch > 260 and y0 < 410
     for i in range(2, len(D) - 2):
         for y in range(GRID_Y):
             for x in range(GRID_X):
+                if in_mirror(x, y): continue
                 d0 = D[i, y, x]
                 around = np.median([D[i - 2, y, x], D[i - 1, y, x], D[i + 1, y, x], D[i + 2, y, x]])
                 if d0 < 18 or d0 < 4 * max(around, G[i], 2.0):
+                    continue
+                # Parallax, not a pop: a near object's edge moving across the view changes the
+                # neighbouring cells in the frames just before or after (Doraville 12.2 s, 2026-11-14:
+                # a near building passing on the right read as a pop in three frames).
+                nb = [D[j, y, xx] for j in (i - 1, i + 1) for xx in (x - 1, x + 1) if 0 <= xx < GRID_X]
+                if nb and max(nb) > 0.5 * d0:
                     continue
                 back = abs(C[i + 2, y, x] - C[i, y, x])          # did it come back? (index shift: D[i] = C[i+1]-C[i])
                 kind = 'flicker' if back > 0.7 * d0 and D[i + 1, y, x] > 0.5 * d0 else 'pop'
@@ -117,6 +150,7 @@ def scan(files, times, out_dir):
     for i in range(0, len(D) - 10, 5):
         for y in range(GRID_Y):
             for x in range(GRID_X):
+                if in_mirror(x, y): continue
                 seg = D[i:i + 10, y, x]
                 if seg.min() > 10 and seg.mean() > 3 * max(np.median(G[i:i + 10]), 2.0):
                     found.append((float(seg.mean()), i + 5, x, y, 'shimmer'))
@@ -178,7 +212,8 @@ def run_one(run, ff):
     rows = scan(files, times, os.path.join(mdir, 'scan'))
     md = [f'# Motion review: {os.path.basename(run)}', '',
           f'{len(files)} video frames; frame times: {how}. Result of the judge: {pre.get("result", "?")} {pre.get("reasons", "")}', '',
-          'Watch every clip and every scan finding at real speed (the .mp4), then fill Verdict (real fault / not a fault) and Fault.', '',
+          'Watch every clip and every scan finding at real speed (the .mp4), then fill Verdict (real fault / not a fault) and Fault.',
+          'A scan candidate is not a fault until at least 8 video frames round it were watched (a near object passing, a turn or a rocking car can look like a pop in 3 frames).', '',
           '## Judge events (clips, 1 s before to 1 s after)', '', '| Time (s) | Event | Clip | Verdict | Fault |', '|---|---|---|---|---|']
     md += [f'| {t:.1f} | {n} | {c} | | |' for t, n, c in clips]
     md += ['', '## Video scan (candidates)', '', '| Time (s) | Kind | Where | Measure | Picture | Verdict | Fault |', '|---|---|---|---|---|---|---|']
