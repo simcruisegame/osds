@@ -5,7 +5,7 @@
 <p align="center">
   <b>A free, open-source driving simulator for real roads.</b><br>
   Type any US address and drive there. The roads, terrain, buildings and trees are built live from OpenStreetMap, USGS elevation data and aerial photographs.<br>
-  Realistic car physics, traffic and a GPS. Keyboard, Xbox controller or USB wheel. Made in Unreal Engine 5, for Windows.
+  Realistic car physics and a GPS. Keyboard, Xbox controller or USB wheel. Made in Unreal Engine 5, for Windows.
 </p>
 
 <p align="center">
@@ -91,7 +91,7 @@ From the 2.0.2 Shipping build, Ultra preset, 1920x1080.
 - **Real places from public data.** Roads, terrain, buildings, land cover and water come from OpenStreetMap, USGS and Overture through the keyless map helper, streamed in tiles around the car with a floating origin.
 - **Cars that drive like the real ones.** The physics runs on Chaos at a fixed 360 Hz with every wheel's contact, tyre slip, suspension, engine, clutch, gearbox and differential from published specifications, held to magazine 0–60 mph, 70–0 mph and skidpad figures by automated benches. The automatic changes gear with the pedal, as a real one does.
 - **Roads built like real roads.** Fitted ribbons with crown and curbs, MUTCD markings, parking lanes with parked cars and crosswalks, street lights behind the curbs.
-- **Traffic.** Cars drive their lanes at the posted speed, turn at junctions, stop at minor approaches and all-way stops and wait their turn, keep their distance and brake for the car ahead and for you.
+- **Traffic (off for now; `sc.Feature.Traffic 1` turns it on for development).** Cars drive their lanes at the posted speed, turn at junctions, stop at minor approaches and all-way stops and wait their turn, keep their distance and brake for the car ahead and for you.
 - **An engine and a road you hear.** A procedural inline-four voice follows the simulated crank: firing pulses, load, intake, the limiter's stutter and overrun pops; tyre hiss, gravel crunch, scrub and squeal from each tyre's slip, and a little wind, all darker from the driver's seat. Live rear-view and door mirrors show the road behind.
 - **The real sun and sky.** Sun and moon where they are at that place and time, physically based sky and exposure in real units, street lights and lit windows at night, low beams with a real cut-off. A drive starts in a morning sun; `-SimCruiseRealTime` follows your clock instead.
 - **The real place, now.** While you drive, the game reads free public live feeds for the place you are: the weather (Open-Meteo and the nearest airport's METAR) sets the clouds, haze, mist and wet roads; the air quality (aerosol optical depth) sets the haze in clear air; the sea and the nearest NOAA tide gauge give the tide and waves; and the real aircraft within 25 nautical miles (adsb.lol) fly over you at their real positions, with their real lights at night. `-SimCruiseNoLive` turns it off.

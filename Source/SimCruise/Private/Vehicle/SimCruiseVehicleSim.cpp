@@ -709,10 +709,22 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			for (int32 WheelIndex = 0; WheelIndex < 4; ++WheelIndex)
 			{
 				const FSimCruiseWheelState& Wheel = State.Wheels[WheelIndex];
-				if (Car.IsDrivenWheel(WheelIndex) && Wheel.LoadN > 0.0)
+				if (!Car.IsDrivenWheel(WheelIndex)) continue;
+				if (Wheel.LoadN > 0.0)
 				{
 					Ratio = FMath::Max(Ratio, Wheel.TractionControlSlip * SignDirection /
 						FMath::Max(FMath::Max(Car.TractionControlTargetSlipRatio, Wheel.PeakSlip), 0.01));
+				}
+				else
+				{
+					// A driven wheel off the ground (the Corvette beached on a wall end at Doraville,
+					// rear wheels free: 6600 rpm in first at 0 mph, full pedal). The real system reads
+					// wheel-speed sensors, not tyre force: a wheel turning faster than the car moves
+					// is slip, with or without load (3 m/s floor, as a sensor's reference speed).
+					const double Surface = Wheel.AngularSpeedRadPerSecond * TireRadiusM * SignDirection;
+					const double Ground = Wheel.ForwardSpeedMps * SignDirection;
+					const double FreeSlip = (Surface - Ground) / FMath::Max(FMath::Abs(Ground), 3.0);
+					Ratio = FMath::Max(Ratio, FreeSlip / FMath::Max(Car.TractionControlTargetSlipRatio, 0.01));
 				}
 			}
 			State.TcSlipFiltered += (Ratio - State.TcSlipFiltered) * (1.0 - FMath::Exp(-Ds / TcFilterS));
