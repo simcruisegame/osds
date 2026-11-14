@@ -126,4 +126,50 @@ bool FSimCruisePreflightFlashTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruisePreflightTrafficTest, "SimCruise.Gameplay.Preflight.Traffic", SimCruisePreflightTest::Flags)
+bool FSimCruisePreflightTrafficTest::RunTest(const FString& Parameters)
+{
+	using namespace SimCruisePreflightRules;
+	// Turn round: 180 deg in 2 s across the +-180 seam is one; a 90 deg junction turn in 3 s and a
+	// slow 180 deg loop over 6 s are not.
+	TArray<FVector2d> UTurn;
+	for (int32 I = 0; I <= 20; ++I) UTurn.Add(FVector2d(I * 0.1, FMath::UnwindDegrees(170.0 + 9.0 * I)));
+	TestTrue(TEXT("a U-turn in 2 s across the seam"), IsTurnRound(UTurn));
+	TArray<FVector2d> Corner;
+	for (int32 I = 0; I <= 30; ++I) Corner.Add(FVector2d(I * 0.1, -3.0 * I));
+	TestFalse(TEXT("a right-angle turn at a junction"), IsTurnRound(Corner));
+	TArray<FVector2d> Loop;
+	for (int32 I = 0; I <= 60; ++I) Loop.Add(FVector2d(I * 0.1, FMath::UnwindDegrees(3.0 * I)));
+	TestFalse(TEXT("a slow loop round a ramp"), IsTurnRound(Loop));
+
+	// Cut-in: a car crossing 3 m from our bumper while we drive at 10 m/s; the same while we stand;
+	// a car ahead in our lane, same heading, that we close on; a car changing into our lane from the side.
+	TestTrue(TEXT("a crossing car within one car length"), IsCutIn(OwnHalfLengthM + 2.25 + 3.0, 0.5, 0.5, 90.0, 10.0, 4.5));
+	TestFalse(TEXT("a crossing car while we wait at the line"), IsCutIn(OwnHalfLengthM + 2.25 + 3.0, 0.5, 0.5, 90.0, 0.0, 4.5));
+	TestFalse(TEXT("the car ahead in our lane"), IsCutIn(OwnHalfLengthM + 2.25 + 3.0, 0.2, 0.2, 2.0, 10.0, 4.5));
+	TestTrue(TEXT("a lane change into our lane, 2 m ahead"), IsCutIn(OwnHalfLengthM + 2.25 + 2.0, 1.2, 3.0, 8.0, 10.0, 4.5));
+	TestFalse(TEXT("a crossing car 10 m ahead"), IsCutIn(OwnHalfLengthM + 2.25 + 10.0, 0.0, 0.0, 90.0, 10.0, 4.5));
+	TestFalse(TEXT("a car in the next lane"), IsCutIn(OwnHalfLengthM + 2.25 + 2.0, 3.5, 3.5, 0.0, 10.0, 4.5));
+
+	// Overlap of the bodies.
+	TestTrue(TEXT("a car through ours"), Overlaps(1.0, 0.3, 4.5));
+	TestFalse(TEXT("a car passing in the next lane"), Overlaps(0.0, 3.4, 4.5));
+	TestFalse(TEXT("a car just in front"), Overlaps(5.0, 0.0, 4.5));
+
+	// At grade: a motorway car across our road at our level; the same 7 m below (an overpass); a primary road.
+	TestTrue(TEXT("motorway traffic across our road"), IsAtGradeMotorway(TEXT("motorway"), 20.0, 2.0, 0.3, 88.0));
+	TestFalse(TEXT("motorway traffic under our bridge"), IsAtGradeMotorway(TEXT("motorway"), 20.0, 2.0, -7.0, 88.0));
+	TestFalse(TEXT("a crossing street"), IsAtGradeMotorway(TEXT("primary"), 20.0, 2.0, 0.3, 88.0));
+	TestFalse(TEXT("a motorway alongside"), IsAtGradeMotorway(TEXT("motorway"), 20.0, 6.0, 0.3, 5.0));
+
+	FSimCruisePreflightStats S = SimCruisePreflightTest::Good();
+	S.TrafficCutIns = 1; TestTrue(TEXT("a cut-in fails"), Judge(S).Contains(TEXT("traffic-cut-in-1")));
+	S = SimCruisePreflightTest::Good(); S.TrafficOverlaps = 1; TestTrue(TEXT("a car through ours fails"), Judge(S).Contains(TEXT("traffic-through-our-car")));
+	S = SimCruisePreflightTest::Good(); S.TrafficTurnRounds = 2; TestTrue(TEXT("turn-rounds fail"), Judge(S).Contains(TEXT("traffic-turn-round-2")));
+	S = SimCruisePreflightTest::Good(); S.TrafficAtGrade = 1; TestTrue(TEXT("motorway at grade fails"), Judge(S).Contains(TEXT("motorway-traffic-at-grade")));
+	S = SimCruisePreflightTest::Good(); S.JunctionHoldAskedS = 10.f; S.JunctionHoldS = 0.f; TestTrue(TEXT("no stop line found fails"), Judge(S).Contains(TEXT("junction-hold-0s-of-10s")));
+	S = SimCruisePreflightTest::Good(); S.JunctionHoldAskedS = 10.f; S.JunctionHoldS = 10.f; TestEqual(TEXT("a held junction passes"), Judge(S), FString());
+	return true;
+}
+
 #endif

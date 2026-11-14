@@ -20,12 +20,17 @@ param(
     [string]$OutRoot = '',
     [switch]$ShowWindow,
     [int]$Seconds = 60,
-    [double]$NearM = 60
+    [double]$NearM = 60,
+    # More run folders whose routes are checked against the spans (for example the Doraville drives).
+    [string[]]$ExtraRunDirs = @()
 )
 
 $ErrorActionPreference = 'Stop'
 # The world lane's span lines: "Bridge span <tile>/r<n> at <lat>, <lon>: lifted to <m> m clearance (deck <old> -> <new> m)" or "...: de-decked".
-$script:SpanPattern = 'Bridge span (\S+) at (-?\d+(?:\.\d+)?), (-?\d+(?:\.\d+)?): (lifted to ([\d.]+) m|de-decked)'
+# A third form removes only the parapet and deck faces inside another carriageway: "...: <n> faces removed ...".
+$script:SpanPattern = 'Bridge span (\S+) at (-?\d+(?:\.\d+)?), (-?\d+(?:\.\d+)?): (lifted to ([\d.]+) m|de-decked|[^\r\n]*?faces? removed[^\r\n]*)'
+# Bixby Bridge must stay unchanged: a lifted or de-decked span within 400 m of it is a FAIL.
+$script:Bixby = @(36.37151, -121.90187)
 . (Join-Path $PSScriptRoot 'ReviewLib.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
 if (-not $OutRoot) { $OutRoot = (Get-ReviewRoot $Root) + '-bridges' }
@@ -52,8 +57,9 @@ function Get-DistM([double]$La1, [double]$Lo1, [double]$La2, [double]$Lo2) {
 }
 $Md = @('# Bridge check', '', "Runs in $OutRoot. One row per changed span within $NearM m of a route: the closest frame, and the events within 2 s. Fill Seen (deck continuous, no lip or step, no floating deck or parapet, clearance) and Upset from the frames.", '',
     '| Run | Span (log) | Kind | Closest frame | Distance (m) | Events within 2 s | Seen | Upset |', '|---|---|---|---|---|---|---|---|')
-foreach ($C in $Cases) {
-    $Dir = Join-Path $OutRoot $C.Name
+$Checks = @($Cases | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Dir = (Join-Path $OutRoot $_.Name) } }) + @($ExtraRunDirs | ForEach-Object { $_ -split ',' } | Where-Object { $_ } | ForEach-Object { [pscustomobject]@{ Name = (Split-Path -Leaf $_); Dir = $_ } })
+foreach ($C in $Checks) {
+    $Dir = $C.Dir
     $Log = Join-Path $Dir 'game.log'
     if (-not (Test-Path $Log)) { $Md += "| $($C.Name) | no log | | | | | | |"; continue }
     $Frames = @(Get-ChildItem (Join-Path $Dir 'review') -Filter '*.json' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -61,8 +67,13 @@ foreach ($C in $Cases) {
         if ($J.PSObject.Properties['lat']) { [pscustomobject]@{ Name = $_.BaseName + '.png'; T = [double]$J.t; Lat = [double]$J.lat; Lon = [double]$J.lon } } })
     $Rev = if (Test-Path (Join-Path $Dir 'review.json')) { Get-Content (Join-Path $Dir 'review.json') -Raw | ConvertFrom-Json } else { $null }
     $Spans = @(Select-String -Path $Log -Pattern $script:SpanPattern | ForEach-Object {
-        [pscustomobject]@{ Text = (($_.Line -replace '^\[.*?\]\[.*?\]', '').Trim()); Id = $_.Matches[0].Groups[1].Value; Lat = [double]$_.Matches[0].Groups[2].Value; Lon = [double]$_.Matches[0].Groups[3].Value; Kind = $(if ($_.Matches[0].Groups[4].Value -match 'de-decked') { 'de-decked' } else { "lifted to $($_.Matches[0].Groups[5].Value) m" }) } })
+        [pscustomobject]@{ Text = (($_.Line -replace '^\[.*?\]\[.*?\]', '').Trim()); Id = $_.Matches[0].Groups[1].Value; Lat = [double]$_.Matches[0].Groups[2].Value; Lon = [double]$_.Matches[0].Groups[3].Value; Kind = $(if ($_.Matches[0].Groups[4].Value -match 'de-decked') { 'de-decked' } elseif ($_.Matches[0].Groups[5].Value) { "lifted to $($_.Matches[0].Groups[5].Value) m" } else { $_.Matches[0].Groups[4].Value.Trim() }) } })
     if (-not $Spans.Count) { $Md += "| $($C.Name) | no span lines with a position in the log | | | | | | |" }
+    # Bixby: unchanged is the rule. A change near it is a FAIL; the frames nearest the deck are always listed.
+    # No height changes in this rule: a lifted or de-decked span anywhere is a FAIL; near Bixby only a faces-removed change is allowed.
+    foreach ($S in $Spans) { if ($S.Kind -notmatch 'faces') { $Md += "| $($C.Name) | $($S.Id) at $($S.Lat), $($S.Lon) | $($S.Kind) | **FAIL: no height change is allowed$(if ((Get-DistM $S.Lat $S.Lon $script:Bixby[0] $script:Bixby[1]) -lt 400) { ' (Bixby Bridge)' })** | | | | |" } }
+    $AtBixby = @($Frames | Where-Object { (Get-DistM $_.Lat $_.Lon $script:Bixby[0] $script:Bixby[1]) -lt 200 } | Sort-Object T)
+    if ($AtBixby.Count) { $Md += "| $($C.Name) | Bixby Bridge deck and abutments (unchanged rule) | check: deck, parapets, no gap at the abutments, no upset | $(($AtBixby | ForEach-Object { "$($C.Name)\review\$($_.Name)" }) -join ', ') | $([Math]::Round((Get-DistM $AtBixby[0].Lat $AtBixby[0].Lon $script:Bixby[0] $script:Bixby[1]))) | $(@(if ($Rev) { $Rev.events | Where-Object { $_ -match '^([\d.]+) s' -and [double]$Matches[1] -ge $AtBixby[0].T - 2 -and [double]$Matches[1] -le $AtBixby[-1].T + 2 } }) -join '; ') | | |" }
     foreach ($S in $Spans) {
         $Best = $Frames | Sort-Object { Get-DistM $S.Lat $S.Lon $_.Lat $_.Lon } | Select-Object -First 1
         if (-not $Best) { continue }
