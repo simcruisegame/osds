@@ -345,6 +345,11 @@ void ASimCruiseGameMode::BeginTravel(const FSimCruisePlace& Place, bool bRestart
 	WaitStartedSeconds = FPlatformTime::Seconds();
 	LastMessageSeconds = -100.0;
 	bStartCarBuilt = false;
+	// The car's model and the traffic models start on worker threads now (glTF and rig, most of a
+	// heavy model's time: the Miata's took 27.7 s on the game thread at Welch); the meshes are built
+	// on the game thread later, while the start tiles load.
+	SimCruiseCarAssets::PrepareAsync(CarId);
+	for (const FString& Model : SimCruiseParkedCars::AllCarIds()) SimCruiseCarAssets::PrepareAsync(Model);
 
 	// The sun and sky follow the place (unless the command line placed the observer).
 	double CommandLineLat = 0.0;

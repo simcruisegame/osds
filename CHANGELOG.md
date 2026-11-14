@@ -3,6 +3,7 @@
 Notable changes to SimCruise, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/) and versions follow [Semantic Versioning](https://semver.org/). Dates are release dates, not the survey dates of the data a release uses. The release notes written for Sunday Driver 1.0.0 to 1.0.8 are preserved word for word in [docs/history.md](docs/history.md).
 
 ## Unreleased
+- Faster start: a car model's glTF and rig (most of a heavy model's build) now run on a worker thread from the moment a drive or a trip begins, for the player's car and every traffic model; only the meshes are built on the game thread while the start tiles load. The Miata's whole build took 27.7 s on the game thread at Welch, West Virginia; the log now splits each build (`built in ... s: ... s glTF and rig, ... s meshes`).
 - Pre-flight: the car stands on its parking brake from placement until the drive starts; an automatic creeps in Drive (the Mustang crept 3.7 m onto the grass bank at Welch, West Virginia, while the tiles and shaders finished).
 
 
