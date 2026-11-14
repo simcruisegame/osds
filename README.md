@@ -47,11 +47,7 @@ No account, no API keys, no subscription, no telemetry. The game talks directly 
 
 ## Download
 
-<<<<<<< HEAD
-**OSDS 2.0.2 for Windows** (64-bit Windows 10 or 11, DirectX 12): get `SimCruise-2.0.2-windows-x64-setup.exe` from the [latest release](https://github.com/simcruisegame/osds/releases/latest), run it, and start it from the Start menu (the 2.0.x releases still use the old name, SimCruise, for their files and the Start menu entry). A portable zip and SHA-256 checksums are on the same page. Install steps and system requirements: [docs/install.md](docs/install.md). Controls (keyboard, Xbox controller, USB wheel): [docs/controls.md](docs/controls.md).
-=======
-**OSDS 2.0.2 for Windows** (64-bit Windows 10 or 11, DirectX 12): get `SimCruise-2.0.2-windows-x64-setup.exe` from the [latest release](https://github.com/simcruisegame/simcruise/releases/latest), run it, and start it from the Start menu (releases up to 2.0.2 use the old name, SimCruise, for their files and the Start menu entry). A portable zip and SHA-256 checksums are on the same page. Install steps and system requirements: [docs/install.md](docs/install.md). Controls (keyboard, Xbox controller, USB wheel): [docs/controls.md](docs/controls.md).
->>>>>>> brand/osds
+**OSDS 2.0.2 for Windows** (64-bit Windows 10 or 11, DirectX 12): get `SimCruise-2.0.2-windows-x64-setup.exe` from the [latest release](https://github.com/simcruisegame/osds/releases/latest), run it, and start it from the Start menu (releases up to 2.0.2 use the old name, SimCruise, for their files and the Start menu entry). A portable zip and SHA-256 checksums are on the same page. Install steps and system requirements: [docs/install.md](docs/install.md). Controls (keyboard, Xbox controller, USB wheel): [docs/controls.md](docs/controls.md).
 
 **New in 2.0.2:** a GPS that drives you on the real roads (turn sign, chevrons on the road, a round map, a route planner and famous roads), a new pause menu and speed display, your seat and the car's setup one press away, hood and far chase views, looking around with the right stick, and traffic Normal, Light or Off. What to try first, in plain words: [docs/release/v2.0.2-what-you-should-notice.md](docs/release/v2.0.2-what-you-should-notice.md). Everything, with the known issues: [CHANGELOG.md](CHANGELOG.md).
 
