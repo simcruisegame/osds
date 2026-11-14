@@ -63,7 +63,10 @@ param(
     # An Unreal Insights trace of the whole run (cpu, frame, bookmark) as trace.utrace in the run's folder.
     [switch]$Trace,
     # The start pick's random seed (-SimCruiseStartSeed=), to repeat a start exactly; 0: the game's own.
-    [int]$StartSeed = 0
+    [int]$StartSeed = 0,
+    # The gap-acceptance case: the robot stops at the first stop line ahead, holds this many seconds, then pulls out
+    # (-SimCruisePreflightStopAtJunction=). 0: off.
+    [int]$StopAtJunction = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -136,7 +139,7 @@ $Log = Join-Path $RunDir 'game.log'
 $env:UE_SKIP_UBT_SDK_SETUP = '1'
 $GameArgs = @(if ($GameExe) { '-SimCruiseWorld' } else { "`"$Project`"", '-game', '-SimCruiseWorld' }) + @(if ($Case -notin 'eye', 'eyeoff') { '-SimCruiseNoLive' }) + @('-SimCruiseNoNeural', "-SimCruiseGraphics=$Graphics", "-SimCruiseUtc=$Utc",
     "-SimCruiseCar=$Car", '-SimCruiseViewCheck', '-SimCruisePreflight', '-SimCruiseReview', "-SimCruisePreflightRoad=$Name", "-SimCruisePreflightSeconds=$Seconds",
-    "`"-SimCruisePreflightOut=$RunDir`"", '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution) + $PlaceArgs + $ExtraArgs + @(switch ($Case) { 'fallback' { "-SimCruiseFailTiles=$FailTiles" } 'eye' { '-SimCruiseScanEye=satlas_landcover' } 'standstill' { '-SimCruiseStandstillTest' } 'speed' { '-SimCruiseSpeedTest' } }) + @(if (-not $NoCockpit) { '-SimCruiseCockpitTest' }) + @(if ($StartSeed -gt 0) { "-SimCruiseStartSeed=$StartSeed" }) + @(if ($Trace) { '-trace=cpu,frame,bookmark,log', "`"-tracefile=$(Join-Path $RunDir 'trace.utrace')`"" })
+    "`"-SimCruisePreflightOut=$RunDir`"", '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution) + $PlaceArgs + $ExtraArgs + @(switch ($Case) { 'fallback' { "-SimCruiseFailTiles=$FailTiles" } 'eye' { '-SimCruiseScanEye=satlas_landcover' } 'standstill' { '-SimCruiseStandstillTest' } 'speed' { '-SimCruiseSpeedTest' } }) + @(if (-not $NoCockpit) { '-SimCruiseCockpitTest' }) + @(if ($StartSeed -gt 0) { "-SimCruiseStartSeed=$StartSeed" }) + @(if ($StopAtJunction -gt 0) { "-SimCruisePreflightStopAtJunction=$StopAtJunction" }) + @(if ($Trace) { '-trace=cpu,frame,bookmark,log', "`"-tracefile=$(Join-Path $RunDir 'trace.utrace')`"" })
 $CommandLine = "`"$Editor`" " + ($GameArgs -join ' ')
 
 if (-not (Enter-EditorLock -GpuTest -TimeoutMinutes $LockTimeoutMinutes -Why "launch review $Name on $Root")) { exit 1 }

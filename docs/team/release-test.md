@@ -93,6 +93,20 @@ So a start the start pick accepts can still fail the judge at frame 0 in two way
 
 Welch, 2026-11-14 (a97af50): the car was placed at about 37.4329 N, 81.5840 W, heading -124.6 deg. At frame 0 the judge read 2.0 m past the edge. In the frame, the car's left side is on asphalt and its nose points at a grass bank, with the drawn road curving away to the left. So the run-off was mostly real: the start pose follows the ribbon, not the drawn road.
 
+## The traffic judge
+
+Ten times a second the judge looks at each traffic car in our car's frame (Along: metres ahead of our centre, Side: metres to the side, centre to centre; heading relative to ours). Limits in `SimCruisePreflightRules` (`SimCruisePreflight.h`), tests in `SimCruise.Gameplay.Preflight.Traffic`. Each event has a line `Pre-flight: traffic ...` in the game log (the car's name, where it was) and an event frame in `review\`.
+
+| Reason | Rule | Team, severity |
+|---|---|---|
+| `traffic-cut-in-<n>` | Our car drives at 2 m/s or more. The other car is in our lane (Side under 1.8 m), with at most one car length (4.5 m) from our front bumper to its rear (our half length 2.2 m). It came across (heading more than 30 deg from ours) or from the next lane (Side over 2.5 m one sample before). One count per car in 5 s. At a stop line (our car below 2 m/s) the crossing traffic has priority and nothing is counted. | driving, P1 |
+| `traffic-through-our-car-<n>` | The bodies overlap: \|Along\| under 2.2 m + half its length - 0.3 m, \|Side\| under 1.6 m, height within 2 m. | driving, P1 |
+| `traffic-turn-round-<n>` | The car's heading changes by 150 deg or more within 3 s (unwrapped through 180 deg), while it moves (over 0.5 m/s). A car removed and placed again (more than 30 m in one sample) starts a new history. | driving, P2 |
+| `motorway-traffic-at-grade-<n>` | A car on a `motorway` ribbon is across our road (45 to 135 deg), on it (\|Side\| under 8 m, -10 to 60 m ahead), at our level (within 2.5 m). Motorways never cross a road at grade; an overpass is metres above or below. | driving, P2 |
+| `junction-hold-<s>s-of-<n>s` | Only with `-SimCruisePreflightStopAtJunction=N` (`launch-review.ps1 -StopAtJunction N`): the robot held less than N s at a stop line, so the gap-acceptance case did not run. | release, P2 |
+
+The gap-acceptance case: with `-SimCruisePreflightStopAtJunction=N` the robot looks up to 60 m ahead along its route for the first point inside a crossing carriageway of a road its own road gives way to (the traffic's rule, `SimCruiseLanes::ApproachStops`: a higher rank, or an equal rank that is not a major road). It stops `StopLineSetbackM` (5.25 m) before it, holds N s on the parking brake, then pulls out without waiting for a gap. The traffic must leave it a full gap: no cut-in and no car through ours. `scripts\traffic-retest.ps1` runs the traffic cases (Detroit Woodward north and south, Doraville, one junction; Bixby south with `-WithBixby`).
+
 ## Graphics rule
 
 Review launches turn dynamic resolution off (console priority), so the 3D picture stays at the preset's screen percentage (75 for Ultra, from the preset) and the frame times are its honest cost; `-SimCruisePlayerRes` keeps the player's dynamic resolution. A launch is valid for sign-off only when the engine really had the top preset (Ultra), all `sg.*` levels at the top, the screen's own resolution, and a screen percentage, set and measured each frame, not below the preset's. A frame p95 over the budget at the fixed percentage is a FAIL for the picture and world teams, not a test fault. Else the run is **NOT VALID FOR SIGN-OFF**: the picture report has a P1 finding, the summary says so, and `scripts\review-check.ps1` and `scripts\playtest.ps1` refuse it.

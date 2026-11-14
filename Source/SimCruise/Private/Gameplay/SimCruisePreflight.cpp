@@ -76,6 +76,44 @@ namespace
 
 namespace SimCruisePreflightRules
 {
+	bool IsTurnRound(const TArray<FVector2d>& TimeYawDeg)
+	{
+		// The heading unwrapped through +-180 deg, so that a turn round reads as about 180 deg.
+		TArray<double> Unwrapped;
+		Unwrapped.Reserve(TimeYawDeg.Num());
+		for (int32 I = 0; I < TimeYawDeg.Num(); ++I)
+		{
+			Unwrapped.Add(I == 0 ? TimeYawDeg[0].Y : Unwrapped[I - 1] + FMath::FindDeltaAngleDegrees(TimeYawDeg[I - 1].Y, TimeYawDeg[I].Y));
+		}
+		for (int32 I = 0; I < TimeYawDeg.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < TimeYawDeg.Num() && TimeYawDeg[J].X - TimeYawDeg[I].X <= TurnRoundWindowS; ++J)
+			{
+				if (FMath::Abs(Unwrapped[J] - Unwrapped[I]) >= TurnRoundDeg) return true;
+			}
+		}
+		return false;
+	}
+
+	bool IsCutIn(double AlongM, double SideM, double PrevSideM, double RelHeadingDeg, double OurSpeedMps, double TheirLengthM)
+	{
+		if (OurSpeedMps < CutInMinSpeedMps) return false;
+		const double BumperGapM = AlongM - OwnHalfLengthM - 0.5 * TheirLengthM;
+		if (BumperGapM < 0.0 || BumperGapM > CarLengthM || FMath::Abs(SideM) > 1.8) return false;
+		return FMath::Abs(RelHeadingDeg) > 30.0 || FMath::Abs(PrevSideM) > 2.5;
+	}
+
+	bool Overlaps(double AlongM, double SideM, double TheirLengthM)
+	{
+		return FMath::Abs(AlongM) < OwnHalfLengthM + 0.5 * TheirLengthM - 0.3 && FMath::Abs(SideM) < 2.0 * OwnHalfWidthM - 0.2;
+	}
+
+	bool IsAtGradeMotorway(const FString& TheirClass, double AlongM, double SideM, double DzM, double RelHeadingDeg)
+	{
+		const double Rel = FMath::Abs(RelHeadingDeg);
+		return TheirClass == TEXT("motorway") && AlongM > -10.0 && AlongM < 60.0 && FMath::Abs(SideM) < 8.0 && FMath::Abs(DzM) < 2.5 && Rel > 45.0 && Rel < 135.0;
+	}
+
 	FString Judge(const FSimCruisePreflightStats& S)
 	{
 		TArray<FString> R;
@@ -92,6 +130,11 @@ namespace SimCruisePreflightRules
 		if (S.RoadGaps > 0) R.Add(FString::Printf(TEXT("road-gaps-%d"), S.RoadGaps));
 		if (S.BorderJolts > 0) R.Add(FString::Printf(TEXT("jolts-at-tile-borders-%d"), S.BorderJolts));
 		if (S.StuckTraffic > 0) R.Add(FString::Printf(TEXT("stuck-traffic-%d"), S.StuckTraffic));
+		if (S.TrafficCutIns > 0) R.Add(FString::Printf(TEXT("traffic-cut-in-%d"), S.TrafficCutIns));
+		if (S.TrafficOverlaps > 0) R.Add(FString::Printf(TEXT("traffic-through-our-car-%d"), S.TrafficOverlaps));
+		if (S.TrafficTurnRounds > 0) R.Add(FString::Printf(TEXT("traffic-turn-round-%d"), S.TrafficTurnRounds));
+		if (S.TrafficAtGrade > 0) R.Add(FString::Printf(TEXT("motorway-traffic-at-grade-%d"), S.TrafficAtGrade));
+		if (S.JunctionHoldAskedS > 0.f && S.JunctionHoldS < S.JunctionHoldAskedS - 0.5f) R.Add(FString::Printf(TEXT("junction-hold-%.0fs-of-%.0fs"), S.JunctionHoldS, S.JunctionHoldAskedS));
 		if (S.DriveSeconds > 0.f && S.Frames < S.DriveSeconds / 0.1f * 0.5f) R.Add(FString::Printf(TEXT("few-frames-%d"), S.Frames));
 		if (S.PeakRearSlipDeg > MaxRearSlipDeg || S.ReversedSeconds > MaxReversedSeconds)
 		{
@@ -199,6 +242,11 @@ void ASimCruisePreflight::BeginPlay()
 	{
 		if (IConsoleVariable* Cars = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Traffic.Cars"))) Cars->Set(0, ECVF_SetByCode);
 	}
+	// -SimCruisePreflightStopAtJunction=N: stop at the first stop line ahead (a road this one gives
+	// way to), hold N s on the parking brake, then pull out: the gap-acceptance case for the traffic.
+	FParse::Value(Cmd, TEXT("SimCruisePreflightStopAtJunction="), StopAtJunctionS);
+	StopAtJunctionS = FMath::Clamp(StopAtJunctionS, 0.f, 120.f);
+	Stats.JunctionHoldAskedS = StopAtJunctionS;
 	FParse::Value(Cmd, TEXT("SimCruisePreflightRoad="), RoadName);
 	FParse::Value(Cmd, TEXT("SimCruiseCar="), CarId);
 	if (!FParse::Value(Cmd, TEXT("SimCruisePreflightOut="), OutputDir))
@@ -255,6 +303,117 @@ void ASimCruisePreflight::OnRebased(const FVector& OffsetCm)
 	for (TPair<TWeakObjectPtr<AActor>, FVector>& Car : KnownCars)
 	{
 		Car.Value += OffsetCm;
+	}
+	for (TPair<TWeakObjectPtr<AActor>, FTrafficWatch>& Car : TrafficWatch)
+	{
+		Car.Value.LastCm += OffsetCm;
+	}
+}
+
+double ASimCruisePreflight::DistanceToStopLine(const FCursor& Here, FString& OutCrossName) const
+{
+	if (!Here.IsValid() || !Lines[Here.Line].Ribbon) return -1.0;
+	const FSimCruiseRibbon& Own = *Lines[Here.Line].Ribbon;
+	FCursor C = Here;
+	constexpr double StepM = 2.0;
+	for (int32 Step = 0; Step <= 30; ++Step)
+	{
+		if (Step > 0 && !Walk(C, StepM * 100.0)) break;
+		const FVector2d P = PointAt(C);
+		// The approach's heading (the robot's route can turn onto the crossing road ahead).
+		const FVector2d Heading = TangentAt(Here);
+		for (int32 L = 0; L < Lines.Num(); ++L)
+		{
+			const FLine& Other = Lines[L];
+			if (L == Here.Line || !Other.Ribbon) continue;
+			if (!Own.Name.IsEmpty() && Other.Ribbon->Name == Own.Name) continue;
+			if (!SimCruiseLanes::ApproachStops(Own.Rank, Own.bMajor, Other.Ribbon->Rank)) continue;
+			for (int32 I = 0; I + 1 < Other.P.Num(); ++I)
+			{
+				const FVector2d A = Other.P[I], B = Other.P[I + 1];
+				// A road that runs along ours (its continuation across a tile seam, a parallel carriageway) is no crossing.
+				if (FMath::Abs(FVector2d::DotProduct((B - A).GetSafeNormal(), Heading)) > 0.85) continue;
+				const double Len2 = FMath::Max((B - A).SizeSquared(), 1.0);
+				const double Tt = FMath::Clamp(FVector2d::DotProduct(P - A, B - A) / Len2, 0.0, 1.0);
+				const double HalfWCm = FMath::Lerp(Other.HalfW[I], Other.HalfW[I + 1], Tt) * 100.0;
+				if (FVector2d::Distance(P, FMath::Lerp(A, B, Tt)) < HalfWCm)
+				{
+					// The first point of the path inside the crossing carriageway: the painted stop line
+					// stands the crosswalk's setback before it, as the traffic stops.
+					OutCrossName = Other.Ribbon->Name.IsEmpty() ? Other.Ribbon->Class : Other.Ribbon->Name;
+					return FMath::Max(0.0, Step * StepM - SimCruiseLanes::StopLineSetbackM);
+				}
+			}
+		}
+	}
+	return -1.0;
+}
+
+void ASimCruisePreflight::WatchTraffic(const ASimCruiseWorldStreamer* Stream, APawn* Pawn, const FVector& CarCm, const FVector& Forward, double Speed)
+{
+	using namespace SimCruisePreflightRules;
+	const double Now = Stats.DriveSeconds;
+	const double OurYaw = Pawn->GetActorRotation().Yaw;
+	for (TActorIterator<ASimCruiseTrafficCar> It(GetWorld()); It; ++It)
+	{
+		ASimCruiseTrafficCar* Car = *It;
+		const FVector Pos = Car->GetActorLocation();
+		FTrafficWatch& W = TrafficWatch.FindOrAdd(TWeakObjectPtr<AActor>(Car));
+		// A car moved far in one sample was removed and placed again: its history starts again.
+		if (W.bHasPrev && FVector::Dist(W.LastCm, Pos) > 3000.0)
+		{
+			W = FTrafficWatch();
+		}
+		const FVector D = Pos - CarCm;
+		const double AlongM = FVector::DotProduct(D, Forward) / 100.0;
+		const double SideM = (Forward.X * D.Y - Forward.Y * D.X) / 100.0;
+		const double DzM = D.Z / 100.0;
+		const double Rel = FMath::FindDeltaAngleDegrees(OurYaw, Car->GetActorRotation().Yaw);
+		const double PrevSide = W.bHasPrev ? W.PrevSideM : SideM;
+
+		W.TimeYaw.Add(FVector2d(Now, Car->GetActorRotation().Yaw));
+		while (W.TimeYaw.Num() > 1 && Now - W.TimeYaw[0].X > TurnRoundWindowS + 0.5) W.TimeYaw.RemoveAt(0);
+		if (!W.bTurnRoundCounted && Car->Speed > 0.5 && IsTurnRound(W.TimeYaw))
+		{
+			W.bTurnRoundCounted = true;
+			++Stats.TrafficTurnRounds;
+			UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: traffic car %s turned round (%.0f m away, ribbon %d of tile %d_%d, frame %d)"),
+				*Car->GetName(), D.Size() / 100.0, Car->Ribbon, Car->Tile.X, Car->Tile.Y, FrameIndex);
+			Review.Event(TEXT("traffic turn-round"), Stats.DriveSeconds);
+		}
+		if (Now - W.LastCutInS > 5.0 && IsCutIn(AlongM, SideM, PrevSide, Rel, Speed, Car->LengthM))
+		{
+			W.LastCutInS = Now;
+			++Stats.TrafficCutIns;
+			UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: traffic cut-in: %s %.1f m ahead, %.1f m aside (was %.1f m), heading %+.0f deg to ours, at %.1f m/s (frame %d)"),
+				*Car->GetName(), AlongM, SideM, PrevSide, Rel, Speed, FrameIndex);
+			Review.Event(TEXT("traffic cut-in"), Stats.DriveSeconds);
+		}
+		if (!W.bOverlapCounted && FMath::Abs(DzM) < 2.0 && Overlaps(AlongM, SideM, Car->LengthM))
+		{
+			W.bOverlapCounted = true;
+			++Stats.TrafficOverlaps;
+			UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: traffic car %s inside our car: %.1f m ahead, %.1f m aside, heading %+.0f deg (frame %d)"),
+				*Car->GetName(), AlongM, SideM, Rel, FrameIndex);
+			Review.Event(TEXT("traffic through our car"), Stats.DriveSeconds);
+		}
+		if (!W.bAtGradeCounted && Stream)
+		{
+			const ASimCruiseWorldTile* Tile = Stream->GetTile(Car->Tile);
+			const FSimCruiseTileBuild* Build = Tile ? Tile->GetBuild() : nullptr;
+			const FString Class = Build && Build->Roads.Ribbons.IsValidIndex(Car->Ribbon) ? Build->Roads.Ribbons[Car->Ribbon].Class : FString();
+			if (IsAtGradeMotorway(Class, AlongM, SideM, DzM, Rel))
+			{
+				W.bAtGradeCounted = true;
+				++Stats.TrafficAtGrade;
+				UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: motorway traffic at grade: %s on \"%s\" crosses our road %.1f m ahead, %.1f m aside, %.1f m up, heading %+.0f deg (frame %d)"),
+					*Car->GetName(), *Build->Roads.Ribbons[Car->Ribbon].Name, AlongM, SideM, DzM, Rel, FrameIndex);
+				Review.Event(TEXT("motorway traffic at grade"), Stats.DriveSeconds);
+			}
+		}
+		W.PrevSideM = SideM;
+		W.LastCm = Pos;
+		W.bHasPrev = true;
 	}
 }
 
@@ -694,6 +853,34 @@ void ASimCruisePreflight::DriveTick(ASimCruisePlayerController* Player, float De
 			}
 		}
 	}
+	// The gap-acceptance case: stop at the first stop line, hold, then pull out as a driver would.
+	if (StopAtJunctionS > 0.f && !bJunctionDone)
+	{
+		FString Cross;
+		const double StopM = DistanceToStopLine(Here, Cross);
+		if (StopM >= 0.0)
+		{
+			TargetMps = FMath::Min(TargetMps, FMath::Sqrt(2.0 * Decel * FMath::Max(0.0, StopM - 0.5)));
+			if (StopM < 4.0 && Speed < 0.3)
+			{
+				TargetMps = 0.0;
+				if (JunctionHeldS == 0.0)
+				{
+					JunctionCrossName = Cross;
+					UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: stopped at the stop line for %s, %.1f m to it, at %.0f m; holding %.0f s"), *Cross, StopM, PathM, StopAtJunctionS);
+					Review.Event(TEXT("junction stop"), Stats.DriveSeconds);
+				}
+				JunctionHeldS += DeltaSeconds;
+				Stats.JunctionHoldS = static_cast<float>(JunctionHeldS);
+				if (JunctionHeldS >= StopAtJunctionS)
+				{
+					bJunctionDone = true;
+					UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: pulls out across %s after %.1f s"), *JunctionCrossName, JunctionHeldS);
+					Review.Event(TEXT("junction go"), Stats.DriveSeconds);
+				}
+			}
+		}
+	}
 	const double Error = TargetMps - Speed;
 	if (Error > 0.0)
 	{
@@ -926,6 +1113,7 @@ void ASimCruisePreflight::MeasureTick(ASimCruisePlayerController* Player, float 
 			}
 		}
 	}
+	WatchTraffic(Stream, Pawn, CarCm, Forward, Speed);
 	FCollisionQueryParams SightParams(SCENE_QUERY_STAT(SimCruisePreflightSight), false);
 	SightParams.AddIgnoredActor(Pawn);
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
@@ -1163,11 +1351,12 @@ void ASimCruisePreflight::Finish()
 	const bool bPass = Reasons.IsEmpty();
 	Review.Finish(bPass ? TEXT("PASS") : TEXT("FAIL"), Reasons);
 	UE_LOG(LogSimCruisePreflight, Display,
-		TEXT("PREFLIGHT %s road=%s car=%s place=\"%s\" distance=%.0fm mean=%.1fm/s offroad=%.1fs rear_slip=%.1fdeg backwards=%.1fs past_edge=%.1fm/%.1fs frame_p95=%.1fms hitches=%d sky_white=%.0f%% tile_popin=%d car_popin=%d flashes=%d steps=%d max_step=%.1fcm gaps=%d jolts=%d border_jolts=%d stuck=%d frames=%d reasons=%s"),
+		TEXT("PREFLIGHT %s road=%s car=%s place=\"%s\" distance=%.0fm mean=%.1fm/s offroad=%.1fs rear_slip=%.1fdeg backwards=%.1fs past_edge=%.1fm/%.1fs frame_p95=%.1fms hitches=%d sky_white=%.0f%% tile_popin=%d car_popin=%d flashes=%d steps=%d max_step=%.1fcm gaps=%d jolts=%d border_jolts=%d stuck=%d cut_ins=%d through=%d turn_rounds=%d at_grade=%d junction_hold=%.1fs frames=%d reasons=%s"),
 		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place, Stats.DistanceM, Stats.MeanSpeedMps, Stats.OffRoadSeconds,
 		Stats.PeakRearSlipDeg, Stats.ReversedSeconds, Stats.MaxOffRibbonM, Stats.OffRibbonSeconds, Stats.FrameP95Ms, Stats.Hitches, Stats.SkyWhitePercent,
 		Stats.TilePopIns, Stats.CarPopIns, Stats.FlashFrames, Stats.RoadSteps, Stats.MaxStepCm, Stats.RoadGaps, Stats.Jolts, Stats.BorderJolts,
-		Stats.StuckTraffic, Stats.Frames, bPass ? TEXT("ok") : *Reasons);
+		Stats.StuckTraffic, Stats.TrafficCutIns, Stats.TrafficOverlaps, Stats.TrafficTurnRounds, Stats.TrafficAtGrade, Stats.JunctionHoldS,
+		Stats.Frames, bPass ? TEXT("ok") : *Reasons);
 
 	auto B = [](bool bValue) { return bValue ? TEXT("true") : TEXT("false"); };
 	const FString Json = FString::Printf(TEXT("{\n")
@@ -1177,7 +1366,8 @@ void ASimCruisePreflight::Finish()
 		TEXT("  \"sky_samples\": %d, \"sky_white_percent\": %.1f, \"reference_ev100\": %.2f,\n")
 		TEXT("  \"tile_popins\": %d, \"car_popins\": %d, \"flash_frames\": %d, \"median_frame_diff\": %.2f,\n")
 		TEXT("  \"road_steps\": %d, \"max_step_cm\": %.1f, \"road_gaps\": %d, \"jolts\": %d, \"border_jolts\": %d,\n")
-		TEXT("  \"stuck_traffic\": %d, \"frames\": %d,\n")
+		TEXT("  \"stuck_traffic\": %d, \"traffic_cut_ins\": %d, \"traffic_through_our_car\": %d, \"traffic_turn_rounds\": %d, \"motorway_traffic_at_grade\": %d,\n")
+		TEXT("  \"junction_hold_asked_s\": %.1f, \"junction_hold_s\": %.1f, \"junction_cross\": \"%s\", \"frames\": %d,\n")
 		TEXT("  \"peak_rear_slip_deg\": %.1f, \"peak_yaw_dps\": %.1f, \"backwards_seconds\": %.2f, \"forced_spin\": %s,\n")
 		TEXT("  \"max_past_edge_m\": %.2f, \"past_edge_seconds\": %.2f,\n")
 		TEXT("  \"timed_frames\": %d, \"frame_p95_ms\": %.1f, \"frames_over_50ms\": %d, \"hitches_over_100ms\": %d,\n")
@@ -1188,7 +1378,8 @@ void ASimCruisePreflight::Finish()
 		Stats.SkySamples, Stats.SkyWhitePercent, Stats.ReferenceEV100,
 		Stats.TilePopIns, Stats.CarPopIns, Stats.FlashFrames, Stats.MedianFrameDiff,
 		Stats.RoadSteps, Stats.MaxStepCm, Stats.RoadGaps, Stats.Jolts, Stats.BorderJolts,
-		Stats.StuckTraffic, Stats.Frames,
+		Stats.StuckTraffic, Stats.TrafficCutIns, Stats.TrafficOverlaps, Stats.TrafficTurnRounds, Stats.TrafficAtGrade,
+		Stats.JunctionHoldAskedS, Stats.JunctionHoldS, *JunctionCrossName.ReplaceCharWithEscapedChar(), Stats.Frames,
 		Stats.PeakRearSlipDeg, Stats.PeakYawDps, Stats.ReversedSeconds, B(Stats.bForcedSpin),
 		Stats.MaxOffRibbonM, Stats.OffRibbonSeconds,
 		Stats.TimedFrames, Stats.FrameP95Ms, Stats.SlowFrames, Stats.Hitches,
