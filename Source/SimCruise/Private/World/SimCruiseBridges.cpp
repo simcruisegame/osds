@@ -118,18 +118,6 @@ void ASimCruiseBridges::BuildTile(const FIntPoint& Id)
 					B.Quad(Cm(E0, Z0), Cm(E1, Z1), Cm(E1, Z1 + ParapetM), Cm(E0, Z0 + ParapetM), -Out);
 					B.Quad(Cm(E0, Z0 + ParapetM), Cm(E1, Z1 + ParapetM), Cm(O1, Z1 + ParapetM), Cm(O0, Z0 + ParapetM), FVector::UpVector);
 					B.Quad(Cm(O0, Z0 + ParapetM), Cm(O1, Z1 + ParapetM), Cm(O1, Z1 - DeckDepthM), Cm(O0, Z0 - DeckDepthM), Out);
-					// A flush end where the parapet stops (a span's end, or where faces over a road at
-					// the deck's level are left out): no open, tilted profile standing beside the lane.
-					const FVector2d Along = (S1.C - S0.C).GetSafeNormal();
-					const FVector Back = FVector(-Along.X, -Along.Y, 0.0), Fore = FVector(Along.X, Along.Y, 0.0);
-					if (j == A || !Build->Roads.ParapetAt(RibbonIndex, j - 1, Edge))
-					{
-						B.Quad(Cm(O0, Z0 - DeckDepthM), Cm(E0, Z0 - DeckDepthM), Cm(E0, Z0 + ParapetM), Cm(O0, Z0 + ParapetM), Back);
-					}
-					if (j + 1 >= Z || !Build->Roads.ParapetAt(RibbonIndex, j + 1, Edge))
-					{
-						B.Quad(Cm(E1, Z1 - DeckDepthM), Cm(O1, Z1 - DeckDepthM), Cm(O1, Z1 + ParapetM), Cm(E1, Z1 + ParapetM), Fore);
-					}
 				}
 				// The deck's underside (not as a slab across a road just under the deck).
 				const bool bUnderside = Build->Roads.DeckUndersideAt(RibbonIndex, j);
