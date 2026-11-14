@@ -3,6 +3,7 @@
 #include "World/SimCruiseRoadNetwork.h"
 
 #include "World/SimCruiseTileData.h"
+#include "HAL/PlatformMisc.h"
 
 #include <limits>
 
@@ -16,6 +17,9 @@ namespace
 	constexpr double PinSpanM = 30.0;         // boundary pin fade (and superelevation run-out)
 	constexpr double JoinFadeM = 15.0;        // RoadSurface.gd JOIN_FADE_M
 	constexpr double JoinProtectM = 10.0;     // joins fade out this close to a pinned boundary end
+	// The settle pass takes only a carriageway within this height of a column: an overpass clears
+	// 4.9 m or more (16 ft), while two roads' profiles at a hillside junction can differ by 1-2 m.
+	constexpr double JoinSameLevelM = 3.0;
 	constexpr double JoinStepM = 0.5;         // station spacing where ribbons overlap
 	constexpr double SeamClearM = 0.02;       // a seam section's lowest edge over the shared ground
 	constexpr double PadMaxRadiusM = 16.0;    // closed rings up to this size are turnaround pads
@@ -1196,7 +1200,8 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 			TArray<bool> Covered; Covered.Init(false, N);
 			TArray<double> Snap[5], Cap[5];
 			TArray<bool> Snapped[5], Capped[5];
-			for (int32 c = 0; c < 5; ++c) { Snap[c].Init(0.0, N); Snapped[c].Init(false, N); Cap[c].Init(0.0, N); Capped[c].Init(false, N); }
+			TArray<int32> SnapFrom[5];
+			for (int32 c = 0; c < 5; ++c) { Snap[c].Init(0.0, N); Snapped[c].Init(false, N); Cap[c].Init(0.0, N); Capped[c].Init(false, N); SnapFrom[c].Init(INDEX_NONE, N); }
 			for (int32 i = 0; i < N; ++i)
 			{
 				const FSimCruiseRibbonStation& St = Ribbon.St[i];
@@ -1207,7 +1212,7 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 					FSimCruiseRoadHit Hit;
 					if (FindCarriageway(P, Hit, r))
 					{
-						Snap[c][i] = Hit.Height; Snapped[c][i] = true;
+						Snap[c][i] = Hit.Height; Snapped[c][i] = true; SnapFrom[c][i] = Hit.Ribbon;
 						Sum += Hit.Height - St.Column(c); ++Num;
 					}
 					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM))
@@ -1281,10 +1286,74 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 						}
 						St.Z = St.HC;
 					}
+					// SIMCRUISE_JOIN_TRACE=x,y,radius (tile metres): every column decision of the joins near
+					// a point, for the junction-lip study (release test 20261114: Welch, Doraville).
+					static const FString Trace = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_JOIN_TRACE"));
+					if (!Trace.IsEmpty())
+					{
+						TArray<FString> V;
+						Trace.ParseIntoArray(V, TEXT(","));
+						if (V.Num() == 3 && FVector2d::Distance(St.C, FVector2d(FCString::Atod(*V[0]), FCString::Atod(*V[1]))) <= FCString::Atod(*V[2]))
+						{
+							FString Line = FString::Printf(TEXT("JOIN ribbon %d %s (%s, rank %d) S %.2f covered %d weight %.2f protect %.2f shift %+.3f:"),
+								r, *Ribbon.Name, *Ribbon.Class, Ribbon.Rank, St.S, Covered[i] ? 1 : 0, Weight, Protect, Shift);
+							for (int32 c = 0; c < 5; ++c)
+							{
+								Line += FString::Printf(TEXT(" [c%d own %.3f snap %s cap %s colw %.2f colbest %+.3f -> %.3f]"), c, Own[c][i],
+									Snapped[c][i] ? *FString::Printf(TEXT("%.3f r%d"), Snap[c][i], SnapFrom[c][i]) : TEXT("-"),
+									Capped[c][i] ? *FString::Printf(TEXT("%.3f"), Cap[c][i]) : TEXT("-"), ColWeight[c], ColBest[c], St.Column(c));
+							}
+							UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+						}
+					}
 				}
 			}
 		}
 		AddToBins(r);
+	}
+
+	// 5b. Settle: every column of a road that lies inside a road before it in the join order (a
+	// higher road) at its level is that road's surface exactly. The joins above leave some of
+	// them standing up to 12 cm above it (the edge column of a driveway crossing a graded street:
+	// Welch, WV; ramp ends on a motorway: Doraville, GA; release test 2026-11-14), and that lip is
+	// in the drawn mesh and the collision both. Never onto a bridge deck (a road crossing near a
+	// deck's end stays on its own surface), never within JoinProtectM of a pinned seam end.
+	for (int32 r = 1; r < Ribbons.Num(); ++r)
+	{
+		FSimCruiseRibbon& Ribbon = Ribbons[r];
+		for (int32 i = 0; i < Ribbon.St.Num(); ++i)
+		{
+			FSimCruiseRibbonStation& St = Ribbon.St[i];
+			if (St.bBridge) continue;
+			if (Ribbon.bStartOnBoundary && St.S - Ribbon.St[0].S < JoinProtectM) continue;
+			if (Ribbon.bEndOnBoundary && Ribbon.St.Last().S - St.S < JoinProtectM) continue;
+			bool bChanged = false;
+			for (int32 c = 0; c < 5; ++c)
+			{
+				const FVector2d P = St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW);
+				TArray<TPair<int32, int32>> Segs;
+				GatherSegments(P, 2.0 * BinM, Segs);
+				int32 BestRibbon = INDEX_NONE;
+				double BestHeight = 0.0;
+				for (const TPair<int32, int32>& Seg : Segs)
+				{
+					if (Seg.Key >= r || (BestRibbon != INDEX_NONE && Seg.Key > BestRibbon)) continue;
+					const FSimCruiseRibbon& Other = Ribbons[Seg.Key];
+					if (!Other.St.IsValidIndex(Seg.Value + 1) || Other.St[Seg.Value].bBridge || Other.St[Seg.Value + 1].bBridge) continue;
+					const FSimCruiseRoadHit Hit = Project(Seg.Key, Seg.Value, P);
+					const bool bEnd = (Seg.Value == 0 && Hit.T <= 0.0) || (Seg.Value + 2 == Other.St.Num() && Hit.T >= 1.0);
+					if (FMath::Abs(Hit.Along) > (bEnd ? 0.01 : 1.2) || FMath::Abs(Hit.Lateral) > Hit.HalfW) continue;
+					if (FMath::Abs(Hit.Height - St.Column(c)) > JoinSameLevelM) continue;
+					if (BestRibbon == INDEX_NONE || Seg.Key < BestRibbon) { BestRibbon = Seg.Key; BestHeight = Hit.Height; }
+				}
+				if (BestRibbon != INDEX_NONE && FMath::Abs(St.Column(c) - BestHeight) > 0.002)
+				{
+					St.Column(c) = BestHeight;
+					bChanged = true;
+				}
+			}
+			if (bChanged) St.Z = St.HC;
+		}
 	}
 
 	// Sides that run into another carriageway are cut (junction corners, driveways).
