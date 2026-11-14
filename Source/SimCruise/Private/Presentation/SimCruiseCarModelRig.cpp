@@ -1761,6 +1761,26 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 						}
 					}
 				}
+				// Diagnostic (-SimCruiseHideStillInDisc): take those still pieces out (instruments and glass
+				// kept), to tell whether the dark bits on the spokes in sunlight are their shadows.
+				if (FParse::Param(FCommandLine::Get(), TEXT("SimCruiseHideStillInDisc")))
+				{
+					int32 Hidden = 0;
+					for (FJob& Job : Context.Jobs)
+					{
+						const ESimCruiseCarMaterialRole StillRole = Profile.RoleFor(Job.MaterialName, Job.Label);
+						if (StillRole == ESimCruiseCarMaterialRole::Gauge || StillRole == ESimCruiseCarMaterialRole::Glass) continue;
+						TArray<uint32>& List = Job.Dest[DestBody];
+						TArray<uint32> Kept;
+						for (int32 K = 0; K + 2 < List.Num(); K += 3)
+						{
+							if (InDisc(Job.Pos[List[K]], -0.1, 0.09, R * 1.08) && InDisc(Job.Pos[List[K + 1]], -0.1, 0.09, R * 1.08) && InDisc(Job.Pos[List[K + 2]], -0.1, 0.09, R * 1.08)) { ++Hidden; continue; }
+							Kept.Add(List[K]); Kept.Add(List[K + 1]); Kept.Add(List[K + 2]);
+						}
+						if (Kept.Num() != List.Num()) List = MoveTemp(Kept);
+					}
+					Context.Note(FString::Printf(TEXT("steering wheel: diagnostic, %d still triangles inside the wheel's disc hidden"), Hidden));
+				}
 				FString LeftSummary;
 				for (const TPair<FString, FVector>& Pair : Left) LeftSummary += FString::Printf(TEXT(" %s %d (r to %.3f, ax to %.3f)"), *Pair.Key, int32(Pair.Value.X), Pair.Value.Y, Pair.Value.Z);
 				Context.Note(FString::Printf(TEXT("steering wheel disc, left still:%s"), *LeftSummary));
