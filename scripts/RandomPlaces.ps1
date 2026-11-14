@@ -28,6 +28,57 @@ function Get-TestPlaceDraw([string]$Root, [int]$Seed, [int]$Count, [string]$Utc 
         $_ | Add-Member -NotePropertyName Utc -NotePropertyValue ($Day.AddHours(12.0 - [double]$_.lon / 15.0).ToString('yyyy-MM-ddTHH:mm:ssZ')) -PassThru -Force })
 }
 
+# Alaska and Hawaii road areas for the release draw (south, north, west, east): Anchorage to the
+# Mat-Su, Fairbanks, the Kenai and Seward highways; Oahu, Maui, the Kona coast. A point with no road or
+# no map data near it must fall back cleanly (the start pick's nearest-road rule): that is a test too.
+$script:ReleaseExtraAreas = [ordered]@{
+    'alaska' = @(@(61.05, 61.65, -150.1, -149.1), @(64.75, 64.9, -147.95, -147.5), @(60.1, 60.6, -151.3, -149.4))
+    'hawaii' = @(@(21.28, 21.6, -158.15, -157.7), @(20.75, 20.95, -156.7, -156.35), @(19.5, 19.8, -156.05, -155.9))
+}
+
+<#
+  The release test's draw (2026-11-14 team meeting): every place of data\test-places.json in a seeded
+  order, at least -MinAlaska places in Alaska and -MinHawaii in Hawaii (from the list first, then seeded
+  points in the areas above), and seeded points from the US areas below up to -Count. Each place gets
+  the local noon of the day of -Utc. Same rules as the hero places in the release test.
+#>
+function Get-ReleasePlaceDraw([string]$Root, [int]$Seed, [int]$Count = 30, [int]$MinAlaska = 3, [int]$MinHawaii = 3, [string]$Utc = '2026-11-12T17:00:00Z') {
+    $Rng = [System.Random]::new($Seed)
+    $Day = ([datetime]::Parse($Utc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal)).Date
+    $Noon = { param($Lon) $Day.AddHours(12.0 - [double]$Lon / 15.0).ToString('yyyy-MM-ddTHH:mm:ssZ') }
+    $IsAk = { param($P) [double]$P.lat -gt 51.0 -and [double]$P.lon -lt -129.0 }
+    $IsHi = { param($P) [double]$P.lat -lt 23.0 -and [double]$P.lon -lt -154.0 }
+    $File = Join-Path $Root 'data\test-places.json'
+    $Listed = if (Test-Path $File) { @((Get-Content $File -Raw | ConvertFrom-Json) | Sort-Object { $Rng.Next() }) } else { @() }
+    $Out = [System.Collections.Generic.List[object]]::new()
+    foreach ($P in $Listed) { if ($Out.Count -lt $Count) { $Out.Add([pscustomobject]@{ key = $P.key; lat = [double]$P.lat; lon = [double]$P.lon; kind = $P.kind; Utc = (& $Noon $P.lon) }) } }
+    $Point = {
+        param($Kind, $Areas, $N)
+        $A = $Areas[$Rng.Next(0, $Areas.Count)]
+        $Lat = [Math]::Round($A[0] + ($A[1] - $A[0]) * $Rng.NextDouble(), 5)
+        $Lon = [Math]::Round($A[2] + ($A[3] - $A[2]) * $Rng.NextDouble(), 5)
+        [pscustomobject]@{ key = "rand-$Kind-$N"; lat = $Lat; lon = $Lon; kind = $Kind; Utc = (& $Noon $Lon) }
+    }
+    # Make room for the Alaska and Hawaii places, taking out listed places of other states from the end.
+    foreach ($Need in @(@('alaska', $MinAlaska, $IsAk), @('hawaii', $MinHawaii, $IsHi))) {
+        $Have = @($Out | Where-Object { & $Need[2] $_ }).Count
+        for ($K = $Have; $K -lt $Need[1]; $K++) {
+            if ($Out.Count -ge $Count) {
+                $Drop = $Out | Where-Object { -not (& $IsAk $_) -and -not (& $IsHi $_) } | Select-Object -Last 1
+                if ($Drop) { [void]$Out.Remove($Drop) }
+            }
+            $Out.Add((& $Point $Need[0] $script:ReleaseExtraAreas[$Need[0]] ($K + 1)))
+        }
+    }
+    $Types = @($script:RandomUSAreas.Keys)
+    $T = 0
+    while ($Out.Count -lt $Count) {
+        $Kind = $Types[$T % $Types.Count]; $T++
+        $Out.Add((& $Point $Kind $script:RandomUSAreas[$Kind] $T))
+    }
+    return @($Out)
+}
+
 # Areas: south, north, west, east (degrees).
 $script:RandomUSAreas = [ordered]@{
     'desert'     = @(@(32.3, 33.8, -114.5, -111.0), @(35.5, 36.6, -116.0, -114.6), @(34.5, 35.3, -108.5, -106.5))

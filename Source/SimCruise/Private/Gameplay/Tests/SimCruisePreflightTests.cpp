@@ -42,7 +42,8 @@ bool FSimCruisePreflightJudgeTest::RunTest(const FString& Parameters)
 	S = Good(); S.RoadSteps = 1; S.MaxStepCm = 12.f; Fails(TEXT("a step in the road"), S, TEXT("road-steps"));
 	S = Good(); S.RoadGaps = 1; Fails(TEXT("a gap in the road"), S, TEXT("road-gaps"));
 	S = Good(); S.BorderJolts = 1; Fails(TEXT("a jolt at a tile border"), S, TEXT("jolts-at-tile-borders"));
-	S = Good(); S.StuckTraffic = 2; Fails(TEXT("stuck traffic"), S, TEXT("stuck-traffic"));
+	// Stuck traffic is a note now (traffic is off for v2.0.3), not a FAIL.
+	S = Good(); S.StuckTraffic = 2; TestTrue(TEXT("stuck traffic is noted"), SimCruisePreflightRules::Notes(S).Contains(TEXT("stuck-traffic-2")));
 	S = Good(); S.OffRoadSeconds = 5.f; Fails(TEXT("off the road"), S, TEXT("left-the-road"));
 	S = Good(); S.bFellBack = true; Fails(TEXT("fell back to Miami Beach"), S, TEXT("fell-back"));
 	S = Good(); S.bViewCheckPassed = false; S.ViewCheckReasons = TEXT("a,b"); Fails(TEXT("the view check failed"), S, TEXT("viewcheck-fail(a+b)"));

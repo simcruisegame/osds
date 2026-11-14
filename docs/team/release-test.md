@@ -51,6 +51,10 @@ The release test owns the GPU while it runs: other lanes ask before they launch 
 
 `C:\aiwork\GPU-BUSY` holds one line while this lane uses the GPU (`holder=lane-view, start=<UTC>, end_estimate=<UTC>, purpose=<text>`); `release-test.ps1`, `start-compare.ps1` and `focus-check.ps1` set it and clear it in a finally block (`Set-GpuBusy` / `Clear-GpuBusy` in `scripts\EditorLock.ps1`). Other lanes call `scripts\gpu-wait.ps1` before a build or a game launch: it waits while the file is there (`-TimeoutMinutes`, default 120); a file whose end_estimate is more than 30 min past is stale, so it is ignored and logged.
 
+**CPU-heavy builds also take the lock.** A build (UnrealBuildTool, cl, link, a cook or a commandlet) disturbs a timed run on the same PC as much as a game does, so a lane sets `GPU-BUSY` for its builds and its headless test runs too, not only for game launches.
+
+**The order.** `C:\aiwork\GPU-QUEUE` has one holder per line, first goes first. A lane that calls `scripts\gpu-wait.ps1 -Me <holder>` waits until the GPU is free and it is first, then takes its line out. The coordinator writes the order; while lanes are listed it is refreshed at least every 20 min (a queue not changed for 30 min is stale and ignored). The order for the night of 2026-11-14 (23:41Z): `menus-ui-build` (holds the lock now), `world-release12-build`, `picture-savings`, `world-gpu-profile`, `lane-ai-build-tests`, `lane1-build-drives`, `cleanup-privacy-fast`, `lane-view-release10-review`, `lane-ai-eye-run`, `lane-ai-wall-library` (4-6 h, last, only when the queue is otherwise empty).
+
 ## A quiet window
 
 Run the release test only in a quiet window: no build, test or game from another lane. Load from other lanes added about 2 ms to the frame p95. The script samples the PC every 30 s into `load.csv` (`scripts\LoadWatch.ps1`): the other Unreal and SimCruise processes and the GPU use of other processes. When another Unreal or SimCruise process ran, or other GPU use averaged over 5 %, the summary says **NOT QUIET** and the frame-time rows in the picture and ai reports are marked NOT QUIET: they are not valid for sign-off.

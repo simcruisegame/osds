@@ -35,7 +35,11 @@
 #>
 param(
     [int]$Seed = -1,
-    [int]$RandomCount = 4,
+    # Random US places (the release draw: every place of data\test-places.json, at least 3 in Alaska and
+    # 3 in Hawaii, then seeded points; scripts\RandomPlaces.ps1 Get-ReleasePlaceDraw). Same rules as the heroes.
+    [int]$RandomCount = 30,
+    # Each hero road with all three cars (the final test), not one car per road.
+    [switch]$AllCars,
     [int]$Seconds = 60,
     [int]$MaxPlaces = 0,
     [string]$Utc = '2026-11-12T17:00:00Z',
@@ -83,9 +87,13 @@ $Cars = @('nb2001_aaron', 'mustang65', 'meridian_z')
 $Heroes = @('ocean-drive', 'dragon', 'nebraska', 'big-sur')
 $Plan = @()
 for ($I = 0; $I -lt $Heroes.Count; $I++) {
-    $Plan += [pscustomobject]@{ Name = $Heroes[$I]; Car = $Cars[($I + $Seed) % $Cars.Count]; Road = $Heroes[$I]; Start = ''; StartRoad = ''; Utc = $Utc; Kind = 'launch' }
+    if ($AllCars) {
+        foreach ($Car in $Cars) { $Plan += [pscustomobject]@{ Name = "$($Heroes[$I])-$Car"; Car = $Car; Road = $Heroes[$I]; Start = ''; StartRoad = ''; Utc = $Utc; Kind = 'launch' } }
+    } else {
+        $Plan += [pscustomobject]@{ Name = $Heroes[$I]; Car = $Cars[($I + $Seed) % $Cars.Count]; Road = $Heroes[$I]; Start = ''; StartRoad = ''; Utc = $Utc; Kind = 'launch' }
+    }
 }
-$Draw = @(Get-TestPlaceDraw -Root $Root -Seed $Seed -Count $RandomCount -Utc $Utc)
+$Draw = @(Get-ReleasePlaceDraw -Root $Root -Seed $Seed -Count $RandomCount -Utc $Utc)
 for ($I = 0; $I -lt $Draw.Count; $I++) {
     $P = $Draw[$I]
     $Plan += [pscustomobject]@{ Name = $P.key; Car = $Cars[($I + $Seed + 1) % $Cars.Count]; Road = ''; Start = "$($P.lat),$($P.lon)"; StartRoad = ''; Utc = $P.Utc; Kind = 'random' }
