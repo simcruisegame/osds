@@ -106,6 +106,90 @@ bool FSimCruiseAerialEyeInputsTest::RunTest(const FString& Parameters)
 }
 
 /**
+ * The clean photo albedo: shadows inside a natural class are replaced by the class's own nearby pixels,
+ * the guard band comes from the neighbour's photograph, and two neighbouring tiles agree along their
+ * shared edge (no seam at z16 borders: the world lane's condition).
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseAerialEyeCleanPhotoTest, "SimCruise.AI.AerialEye.CleanPhotoSeams",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSimCruiseAerialEyeCleanPhotoTest::RunTest(const FString& Parameters)
+{
+	const int32 N = FSimCruiseAerialEye::PhotoCells, S = FSimCruiseAerialEye::PhotoStored, G = FSimCruiseAerialEye::PhotoGuard;
+	// One continuous "world" photograph: grass with fine noise, and dark tree shadows, one across the A|B edge.
+	auto World = [](int64 X, int64 Y) -> FColor
+	{
+		const uint32 H = GetTypeHash(FIntPoint(int32(X), int32(Y)));
+		const int32 Noise = int32(H % 21) - 10;
+		const FVector2D Shadows[3] = {FVector2D(100.0 * 1024 + 476.0, 200.0 * 1024 + 300.0), FVector2D(101.0 * 1024 - 2.0, 200.0 * 1024 + 600.0), FVector2D(102.0 * 1024 + 400.0, 200.0 * 1024 + 500.0)};
+		for (const FVector2D& C : Shadows)
+		{
+			if (FVector2D::DistSquared(FVector2D(double(X), double(Y)), C) < 12.0 * 12.0) return FColor(20 + Noise / 4, 35 + Noise / 4, 18, 255);
+		}
+		return FColor(uint8(70 + Noise), uint8(130 + Noise), uint8(55 + Noise), 255);
+	};
+	auto PhotoOf = [&](const FIntPoint& T, TArray<FColor>& Out)
+	{
+		Out.SetNumUninitialized(N * N);
+		for (int32 Y = 0; Y < N; ++Y) for (int32 X = 0; X < N; ++X) Out[Y * N + X] = World(int64(T.X) * N + X, int64(T.Y) * N + Y);
+		return true;
+	};
+	// The eye says "grass, sure" everywhere.
+	const int32 L = FSimCruiseAerialEye::Cells + 2 * FSimCruiseAerialEye::GuardCells;
+	TArray<FSimCruiseScanChannel> Land;
+	for (int32 K = 0; K < 12; ++K)
+	{
+		FSimCruiseScanChannel& C = Land.AddDefaulted_GetRef();
+		C.Name = FSimCruiseAerialEye::ChannelNames()[K];
+		C.Size = L;
+		C.Data.Init(K == 5 ? 255 : 0, L * L);
+	}
+	const FIntPoint A(100, 200), B(101, 200);
+	TArray<FColor> MA, MB;
+	TestTrue(TEXT("mosaic A"), FSimCruiseAerialEye::BuildMosaic(A, PhotoOf, MA));
+	TestTrue(TEXT("mosaic B"), FSimCruiseAerialEye::BuildMosaic(B, PhotoOf, MB));
+	TestEqual(TEXT("mosaic size"), MA.Num(), S * S);
+	TestTrue(TEXT("A's east guard is B's photo"), MA[(G + 10) * S + G + N + 3] == World(int64(B.X) * N + 3, int64(B.Y) * N + 10));
+	TArray<FSimCruiseScanChannel> CA, CB;
+	int32 CleanedA = 0, CleanedB = 0;
+	FSimCruiseAerialEye::CleanPhoto(MA, A, Land, CA, &CleanedA);
+	FSimCruiseAerialEye::CleanPhoto(MB, B, Land, CB, &CleanedB);
+	TestEqual(TEXT("four albedo channels"), CA.Num(), 4);
+	TestTrue(TEXT("shadows were cleaned"), CleanedA > 200 && CleanedB > 200);
+	if (CA.Num() == 4 && CB.Num() == 4)
+	{
+		// A shadow pixel inside A became grass-bright.
+		const int32 In = (G + 300) * S + (G + 476);
+		TestTrue(TEXT("the shadow is now grass"), CA[1].Data[In] > 100);
+		// Seam: A's last interior column against B's first, cleaned vs the photo itself.
+		double Clean = 0.0, Raw = 0.0;
+		int32 Same = 0, Count = 0;
+		for (int32 Y = G; Y < G + N; ++Y)
+		{
+			const int32 IA = Y * S + G + N - 1, IB = Y * S + G;
+			for (int32 Ch = 0; Ch < 3; ++Ch)
+			{
+				Clean += FMath::Abs(int32(CA[Ch].Data[IA]) - int32(CB[Ch].Data[IB]));
+			}
+			Raw += FMath::Abs(int32(MA[IA].R) - int32(MB[IB].R)) + FMath::Abs(int32(MA[IA].G) - int32(MB[IB].G)) + FMath::Abs(int32(MA[IA].B) - int32(MB[IB].B));
+			// The same ground pixel seen by both tiles (A's guard, B's interior) gets the same colour.
+			for (int32 X = 0; X < G; ++X)
+			{
+				const int32 GA = Y * S + G + N + X, GB = Y * S + G + X;
+				Same += (CA[0].Data[GA] == CB[0].Data[GB] && CA[1].Data[GA] == CB[1].Data[GB] && CA[2].Data[GA] == CB[2].Data[GB]) ? 1 : 0;
+				++Count;
+			}
+		}
+		Clean /= 3.0 * N;
+		Raw /= 3.0 * N;
+		AddInfo(FString::Printf(TEXT("edge difference: clean %.2f, photo %.2f; same colour in the shared band %.1f %%"), Clean, Raw, 100.0 * Same / FMath::Max(1, Count)));
+		TestTrue(TEXT("no seam: the cleaned edge differs no more than the photo's own edge (+2)"), Clean <= Raw + 2.0);
+		TestTrue(TEXT("the shared band agrees (>= 98 %)"), Same >= 0.98 * Count);
+	}
+	return true;
+}
+
+/**
  * The eye's back-off reads the frame time on its worker thread without touching FApp's game-thread
  * time (that raised an ensure, "no inherited time context", in game runs).
  */
