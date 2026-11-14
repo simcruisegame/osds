@@ -37,6 +37,10 @@ if (TileId == Car.Tile && Build->Roads.AcrossLevels(Car.Ribbon, DecisionS, Hit.K
 
 For a ribbon in a neighbouring tile (a crossing on a seam), skip the option when exactly one of the car's station at `DecisionS` and `Other.St[I]` is `bBridge`.
 
+## A fast test for it
+
+`SimCruise.World.TrafficLevelCrossings` (driving lane): build the recorded Doraville and Detroit-Woodward tiles. For every crossing with `bAtGradeConflict`, put a traffic car on each ribbon 30 m before the crossing, heading towards it. Call `ChooseAt` at the crossing and fail if any option it offers is the other ribbon, i.e. `AcrossLevels` holds for the option. The Miami bundled tiles have no crossings, so the test needs the recorded places, or two synthetic ribbons, one flagged bridge, crossing at one level.
+
 ## Counts (tile data, plan view)
 
 Bridge pieces crossing another drivable road: Detroit round Woodward 37, Doraville 85, Big Sur 0, Detroit start tiles 0, Miami bundled tiles 0 (their format has no bridge flag). `SimCruise.World.RoadOverlaps.Recorded` lists how many are at one level per place in `Saved/BridgeFix/changed-spans.md`.
