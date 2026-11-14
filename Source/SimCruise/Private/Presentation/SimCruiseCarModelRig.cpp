@@ -1718,30 +1718,6 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 				Context.Note(FString::Printf(TEXT("steering wheel turning parts by material:%s; deepest %.3f m toward the dash"), *Summary, Deepest));
 			}
 			MoveTris(Context, Turning, DestBody, DestSteering);
-			// A badge on the hub drawn in an instrument material (the NB model's horn pad carries an
-			// "ND" emblem in its gauge texture "white"): instruments are kept still, so it stayed, and
-			// it is the wrong generation's badge. Gauge-material triangles on the hub itself (within
-			// 30 % of the rim's radius of the axis, no deeper than 3 cm behind the rim's plane) are
-			// no instrument: the cluster lies well behind the wheel. They go.
-			{
-				int32 HubBadge = 0;
-				for (FJob& Job : Context.Jobs)
-				{
-					if (Profile.RoleFor(Job.MaterialName, Job.Label) != ESimCruiseCarMaterialRole::Gauge) continue;
-					TArray<uint32>& List = Job.Dest[DestBody];
-					TArray<uint32> Kept;
-					Kept.Reserve(List.Num());
-					for (int32 K = 0; K + 2 < List.Num(); K += 3)
-					{
-						bool bOnHub = true;
-						for (int32 M = 0; M < 3 && bOnHub; ++M) bOnHub = InDisc(Job.Pos[List[K + M]], -0.03, 0.09, 0.3 * R);
-						if (bOnHub) { ++HubBadge; continue; }
-						Kept.Add(List[K]); Kept.Add(List[K + 1]); Kept.Add(List[K + 2]);
-					}
-					if (Kept.Num() != List.Num()) List = MoveTemp(Kept);
-				}
-				if (HubBadge > 0) Context.Note(FString::Printf(TEXT("steering wheel: %d instrument-material triangles on the hub removed (a badge, not an instrument)"), HubBadge));
-			}
 			// What stays behind inside the wheel's own disc (a few centimetres either side of the rim's
 			// plane): pieces left there sit still while the wheel turns over them.
 			{
@@ -1950,6 +1926,31 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 					}
 				}
 				}
+			}
+			// (After the rim fit: the hub's own centre and axis, not the profile's ring.)
+			// A badge on the hub drawn in an instrument material (the NB model's horn pad carries an
+			// "ND" emblem in its gauge texture "white"): instruments are kept still, so it stayed, and
+			// it is the wrong generation's badge. Gauge-material triangles on the hub itself (within
+			// 30 % of the rim's radius of the axis, no deeper than 3 cm behind the rim's plane) are
+			// no instrument: the cluster lies well behind the wheel. They go.
+			{
+				int32 HubBadge = 0;
+				for (FJob& Job : Context.Jobs)
+				{
+					if (Profile.RoleFor(Job.MaterialName, Job.Label) != ESimCruiseCarMaterialRole::Gauge) continue;
+					TArray<uint32>& List = Job.Dest[DestBody];
+					TArray<uint32> Kept;
+					Kept.Reserve(List.Num());
+					for (int32 K = 0; K + 2 < List.Num(); K += 3)
+					{
+						bool bOnHub = true;
+						for (int32 M = 0; M < 3 && bOnHub; ++M) bOnHub = InDisc(Job.Pos[List[K + M]], -0.03, 0.09, 0.3 * R);
+						if (bOnHub) { ++HubBadge; continue; }
+						Kept.Add(List[K]); Kept.Add(List[K + 1]); Kept.Add(List[K + 2]);
+					}
+					if (Kept.Num() != List.Num()) List = MoveTemp(Kept);
+				}
+				if (HubBadge > 0) Context.Note(FString::Printf(TEXT("steering wheel: %d instrument-material triangles on the hub removed (a badge, not an instrument)"), HubBadge));
 			}
 			SteerCentre = Centre;
 			SteerN = N;

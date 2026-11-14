@@ -780,16 +780,24 @@ void ASimCruisePreflight::DriveTick(ASimCruisePlayerController* Player, float De
 	// angle full stick gives now (the shaper's range at this speed, else the car's full lock).
 	double WheelbaseM = 2.4;
 	double FullLockRad = 0.61;
+	TOptional<FSimCruiseVehicleSetup> RobotSetup;
 	if (const ISimCruiseVehicleControl* Control = Cast<ISimCruiseVehicleControl>(Pawn))
 	{
-		const FSimCruiseVehicleSetup Setup = Control->GetVehicleSetup();
-		WheelbaseM = Setup.WheelbaseM;
-		FullLockRad = Setup.ParkingRackAngleRad;
+		RobotSetup = Control->GetVehicleSetup();
+		WheelbaseM = RobotSetup->WheelbaseM;
+		FullLockRad = RobotSetup->ParkingRackAngleRad;
 	}
 	const double WheelRad = FMath::Atan(Curvature * WheelbaseM);
 	const double RangeRad = WheelRad >= 0.0 ? Player->GetShaper().GetRangeRightRad() : Player->GetShaper().GetRangeLeftRad();
 	const double FeedForward = WheelRad / FMath::Max(FMath::Abs(RangeRad) > 0.01 ? FMath::Abs(RangeRad) : FullLockRad, 0.05);
-	const float WantStick = FMath::Clamp(static_cast<float>(FeedForward + SteerIntegral + 0.4 * YawError), -1.f, 1.f);
+	// The wanted command is a share of the range, linear in the wheel angle; the pad's own shaping
+	// (dead zones, the fine centre, the car's quickness) is not. Sent as it was, a 0.28 stick asked
+	// for a third of the angle meant, and the robot ran wide in a 25 mph left at Bixby Creek. The
+	// stick that gives the wanted command, through the same shaping a player's thumb goes through.
+	const double WantCommand = FMath::Clamp(FeedForward + SteerIntegral + 0.4 * YawError, -1.0, 1.0);
+	const float WantStick = RobotSetup.IsSet()
+		? static_cast<float>(SimCruiseShaping::PadStickForCommand(*RobotSetup, WantCommand, Speed))
+		: static_cast<float>(WantCommand);
 	// A hand moves the stick at most about 4 full widths a second (lock to lock in half a second).
 	const float MaxStep = 4.f * FMath::Max(DeltaSeconds, 0.f);
 	Stick = LastStick + FMath::Clamp(WantStick - LastStick, -MaxStep, MaxStep);
