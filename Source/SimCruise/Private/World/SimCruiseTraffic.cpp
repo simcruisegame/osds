@@ -60,6 +60,25 @@ double SimCruiseTrafficModel::IdmAcceleration(double V, double V0, double GapM, 
 	return FMath::Clamp(Accel, -9.0, A);
 }
 
+double SimCruiseTrafficModel::GapWindowS(bool bLeftTurn, double WaitedS, bool bPlayer)
+{
+	if (bLeftTurn) return bPlayer ? 4.5 : WaitedS > 15.0 ? 1.5 : WaitedS > 8.0 ? 2.5 : 4.5;
+	return bPlayer ? 5.0 : WaitedS > 20.0 ? 2.0 : WaitedS > 10.0 ? 3.0 : 5.0;
+}
+
+bool SimCruiseTrafficModel::IsTrueDeadEnd(const FSimCruiseWorldFrame& Frame, const FVector& EndCm, const FVector2d& Heading)
+{
+	if (!Frame.IsValid()) return false;
+	const FIntPoint Tile = Frame.TileAtWorldCm(EndCm);
+	// 30 m on, and 30 m to either side: all still in this tile.
+	const FVector2d Side(-Heading.Y, Heading.X);
+	for (const FVector2d& Step : { Heading, Side, -Side })
+	{
+		if (Frame.TileAtWorldCm(EndCm + FVector(Step.X, Step.Y, 0.0) * 3000.0) != Tile) return false;
+	}
+	return true;
+}
+
 double SimCruiseTrafficModel::SpeedLimitMps(const FString& Class)
 {
 	// mph: motorway 65, trunk 55, primary 40, secondary 35, tertiary 30, residential 25.
@@ -327,8 +346,7 @@ bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bo
 		const int32 Back = -Car.Dir;
 		// Only a true dead end: near a tile seam the road may go on in a tile not built yet, and a
 		// car there turned round in the middle of the road (it used to drive on out of sight).
-		const FVector Beyond = End.LocationCm + FVector(End.Heading.X, End.Heading.Y, 0.0) * 3000.0;
-		if (Streamer.IsValid() && Streamer->GetFrame().TileAtWorldCm(Beyond) == Streamer->GetFrame().TileAtWorldCm(End.LocationCm))
+		if (Streamer.IsValid() && SimCruiseTrafficModel::IsTrueDeadEnd(Streamer->GetFrame(), End.LocationCm, End.Heading))
 		{
 			UTurns.Add({ Car.Tile, Car.Ribbon, Back, DecisionS, 180.0, 1.0 });
 		}
@@ -516,7 +534,7 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 				// A driver kept waiting takes a shorter gap (5 s, after 10 s 3 s, after 20 s 2 s): a
 				// steady stream never holds a stop line for good.
 				// Never a shorter gap in front of the player: the player is not a stream to cut into.
-				const double Window = !OtherCar ? 5.0 : Car.WaitS > 20.0 ? 2.0 : Car.WaitS > 10.0 ? 3.0 : 5.0;
+				const double Window = SimCruiseTrafficModel::GapWindowS(false, Car.WaitS, !OtherCar);
 				return bTowards && !bWillStop && OtherSpeed > 1.0 && Dist > 2.0 && Dist / OtherSpeed < Window;
 			};
 			for (const ASimCruiseTrafficCar* Other : Cars)
@@ -561,7 +579,7 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 			// The gap a left-turner waits for shrinks as it waits in the junction (4.5 s, after 8 s 2.5 s,
 			// after 15 s 1.5 s): it never stands across the junction for good while oncoming cars stream
 			// past (Stonington, Maine: a Corvette held the robot for a minute).
-			const double Window = bPlayer ? 4.5 : Car.StandS > 15.0 ? 1.5 : Car.StandS > 8.0 ? 2.5 : 4.5;
+			const double Window = SimCruiseTrafficModel::GapWindowS(true, Car.StandS, bPlayer);
 			return Ahead > -2.0 && Ahead < 60.0 && Ahead / OtherSpeed < Window;
 		};
 		bool bYield = false;
