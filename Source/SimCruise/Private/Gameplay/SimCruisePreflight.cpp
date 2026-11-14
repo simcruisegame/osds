@@ -459,6 +459,7 @@ void ASimCruisePreflight::Tick(float DeltaSeconds)
 			Stage = EStage::Drive;
 			StageStarted = Now;
 			Stats.DriveSeconds = 0.f;
+	PoseLogNext = 0;
 		}
 		else if (Now - StageStarted > 60.0)
 		{
@@ -779,6 +780,21 @@ void ASimCruisePreflight::MeasureTick(ASimCruisePlayerController* Player, float 
 		}
 		OffRibbonNow = bOff ? OffRibbonNow + DeltaSeconds : 0.f;
 		Stats.OffRibbonSeconds = FMath::Max(Stats.OffRibbonSeconds, OffRibbonNow);
+		// The pose at drive frame 0 and at 0.1, 0.5 and 1.0 s: where the car really is, and what the
+		// judge measures it against (a start that fails at frame 0 can be read from this).
+		static const float PoseTimes[] = {0.f, 0.1f, 0.5f, 1.0f};
+		while (PoseLogNext < UE_ARRAY_COUNT(PoseTimes) && Stats.DriveSeconds >= PoseTimes[PoseLogNext])
+		{
+			double Lon = 0.0, Lat = 0.0;
+			if (Stream) Stream->GetFrame().WorldCmToLonLat(CarCm, Lon, Lat);
+			const FIntPoint Tile = Stream ? Stream->GetFrame().TileAtWorldCm(CarCm) : FIntPoint::ZeroValue;
+			const FSimCruiseRibbon* Ribbon = Near.IsValid() ? Lines[Near.Line].Ribbon : nullptr;
+			UE_LOG(LogSimCruisePreflight, Display, TEXT("PREFLIGHT POSE t=%.2f X=%.1f Y=%.1f Z=%.1f lat=%.6f lon=%.6f heading=%.1f tile=%d_%d judge_line=%d seg=%d ribbon=\"%s\" class=%s centreline=%.2fm half_width=%.2fm past_edge=%.2fm"),
+				Stats.DriveSeconds, CarCm.X, CarCm.Y, CarCm.Z, Lat, Lon, Pawn->GetActorRotation().Yaw, Tile.X, Tile.Y,
+				Near.IsValid() ? Near.Line : -1, Near.IsValid() ? Near.Seg : -1, Ribbon ? *Ribbon->Name : TEXT("-"), Ribbon ? *Ribbon->Class : TEXT("-"),
+				Near.IsValid() ? FVector2d::Distance(Car2, PointAt(Near)) / 100.0 : -1.0, Near.IsValid() ? Lines[Near.Line].HalfW[Near.Seg] : -1.0, PastEdgeM);
+			++PoseLogNext;
+		}
 	}
 
 	// The road surface: the tile's own collision under a point, or a bridge deck above it.

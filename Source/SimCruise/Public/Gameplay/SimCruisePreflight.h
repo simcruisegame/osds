@@ -226,6 +226,8 @@ private:
 	/** The car has been above 5 m/s once in this drive. */
 	bool bHasDriven = false;
 	float OffRibbonNow = 0.f;
+	/** The next pose log time (index into the pose times). */
+	int32 PoseLogNext = 0;
 	FDelegateHandle FrameHandle;
 	int32 FrameIndex = 0;
 	TArray<FVector2D> PendingSky;
