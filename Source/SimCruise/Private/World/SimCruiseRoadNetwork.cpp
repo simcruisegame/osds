@@ -467,6 +467,7 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 	Ribbons.Reset();
 	Pads.Reset();
 	BridgeChanges.Reset();
+	Crossings.Reset();
 	Bins.Reset();
 	NumContractedEnds = 0;
 	TileSizeM = InTileSizeM;
@@ -1315,6 +1316,47 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 		}
 	}
 
+	// Deck crossings over other roads, for traffic (never a junction) and the checks.
+	Crossings.Reset();
+	for (int32 r = 0; r < Ribbons.Num(); ++r)
+	{
+		const FSimCruiseRibbon& Rb = Ribbons[r];
+		TMap<int32, FSimCruiseRoadCrossing> ByOther;
+		for (int32 j = 0; j < Rb.St.Num(); ++j)
+		{
+			const FSimCruiseRibbonStation& St = Rb.St[j];
+			if (!St.bBridge) continue;
+			TArray<TPair<int32, int32>> Segs;
+			GatherSegments(St.C, St.HalfW + 1.0, Segs);
+			for (const TPair<int32, int32>& Sg : Segs)
+			{
+				if (Sg.Key == r) continue;
+				const FSimCruiseRibbon& O = Ribbons[Sg.Key];
+				if (O.St[Sg.Value].bBridge && O.St[Sg.Value + 1].bBridge) continue; // a deck by a deck
+				const FSimCruiseRoadHit Hit = Project(Sg.Key, Sg.Value, St.C);
+				if (FMath::Abs(Hit.Along) > 0.01 || FMath::Abs(Hit.Lateral) > Hit.HalfW) continue;
+				if (FMath::Abs(FVector2d::DotProduct(St.T, O.St[Sg.Value].T)) > 0.94) continue; // the road going on, not one crossed
+				const double Clear = St.HC - 1.2 - Hit.Height;
+				const double UnderS = FMath::Lerp(O.St[Sg.Value].S, O.St[Sg.Value + 1].S, Hit.T);
+				FSimCruiseRoadCrossing* C = ByOther.Find(Sg.Key);
+				if (!C)
+				{
+					C = &ByOther.Add(Sg.Key);
+					C->Deck = r; C->Under = Sg.Key; C->DeckFrom = C->DeckTo = j; C->UnderFrom = C->UnderTo = Sg.Value;
+					C->ClearanceM = Clear; C->DeckS = St.S; C->UnderS = UnderS;
+				}
+				C->DeckFrom = FMath::Min(C->DeckFrom, j); C->DeckTo = FMath::Max(C->DeckTo, j);
+				C->UnderFrom = FMath::Min(C->UnderFrom, Sg.Value); C->UnderTo = FMath::Max(C->UnderTo, Sg.Value + 1);
+				if (Clear < C->ClearanceM) { C->ClearanceM = Clear; C->DeckS = St.S; C->UnderS = UnderS; }
+			}
+		}
+		for (TPair<int32, FSimCruiseRoadCrossing>& Pair : ByOther)
+		{
+			Pair.Value.bAtGradeConflict = Pair.Value.ClearanceM < 4.9;
+			Crossings.Add(Pair.Value);
+		}
+	}
+
 	// One line per bridge span whose parapets or slab were left out over a road at its level.
 	for (int32 r = 0; r < Ribbons.Num() && BridgeRuleOn(); ++r)
 	{
@@ -1428,6 +1470,28 @@ bool FSimCruiseRoadNetwork::BridgeRuleOn()
 {
 	static const bool bOn = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_NO_BRIDGE_RULE")) != TEXT("1");
 	return bOn;
+}
+
+bool FSimCruiseRoadNetwork::LevelConflictAt(int32 RibbonIndex, double S, double ReachM, int32* OutOther) const
+{
+	for (const FSimCruiseRoadCrossing& C : Crossings)
+	{
+		if (!C.bAtGradeConflict) continue;
+		if (C.Deck == RibbonIndex && FMath::Abs(S - C.DeckS) <= ReachM) { if (OutOther) *OutOther = C.Under; return true; }
+		if (C.Under == RibbonIndex && FMath::Abs(S - C.UnderS) <= ReachM) { if (OutOther) *OutOther = C.Deck; return true; }
+	}
+	return false;
+}
+
+bool FSimCruiseRoadNetwork::AcrossLevels(int32 RibbonA, double SA, int32 RibbonB, double SB, double ReachM) const
+{
+	for (const FSimCruiseRoadCrossing& C : Crossings)
+	{
+		if (!C.bAtGradeConflict) continue;
+		if (C.Deck == RibbonA && C.Under == RibbonB && FMath::Abs(SA - C.DeckS) <= ReachM && FMath::Abs(SB - C.UnderS) <= ReachM) return true;
+		if (C.Under == RibbonA && C.Deck == RibbonB && FMath::Abs(SA - C.UnderS) <= ReachM && FMath::Abs(SB - C.DeckS) <= ReachM) return true;
+	}
+	return false;
 }
 
 bool FSimCruiseRoadNetwork::DeckFaceClear(int32 RibbonIndex, int32 I, double Frac, double OutM) const

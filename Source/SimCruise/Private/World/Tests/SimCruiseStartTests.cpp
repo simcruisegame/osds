@@ -601,6 +601,15 @@ bool FSimCruiseReleaseFaultProbe::RunTest(const FString& Parameters)
 							if (Up > 0.15 && Up < 4.5) Faces += FString::Printf(TEXT(" [r%d %s %.2f m up at %+.1f m]"), Sg.Key, *T.Build->Roads.Ribbons[Sg.Key].Class, Up, Off);
 						}
 					}
+					// The ground beside the lane (a cut bank the car meets if it runs wide): its height
+					// over the lane at 1.5, 2.5 and 3.5 m either side, where it stands 0.3 m or more over.
+					for (const double Off : { -3.5, -2.5, -1.5, 1.5, 2.5, 3.5 })
+					{
+						const FVector2d Q = L + Side * Off;
+						if (Q.X < 0.0 || Q.Y < 0.0 || Q.X > T.Build->TileSizeM || Q.Y > T.Build->TileSizeM) continue;
+						const double Up = T.Build->TerrainHeightAt(Q) - S.LaneCm.Z / 100.0;
+						if (Up > 0.3) Faces += FString::Printf(TEXT(" [ground %.2f m up at %+.1f m]"), Up, Off);
+					}
 					if (k % 4 == 0 || !Faces.IsEmpty() || !bTop)
 					{
 						Text += FString::Printf(TEXT("\n    %.1f m: tile %d_%d (%.1f, %.1f) lane %.2f, top %s%s"), k * 0.5, TileIds[S.Tile].X, TileIds[S.Tile].Y, L.X, L.Y,
@@ -1092,10 +1101,24 @@ bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 			if (!SimCruiseStartTest::BuildPlace(FPaths::Combine(Root, Place), Frame, Built, StartCm)) continue;
 			++NumPlaces;
 			int32 PlaceFaults = 0, PlaceSpans = 0, PlaceFaces = 0, PlaceOther = 0;
+			int32 PlaceCrossings = 0, PlaceConflicts = 0;
+			FString CrossLines;
 			FString Lines;
 			for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built)
 			{
 				for (const FString& Span : Pair.Value->Roads.BridgeChanges) { Lines += FString::Printf(TEXT("- %s\n"), *Span); ++PlaceSpans; }
+				for (const FSimCruiseRoadCrossing& C : Pair.Value->Roads.Crossings)
+				{
+					++PlaceCrossings;
+					if (!C.bAtGradeConflict) continue;
+					++PlaceConflicts;
+					const FSimCruiseRibbon& D = Pair.Value->Roads.Ribbons[C.Deck];
+					const FSimCruiseRibbon& U = Pair.Value->Roads.Ribbons[C.Under];
+					double Lon = 0.0, Lat = 0.0;
+					SimCruiseGeo::TileToLonLat(FVector2d(Pair.Key.X, Pair.Key.Y) + D.St[C.DeckFrom].C / Pair.Value->TileSizeM, Lon, Lat);
+					CrossLines += FString::Printf(TEXT("- tile %d_%d: %s %s (r%d) over %s %s (r%d) at %.6f, %.6f: clearance %.2f m\n"), Pair.Key.X, Pair.Key.Y,
+						*D.Class, D.Name.IsEmpty() ? TEXT("(unnamed)") : *D.Name, C.Deck, *U.Class, U.Name.IsEmpty() ? TEXT("(unnamed)") : *U.Name, C.Under, Lat, Lon, C.ClearanceM);
+				}
 				for (const FString& Fault : SimCruiseStartTest::RoadOverlaps(*Pair.Value, FString::Printf(TEXT("%s tile %d_%d"), *Place, Pair.Key.X, Pair.Key.Y)))
 				{
 					// Faces in a car's way fail; edges over a parallel carriageway and crossings are
@@ -1108,6 +1131,8 @@ bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 			AddInfo(FString::Printf(TEXT("ROADOVERLAPS %s: %d tiles, %d bridge spans changed, %d faults (%d faces in a car's way, %d other), bridge rule %s"),
 				*Place, Built.Num(), PlaceSpans, PlaceFaults, PlaceFaces, PlaceOther, FSimCruiseRoadNetwork::BridgeRuleOn() ? TEXT("on") : TEXT("off")));
 			Md += FString::Printf(TEXT("\n## %s: %d spans changed, %d overlap faults\n\n%s"), *Place, PlaceSpans, PlaceFaults, Lines.IsEmpty() ? TEXT("(none)\n") : *Lines);
+			Md += FString::Printf(TEXT("\nDeck crossings over another road: %d, at one level (clearance under 4.9 m): %d\n\n%s"), PlaceCrossings, PlaceConflicts, *CrossLines);
+			AddInfo(FString::Printf(TEXT("CROSSINGS %s: %d deck crossings, %d at one level"), *Place, PlaceCrossings, PlaceConflicts));
 			Faults += PlaceFaults;
 			Spans += PlaceSpans;
 		}

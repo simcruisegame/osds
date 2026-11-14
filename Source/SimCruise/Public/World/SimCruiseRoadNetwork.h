@@ -215,6 +215,24 @@ struct FSimCruiseSeamEnd
 	double HL = 0.0, HC = 0.0, HR = 0.0;
 };
 
+/**
+ * Where a bridge deck (a mapped bridge span) passes over another road. The tile data has the
+ * bridge flag only (no OSM layer, tunnel or cutting), so a crossing is a deck span over a
+ * carriageway that is not a deck there. bAtGradeConflict: the deck's underside does not clear
+ * that road by 4.9 m (the elevation model has no cuts or embankments, so most decks meet the
+ * road under them at one level): two levels in the map, one level in the game.
+ */
+struct FSimCruiseRoadCrossing
+{
+	int32 Deck = INDEX_NONE;        // the bridge ribbon
+	int32 DeckFrom = 0, DeckTo = 0; // its stations over the other road
+	int32 Under = INDEX_NONE;       // the road under it
+	int32 UnderFrom = 0, UnderTo = 0;
+	double DeckS = 0.0, UnderS = 0.0; // the crossing point along each (m)
+	double ClearanceM = 0.0;        // the deck's underside (1.2 m under its surface) over the road there
+	bool bAtGradeConflict = false;  // ClearanceM < 4.9
+};
+
 class SIMCRUISE_API FSimCruiseRoadNetwork
 {
 public:
@@ -227,6 +245,8 @@ public:
 	TArray<FSimCruiseRibbon> Ribbons;
 	/** One line per bridge span the clearance rule lifted or de-decked in this build (also logged as "SimCruise BRIDGE"). */
 	TArray<FString> BridgeChanges;
+	/** Every deck crossing over another road in this tile (see FSimCruiseRoadCrossing). */
+	TArray<FSimCruiseRoadCrossing> Crossings;
 	TArray<FSimCruiseRoadPad> Pads;
 	double TileSizeM = 0.0;
 	int32 NumContractedEnds = 0;
@@ -248,6 +268,15 @@ public:
 	 * (the deck from 0.7 m under to 2.5 m over it: a merge gore, a crossing at grade), where it would be a
 	 * wall across that road. SimCruiseBridges builds by it; World.RoadOverlaps checks by it.
 	 */
+	/**
+	 * Whether ribbon RibbonIndex at S (m along it, within ReachM) is part of a crossing where two
+	 * roads the map puts on two levels meet at one level here (FSimCruiseRoadCrossing::bAtGradeConflict),
+	 * and if so which road it crosses. Traffic must not turn from one onto the other there: they
+	 * are a bridge and the road under it, not a junction.
+	 */
+	bool LevelConflictAt(int32 RibbonIndex, double S, double ReachM = 20.0, int32* OutOther = nullptr) const;
+	/** Whether going from RibbonA (at SA) onto RibbonB (at SB) crosses levels: a deck and the road under it at a listed crossing. */
+	bool AcrossLevels(int32 RibbonA, double SA, int32 RibbonB, double SB, double ReachM = 20.0) const;
 	bool ParapetAt(int32 RibbonIndex, int32 I, int32 Edge) const;
 	/** Whether the deck's slab (its underside) stands from station I to I + 1: not over a road within 2.5 m under it. */
 	bool DeckUndersideAt(int32 RibbonIndex, int32 I) const;
