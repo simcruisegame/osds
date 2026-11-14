@@ -72,7 +72,7 @@ bool SimCruiseTrafficModel::CrossesAtGrade(const TArray<FSimCruiseRibbon>& Ribbo
 	// at road level (I-75 under Woodward in Detroit, its bridge not raised), its cars would drive
 	// across the street. Traffic keeps off such a span. A ramp that joins it is no crossing: only
 	// another road's middle (beyond 10 m of its ends) crossing the motorway's line counts, where
-	// neither is on a mapped bridge.
+	// the two are less than 4.9 m apart in height (a mapped bridge drawn without clearance counts).
 	if (!Ribbons.IsValidIndex(Index)) return false;
 	const FSimCruiseRibbon& M = Ribbons[Index];
 	if (M.Class != TEXT("motorway") || M.St.Num() < 2) return false;
@@ -89,11 +89,9 @@ bool SimCruiseTrafficModel::CrossesAtGrade(const TArray<FSimCruiseRibbon>& Ribbo
 		const double OLen = O.St.Last().S - O.St[0].S;
 		for (int32 A = 0; A + 1 < M.St.Num(); ++A)
 		{
-			if (M.St[A].bBridge || M.St[A + 1].bBridge) continue;
 			const FVector2d P = M.St[A].C, Q = M.St[A + 1].C;
 			for (int32 B = 0; B + 1 < O.St.Num(); ++B)
 			{
-				if (O.St[B].bBridge || O.St[B + 1].bBridge) continue;
 				const FVector2d U = O.St[B].C, V = O.St[B + 1].C;
 				const FVector2d D1 = Q - P, D2 = V - U;
 				const double Den = D1.X * D2.Y - D1.Y * D2.X;
@@ -103,6 +101,12 @@ bool SimCruiseTrafficModel::CrossesAtGrade(const TArray<FSimCruiseRibbon>& Ribbo
 				const double To = (W.X * D1.Y - W.Y * D1.X) / Den;
 				if (Tm < 0.0 || Tm > 1.0 || To < 0.0 || To > 1.0) continue;
 				const double SAlong = FMath::Lerp(O.St[B].S, O.St[B + 1].S, To) - O.St[0].S;
+				// A mapped bridge only separates the roads when its deck clears the one below:
+				// Woodward's deck over I-75 is drawn at the motorway's own level (no freeway cut in
+				// the elevation data). Less than 4.9 m (16 ft, the US minimum) is a crossing.
+				const double Zm = FMath::Lerp(M.St[A].Z, M.St[A + 1].Z, Tm);
+				const double Zo = FMath::Lerp(O.St[B].Z, O.St[B + 1].Z, To);
+				if (FMath::Abs(Zo - Zm) >= 4.9) continue;
 				if (SAlong > 10.0 && SAlong < OLen - 10.0) return true;
 			}
 		}
@@ -353,6 +357,10 @@ bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bo
 				const double Tt = FMath::Clamp(FVector2d::DotProduct(Local - A, B - A) / Len2, 0.0, 1.0);
 				const double D = FVector2d::Distance(Local, FMath::Lerp(A, B, Tt));
 				if (D > Other.St[Seg.Value].HalfW + 4.0) continue;
+				// Close in plan is not a junction when the other road runs at another level (a
+				// street on its bridge over the motorway, the motorway in its cut below).
+				const double OtherZ = FMath::Lerp(Other.St[Seg.Value].Z, Other.St[Seg.Value + 1].Z, Tt);
+				if (FMath::Abs(OtherZ - Local3.Z) > 3.0) continue;
 				if (!BestDist.Contains(Seg.Key) || D < BestDist[Seg.Key])
 				{
 					BestDist.Add(Seg.Key, D);

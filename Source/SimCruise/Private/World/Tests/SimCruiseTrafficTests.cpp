@@ -166,7 +166,7 @@ bool FSimCruiseTrafficPatienceTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("a road ending 10 m from its tile's side: not a dead end"), SimCruiseTrafficModel::IsTrueDeadEnd(Frame, NearSide, East));
 	TestFalse(TEXT("no world frame: never"), SimCruiseTrafficModel::IsTrueDeadEnd(FSimCruiseWorldFrame(), Middle, East));
 	// A motorway the data draws crossing a street at grade: traffic keeps off it. A ramp joining
-	// it is no crossing, nor a street that crosses on a mapped bridge.
+	// it is no crossing, nor a street on a bridge that clears it.
 	auto Road = [](const FString& Class, const FVector2d& From, const FVector2d& To)
 	{
 		FSimCruiseRibbon R = SimCruiseTrafficTests::Straight(Class, 6.0, 0);
@@ -187,7 +187,9 @@ bool FSimCruiseTrafficPatienceTest::RunTest(const FString& Parameters)
 	Ribbons.Add(Road(TEXT("primary"), FVector2d(150.0, -60.0), FVector2d(150.0, 60.0)));
 	TestTrue(TEXT("a street drawn across the motorway at grade (I-75 under Woodward)"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
 	for (FSimCruiseRibbonStation& St : Ribbons.Last().St) St.bBridge = true;
-	TestFalse(TEXT("the same street on a mapped bridge"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	TestTrue(TEXT("a mapped bridge drawn without clearance (Woodward over I-75) still crosses at grade"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	for (FSimCruiseRibbonStation& St : Ribbons.Last().St) St.Z += 6.0;
+	TestFalse(TEXT("the same street on a bridge 6 m above"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
 	TestFalse(TEXT("only motorways are judged"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 3));
 	return true;
 }
