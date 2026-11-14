@@ -38,5 +38,16 @@ namespace SimCruiseRoadCheck
 	/** The top of the collision surfaces at P (tile metres); false when nothing covers P. */
 	SIMCRUISE_API bool TopSurface(const FSimCruiseTileBuild& Build, const FVector2d& P, double& OutHeightM);
 
+	/** TopSurface for many points: the asphalt (road-layer) triangles of one build, binned once. */
+	struct SIMCRUISE_API FTopSurface
+	{
+		explicit FTopSurface(const FSimCruiseTileBuild& Build);
+		/** The highest road-layer face at tile metres P (false: no road face there). */
+		bool Top(const FVector2d& P, double& OutHeightM) const;
+	private:
+		TArray<FVector3d> A, B, C;
+		TMap<FIntPoint, TArray<int32>> Cells;
+	};
+
 	SIMCRUISE_API FString Describe(const FSimCruiseTileBuild& Build, const TArray<FSimCruiseRoadStep>& Steps, int32 Max = 8);
 }

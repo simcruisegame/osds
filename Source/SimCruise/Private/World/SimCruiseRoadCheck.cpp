@@ -75,6 +75,35 @@ namespace SimCruiseRoadCheck
 		return G.Top(P, OutHeightM);
 	}
 
+	FTopSurface::FTopSurface(const FSimCruiseTileBuild& Build)
+	{
+		FTriangleGrid G;
+		BuildGrid(Build, G);
+		for (const FTriangleGrid::FTri& T : G.Tris) { A.Add(T.A); B.Add(T.B); C.Add(T.C); }
+		Cells = MoveTemp(G.Cells);
+	}
+
+	bool FTopSurface::Top(const FVector2d& P, double& OutHeightM) const
+	{
+		const TArray<int32>* List = Cells.Find(FIntPoint(FMath::FloorToInt(P.X / FTriangleGrid::CellM), FMath::FloorToInt(P.Y / FTriangleGrid::CellM)));
+		if (!List) return false;
+		bool bAny = false;
+		for (const int32 i : *List)
+		{
+			const FVector2d Pa(A[i].X, A[i].Y), Pb(B[i].X, B[i].Y), Pc(C[i].X, C[i].Y);
+			const double D = (Pb.Y - Pc.Y) * (Pa.X - Pc.X) + (Pc.X - Pb.X) * (Pa.Y - Pc.Y);
+			if (FMath::Abs(D) < 1e-12) continue;
+			const double L1 = ((Pb.Y - Pc.Y) * (P.X - Pc.X) + (Pc.X - Pb.X) * (P.Y - Pc.Y)) / D;
+			const double L2 = ((Pc.Y - Pa.Y) * (P.X - Pc.X) + (Pa.X - Pc.X) * (P.Y - Pc.Y)) / D;
+			const double L3 = 1.0 - L1 - L2;
+			constexpr double Eps = -1e-7;
+			if (L1 < Eps || L2 < Eps || L3 < Eps) continue;
+			const double Z = L1 * A[i].Z + L2 * B[i].Z + L3 * C[i].Z;
+			if (!bAny || Z > OutHeightM) { OutHeightM = Z; bAny = true; }
+		}
+		return bAny;
+	}
+
 	TArray<FSimCruiseRoadStep> FindSteps(const FSimCruiseTileBuild& Build, double ThresholdCm)
 	{
 		TArray<FSimCruiseRoadStep> Out;
