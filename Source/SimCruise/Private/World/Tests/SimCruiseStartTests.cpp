@@ -1390,6 +1390,34 @@ namespace SimCruiseStartTest
 					if (Curve > 0.02) Out.Add(FString::Printf(TEXT("%s ribbon %d (%s) deck station %d: grade changes %.3f per m (a hump or dip)"), *Where, r, *R.Name, j, Curve));
 					if (FMath::Abs(G1) > (bSteepByData ? LineGrade + 0.01 : 0.065)) Out.Add(FString::Printf(TEXT("%s ribbon %d (%s) deck station %d: grade %.1f %% (its line %.1f %%)"), *Where, r, *R.Name, j, 100.0 * FMath::Abs(G1), 100.0 * LineGrade));
 				}
+				// Clearance: over every road it crosses (not one ending into it: a junction at the
+				// abutment), the deck's underside (1.2 m under its surface) clears that road by 4.9 m.
+				for (int32 j = k; j <= e && !bLeft; ++j)
+				{
+					const FSimCruiseRibbonStation& St = R.St[j];
+					if (!Inside(St.C)) continue;
+					TArray<TPair<int32, int32>> Under;
+					Roads.GatherSegments(St.C, St.HalfW + 1.0, Under);
+					for (const TPair<int32, int32>& Sg : Under)
+					{
+						if (Sg.Key == r) continue;
+						const FSimCruiseRibbon& O = Roads.Ribbons[Sg.Key];
+						if (O.St[Sg.Value].bBridge && O.St[Sg.Value + 1].bBridge) continue;
+						const FSimCruiseRoadHit Hit = Roads.Project(Sg.Key, Sg.Value, St.C);
+						if (FMath::Abs(Hit.Along) > 0.01 || FMath::Abs(Hit.Lateral) > Hit.HalfW) continue;
+						if (FMath::Abs(FVector2d::DotProduct(St.T, O.St[Sg.Value].T)) > 0.94) continue;
+						const double UnderS = FMath::Lerp(O.St[Sg.Value].S, O.St[Sg.Value + 1].S, Hit.T);
+						const double Stem = St.HalfW + 1.5;
+						if ((!O.bStartOnBoundary && UnderS - O.St[0].S < Stem) || (!O.bEndOnBoundary && O.St.Last().S - UnderS < Stem)) continue;
+						if (Hit.Height > St.HC + 1.0) continue; // a road above the deck
+						const double Clear = St.HC - 1.2 - Hit.Height;
+						if (Clear < 4.9 - 0.05)
+						{
+							Out.Add(FString::Printf(TEXT("%s ribbon %d (%s) deck station %d: %.2f m over ribbon %d (%s %s), under 4.9 m"), *Where, r, *R.Name, j, Clear, Sg.Key, *O.Class, *O.Name));
+							break;
+						}
+					}
+				}
 				for (int32 j = k; j <= e; ++j)
 				{
 					const FSimCruiseRibbonStation& St = R.St[j];
