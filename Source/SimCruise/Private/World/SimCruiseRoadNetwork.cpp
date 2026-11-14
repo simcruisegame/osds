@@ -16,10 +16,6 @@ namespace
 	constexpr double PinSpanM = 30.0;         // boundary pin fade (and superelevation run-out)
 	constexpr double JoinFadeM = 15.0;        // RoadSurface.gd JOIN_FADE_M
 	constexpr double JoinProtectM = 10.0;     // joins fade out this close to a pinned boundary end
-	// A join takes only a carriageway within this height of its own: an overpass clears 4.9 m or
-	// more (16 ft), while two roads' own profiles at a junction on a hillside can differ by 1-2 m
-	// before the join levels them.
-	constexpr double JoinSameLevelM = 3.0;
 	constexpr double JoinStepM = 0.5;         // station spacing where ribbons overlap
 	constexpr double SeamClearM = 0.02;       // a seam section's lowest edge over the shared ground
 	constexpr double PadMaxRadiusM = 16.0;    // closed rings up to this size are turnaround pads
@@ -1209,16 +1205,12 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 				{
 					const FVector2d P = St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW);
 					FSimCruiseRoadHit Hit;
-					// The most major road under the column (the first in this join order), not the
-					// highest surface (another minor road's edge can stand above the road both join);
-					// only a road at this road's level (JoinSameLevelM): an overpass or the road under a
-					// bridge is not a junction.
-					if (FindCarriageway(P, Hit, r, 0.0, MIN_int32, true, St.Column(c), JoinSameLevelM))
+					if (FindCarriageway(P, Hit, r))
 					{
 						Snap[c][i] = Hit.Height; Snapped[c][i] = true;
 						Sum += Hit.Height - St.Column(c); ++Num;
 					}
-					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM, MIN_int32, true, St.Column(c), JoinSameLevelM))
+					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM))
 					{
 						// Just outside the other carriageway: never above its edge, so this
 						// ribbon's quads cannot stand proud of the road it runs into.
@@ -1397,36 +1389,20 @@ FVector2d FSimCruiseRoadPad::OutlinePoint(int32 K) const
 	return Centre + FVector2d(FMath::Cos(A), FMath::Sin(A)) * Radii[K % Radii.Num()];
 }
 
-bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon, double Margin, int32 MinRank, bool bMostMajor,
-	double AtHeightM, double SameLevelM) const
+bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon, double Margin, int32 MinRank) const
 {
 	bool bFound = false;
-	auto SameLevel = [&](double Height) { return SameLevelM < 0.0 || FMath::Abs(Height - AtHeightM) <= SameLevelM; };
-	// bMostMajor (the junction joins): the carriageway first in the join order (highest rank, then
-	// longest), not the highest surface: where two driveways overlap at a street, the second one
-	// took the first one's surface over the street (lifted toward its own ground beyond the kerb)
-	// and stood 3-12 cm above the street (Welch, WV; ramp merges in Doraville, GA, 2026-11-14).
-	auto Better = [&](const FSimCruiseRoadHit& Hit)
-	{
-		if (!bFound) return true;
-		if (!bMostMajor) return Hit.Height > OutHit.Height;
-		const bool bPadNow = OutHit.Ribbon < 0, bPadNew = Hit.Ribbon < 0;
-		if (bPadNow != bPadNew) return bPadNow; // a ribbon before a turnaround pad
-		if (bPadNew) return Hit.Height > OutHit.Height;
-		return Hit.Ribbon < OutHit.Ribbon || (Hit.Ribbon == OutHit.Ribbon && Hit.Height > OutHit.Height);
-	};
 	for (int32 i = 0; i < Pads.Num(); ++i)
 	{
 		const FSimCruiseRoadPad& Pad = Pads[i];
 		if (Pad.Rank < MinRank || !Pad.Contains(P, Margin)) continue;
-		FSimCruiseRoadHit PadHit;
-		PadHit.Ribbon = -2 - i; // a pad, not a ribbon
-		PadHit.Height = Pad.Height;
-		PadHit.HalfW = Pad.RadiusAt(P);
-		PadHit.Lateral = FVector2d::Distance(P, Pad.Centre);
-		if (SameLevel(PadHit.Height) && Better(PadHit))
+		if (!bFound || Pad.Height > OutHit.Height)
 		{
-			OutHit = PadHit;
+			OutHit = FSimCruiseRoadHit();
+			OutHit.Ribbon = -2 - i; // a pad, not a ribbon
+			OutHit.Height = Pad.Height;
+			OutHit.HalfW = Pad.RadiusAt(P);
+			OutHit.Lateral = FVector2d::Distance(P, Pad.Centre);
 			bFound = true;
 		}
 	}
@@ -1445,7 +1421,7 @@ bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHi
 		const double AlongTolerance = ((bFirst && Hit.T <= 0.0) || (bLast && Hit.T >= 1.0)) ? 0.01 : 1.2;
 		if (FMath::Abs(Hit.Along) > AlongTolerance) continue;
 		if (FMath::Abs(Hit.Lateral) > Hit.HalfW + Margin) continue;
-		if (SameLevel(Hit.Height) && Better(Hit))
+		if (!bFound || Hit.Height > OutHit.Height)
 		{
 			OutHit = Hit;
 			bFound = true;
