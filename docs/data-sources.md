@@ -11,6 +11,7 @@ The table lists what the map helper (`helper/atlas.mjs`, shipped as `tools/atlas
 | Place search | [Photon](https://photon.komoot.io/) geocoder on OSM data | ODbL 1.0 (data) | At runtime |
 | Ground elevation | Mapzen/Tilezen Terrarium tiles; USGS 3DEP 1/3-arc-second and 1 m products (The National Map) | US public domain | At runtime |
 | Aerial imagery | USGS The National Map imagery; USDA NAIP (Hawaii, low-vegetation detection); USDA Forest Service Alaska orthophotos | US public domain | At runtime; offline-start imagery bundled |
+| Aerial imagery at zoom 16 (scan eye, clean ground albedo) | USGS The National Map imagery (USGSImageryOnly), 1024 px per zoom-16 tile (about 0.45-0.6 m), helper command `aerial16`, lower 48 states | US public domain; credited "aerial photographs USGS The National Map" | At runtime, through the helper's polite fetch and bounded source cache (`a16-<x>-<y>.jpg`); never bundled |
 | Recent surface colour | Copernicus Sentinel-2 L2A via Element 84 Earth Search | Copernicus Sentinel data terms (free, attribution) | At runtime, optional |
 | Tree canopy heights | WRI/Meta High Resolution Canopy Height Maps v2 | CC BY 4.0 | At runtime |
 | Forest type, shrub cover | USGS/USDA LANDFIRE EVT; MRLC NLCD and RCMAP; USDA Rangeland Analysis Platform | US public domain | At runtime |
