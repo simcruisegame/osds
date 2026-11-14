@@ -60,7 +60,20 @@ public:
 	 */
 	FString SettingsJson(bool bLog);
 
+	/** Where the car is now (the pre-flight sets it each frame): written into each frame's sidecar. */
+	void SetPosition(double Lat, double Lon, double HeadingDeg, double PathM) { PosLat = Lat; PosLon = Lon; PosHeadingDeg = HeadingDeg; PosPathM = PathM; }
+
 private:
+	double PosLat = 0.0, PosLon = 0.0, PosHeadingDeg = 0.0, PosPathM = 0.0;
+	/** A watched run (-SimCruiseReview): the viewer's input is blocked (Esc passes) and logged, focus changes are logged. */
+	void StartGuard();
+	void StopGuard();
+	TSharedPtr<class IInputProcessor> Guard;
+	FDelegateHandle FocusHandle;
+	/** The frame pacing each second of the drive (REVIEW PACE lines). */
+	int32 PaceFrames = 0;
+	float PaceMaxMs = 0.f;
+	float NextPaceS = 1.f;
 	void SampleResolution();
 	double ResFractionSum = 0.0;
 	int32 ResFractionSamples = 0;

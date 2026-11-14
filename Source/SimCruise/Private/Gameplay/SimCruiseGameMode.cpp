@@ -28,11 +28,15 @@
 #include "Vehicle/SimCruiseVehicle.h"
 #include "Vehicle/SimCruiseVehicleMovementComponent.h"
 #include "Misc/App.h"
+#include "Presentation/SimCruiseCarAssets.h"
+#include "World/SimCruiseWorldTile.h"
 #include "World/SimCruiseBridges.h"
 #include "World/SimCruiseGuardRails.h"
 #include "World/SimCruiseRegionalTerrain.h"
 #include "World/SimCruiseSignals.h"
+#include "World/SimCruiseStartPick.h"
 #include "World/SimCruiseTrees.h"
+#include "Presentation/SimCruiseCarAssets.h"
 #include "World/SimCruiseWorldStreamer.h"
 #include "World/SimCruiseWorldSubsystem.h"
 
@@ -340,6 +344,12 @@ void ASimCruiseGameMode::BeginTravel(const FSimCruisePlace& Place, bool bRestart
 	Stream->SetFocus(StartCm, FVector::ZeroVector);
 	WaitStartedSeconds = FPlatformTime::Seconds();
 	LastMessageSeconds = -100.0;
+	bStartCarBuilt = false;
+	// The car's model and the traffic models start on worker threads now (glTF and rig, most of a
+	// heavy model's time: the Miata's took 27.7 s on the game thread at Welch); the meshes are built
+	// on the game thread later, while the start tiles load.
+	SimCruiseCarAssets::PrepareAsync(CarId);
+	for (const FString& Model : SimCruiseParkedCars::AllCarIds()) SimCruiseCarAssets::PrepareAsync(Model);
 
 	// The sun and sky follow the place (unless the command line placed the observer).
 	double CommandLineLat = 0.0;
@@ -543,11 +553,48 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 		return false;
 	}
 	const bool bFirstPlacement = !bCarPlaced;
+	Stream->HoldRoadTops();
 	if (bFirstPlacement)
 	{
 		Stream->SetFocus(StartCm, FVector::ZeroVector);
-		const bool bReady = Stream->AreTilesReadyAround(StartCm, 1);
+		// The start tiles first and together (the start tile and its corners at once); while they
+		// are fetched and built, the player's car model, then the traffic and parked-car models
+		// (one a frame): building a model holds the game thread (30 s for the Miatas' 38 MB on a
+		// busy PC), and after the tiles it added all of that to the start (Detroit and Doraville,
+		// 2026-11-14: placed after 98-100 s); the 1999 Miata also froze a packaged drive for 3.3 s
+		// when its first car appeared. Background cars never take an unbuilt heavy model
+		// (SimCruiseParkedCars::CarFor), so the list holds light models only.
+		Stream->SetStartBoost(true);
+		const bool bTilesUnderWay = Stream->NumTilesInFlight() >= 3 || FPlatformTime::Seconds() - WaitStartedSeconds > 4.0;
+		bool bModelsReady = true;
+		if (bStartCarBuilt)
+		{
+			const TArray<FString> Models = SimCruiseParkedCars::AllCarIds();
+			if (PrebuiltModels < Models.Num())
+			{
+				const double ModelStart = FPlatformTime::Seconds();
+				FString ModelError;
+				SimCruiseCarAssets::Get(Models[PrebuiltModels], ModelError);
+				UE_LOG(LogSimCruiseDrive, Display, TEXT("Traffic model %s built before the drive in %.2f s%s"), *Models[PrebuiltModels],
+					FPlatformTime::Seconds() - ModelStart, ModelError.IsEmpty() ? TEXT("") : *(TEXT(": ") + ModelError));
+				++PrebuiltModels;
+			}
+			bModelsReady = PrebuiltModels >= Models.Num();
+		}
+		else
+		{
+			bModelsReady = false;
+		}
 		const double Waited = FPlatformTime::Seconds() - WaitStartedSeconds;
+		if (!bStartCarBuilt && (CarId.IsEmpty() || bTilesUnderWay))
+		{
+			bStartCarBuilt = true;
+			const double Before = FPlatformTime::Seconds();
+			FString Error;
+			if (!CarId.IsEmpty()) SimCruiseCarAssets::Get(CarId, Error);
+			UE_LOG(LogSimCruiseDrive, Display, TEXT("The car's model (%s) built while %d start tiles load: %.1f s"), *CarId, Stream->NumTilesInFlight(), FPlatformTime::Seconds() - Before);
+		}
+		const bool bReady = Stream->AreTilesReadyAround(StartCm, 1) && bModelsReady;
 		const bool bTimedOut = Waited > StartTimeoutSeconds;
 		// Tiles that cannot load (offline, no helper, nothing there): the next place, else the
 		// bundled one (Drive.gd start_next). The bundled place itself loads from disk. A failed
@@ -578,12 +625,50 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 	const double AnyRadiusM = CurrentPlace.bLoose ? 30.0 : StartSearchRadiusM;
 	FVector Ground = StartCm;
 	FRotator Heading = CurrentPlace.bHasBearing ? FRotator(0.0, PreferredYaw, 0.0) : FRotator::ZeroRotator;
-	const bool bNamed = !StartRoadName.IsEmpty() && Stream->FindRoadPoseFacing(StartRoadName, StartCm, NamedRadiusM, PreferredYaw, Ground, Heading);
+	// The start places by the general rules (SimCruiseStartPick: mid-block, inside its tile,
+	// straight, on the carriageway, a road going on ahead), best first; the first one a ground
+	// trace confirms (the road surface is there, at the road's height, nothing above it). Where
+	// none passes, the nearest-road rule as before.
+	auto PickStart = [&](const FString& Name, double RadiusM) -> bool
+	{
+		bStartByNearestRoad = false;
+		FString WhyNone;
+		const TArray<FSimCruiseStartPose> Picks = Stream->FindStartCandidates(Name, StartCm, RadiusM, PreferredYaw, &WhyNone);
+		// Never silent: a start by the old nearest-road rule is the fault the release test sees
+		// (Welch, WV, nose at the bank, when the pick saw no road faces on installed tiles).
+		if (Picks.IsEmpty())
+		{
+			// One fixed string the release judge fails on: "SimCruise START FALLBACK: start pick found no candidate".
+			UE_LOG(LogSimCruiseDrive, Warning, TEXT("SimCruise START FALLBACK: start pick found no candidate%s within %.0f m (%s); the nearest-road rule places the car"),
+				Name.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" on %s"), *Name), RadiusM, *WhyNone);
+		}
+		for (const FSimCruiseStartPose& Pick : Picks)
+		{
+			FString Why;
+			if (!GroundTraceOnRoad(Pick.CheckCm, Why))
+			{
+				UE_LOG(LogSimCruiseDrive, Display, TEXT("Start candidate at %s left out: %s"), *Pick.LocationCm.ToString(), *Why);
+				continue;
+			}
+			Ground = Pick.LocationCm;
+			Heading = Pick.Rotation;
+			UE_LOG(LogSimCruiseDrive, Display, TEXT("Start: %.0f m from the start point, %.0f m of road ahead"), Pick.DistanceM, Pick.AheadM);
+			return true;
+		}
+		if (!Picks.IsEmpty())
+		{
+			UE_LOG(LogSimCruiseDrive, Warning, TEXT("SimCruise START FALLBACK: start pick found no candidate the ground trace confirms (%d left out); the nearest-road rule places the car"), Picks.Num());
+		}
+		bStartByNearestRoad = true;
+		return Stream->FindRoadPoseFacing(Name, StartCm, RadiusM, PreferredYaw, Ground, Heading);
+	};
+	bStartByNearestRoad = false;
+	const bool bNamed = !StartRoadName.IsEmpty() && PickStart(StartRoadName, NamedRadiusM);
 	if (!bNamed && !StartRoadName.IsEmpty())
 	{
 		UE_LOG(LogSimCruiseDrive, Warning, TEXT("No room to start on %s within %.0f m of the start; starting on the nearest road."), *StartRoadName, NamedRadiusM);
 	}
-	const bool bOnRoad = bNamed || Stream->FindRoadPoseFacing(FString(), StartCm, AnyRadiusM, PreferredYaw, Ground, Heading);
+	const bool bOnRoad = bNamed || PickStart(FString(), AnyRadiusM);
 	if (!bOnRoad)
 	{
 		if (bFirstPlacement && (!StartChain.IsEmpty() || bStartLaunch))
@@ -618,10 +703,41 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 	}
 	PendingPlayers.Reset();
 	bCarPlaced = true;
+	Stream->SetStartBoost(false);
 	StartChain.Reset();
 	bStartLaunch = false;
 	StartNote.Reset();
 
+	return true;
+}
+
+bool ASimCruiseGameMode::GroundTraceOnRoad(const TArray<FVector>& PointsCm, FString& OutWhy) const
+{
+	if (PointsCm.IsEmpty())
+	{
+		OutWhy = TEXT("no points to check");
+		return false;
+	}
+	const FCollisionObjectQueryParams Objects(ECC_WorldStatic);
+	const FCollisionQueryParams Params(SCENE_QUERY_STAT(SimCruiseStartTrace), true);
+	// Under the car's middle and its four corners, the first thing down from 5 m is the road at
+	// its own height (within 8 cm): a kerb or a sidewalk (15 cm), a bank, a building or a hole fails.
+	for (int32 i = 0; i < PointsCm.Num(); ++i)
+	{
+		const FVector& At = PointsCm[i];
+		FHitResult Hit;
+		if (!GetWorld()->LineTraceSingleByObjectType(Hit, At + FVector(0.0, 0.0, 500.0), At - FVector(0.0, 0.0, 500.0), Objects, Params))
+		{
+			OutWhy = FString::Printf(TEXT("no ground under point %d"), i);
+			return false;
+		}
+		const double Off = Hit.ImpactPoint.Z - At.Z;
+		if (FMath::Abs(Off) > 8.0)
+		{
+			OutWhy = FString::Printf(TEXT("the ground under point %d is %+.0f cm off the road's height"), i, Off);
+			return false;
+		}
+	}
 	return true;
 }
 
@@ -712,6 +828,7 @@ void ASimCruiseGameMode::HandleRebased(const FVector& OffsetCm)
 		{
 			// Teleport keeps the body's velocity: the car drives on across the shift.
 			Pawn->AddActorWorldOffset(OffsetCm, false, nullptr, ETeleportType::TeleportPhysics);
+			UE_LOG(LogTemp, Display, TEXT("PLAYER MOVE rebase: the world shifted by X=%.1f Y=%.1f Z=%.1f cm (the car keeps its place in the world)"), OffsetCm.X, OffsetCm.Y, OffsetCm.Z);
 		}
 		if (ASimCruisePlayerCameraManager* Camera = Player ? Cast<ASimCruisePlayerCameraManager>(Player->PlayerCameraManager) : nullptr)
 		{

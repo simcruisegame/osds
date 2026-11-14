@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Gameplay/SimCruiseHUD.h"
+#include "Gameplay/SimCruiseHudTextLog.h"
 
 #include "Knowledge/SimCruisePlaceGraphSubsystem.h"
 
@@ -294,6 +295,7 @@ FVector2D ASimCruiseHUD::MeasureText(const FString& Text, bool bBold, float Poin
 
 void ASimCruiseHUD::DrawTextAt(const FString& Text, bool bBold, float PointSize, float X, float Y, const FLinearColor& Color, bool bRightAlign)
 {
+	SimCruiseHudTextLog::Note(Text);
 	UFont* Font = HudFont(bBold);
 	if (!Font || Text.IsEmpty())
 	{

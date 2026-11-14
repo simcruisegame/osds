@@ -9,6 +9,7 @@
 #include "Live/SimCruiseAerialEye.h"
 #include "Live/SimCruiseNeuralDetail.h"
 #include "World/SimCruiseTraffic.h"
+#include "World/SimCruiseStartPick.h"
 #include "Misc/App.h"
 
 #include "Async/Async.h"
@@ -40,14 +41,19 @@ void ASimCruiseWorldStreamer::BeginPlay()
 	Super::BeginPlay();
 	{
 		FString Fail;
-		if (FParse::Value(FCommandLine::Get(), TEXT("SimCruiseFailTiles="), Fail))
+		// The whole list up to the next space: Windows drops the quotes, and the default parse stops at the first comma.
+		if (FParse::Value(FCommandLine::Get(), TEXT("SimCruiseFailTiles="), Fail, false))
 		{
 			TArray<FString> Parts;
 			Fail.ParseIntoArray(Parts, TEXT(","));
 			for (const FString& P : Parts)
 			{
 				FString X, Y;
-				if (P.Split(TEXT("_"), &X, &Y)) ForcedFailures.Add(FIntPoint(FCString::Atoi(*X), FCString::Atoi(*Y)));
+				if (P.TrimQuotes().Split(TEXT("_"), &X, &Y))
+				{
+					ForcedFailures.Add(FIntPoint(FCString::Atoi(*X), FCString::Atoi(*Y)));
+					UE_LOG(LogSimCruiseWorld, Display, TEXT("Forced tile failure: %s_%s (-SimCruiseFailTiles)"), *X, *Y);
+				}
 			}
 			UE_LOG(LogSimCruiseWorld, Display, TEXT("Forced tile failures: %d (-SimCruiseFailTiles)"), ForcedFailures.Num());
 		}
@@ -98,6 +104,7 @@ void ASimCruiseWorldStreamer::StartAt(double LonDeg, double LatDeg, const FStrin
 	Title = InTitle;
 	Manager.RingRadius = RingRadius;
 	Manager.MaxInFlight = FMath::Max(1, MaxConcurrentBuilds);
+	if (Atlas.IsValid()) Atlas->SetMaxConcurrent(Manager.MaxInFlight);
 	Manager.Reset();
 	TilesFailed = 0;
 	// Cars of the last place drive on its roads: they go with it.
@@ -108,6 +115,21 @@ void ASimCruiseWorldStreamer::StartAt(double LonDeg, double LatDeg, const FStrin
 	bStarted = true;
 	UE_LOG(LogSimCruiseWorld, Display, TEXT("Drive at %s (%.5f, %.5f): origin tile %s, tile %.2f m, generation %u"),
 		*Title, LatDeg, LonDeg, *SimCruiseTileName(Frame.OriginTile), Frame.TileSizeM, Manager.GetGeneration());
+}
+
+void ASimCruiseWorldStreamer::SetStartBoost(bool bOn)
+{
+	// The road faces each build keeps for the start pick (2-3 MB a tile) are not needed once the
+	// car stands on the road: freed now, and on every tile installed until the next start.
+	bStartPending = bOn;
+	if (!bOn)
+	{
+		for (const TPair<FIntPoint, TObjectPtr<ASimCruiseWorldTile>>& Pair : Tiles) if (Pair.Value) Pair.Value->DropRoadTops();
+	}
+	const int32 Builds = bOn ? FMath::Max(MaxConcurrentBuilds, StartConcurrentBuilds) : FMath::Max(1, MaxConcurrentBuilds);
+	if (Manager.MaxInFlight == Builds) return;
+	Manager.MaxInFlight = Builds;
+	if (Atlas.IsValid()) Atlas->SetMaxConcurrent(Builds);
 }
 
 void ASimCruiseWorldStreamer::SetFocus(const FVector& WorldCm, const FVector& VelocityCmPerSecond)
@@ -171,8 +193,29 @@ bool ASimCruiseWorldStreamer::FindRoadPose(const FString& RoadName, const FVecto
 	return FindRoadPoseFacing(RoadName, NearWorldCm, SearchRadiusM, TNumericLimits<double>::Max(), OutLocationCm, OutRotation);
 }
 
+TArray<FSimCruiseStartPose> ASimCruiseWorldStreamer::FindStartCandidates(const FString& RoadName, const FVector& NearWorldCm, double SearchRadiusM, double PreferredYawDeg, FString* OutWhyNone) const
+{
+	TArray<FSimCruiseStartTile> Built;
+	for (const auto& Pair : Tiles)
+	{
+		const ASimCruiseWorldTile* Tile = Pair.Value;
+		if (Tile && Tile->GetBuild()) Built.Add({ Tile->GetActorLocation(), Tile->GetBuild() });
+	}
+	return SimCruiseStartPick::Candidates(Built, RoadName, NearWorldCm, SearchRadiusM, PreferredYawDeg, 24, OutWhyNone);
+}
+
 bool ASimCruiseWorldStreamer::FindRoadPoseFacing(const FString& RoadName, const FVector& NearWorldCm, double SearchRadiusM, double PreferredYawDeg, FVector& OutLocationCm, FRotator& OutRotation) const
 {
+	// The start rules (SimCruiseStartPick): mid-block, inside the tile, straight, the footprint on
+	// the carriageway, a road going on ahead. The old nearest-station rule below only where none
+	// passes (a place with no such road near).
+	const TArray<FSimCruiseStartPose> Picks = FindStartCandidates(RoadName, NearWorldCm, SearchRadiusM, PreferredYawDeg);
+	if (Picks.Num() > 0)
+	{
+		OutLocationCm = Picks[0].LocationCm;
+		OutRotation = Picks[0].Rotation;
+		return true;
+	}
 	const bool bPreferred = PreferredYawDeg < 1e9;
 	const FVector2d Wanted = bPreferred
 		? FVector2d(FMath::Cos(FMath::DegreesToRadians(PreferredYawDeg)), FMath::Sin(FMath::DegreesToRadians(PreferredYawDeg)))
@@ -652,6 +695,7 @@ void ASimCruiseWorldStreamer::TickStreaming(float DeltaSeconds)
 			*SimCruiseTileName(TileId), B.Roads.Ribbons.Num(), B.Roads.NumStations(), B.MarkingQuads, B.StopSigns, B.NumTriangles(), B.ConditionedVertices,
 			B.MinHeightM, B.MaxHeightM, B.BuildMs, Aerial ? TEXT(", aerial") : TEXT(""));
 		Tile->Install(Result->Build.ToSharedRef(), Resources, Aerial, true);
+		if (!bStartPending) Tile->DropRoadTops();
 		Tiles.Add(TileId, Tile);
 		++TilesInstalled;
 		++Installed;
