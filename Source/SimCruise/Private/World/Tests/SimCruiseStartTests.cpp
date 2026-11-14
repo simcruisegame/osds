@@ -1365,10 +1365,11 @@ namespace SimCruiseStartTest
 				int32 e = k;
 				while (e + 1 < N && R.St[e + 1].bBridge) ++e;
 				++OutSpans;
-				// A span left as it was (its ramps did not fit; logged by the road network) is not judged here.
+				// A span left as it was (its ramps did not fit; logged by the road network): its smoothness is not
+				// judged, but it is still driven (car corners on the road, nothing built in its lanes).
 				bool bLeft = false;
 				for (const FVector2d& Lw : Roads.DecksLeftAsTheyWere) bLeft |= FMath::RoundToInt(Lw.X) == r && FMath::Abs(Lw.Y - R.St[k].S) < 0.5;
-				if (bLeft) { ++OutLeft; k = e; continue; }
+				if (bLeft) ++OutLeft;
 				// Its own line: a deck whose mapped end heights need more than 6 % keeps that grade (real data).
 				const int32 Ea = FMath::Max(k - 1, 0), Eb = FMath::Min(e + 1, N - 1);
 				const double LineGrade = R.St[Eb].S - R.St[Ea].S > 1.0 ? FMath::Abs(R.St[Eb].HC - R.St[Ea].HC) / (R.St[Eb].S - R.St[Ea].S) : 0.0;
@@ -1381,7 +1382,7 @@ namespace SimCruiseStartTest
 					const FSimCruiseRibbonStation& P1 = R.St[j];
 					const FSimCruiseRibbonStation& P2 = R.St[j + 1];
 					const double D0 = P1.S - P0.S, D1 = P2.S - P1.S;
-					if (D0 < 1.0 || D1 < 1.0 || !Inside(P1.C)) continue;
+					if (bLeft || D0 < 1.0 || D1 < 1.0 || !Inside(P1.C)) continue;
 					const double G0 = (P1.HC - P0.HC) / D0, G1 = (P2.HC - P1.HC) / D1;
 					const double Curve = FMath::Abs(G1 - G0) / (0.5 * (D0 + D1));
 					OutWorstCurve = FMath::Max(OutWorstCurve, Curve);
@@ -1484,6 +1485,13 @@ bool FSimCruiseBridgeDecksTest::RunTest(const FString& Parameters)
 		for (const TSharedRef<FSimCruiseTileBuild>& B : P.Builds)
 		{
 			for (const FString& Span : B->Roads.BridgeChanges) { AddInfo(Span); ++Changed; }
+			for (const FVector2d& Lw : B->Roads.DecksLeftAsTheyWere)
+			{
+				const int32 Ri = FMath::RoundToInt(Lw.X);
+				if (!B->Roads.Ribbons.IsValidIndex(Ri)) continue;
+				const FSimCruiseRibbon& Lr = B->Roads.Ribbons[Ri];
+				if (Lr.Name == TEXT("Northcrest Road")) AddError(FString::Printf(TEXT("%s tile %d_%d: Northcrest Road's deck (ribbon %d) was left as it was; it must be made smooth"), *P.Name, B->Tile.X, B->Tile.Y, Ri));
+			}
 			for (const FSimCruiseRibbon& R : B->Roads.Ribbons) bNorthcrest |= R.Name == TEXT("Northcrest Road") && R.St.ContainsByPredicate([](const FSimCruiseRibbonStation& S) { return S.bBridge; });
 			for (const FString& Fault : SimCruiseStartTest::CheckDecks(*B, FString::Printf(TEXT("%s tile %d_%d"), *P.Name, B->Tile.X, B->Tile.Y), WorstCurve, WorstGrade, Spans, SteepByData, Left))
 			{
