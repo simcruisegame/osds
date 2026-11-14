@@ -28,6 +28,8 @@ struct FSimCruiseStartPose
 	double DistanceM = 0.0;
 	/** Lower is better (DistanceM, plus penalties for a short road ahead or the wrong way). */
 	double Score = 0.0;
+	/** The road surface under the car's middle and its four corners (world cm): the ground trace checks them. */
+	TArray<FVector> CheckCm;
 };
 
 /**
@@ -45,6 +47,12 @@ namespace SimCruiseStartPick
 {
 	/** The road ahead the start wants (60 s of driving at about 13 m/s). */
 	constexpr double WantedAheadM = 800.0;
+	/** A start stays this far from any junction (along its road). */
+	constexpr double JunctionClearM = 30.0;
+	/** The car's footprint stays this far inside the carriageway's edge. */
+	constexpr double EdgeClearM = 0.5;
+	/** The car's middle stays this far inside the drive judge's edge (half a car's width and 0.5 m). */
+	constexpr double JudgeInsideM = 1.5;
 
 	/**
 	 * How far the road goes on from station S of a ribbon in direction Dir (+1 along the
@@ -57,13 +65,35 @@ namespace SimCruiseStartPick
 	 * Whether a car's footprint at Pose stands on the carriageway of its ribbon with no ground
 	 * above the road under it; Why says what failed.
 	 */
-	SIMCRUISE_API bool OnCarriageway(const TArray<FSimCruiseStartTile>& Tiles, const FSimCruiseStartPose& Pose, FString* Why = nullptr);
+	SIMCRUISE_API bool OnCarriageway(const TArray<FSimCruiseStartTile>& Tiles, const FSimCruiseStartPose& Pose, FString* Why = nullptr, TArray<FVector>* OutCheckCm = nullptr);
 
 	/**
 	 * Start candidates within RadiusM of NearCm, best first (at most MaxCandidates): on the road
 	 * named RoadName (empty: any public road), facing PreferredYawDeg where the road allows it
 	 * (>= 1e9: no preference).
 	 */
+	/**
+	 * The drive judge's edge (ASimCruisePreflight: FindCursor and the past-edge measure): among the
+	 * centre lines of the public ribbons, the one nearest the car plus 8 m per unit of misalignment
+	 * with its heading; past edge = the distance to that line minus its half width at the
+	 * segment's first station. Negative inside. Returns 30 when no line is aligned within 30 m.
+	 */
+	SIMCRUISE_API double JudgePastEdgeM(const TArray<FSimCruiseStartTile>& Tiles, const FVector& CarCm, double YawDeg, int32* OutTile = nullptr, int32* OutRibbon = nullptr);
+
+	/** One sample of the drive robot's route: where (world cm, in its lane), the lane's own height, the tile. */
+	struct FRouteSample
+	{
+		FVector LaneCm = FVector::ZeroVector;
+		int32 Tile = INDEX_NONE;
+	};
+
+	/**
+	 * The route the drive robot takes from a start: along its ribbon in its lane, then on the
+	 * straightest ribbon that starts or ends within 3 m of where it ends (ASimCruisePreflight::Walk),
+	 * one sample every StepM for LengthM or to a dead end.
+	 */
+	SIMCRUISE_API TArray<FRouteSample> RouteSamples(const TArray<FSimCruiseStartTile>& Tiles, const FSimCruiseStartPose& Start, double LengthM, double StepM);
+
 	SIMCRUISE_API TArray<FSimCruiseStartPose> Candidates(const TArray<FSimCruiseStartTile>& Tiles, const FString& RoadName, const FVector& NearCm,
-		double RadiusM, double PreferredYawDeg, int32 MaxCandidates = 24);
+		double RadiusM, double PreferredYawDeg, int32 MaxCandidates = 24, FString* OutWhyNone = nullptr);
 }

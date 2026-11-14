@@ -12,6 +12,9 @@
 
 . (Join-Path $PSScriptRoot 'ViewerWatch.ps1')
 
+# The world lane's start-pick fallback warning (the start fell back to an old pose): a FAIL for the place.
+$script:StartFallbackPattern = 'SimCruise START FALLBACK: start pick found no candidate|start-by-nearest-road-rule'
+
 $script:Teams = [ordered]@{
     driving = 'Driving (physics, the robot judge, steering ratio)'
     cockpit = 'Cockpit (steering wheel, gauges)'
@@ -146,7 +149,7 @@ function Add-CaseResults($Cases, $Findings, $Numbers, $Frames, $Ran) {
 }
 
 function Write-ReleaseReports {
-    param([string]$RunDir, [object[]]$Rows, [string]$Commit, [int]$Seed, [string]$PadResult, [string]$PadDir, [object[]]$Cases = @(), $Load = $null, [int]$Minutes)
+    param([string]$RunDir, [object[]]$Rows, [string]$Commit, [int]$Seed, [string]$PadResult, [string]$PadDir, [object[]]$Cases = @(), $Load = $null, [object[]]$ExtraFindings = @(), [int]$Minutes)
     $Findings = @{}; foreach ($T in $script:Teams.Keys) { $Findings[$T] = @() }
     $Numbers = @{}; foreach ($T in $script:Teams.Keys) { $Numbers[$T] = @() }
     $Frames = @{}; foreach ($T in $script:Teams.Keys) { $Frames[$T] = @() }
@@ -194,6 +197,8 @@ function Write-ReleaseReports {
 
         # Release: the launch itself.
         if ($Crash) { Add-Finding 'release' 'P0' $R '-' "$Rel\crash\" 'the game crashed' }
+        $Fallback = if (Test-Path $Log) { Select-String -Path $Log -Pattern $script:StartFallbackPattern | Select-Object -First 1 } else { $null }
+        if ($Fallback) { Add-Finding 'world' 'P1' $R '0 s' "$Rel\game.log" "the start pick fell back: $(($Fallback.Line -replace '^\[.*?\]\[.*?\]', '').Trim())" }
         if ($Hung) { Add-Finding 'release' 'P0' $R '-' "$Rel\game.log" 'the game hung and was stopped' }
         if (-not $Pre) { Add-Finding 'release' 'P0' $R '-' "$Rel\game.log" 'no result: the drive did not happen' }
         if ($Engine.Count) { Add-Finding 'release' 'P1' $R '-' "$Rel\game.log" "$($Engine.Count) engine errors, first: $(($Engine[0].Line -replace '^\[.*?\]\[.*?\]', '').Trim())" }
@@ -229,6 +234,17 @@ function Write-ReleaseReports {
             if ($Reasons -match 'road-steps-[^,]*|road-gaps-[^,]*|jolts-at-tile-borders-[^,]*') { Add-Finding 'world' 'P2' $R '-' "$Rel\review\" $Matches[0] }
             if ($Reasons -match 'tile-pop-in-[^,]*|car-pop-in-[^,]*') { Add-Finding 'world' 'P2' $R '-' "$Rel\review\" $Matches[0] }
             if ($Reasons -match 'stuck-traffic-[^,]*') { Add-Finding 'world' 'P2' $R '-' "$Rel\game.log" $Matches[0] }
+            # Traffic behaviour (the driving lane owns the traffic model): a car through ours or across our
+            # bumper is P1; a turn round and motorway traffic at grade are P2. The log line names the car.
+            if ($Reasons -match 'traffic-through-our-car-[^,]*') { Add-Finding 'driving' 'P1' $R '-' "$Rel\game.log" $Matches[0] }
+            if ($Reasons -match 'traffic-cut-in-[^,]*') { Add-Finding 'driving' 'P1' $R '-' "$Rel\game.log" $Matches[0] }
+            if ($Reasons -match 'traffic-turn-round-[^,]*') { Add-Finding 'driving' 'P2' $R '-' "$Rel\game.log" $Matches[0] }
+            if ($Reasons -match 'motorway-traffic-at-grade-[^,]*') { Add-Finding 'driving' 'P2' $R '-' "$Rel\game.log" $Matches[0] }
+            if ($Reasons -match 'junction-hold-[^,]*') { Add-Finding 'release' 'P2' $R '-' "$Rel\game.log" "$($Matches[0]): the robot found no stop line (the case did not test gap acceptance)" }
+            if ($Pre.PSObject.Properties['traffic_cut_ins']) {
+                $Numbers['driving'] += "| $Rel ($($R.Plan.Car)) | traffic: cut-ins / through our car / turn-rounds / motorway at grade | $($Pre.traffic_cut_ins) / $($Pre.traffic_through_our_car) / $($Pre.traffic_turn_rounds) / $($Pre.motorway_traffic_at_grade) | 0 / 0 / 0 / 0 | $(if ([int]$Pre.traffic_cut_ins + [int]$Pre.traffic_through_our_car + [int]$Pre.traffic_turn_rounds + [int]$Pre.motorway_traffic_at_grade) { 'FAIL' } else { 'ok' }) |"
+                if ([double]$Pre.junction_hold_asked_s -gt 0) { $Numbers['driving'] += "| $Rel ($($R.Plan.Car)) | held at the stop line for $($Pre.junction_cross) | $($Pre.junction_hold_s) s | $($Pre.junction_hold_asked_s) s | $(if ([double]$Pre.junction_hold_s -lt [double]$Pre.junction_hold_asked_s - 0.5) { 'FAIL' } else { 'ok' }) |" }
+            }
             if ($Pre.fell_back) { Add-Finding 'world' 'P0' $R '-' "$Rel\review\000-*.png" 'the start fell back to the bundled place' }
             $Numbers['world'] += "| $Rel | road steps / gaps / tile pop-in | $($Pre.road_steps) (max $($Pre.max_step_cm) cm) / $($Pre.road_gaps) / $($Pre.tile_popins) | 0 / 0 / 0 | $(if ([int]$Pre.road_steps + [int]$Pre.road_gaps + [int]$Pre.tile_popins) { 'FAIL' } else { 'ok' }) |"
         }
@@ -256,9 +272,11 @@ function Write-ReleaseReports {
         if ($Shots.Count) { $Frames['world'] += "$Rel\review\$($Shots[0].Name) (start)" }
         if (Test-Path (Join-Path $D 'sheet.png')) { $Frames['picture'] += "$Rel\sheet.png" }
 
-        $Verdict = if (-not $Pre -or $Crash -or $Hung) { 'FAIL' } elseif ($Pre.result -eq 'PASS' -and (-not $Ck -or $Ck.result -eq 'PASS') -and $Valid) { 'PASS' } else { 'FAIL' }
+        $Verdict = if (-not $Pre -or $Crash -or $Hung -or $Fallback) { 'FAIL' } elseif ($Pre.result -eq 'PASS' -and (-not $Ck -or $Ck.result -eq 'PASS') -and $Valid) { 'PASS' } else { 'FAIL' }
         $Table += "| $($R.Plan.Name) | $($R.Plan.Car) | $Verdict$(if (-not $Valid) { ' (NOT VALID FOR SIGN-OFF)' }) | $(if ($Pre) { $Pre.reasons } else { 'no result' }) | $(if ($Ck) { $Ck.result } else { '-' }) | $(if ($View) { $View.Matches[0].Groups[1].Value } else { '-' }) | $(if ($Pre) { $Pre.frame_p95_ms } else { '-' }) | $($R.Minutes) | $(if ($Visible) { 'windowed (visible)' } else { 'off screen' })$(if ($Disturb.Count) { ', DISTURBED' }) | [review]($Rel/review.md) |"
     }
+    # Findings a step of the run made itself (the package text check): {Team; Sev; Place; Car; Time; Evidence; What}.
+    foreach ($X in $ExtraFindings) { $Findings[$X.Team] += [pscustomobject]@{ Sev = $X.Sev; Place = $X.Place; Car = $X.Car; Time = $X.Time; Evidence = $X.Evidence; What = $X.What }; $Ran[$X.Team] = $true }
     Add-CaseResults -Cases $Cases -Findings $Findings -Numbers $Numbers -Frames $Frames -Ran $Ran
     # UI: the controller menu test.
     if ($PadResult -ne 'NOT RUN') {

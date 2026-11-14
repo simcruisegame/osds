@@ -8,6 +8,7 @@
 #include "Gameplay/SimCruiseReview.h"
 #include "SimCruisePreflight.generated.h"
 
+class APawn;
 class APlayerController;
 class ASimCruisePlayerController;
 class ASimCruiseWorldStreamer;
@@ -24,6 +25,8 @@ struct SIMCRUISE_API FSimCruisePreflightStats
 	float OffRoadSeconds = 0.f;
 	/** The start fell back to the bundled place (the requested place did not load). */
 	bool bFellBack = false;
+	/** The start pick found no start and the nearest-road rule placed the car ("SimCruise START FALLBACK" in the log). */
+	bool bStartByNearestRoad = false;
 	/** The start's VIEWCHECK (when it ran). */
 	bool bViewCheckRan = false;
 	bool bViewCheckPassed = false;
@@ -51,6 +54,17 @@ struct SIMCRUISE_API FSimCruisePreflightStats
 
 	// Traffic.
 	int32 StuckTraffic = 0;
+	/** Traffic cars that came into our path within one car length ahead while we drove (crossing or from the side). */
+	int32 TrafficCutIns = 0;
+	/** Traffic cars whose body went into our car's body (drove through it). */
+	int32 TrafficOverlaps = 0;
+	/** Traffic cars that turned round (more than TurnRoundDeg of heading in TurnRoundWindowS). */
+	int32 TrafficTurnRounds = 0;
+	/** Traffic cars on a motorway ribbon that crossed our road at our level. */
+	int32 TrafficAtGrade = 0;
+	/** -SimCruisePreflightStopAtJunction=N: the seconds asked for, and the seconds held at the stop line. */
+	float JunctionHoldAskedS = 0.f;
+	float JunctionHoldS = 0.f;
 
 	int32 Frames = 0;
 
@@ -100,6 +114,33 @@ namespace SimCruisePreflightRules
 	constexpr int32 MaxFlashFrames = 2;
 	constexpr float StepCm = 5.f;
 	constexpr float JoltMps2 = 8.f;
+
+	// Traffic behaviour, measured ten times a second on each traffic car in our car's frame
+	// (Along: m ahead of our centre, Side: m to the side, both centre to centre).
+	/** A turn round: the heading changes by at least TurnRoundDeg within TurnRoundWindowS. */
+	constexpr double TurnRoundDeg = 150.0;
+	constexpr double TurnRoundWindowS = 3.0;
+	/** One car length (m): the room a cut-in leaves in front of our bumper at most. */
+	constexpr double CarLengthM = 4.5;
+	/** Half the length and half the width of our car (m), for the bumper gap and the overlap. */
+	constexpr double OwnHalfLengthM = 2.2;
+	constexpr double OwnHalfWidthM = 0.9;
+	/** No cut-in is counted below this speed of our car (m/s): at a stop line the crossing traffic has priority. */
+	constexpr double CutInMinSpeedMps = 2.0;
+
+	/** Samples (time s, yaw deg) in time order: true when the heading turned round within the window. */
+	SIMCRUISE_API bool IsTurnRound(const TArray<FVector2d>& TimeYawDeg);
+	/**
+	 * A cut-in: our car drives (CutInMinSpeedMps or more), the other car is in our lane
+	 * (|Side| < 1.8 m) with at most one car length from our front bumper to its rear, and
+	 * it came across (heading more than 30 deg from ours) or from the side (last sample
+	 * |PrevSide| > 2.5 m).
+	 */
+	SIMCRUISE_API bool IsCutIn(double AlongM, double SideM, double PrevSideM, double RelHeadingDeg, double OurSpeedMps, double TheirLengthM);
+	/** The two bodies overlap (a car drove into or through ours). */
+	SIMCRUISE_API bool Overlaps(double AlongM, double SideM, double TheirLengthM);
+	/** A motorway car crossing our road (45 to 135 deg) on it (|Side| < 8 m, -10 to 60 m ahead) at our level (|Dz| < 2.5 m). */
+	SIMCRUISE_API bool IsAtGradeMotorway(const FString& TheirClass, double AlongM, double SideM, double DzM, double RelHeadingDeg);
 
 	/** Empty when the run passes, else the reasons (comma-separated). */
 	SIMCRUISE_API FString Judge(const FSimCruisePreflightStats& Stats);
@@ -210,6 +251,9 @@ private:
 	float TelemetryClock = 0.f;
 	/** The robot holds the car on the parking brake while it waits (the brake trigger at rest selects reverse). */
 	bool bHoldingParkingBrake = false;
+	/** The robot's felt yaw rate (low-passed) and its last stick, for a smooth hand. */
+	double SmoothedYawRate = 0.0;
+	float LastStick = 0.f;
 	/** Every drive frame's real time (ms) and the path distance at the long ones. */
 	TArray<float> FrameMs;
 	/** The frame times the rules judge: after the warm-up, none a screenshot touched. */
@@ -224,6 +268,8 @@ private:
 	/** The car has been above 5 m/s once in this drive. */
 	bool bHasDriven = false;
 	float OffRibbonNow = 0.f;
+	/** The next pose log time (index into the pose times). */
+	int32 PoseLogNext = 0;
 	FDelegateHandle FrameHandle;
 	int32 FrameIndex = 0;
 	TArray<FVector2D> PendingSky;
@@ -256,6 +302,29 @@ private:
 	TSet<FIntPoint> KnownTiles;
 	TMap<TWeakObjectPtr<AActor>, FVector> KnownCars;
 	TSet<TWeakObjectPtr<AActor>> StuckCars;
+
+	/** What the traffic checks keep per traffic car between samples. */
+	struct FTrafficWatch
+	{
+		TArray<FVector2d> TimeYaw;
+		FVector LastCm = FVector::ZeroVector;
+		double PrevSideM = 0.0;
+		double LastCutInS = -100.0;
+		bool bHasPrev = false;
+		bool bTurnRoundCounted = false;
+		bool bOverlapCounted = false;
+		bool bAtGradeCounted = false;
+	};
+	TMap<TWeakObjectPtr<AActor>, FTrafficWatch> TrafficWatch;
+	void WatchTraffic(const ASimCruiseWorldStreamer* Stream, APawn* Pawn, const FVector& CarCm, const FVector& Forward, double Speed);
+
+	/** -SimCruisePreflightStopAtJunction=N: stop at the first stop line ahead and hold N s, then go. */
+	float StopAtJunctionS = 0.f;
+	double JunctionHeldS = 0.0;
+	bool bJunctionDone = false;
+	FString JunctionCrossName;
+	/** Metres from the car to the stop line of the first road ahead that this road stops for (within 60 m), or -1. */
+	double DistanceToStopLine(const FCursor& Here, FString& OutCrossName) const;
 	FDelegateHandle RebaseHandle;
 	TWeakObjectPtr<ASimCruiseWorldStreamer> RebaseStream;
 };

@@ -437,6 +437,7 @@ void ASimCruiseVehicle::RequestEngineStart()
 
 void ASimCruiseVehicle::ResetVehicle(const FTransform& WorldTransform)
 {
+	UE_LOG(LogTemp, Display, TEXT("PLAYER MOVE reset: %s to X=%.1f Y=%.1f Z=%.1f heading %.1f deg"), *GetName(), WorldTransform.GetLocation().X, WorldTransform.GetLocation().Y, WorldTransform.GetLocation().Z, WorldTransform.Rotator().Yaw);
 	ResetAt(WorldTransform.GetLocation(), static_cast<float>(WorldTransform.Rotator().Yaw));
 }
 

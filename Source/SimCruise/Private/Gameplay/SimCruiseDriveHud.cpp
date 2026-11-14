@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Gameplay/SimCruiseDriveHud.h"
+#include "Gameplay/SimCruiseHudTextLog.h"
 
 #include "CanvasItem.h"
 #include "Camera/PlayerCameraManager.h"
@@ -217,6 +218,7 @@ FVector2D FSimCruiseDriveHud::Measure(const FString& Text, EWeight Weight, float
 float FSimCruiseDriveHud::TextAt(const FString& Text, EWeight Weight, float Px, float X, float Y, const FLinearColor& Color, int32 Align, bool bTabular, bool bShadow)
 {
 	if (Text.IsEmpty() || !Canvas) return 0.f;
+	SimCruiseHudTextLog::Note(Text);
 	UFont* HudFont = SimCruiseHudFonts::Get(Weight);
 	const float K = FontScale(P(Px));
 	auto Item = [&](const FString& Part, float AtX)
