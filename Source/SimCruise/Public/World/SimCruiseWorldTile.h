@@ -82,6 +82,8 @@ public:
 	 * from it when soaked (0..1). Safe to call from the physics thread.
 	 */
 	void SurfaceGripAtFace(int32 FaceIndex, float& OutDryGrip, float& OutWetLoss) const;
+	/** The same, with what the face is (ESimCruiseSurfaceKind). */
+	void SurfaceAtFace(int32 FaceIndex, float& OutDryGrip, float& OutWetLoss, uint8& OutKind) const;
 
 	/** The layer of a collision face (FHitResult::FaceIndex of a complex trace on Mesh); Count when it is not known. */
 	ESimCruiseTileLayer LayerAtFace(int32 FaceIndex) const;

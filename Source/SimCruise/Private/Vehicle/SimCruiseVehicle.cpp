@@ -379,6 +379,8 @@ void ASimCruiseVehicle::ToDriveTelemetry(const FSimCruiseCarDefinition& Car, con
 		// Compression from full droop (the longest the strut can be).
 		W.SuspensionTravelM = FMath::Max(0.0, Car.MaximumSuspensionTravelM - V.SuspensionLengthCm / 100.0);
 		W.SurfaceGrip = V.SurfaceGrip;
+		W.SurfaceKind = V.SurfaceKind;
+		W.bKerb = V.bKerb;
 	}
 }
 

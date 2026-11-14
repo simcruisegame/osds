@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Vehicle/SimCruiseVehicleSim.h"
+#include "Vehicle/SimCruiseSurfaceKind.h"
 
 #include "Vehicle/SimCruiseVehicleDynamics.h"
 #include "Vehicle/SimCruiseUnits.h"
@@ -503,6 +504,8 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 							Hit.PointM += Up * (Height - (Hit.PointM - Source).Dot(Up) - Hit.RoadProfileM);
 							Hit.NormalM = Probe.NormalM;
 						}
+						// A step of more than 3 cm under a shoulder: the tyre is on a kerb.
+						if (Height > CentreHeight + 0.03 && CentreHeight > -1.0e8) Hit.bKerb = true;
 					}
 				}
 			}
@@ -569,6 +572,9 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			Wheel.ContactPointM = Hit.PointM;
 			Wheel.ContactNormal = Hit.NormalM;
 			Wheel.SurfaceGrip = Hit.SurfaceGrip;
+			Wheel.SurfaceKind = Hit.SurfaceKind;
+			// The kerb's own slope (gutter edge, face, batter) also counts, past about 18 deg.
+			Wheel.bKerb = Hit.bKerb || (Hit.SurfaceKind == static_cast<uint8>(ESimCruiseSurfaceKind::Concrete) && Hit.NormalM.Dot(Up) < 0.95);
 			Wheel.ForwardSpeedMps = Row.ForwardSpeed;
 			Wheel.LateralSpeedMps = Row.LateralSpeed;
 			++State.WheelContactCount;

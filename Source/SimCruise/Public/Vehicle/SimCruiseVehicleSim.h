@@ -69,6 +69,10 @@ struct FSimCruiseGroundHit
 	FVector3d NormalM = FVector3d::UnitZ();
 	/** Grip of this surface relative to dry asphalt. */
 	double SurfaceGrip = 1.0;
+	/** ESimCruiseSurfaceKind of the face hit, and whether the tyre stands on a kerb (a step carried
+	 *  it, or the steep part of a kerb's concrete). */
+	uint8 SurfaceKind = 0;
+	bool bKerb = false;
 	/** Road roughness under the tyre (m, + raises the road) and its rate (m/s). */
 	double RoadProfileM = 0.0;
 	double RoadProfileRateMps = 0.0;
@@ -99,6 +103,8 @@ struct FSimCruiseWheelState
 	double InclinationRad = 0.0;
 	double FrictionCoefficient = 0.0;
 	double SurfaceGrip = 1.0;
+	uint8 SurfaceKind = 0;
+	bool bKerb = false;
 	double ForwardSpeedMps = 0.0;
 	double LateralSpeedMps = 0.0;
 	/** Interval-mean tyre forces in the wheel's ground frame. */
