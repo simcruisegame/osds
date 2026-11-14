@@ -1002,7 +1002,7 @@ namespace SimCruiseStartTest
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseRoadOverlapsTest, "SimCruise.World.RoadOverlaps", SimCruiseStartTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseRoadOverlapsTest, "SimCruise.World.RoadOverlaps.Bundled", SimCruiseStartTest::Flags)
 bool FSimCruiseRoadOverlapsTest::RunTest(const FString& Parameters)
 {
 	// Every bundled tile (Miami Beach, data/tiles): no face where two roads overlap, and a deck
@@ -1033,7 +1033,7 @@ bool FSimCruiseRoadOverlapsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseRoadOverlapsRecordedTest, "SimCruise.World.RoadOverlapsRecorded", SimCruiseStartTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseRoadOverlapsRecordedTest, "SimCruise.World.RoadOverlaps.Recorded", SimCruiseStartTest::Flags)
 bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 {
 	// As World.RoadOverlaps over every recorded place (Saved/StartPlaces and SIMCRUISE_PROBE_DIR),
