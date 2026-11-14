@@ -23,18 +23,18 @@ Licences were checked at each maker's own page on 14 November 2026.
 Some licences need the credit where the player sees the data, not only in a file. The game shows:
 
 - **On the map and in the route planner:** "© OpenStreetMap contributors" in the corner of each map (`SimCruiseAtlasUI.cpp`, `SimCruiseRoutePlanner.cpp`).
-- **On the road atlas page:** one line that names OpenStreetMap (ODbL), OpenFreeMap and OpenMapTiles, Photon, USGS 3DEP and Mapzen, USGS NAIP and The National Map, the WRI and Meta canopy height map (CC BY 4.0), Overture Maps, and "full list in DATA-SOURCES.md"; under it, "Weather by Open-Meteo (CC BY 4.0) · aircraft by adsb.lol (ODbL)" (since 2.0.3).
+- **On the road atlas page:** one line that names OpenStreetMap (ODbL), OpenFreeMap and OpenMapTiles, Photon, USGS 3DEP and Mapzen, USGS NAIP and The National Map, the WRI and Meta canopy height map (CC BY 4.0), Overture Maps, and "full list in DATA-SOURCES.md"; under it, "Weather by Open-Meteo (CC BY 4.0)" (since 2.0.3).
 - **In the install folder:** `LICENSE.txt`, `DATA-SOURCES.md`, `CREDITS.txt` (each car model's credit) and `licenses/` (`scripts/package.ps1`).
 
 | Licence | What it needs in the game | Sources under it |
 |---|---|---|
-| ODbL 1.0 | "© OpenStreetMap contributors" where the map data is seen, and a way to find the licence | OpenStreetMap (roads, buildings, routes, place facts), Overture Maps, Photon search results, adsb.lol aircraft |
+| ODbL 1.0 | "© OpenStreetMap contributors" where the map data is seen, and a way to find the licence | OpenStreetMap (roads, buildings, routes, place facts), Overture Maps, Photon search results, adsb.lol aircraft (off in 2.0.3) |
 | CC BY 4.0 | The maker's name, the licence and a link, in a manner that fits the medium | WRI and Meta canopy heights, Open-Meteo weather, the Köppen-Geiger climate classes (Beck et al.), Esri Community Maps buildings (through Overture), the Sketchfab cars, ESA WorldCover (training only) |
 | ODC-BY 1.0 | Credit to the database maker when you use or share it | Satlas model weights (testing) |
 | CC BY-SA | Credit and the same licence for adapted works | The place photographs listed in [Credits.txt](Credits.txt), the Detectron2 weights (development tool) |
 | US public domain | Nothing required; USGS, USDA and NOAA ask for credit as a courtesy | USGS, USDA, NOAA, NASA, FHWA, US Army Corps of Engineers data |
 
-The gap found on 14 November 2026 (Open-Meteo and adsb.lol not named in the game) is closed in 2.0.3 by the second road atlas line. The Köppen-Geiger climate classes are credited in `DATA-SOURCES.md`, `licenses/Credits.txt` and `licenses/Koppen-Geiger (CC BY 4.0).txt` in the install folder.
+The gap found on 14 November 2026 (Open-Meteo and adsb.lol not named in the game) is closed in 2.0.3: the second road atlas line names Open-Meteo, and the live aircraft are switched off, so adsb.lol data is not used or shown. The Köppen-Geiger climate classes are credited in `DATA-SOURCES.md`, `licenses/Credits.txt` and `licenses/Koppen-Geiger (CC BY 4.0).txt` in the install folder.
 
 ## AI models
 
@@ -85,7 +85,7 @@ An earlier scene model, DDRNet23-Slim trained on Cityscapes, was removed because
 | Weather, air quality, sea and waves | [Open-Meteo](https://open-meteo.com/) (with Copernicus CAMS for air quality) | Data [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the free API is for non-commercial use, which SimCruise is | Weather data by Open-Meteo.com |
 | Airport weather | NOAA Aviation Weather Center METAR; NWS observations through Iowa Environmental Mesonet; NOAA GOES | US public domain | NOAA |
 | Tides | NOAA CO-OPS water levels | US public domain | NOAA |
-| Aircraft | [adsb.lol](https://adsb.lol/) | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) | adsb.lol |
+| Aircraft (**off in 2.0.3**: the code ships but makes no request and draws nothing, except with a developer option) | [adsb.lol](https://adsb.lol/) | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) | adsb.lol |
 | Traffic counts, lanes, road roughness | FHWA Highway Performance Monitoring System; US Census geocoder | US public domain | FHWA; US Census Bureau |
 
 ## Cars
