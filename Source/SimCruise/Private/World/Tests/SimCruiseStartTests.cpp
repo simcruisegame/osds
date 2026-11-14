@@ -557,6 +557,22 @@ bool FSimCruiseReleaseFaultProbe::RunTest(const FString& Parameters)
 					}
 					Text += FString::Printf(TEXT("\n      step %.1f cm on %s (%s) at S %.1f lane %+.1f, %.1f m from a junction cut, bridge %d, ribbon S %.0f..%.0f boundary %d/%d"),
 						S.JumpCm, *R.Name, *R.Class, S.S, S.Lateral, ToCut, bBridge ? 1 : 0, R.St[0].S, R.St.Last().S, R.bStartOnBoundary, R.bEndOnBoundary);
+					// Who is the top there: every carriageway covering the step's spot and its own height.
+					{
+						TArray<TPair<int32, int32>> Segs;
+						B.Roads.GatherSegments(S.PositionM, 15.0, Segs);
+						TSet<int32> Seen;
+						for (const TPair<int32, int32>& Sg : Segs)
+						{
+							const FSimCruiseRoadHit H = B.Roads.Project(Sg.Key, Sg.Value, S.PositionM);
+							if (Seen.Contains(Sg.Key) || FMath::Abs(H.Lateral) > H.HalfW || FMath::Abs(H.Along) > 0.01) continue;
+							Seen.Add(Sg.Key);
+							const FSimCruiseRibbon& O = B.Roads.Ribbons[Sg.Key];
+							Text += FString::Printf(TEXT("\n        under it: ribbon %d %s (%s, rank %d) height %.3f at lateral %+.2f of %.2f, station %d"),
+								Sg.Key, *O.Name, *O.Class, O.Rank, H.Height, H.Lateral, H.HalfW, Sg.Value);
+						}
+						Text += FString::Printf(TEXT("\n        top %.3f -> %.3f m"), S.HeightBeforeM, S.HeightAfterM);
+					}
 				}
 			}
 		}
