@@ -82,6 +82,10 @@ private:
 	bool bOn = false;
 	FString OutputDir;
 	float NextTimedS = 0.f;
+	/** Seconds between timed frames (-SimCruiseReviewEveryS=, default 1). */
+	float TimedEveryS = 1.f;
+	/** Event frames taken (their own limit; timed frames do not count). */
+	int32 EventShots = 0;
 	float LastEventS = -10.f;
 	int32 ShotIndex = 0;
 	FString PendingName;

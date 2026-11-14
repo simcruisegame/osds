@@ -2,6 +2,27 @@
 
 One full game test of a release candidate, for all the teams at once. The tools thread owns it.
 
+## How we look
+
+The owner saw faults in our frames that our checks passed (2026-11-14: building tops cut by the roof line in Detroit). Measurements find what we decided to measure; a person finds what is wrong. So every frame review follows these rules, from the release-8 review on.
+
+1. **Fresh eyes first.** Before any checklist, look at the full-size frames (1920x1080, never only contact sheets or thumbnails) from the driver's seat, as a player, with no checklist. Write down everything a person would call wrong or unreal. Only then do the checklist pass.
+2. **Real-place compare.** Each reviewed place gets a side-by-side of a game frame and a real picture of the same spot: the aerial photograph (`scripts\detail-sheets.py`: USGS Imagery Only / NAIP, turned so the travel direction is up), or a legal street-level photograph with its licence recorded (no Google Street View scraping). List the differences by size, biggest first.
+3. **The owner's reports.** When the owner reports a fault, find it in our frames and show it back (path and crop). Never explain it away. If we cannot see it, ask for the frame and say "not found yet", never "not real".
+4. **Blind review.** Once per release, one reviewer with no history (a fresh subagent, given only the frames under neutral names and "list what looks wrong or unreal", no hints) reviews the frames of three places. Compare its list with ours. Anything it finds that we did not is a test escape (rule 7).
+5. **Texture and material classes.** Our geometry checks do not see these, so look for them by eye:
+   - **Building top:** a window row crosses or touches the top edge of a wall; a building with no top band (parapet, cornice, roof edge).
+   - **Cut patterns:** road markings cut or offset at tile edges; a texture pattern cut at a mesh edge (kerbs, walls, guard rails).
+   - **Stretch:** a texture stretched on tall walls, steep ground or long thin faces.
+   - **Visible repeat:** the same window, tree, brick or ground tile repeated so the eye sees the grid.
+   - **Missing edge trim:** no parapet, cornice, kerb, sill or roof edge where a real one is.
+   - **Wrong scale:** bricks, windows or doors against the car and the lane width.
+   - **Flat colour:** one flat colour where the real surface has detail (towers, embankments, plazas).
+   - **Light that is wrong for the time:** windows glowing white in daylight, a black or a clay-grey cabin, a black mirror.
+6. **Slow look segments.** Urban places get a 10 s segment at walking speed (or stopped) beside buildings, with a look left and right on the right stick, so near facades are seen at full detail, not only at 40 mph. Every place with buildings gets a crop sheet of the six nearest buildings (wall tops included), judged by eye.
+7. **Test escapes.** Every fault a person finds before our tests do is a test escape. Record it in [test-escapes.md](test-escapes.md): what it was, which run had it in frame, why we missed it, and which rule or check now catches it.
+8. **The owner's screenshots are reference cases.** A fix is checked against the same spot and the same view.
+
 ## When
 
 - After each change: `scripts\check.ps1 -Tier fast` only (no game, no GPU). See [dev-loop.md](dev-loop.md).
@@ -93,7 +114,22 @@ So a start the start pick accepts can still fail the judge at frame 0 in two way
 
 Welch, 2026-11-14 (a97af50): the car was placed at about 37.4329 N, 81.5840 W, heading -124.6 deg. At frame 0 the judge read 2.0 m past the edge. In the frame, the car's left side is on asphalt and its nose points at a grass bank, with the drawn road curving away to the left. So the run-off was mostly real: the start pose follows the ribbon, not the drawn road.
 
-## The traffic judge
+## The car's own state
+
+The judge also watches our car every frame (`SimCruisePreflightRules`, tests `SimCruise.Gameplay.Preflight.CarState`). On 2026-11-14 a 64-to-1 mph crash into a concrete piece at a Doraville motorway bridge and 27 s at the rev limit passed the judge; the owner found it. Each event has a log line `Pre-flight: STUCK|HIT|DECK NOT SMOOTH|... wheels off the ground` and an event frame.
+
+| Reason | Rule | Team, severity |
+|---|---|---|
+| `stuck-at-rev-limit-<s>s` | The engine above 80 % of the car's redline and the car under 1 m/s for more than 2 s (high-centred, wedged, wheels in the air). While it lasts, a wheel-contact line each second (contact and load per wheel, pitch, roll). | driving, P1 |
+| `hit-<n>` | The speed fell by more than 6 m/s within 0.5 s (more than the hardest braking, about 1.2 g). | driving, P1 |
+| `deck-not-smooth-<n>-max-<deg>deg` | On a road surface or a bridge deck above 3 m/s, the body's pitch or roll changed by more than 4 deg within 5 m of path (a hump, a lip, a warped deck). | world, P1 |
+| `wheels-off-ground-<s>s` | Two or more wheels without contact on a road surface for more than 1 s. | driving, P1 |
+
+## Traffic and planes: off
+
+The owner took traffic and planes out of the game for now (2026-11-14, 20:31Z): the review time goes to detail from the driver's seat and to driving feel. Every pre-flight run has traffic off (`simcruise.Traffic.Cars` 0, set at the start and again when the drive starts); `-SimCruisePreflightTraffic` keeps it on for a traffic test. The review runs have `-SimCruiseNoLive`, so no live planes. The traffic judge below still counts, but only as **information**: `preflight.json` `notes` and the `PREFLIGHT CAR ... notes=` line, never a FAIL.
+
+## The traffic judge (information only)
 
 Ten times a second the judge looks at each traffic car in our car's frame (Along: metres ahead of our centre, Side: metres to the side, centre to centre; heading relative to ours). Limits in `SimCruisePreflightRules` (`SimCruisePreflight.h`), tests in `SimCruise.Gameplay.Preflight.Traffic`. Each event has a line `Pre-flight: traffic ...` in the game log (the car's name, where it was) and an event frame in `review\`.
 

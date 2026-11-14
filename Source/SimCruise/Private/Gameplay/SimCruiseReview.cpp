@@ -111,8 +111,7 @@ void FSimCruiseReviewRecorder::StopGuard()
 
 namespace
 {
-	constexpr float TimedShotEveryS = 5.f;
-	constexpr int32 MaxEventShots = 40;
+	constexpr int32 MaxEventShots = 60;
 
 	double Median(TArray<double> Values)
 	{
@@ -180,6 +179,9 @@ void FSimCruiseReviewRecorder::Begin(const FString& InOutputDir)
 	OutputDir = InOutputDir;
 	IFileManager::Get().MakeDirectory(*FPaths::Combine(OutputDir, TEXT("review")), true);
 	NextTimedS = 0.f;
+	// A timed frame every second by default (2026-11-14: 5 s missed what the owner saw between frames).
+	FParse::Value(FCommandLine::Get(), TEXT("SimCruiseReviewEveryS="), TimedEveryS);
+	TimedEveryS = FMath::Clamp(TimedEveryS, 0.5f, 30.f);
 	// The real preset picture: dynamic resolution off, so the 3D picture stays at the preset's screen
 	// percentage (Apply sets it) and the frame times are its honest cost. Console priority, so the
 	// preset (game-setting priority) cannot turn it back on. -SimCruisePlayerRes keeps the player's.
@@ -195,8 +197,10 @@ void FSimCruiseReviewRecorder::Event(const FString& Name, float DriveSeconds)
 {
 	if (!bOn) return;
 	Events.Add(FString::Printf(TEXT("%.1f s %s"), DriveSeconds, *Name));
-	if (DriveSeconds - LastEventS < 1.f || Shots.Num() >= MaxEventShots + 20 || !PendingName.IsEmpty()) return;
+	// An event frame replaces a pending timed frame: the event is what the reviewer needs.
+	if (DriveSeconds - LastEventS < 1.f || EventShots >= MaxEventShots || (!PendingName.IsEmpty() && (PendingName != TEXT("timed") || bPrepared))) return;
 	LastEventS = DriveSeconds;
+	++EventShots;
 	// Names go into file names: letters, digits and dashes only.
 	FString Safe;
 	for (const TCHAR C : Name.ToLower()) Safe.AppendChar(FChar::IsAlnum(C) && C < 128 ? C : TEXT('-'));
@@ -221,7 +225,7 @@ void FSimCruiseReviewRecorder::Tick(ASimCruisePlayerController& Player, float Dr
 	if (DriveSeconds >= NextTimedS && PendingName.IsEmpty())
 	{
 		PendingName = DriveSeconds < 0.5f ? TEXT("start") : TEXT("timed");
-		NextTimedS = DriveSeconds + TimedShotEveryS;
+		NextTimedS = DriveSeconds + TimedEveryS;
 	}
 
 	// A place card the co-driver shows.

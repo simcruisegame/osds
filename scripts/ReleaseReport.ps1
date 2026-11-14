@@ -234,17 +234,16 @@ function Write-ReleaseReports {
             if ($Reasons -match 'road-steps-[^,]*|road-gaps-[^,]*|jolts-at-tile-borders-[^,]*') { Add-Finding 'world' 'P2' $R '-' "$Rel\review\" $Matches[0] }
             if ($Reasons -match 'tile-pop-in-[^,]*|car-pop-in-[^,]*') { Add-Finding 'world' 'P2' $R '-' "$Rel\review\" $Matches[0] }
             if ($Reasons -match 'stuck-traffic-[^,]*') { Add-Finding 'world' 'P2' $R '-' "$Rel\game.log" $Matches[0] }
-            # Traffic behaviour (the driving lane owns the traffic model): a car through ours or across our
-            # bumper is P1; a turn round and motorway traffic at grade are P2. The log line names the car.
-            if ($Reasons -match 'traffic-through-our-car-[^,]*') { Add-Finding 'driving' 'P1' $R '-' "$Rel\game.log" $Matches[0] }
-            if ($Reasons -match 'traffic-cut-in-[^,]*') { Add-Finding 'driving' 'P1' $R '-' "$Rel\game.log" $Matches[0] }
-            if ($Reasons -match 'traffic-turn-round-[^,]*') { Add-Finding 'driving' 'P2' $R '-' "$Rel\game.log" $Matches[0] }
-            if ($Reasons -match 'motorway-traffic-at-grade-[^,]*') { Add-Finding 'driving' 'P2' $R '-' "$Rel\game.log" $Matches[0] }
-            if ($Reasons -match 'junction-hold-[^,]*') { Add-Finding 'release' 'P2' $R '-' "$Rel\game.log" "$($Matches[0]): the robot found no stop line (the case did not test gap acceptance)" }
-            if ($Pre.PSObject.Properties['traffic_cut_ins']) {
-                $Numbers['driving'] += "| $Rel ($($R.Plan.Car)) | traffic: cut-ins / through our car / turn-rounds / motorway at grade | $($Pre.traffic_cut_ins) / $($Pre.traffic_through_our_car) / $($Pre.traffic_turn_rounds) / $($Pre.motorway_traffic_at_grade) | 0 / 0 / 0 / 0 | $(if ([int]$Pre.traffic_cut_ins + [int]$Pre.traffic_through_our_car + [int]$Pre.traffic_turn_rounds + [int]$Pre.motorway_traffic_at_grade) { 'FAIL' } else { 'ok' }) |"
-                if ([double]$Pre.junction_hold_asked_s -gt 0) { $Numbers['driving'] += "| $Rel ($($R.Plan.Car)) | held at the stop line for $($Pre.junction_cross) | $($Pre.junction_hold_s) s | $($Pre.junction_hold_asked_s) s | $(if ([double]$Pre.junction_hold_s -lt [double]$Pre.junction_hold_asked_s - 0.5) { 'FAIL' } else { 'ok' }) |" }
+            # The car's own state (2026-11-14, Doraville: a crash and 27 s at the rev limit passed the judge).
+            if ($Reasons -match 'hit-\d+') { Add-Finding 'driving' 'P1' $R '-' "$Rel\review\ (event frames 'hit')" "$($Matches[0]): the car lost more speed in 0.5 s than braking gives (it hit something)" }
+            if ($Reasons -match 'stuck-at-rev-limit-[^,]*') { Add-Finding 'driving' 'P1' $R '-' "$Rel\review\ (event frames 'stuck')" $Matches[0] }
+            if ($Reasons -match 'deck-not-smooth-[^,]*') { Add-Finding 'world' 'P1' $R '-' "$Rel\review\ (event frames 'deck-not-smooth')" "$($Matches[0]): the car's pitch or roll jumps on the road (hump, lip or warped deck)" }
+            if ($Reasons -match 'wheels-off-ground-[^,]*') { Add-Finding 'driving' 'P1' $R '-' "$Rel\game.log" $Matches[0] }
+            if ($Pre.PSObject.Properties['stuck_seconds']) {
+                $Numbers['driving'] += "| $Rel ($($R.Plan.Car)) | stuck at the limit / hits / deck jumps (max) / wheels off | $($Pre.stuck_seconds) s / $($Pre.hits) / $($Pre.deck_jumps) ($($Pre.max_deck_deg) deg) / $($Pre.wheels_off_seconds) s | 2 s / 0 / 0 (4 deg) / 1 s | $(if ([double]$Pre.stuck_seconds -gt 2 -or [int]$Pre.hits -or [int]$Pre.deck_jumps -or [double]$Pre.wheels_off_seconds -gt 1) { 'FAIL' } else { 'ok' }) |"
             }
+            # Traffic: information only while the owner has traffic off (2026-11-14). The counts stay in the table.
+            if ($Pre.PSObject.Properties['notes'] -and $Pre.notes) { $Numbers['driving'] += "| $Rel ($($R.Plan.Car)) | traffic notes (info, not judged) | $($Pre.notes) | - | info |" }
             if ($Pre.fell_back) { Add-Finding 'world' 'P0' $R '-' "$Rel\review\000-*.png" 'the start fell back to the bundled place' }
             $Numbers['world'] += "| $Rel | road steps / gaps / tile pop-in | $($Pre.road_steps) (max $($Pre.max_step_cm) cm) / $($Pre.road_gaps) / $($Pre.tile_popins) | 0 / 0 / 0 | $(if ([int]$Pre.road_steps + [int]$Pre.road_gaps + [int]$Pre.tile_popins) { 'FAIL' } else { 'ok' }) |"
         }
