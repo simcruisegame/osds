@@ -250,6 +250,7 @@ bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bo
 	if (!End.bValid) return false;
 	struct FOption { FIntPoint Tile; int32 Ribbon; int32 Dir; double S; double TurnDeg; double Weight; };
 	TArray<FOption> Options;
+	TArray<FOption> UTurns;
 	// At a junction along the ribbon, straight on is the likeliest way.
 	if (!bAtEnd) Options.Add({ Car.Tile, Car.Ribbon, Car.Dir, DecisionS, 0.0, 3.0 });
 	// What meets this end: the same street carrying on (a tile seam) or a crossing road.
@@ -308,12 +309,25 @@ bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bo
 					if (Left < 15.0) continue;
 					const FVector2d Heading = Tn * static_cast<double>(Dir);
 					const double Turn = SignedAngleDeg(End.Heading, Heading);
-					if (FMath::Abs(Turn) > 135.0) continue; // no U-turns
+					if (FMath::Abs(Turn) > 135.0)
+					{
+						// No U-turns, unless the road goes nowhere else (a dead end: turn round at its end).
+						UTurns.Add({ TileId, Hit.Key, Dir, EntryS, Turn, 1.0 });
+						continue;
+					}
 					Options.Add({ TileId, Hit.Key, Dir, EntryS, Turn, FMath::Abs(Turn) < 30.0 ? 3.0 : 1.0 });
 				}
 			}
 		}
 	}
+	// A dead end (Fish Pier Road at Stonington, Maine): the only way on is back the way it came.
+	if (Options.IsEmpty() && bAtEnd)
+	{
+		// Back along this same road (it has no other way on), where it is two-way.
+		const int32 Back = -Car.Dir;
+		UTurns.Add({ Car.Tile, Car.Ribbon, Back, DecisionS, 180.0, 1.0 });
+	}
+	if (Options.IsEmpty()) Options = MoveTemp(UTurns);
 	if (Options.IsEmpty()) return false;
 	// US practice at a junction without signals: the minor approach stops (a stop sign);
 	// between equal minor streets every approach does (an all-way stop); the priority road
@@ -493,7 +507,10 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 				// About to arrive on a road that does not stop (within 5 s).
 				const bool bTowards = FVector2d::DotProduct(OtherHeading, ToJ) > 0.0;
 				const bool bWillStop = OtherCar && OtherCar->StopState == 1;
-				return bTowards && !bWillStop && OtherSpeed > 1.0 && Dist > 2.0 && Dist / OtherSpeed < 5.0;
+				// A driver kept waiting takes a shorter gap (5 s, after 10 s 3 s, after 20 s 2 s): a
+				// steady stream never holds a stop line for good.
+				const double Window = Car.WaitS > 20.0 ? 2.0 : Car.WaitS > 10.0 ? 3.0 : 5.0;
+				return bTowards && !bWillStop && OtherSpeed > 1.0 && Dist > 2.0 && Dist / OtherSpeed < Window;
 			};
 			for (const ASimCruiseTrafficCar* Other : Cars)
 			{
@@ -534,7 +551,11 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 			if (FVector2d::DotProduct(OtherHeading, Fwd) > -0.7 || OtherSpeed < 1.0) return false;
 			const FVector2d ToJ((Centre.LocationCm.X - OtherCm.X) / 100.0, (Centre.LocationCm.Y - OtherCm.Y) / 100.0);
 			const double Ahead = FVector2d::DotProduct(ToJ, OtherHeading);
-			return Ahead > -2.0 && Ahead < 60.0 && Ahead / OtherSpeed < 4.5;
+			// The gap a left-turner waits for shrinks as it waits in the junction (4.5 s, after 8 s 2.5 s,
+			// after 15 s 1.5 s): it never stands across the junction for good while oncoming cars stream
+			// past (Stonington, Maine: a Corvette held the robot for a minute).
+			const double Window = Car.StandS > 15.0 ? 1.5 : Car.StandS > 8.0 ? 2.5 : 4.5;
+			return Ahead > -2.0 && Ahead < 60.0 && Ahead / OtherSpeed < Window;
 		};
 		bool bYield = false;
 		for (const ASimCruiseTrafficCar* Other : Cars)
@@ -885,10 +906,10 @@ void ASimCruiseTraffic::Tick(float DeltaSeconds)
 			UpdateVoice(*Car, FVector::Dist(Car->GetActorLocation(), CameraCm) / 100.0, bSound);
 		}
 		// A queue behind a car or the player that stands for good (you parked in the lane) would
-		// grow without end: a car stuck in it for 25 s turns off out of sight, as drivers find
+		// grow without end: a car stuck in it for 18 s turns off out of sight, as drivers find
 		// another way. Only when nothing can see it go.
 		bool bGivesUp = false;
-		if (Car && Car->Ribbon != INDEX_NONE && Car->StandS > 25.0 && (Car->Why == 1 || Car->Why == 2) &&
+		if (Car && Car->Ribbon != INDEX_NONE && Car->StandS > 18.0 && (Car->Why == 1 || Car->Why == 2) &&
 			CVarTrafficGridlockRules.GetValueOnGameThread() != 0)
 		{
 			const FVector ToCar = Car->GetActorLocation() - CameraCm;

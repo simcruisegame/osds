@@ -27,7 +27,10 @@ $script:GpuTestLock = $null
   -ShowWindow in the calling script gives the window back.
 #>
 function Get-TestWindowArgs([bool]$ShowWindow) {
-    if ($ShowWindow) { return @('-windowed') }
+    # A visible run: -FULLSCREEN is a borderless window at the screen's size in Unreal 5 (r.FullScreenMode 1,
+    # windowed fullscreen, the default; -SimCruiseBorderless also sets it in builds that have it),
+    # so a focus change cannot minimise it or change the display mode.
+    if ($ShowWindow) { return @('-FULLSCREEN', '-SimCruiseBorderless') }
     return @('-RenderOffScreen')
 }
 
@@ -82,6 +85,9 @@ function Exit-EditorLock {
         try { $script:GpuTestLock.ReleaseMutex() } catch { }
         $script:GpuTestLock.Dispose()
         $script:GpuTestLock = $null
+        # Free: the holder file names nobody (load.csv logs the holder).
+        $Holder = Join-Path $env:LOCALAPPDATA 'SimCruise\gpu-test-lock.txt'
+        try { Set-Content -Encoding utf8 $Holder '' } catch { }
     }
 }
 
@@ -142,4 +148,29 @@ function Exit-HeadlessSlot {
 function Stop-ProcessTree {
     param([int]$ProcessId)
     & taskkill.exe /T /F /PID $ProcessId 2>&1 | Out-Null
+}
+
+<#
+  C:\aiwork\GPU-BUSY: one line that tells the other lanes this lane uses the GPU, and until when
+  (holder=lane-view, start=<UTC>, end_estimate=<UTC>, purpose=<text>). Set it before a GPU slot
+  (a build or a game launch) and clear it in a finally block. scripts\gpu-wait.ps1 waits on it.
+#>
+$script:GpuBusyFile = 'C:\aiwork\GPU-BUSY'
+function Set-GpuBusy([string]$Purpose, [double]$Minutes, [string]$Holder = 'lane-view') {
+    try {
+        New-Item -ItemType Directory -Force (Split-Path $script:GpuBusyFile) | Out-Null
+        $Now = (Get-Date).ToUniversalTime()
+        "holder=$Holder, start=$($Now.ToString('yyyy-MM-ddTHH:mm:ssZ')), end_estimate=$($Now.AddMinutes($Minutes).ToString('yyyy-MM-ddTHH:mm:ssZ')), purpose=$($Purpose -replace '[\r\n,]+', ' ')" |
+            Set-Content -Encoding ascii $script:GpuBusyFile
+    } catch { Write-Host "Could not write $($script:GpuBusyFile): $_" }
+}
+function Clear-GpuBusy([string]$Holder = 'lane-view') {
+    # Only our own line: another lane may hold it now.
+    if ((Test-Path $script:GpuBusyFile) -and (Get-Content $script:GpuBusyFile -Raw) -match "holder=$Holder,") { Remove-Item $script:GpuBusyFile -Force -ErrorAction SilentlyContinue }
+}
+function Read-GpuBusy {
+    if (-not (Test-Path $script:GpuBusyFile)) { return $null }
+    $T = Get-Content $script:GpuBusyFile -Raw
+    $End = if ($T -match 'end_estimate=(\S+?),') { [datetime]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal) } else { $null }
+    return [pscustomobject]@{ Text = $T.Trim(); End = $End; Stale = ($End -and (Get-Date).ToUniversalTime() -gt $End.AddMinutes(30)) }
 }

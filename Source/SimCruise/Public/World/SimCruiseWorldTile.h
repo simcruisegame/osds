@@ -26,6 +26,8 @@ class USimCruiseWorldResources;
 namespace SimCruiseParkedCars
 {
 	SIMCRUISE_API const TCHAR* CarFor(uint8 Pick);
+	/** Every model a parked or traffic car can be (to build them all before the drive). */
+	SIMCRUISE_API TArray<FString> AllCarIds();
 	SIMCRUISE_API FLinearColor ColourFor(uint8 Byte);
 }
 
@@ -42,6 +44,8 @@ public:
 
 	FIntPoint GetTileId() const { return TileId; }
 	const FSimCruiseTileBuild* GetBuild() const { return Build.Get(); }
+	/** Frees the road faces kept for the start pick (FSimCruiseTileBuild::RoadTops) once the car is placed. */
+	void DropRoadTops() { if (Build.IsValid()) Build->RoadTops.Reset(); }
 	/** The named places' lettering on this tile. */
 	const TArray<TObjectPtr<UTextRenderComponent>>& GetSigns() const { return SignComponents; }
 

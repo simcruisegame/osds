@@ -8,6 +8,28 @@ One full game test of a release candidate, for all the teams at once. The tools 
 - At the cut-off, all lanes merge into one candidate (a commit or tag such as `rc-v2.0.3`, or `docs/team/cycles/rc.txt`). Then `scripts\release-test.ps1` tests that commit once. Do not start it on a commit that is not the candidate.
 - One GPU test at a time on the PC: the script takes the `Global\SimCruiseGpuTest` lock for each launch (`scripts\EditorLock.ps1 -GpuTest`). Other GPU tests wait. The lock holder is in `%LOCALAPPDATA%\SimCruise\gpu-test-lock.txt`.
 
+## A re-test
+
+After fixes, test only what failed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\release-test.ps1 -Places welch,stonington,detroit,doraville -Cases controller
+```
+
+`-Places` keeps the places whose name contains one of the words. `-Cases` keeps the named cases (a kind such as `controller`, `fallback`, `eye` or `cooked-drive`, or a full case name). With only `-Cases`, no place runs.
+
+## Shaders: the editor build and the cooked package
+
+An editor build compiles shaders the first time a place needs them, and a fresh worktree has an empty cache: Big Sur froze 33 s on "Preparing Shaders" in the 53b290c run. Editor runs therefore first make one short untimed launch per place (15 s, folder `warm\`); `-NoWarm` skips it. A freeze over 1 s in an editor run is a P3 TEST ENV finding when its frame shows "Preparing Shaders", not a game fault.
+
+`-Cooked` runs the cooked package in place of the editor (`scripts\package.ps1 -Configuration Development`: shipped shaders and a log; the Shipping exe writes no log; `-CookedExe` gives another path). There a "Preparing Shaders" or a freeze over 1 s is a P1. The `cooked-drive` case drives the Dragon and Ocean Drive on the package for 60 s with an Unreal Insights trace (`trace.utrace`): no frame or freeze over 0.5 s, with the longest frame and its drive time in the driving, picture and release reports.
+
+## The GPU
+
+The release test owns the GPU while it runs: other lanes ask before they launch a game. Every game launch takes `Global\SimCruiseGpuTest` (`scripts\EditorLock.ps1`); the holder is in `%LOCALAPPDATA%\SimCruise\gpu-test-lock.txt` (empty when free) and in each `load.csv` row (`gpu_lock_holder`). `load.csv` also counts other lanes' builds (UnrealBuildTool, cl, link, shader workers) as load, and names each process's lane (`name#pid@lane`, from its command line); `summary.md` lists the other lanes with their first and last time.
+
+`C:\aiwork\GPU-BUSY` holds one line while this lane uses the GPU (`holder=lane-view, start=<UTC>, end_estimate=<UTC>, purpose=<text>`); `release-test.ps1`, `start-compare.ps1` and `focus-check.ps1` set it and clear it in a finally block (`Set-GpuBusy` / `Clear-GpuBusy` in `scripts\EditorLock.ps1`). Other lanes call `scripts\gpu-wait.ps1` before a build or a game launch: it waits while the file is there (`-TimeoutMinutes`, default 120); a file whose end_estimate is more than 30 min past is stale, so it is ignored and logged.
+
 ## A quiet window
 
 Run the release test only in a quiet window: no build, test or game from another lane. Load from other lanes added about 2 ms to the frame p95. The script samples the PC every 30 s into `load.csv` (`scripts\LoadWatch.ps1`): the other Unreal and SimCruise processes and the GPU use of other processes. When another Unreal or SimCruise process ran, or other GPU use averaged over 5 %, the summary says **NOT QUIET** and the frame-time rows in the picture and ai reports are marked NOT QUIET: they are not valid for sign-off.
@@ -54,6 +76,37 @@ The world lane makes the game side. The release test starts each case, applies t
 | Standstill | Ocean Drive, `-SimCruiseStandstillTest` (`launch-review.ps1 -Case standstill`) | `standstill\t000.png`, `t005.png`, `t015.png`, `t060.png` (0, 5, 15 and 60 s after the stop), `wall.png` (1 m from a wall), `ground.png` (1 m from the ground) | Edge density and fine-detail energy (`scripts\detail-metrics.py`) rise at each step. The 60 s frame beside the place's reference photo (`side-by-side.png`) when one is in `data\reference\<road>\` (legal source only). | world, picture |
 | Speed | Nebraska (straight), then the Dragon, `-SimCruiseSpeedTest` (`-Case speed`) | `speed\speed.json`: `{"runs": [{"road", "kmh", "ai", "lead_m", "lead_s", "holes", "popin_spikes", "frame_median_ms", "frame_p95_ms", "hitches_2x"}]}`, one run per speed (50, 130, 240 km/h), AI workers on and off in the same launch | No holes. No pop-in spikes on the road ahead. On the Dragon, frame p95 with AI on is not more than 0.5 ms above AI off. No extra frames over 2x the median with AI on. Frame p95 not above 50 ms. | world, ai, picture |
 
+## The drive judge: road edge and run-off
+
+The pre-flight judge (`Source/SimCruise/Private/Gameplay/SimCruisePreflight.cpp`, limits in `SimCruisePreflightRules`, `SimCruisePreflight.h`) has two road checks. A world-lane test must use the same rules to agree with it.
+
+| Reason | Rule | Road data | Limit |
+|---|---|---|---|
+| `ran-off-<m>m-past-the-edge-for-<s>s` | The car's centre (the actor location, 2D) against the nearest point of the nearest heading-aligned line: the route lines the robot gathered this frame (`FindCursor` on the drive's `Lines`). Past-edge = distance to that centreline minus that segment's `HalfW`. No aligned line within 30 m counts as 30 m. | The road ribbons of the built tiles (`Build->Roads.Ribbons`: OSM centreline stations with their half width), service ribbons left out (`bService`). Not the drawn mesh. | more than `MaxOffRibbonM` = 2.0 m for longer than `MaxOffRibbonSeconds` = 0.5 s |
+| `left-the-road-<s>s` | The surface under the car's centre: a vertical trace on the tile meshes (the point's tile and its 8 neighbours, highest hit), or a bridge deck. It is road when the hit face is on a road layer (`IsRoadLayer(Tile->LayerAtFace)`). | The drawn mesh's road layer. | not road for longer than `MaxOffRoadSeconds` = 1.0 s |
+
+There is no launch grace: both checks run from the first drive frame (frame 0). The car's start pose comes from the start pick (`World/SimCruiseStartPick.cpp`). It takes public, non-service ribbons, and it requires each corner of the car to be within `HalfW - EdgeClearM` of its own ribbon's centreline. It does not check the drawn road layer or the route's first line.
+
+So a start the start pick accepts can still fail the judge at frame 0 in two ways:
+- The judge's nearest aligned route line is another ribbon (at a junction, the cross street, or a ribbon with a smaller `HalfW`).
+- The drawn road layer under the car's centre is not road (a junction flare, a kerb or a verge drawn as non-road).
+
+Welch, 2026-11-14 (a97af50): the car was placed at about 37.4329 N, 81.5840 W, heading -124.6 deg. At frame 0 the judge read 2.0 m past the edge. In the frame, the car's left side is on asphalt and its nose points at a grass bank, with the drawn road curving away to the left. So the run-off was mostly real: the start pose follows the ribbon, not the drawn road.
+
+## The traffic judge
+
+Ten times a second the judge looks at each traffic car in our car's frame (Along: metres ahead of our centre, Side: metres to the side, centre to centre; heading relative to ours). Limits in `SimCruisePreflightRules` (`SimCruisePreflight.h`), tests in `SimCruise.Gameplay.Preflight.Traffic`. Each event has a line `Pre-flight: traffic ...` in the game log (the car's name, where it was) and an event frame in `review\`.
+
+| Reason | Rule | Team, severity |
+|---|---|---|
+| `traffic-cut-in-<n>` | Our car drives at 2 m/s or more. The other car is in our lane (Side under 1.8 m), with at most one car length (4.5 m) from our front bumper to its rear (our half length 2.2 m). It came across (heading more than 30 deg from ours) or from the next lane (Side over 2.5 m one sample before). One count per car in 5 s. At a stop line (our car below 2 m/s) the crossing traffic has priority and nothing is counted. | driving, P1 |
+| `traffic-through-our-car-<n>` | The bodies overlap: \|Along\| under 2.2 m + half its length - 0.3 m, \|Side\| under 1.6 m, height within 2 m. | driving, P1 |
+| `traffic-turn-round-<n>` | The car's heading changes by 150 deg or more within 3 s (unwrapped through 180 deg), while it moves (over 0.5 m/s). A car removed and placed again (more than 30 m in one sample) starts a new history. | driving, P2 |
+| `motorway-traffic-at-grade-<n>` | A car on a `motorway` ribbon is across our road (45 to 135 deg), on it (\|Side\| under 8 m, -10 to 60 m ahead), at our level (within 2.5 m). Motorways never cross a road at grade; an overpass is metres above or below. | driving, P2 |
+| `junction-hold-<s>s-of-<n>s` | Only with `-SimCruisePreflightStopAtJunction=N` (`launch-review.ps1 -StopAtJunction N`): the robot held less than N s at a stop line, so the gap-acceptance case did not run. | release, P2 |
+
+The gap-acceptance case: with `-SimCruisePreflightStopAtJunction=N` the robot looks up to 60 m ahead along its route for the first point inside a crossing carriageway of a road its own road gives way to (the traffic's rule, `SimCruiseLanes::ApproachStops`: a higher rank, or an equal rank that is not a major road). It stops `StopLineSetbackM` (5.25 m) before it, holds N s on the parking brake, then pulls out without waiting for a gap. The traffic must leave it a full gap: no cut-in and no car through ours. `scripts\traffic-retest.ps1` runs the traffic cases (Detroit Woodward north and south, Doraville, one junction; Bixby south with `-WithBixby`).
+
 ## Graphics rule
 
 Review launches turn dynamic resolution off (console priority), so the 3D picture stays at the preset's screen percentage (75 for Ultra, from the preset) and the frame times are its honest cost; `-SimCruisePlayerRes` keeps the player's dynamic resolution. A launch is valid for sign-off only when the engine really had the top preset (Ultra), all `sg.*` levels at the top, the screen's own resolution, and a screen percentage, set and measured each frame, not below the preset's. A frame p95 over the budget at the fixed percentage is a FAIL for the picture and world teams, not a test fault. Else the run is **NOT VALID FOR SIGN-OFF**: the picture report has a P1 finding, the summary says so, and `scripts\review-check.ps1` and `scripts\playtest.ps1` refuse it.
@@ -91,6 +144,12 @@ Severity:
 | P0 | Stops the release: a crash, a hang, a drive that did not happen, a start at the wrong place. |
 | P1 | A player sees it at once: a spin, a run-off, slow frames, a wrong wheel or gauge, NOT VALID FOR SIGN-OFF. |
 | P2 | A player can see it: road steps, pop-in, stuck traffic, gauges off the true value. |
+
+## A visible run
+
+`-ShowWindow` runs each game in a borderless window at the screen's size (`-FULLSCREEN`, Unreal 5's windowed fullscreen), so the owner can watch. `scripts\ViewerWatch.ps1` logs the foreground window and the PC's last input every 250 ms into `viewer.csv`. A place where the game lost the foreground is **DISTURBED**: its frame times do not count (its frames, video and judge do), and it is run again off screen for the frame times only (`rerun off screen`; a window costs about 1 ms of p95 against off screen).
+
+Known fact (2026-11-14, `scripts\focus-check.ps1`, repeated on a quiet PC at 13:30Z): with the focus on another window, frame p95 rose from 23.2 to 29.2 ms (+6.0 ms) on Ocean Drive at Ultra 75 %; no frame over 50 ms, no hitch. (The first check, 17.3 to 24.6 ms, +7.3 ms, ran while other lanes built and tested.) Frame p95 with the same settings varies between runs on this PC (16.7 to 23 ms), so compare runs only side by side. The process priority stays normal, as for a player. Input rows in `viewer.csv` are information only: on this PC something simulates input about every 50 s with nobody there.
 
 ## Off screen gives the same picture as a window
 
