@@ -63,7 +63,7 @@ An earlier scene model, DDRNet23-Slim trained on Cityscapes, was removed because
 | Building heights, roofs, extra footprints, traffic signals | [Overture Maps Foundation](https://docs.overturemaps.org/attribution/) | Buildings theme: ODbL 1.0 | © OpenStreetMap contributors, Overture Maps Foundation |
 | Building footprints inside Overture | [Microsoft Global ML Building Footprints](https://github.com/microsoft/GlobalMLBuildingFootprints) | ODbL 1.0 in Overture (Microsoft's own release is CDLA Permissive 2.0) | Microsoft |
 | Building footprints inside Overture | Esri Community Maps contributors | CC BY 4.0 | Esri Community Maps contributors |
-| Building use | US Army Corps of Engineers, National Structure Inventory | US public domain | USACE NSI |
+| Building use, construction type, foundation height and storeys | [US Army Corps of Engineers, National Structure Inventory](https://www.hec.usace.army.mil/confluence/nsi/) (public base layer) | US public domain | U.S. Army Corps of Engineers National Structure Inventory (USACE NSI) |
 | Ground elevation | [USGS 3D Elevation Program](https://www.usgs.gov/3d-elevation-program) (1/3 arc-second and 1 m), Mapzen/Tilezen Terrarium tiles | US public domain; Tilezen [attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) | U.S. Geological Survey; Mapzen |
 | Lidar for roofs and road camber | USGS 3DEP lidar (EPT on AWS); Miami-Dade County; NOAA Digital Coast | US public domain; CC0 (Miami-Dade) | U.S. Geological Survey |
 | Aerial photographs | [USDA NAIP](https://naip-usdaonline.hub.arcgis.com/) and USGS The National Map imagery; USDA Forest Service (Alaska) | US public domain | USDA Farm Production and Conservation; U.S. Geological Survey |
