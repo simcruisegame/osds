@@ -19,6 +19,7 @@
 #include "Vehicle/SimCruiseVehicleMovementComponent.h"
 #include "Gameplay/SimCruiseViewCheck.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformStackWalk.h"
 #include "ImageCore.h"
 #include "ImageUtils.h"
 #include "InputCoreTypes.h"
@@ -126,6 +127,8 @@ namespace SimCruisePreflightRules
 	{
 		// Traffic: information only since the owner took traffic out for now (2026-11-14). Not a FAIL.
 		TArray<FString> R;
+		// A stall the watchdog logged (a stack is in the log) but under the FAIL limit.
+		if (S.LongestHangS > HangLogS && S.LongestHangS <= HangFailS) R.Add(FString::Printf(TEXT("game-thread-stall-%.0fs"), S.LongestHangS));
 		if (S.StuckTraffic > 0) R.Add(FString::Printf(TEXT("stuck-traffic-%d"), S.StuckTraffic));
 		if (S.TrafficCutIns > 0) R.Add(FString::Printf(TEXT("traffic-cut-in-%d"), S.TrafficCutIns));
 		if (S.TrafficOverlaps > 0) R.Add(FString::Printf(TEXT("traffic-through-our-car-%d"), S.TrafficOverlaps));
@@ -174,6 +177,7 @@ namespace SimCruisePreflightRules
 		if (S.Hits > 0) R.Add(FString::Printf(TEXT("hit-%d"), S.Hits));
 		if (S.DeckJumps > 0) R.Add(FString::Printf(TEXT("deck-not-smooth-%d-max-%.0fdeg"), S.DeckJumps, S.MaxDeckDeg));
 		if (S.WheelsOffSeconds > MaxWheelsOffSeconds) R.Add(FString::Printf(TEXT("wheels-off-ground-%.1fs"), S.WheelsOffSeconds));
+		if (S.LongestHangS > HangFailS) R.Add(FString::Printf(TEXT("hang-%.0fs"), S.LongestHangS));
 		if (S.DriveSeconds > 0.f && S.Frames < S.DriveSeconds / 0.1f * 0.5f) R.Add(FString::Printf(TEXT("few-frames-%d"), S.Frames));
 		if (S.PeakRearSlipDeg > MaxRearSlipDeg || S.ReversedSeconds > MaxReversedSeconds)
 		{
@@ -260,9 +264,51 @@ ASimCruisePreflight::ASimCruisePreflight()
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 }
 
+void ASimCruisePreflight::StartWatchdog()
+{
+	// The hang watchdog (2026-11-14: a Detroit start stood still 5 min with no log line). A thread of
+	// its own checks the actor's tick: a game thread with no tick for more than HangLogS gets one log
+	// line with its stack; the longest stall goes to the report (info over 10 s, FAIL over 30 s).
+	HeartbeatS.store(FPlatformTime::Seconds());
+	bWatchdogStop.store(false);
+	Watchdog = MakeUnique<FThread>(TEXT("SimCruisePreflightWatchdog"), [this]()
+	{
+		bool bLogged = false;
+		while (!bWatchdogStop.load())
+		{
+			FPlatformProcess::Sleep(0.5f);
+			const double Gap = FPlatformTime::Seconds() - HeartbeatS.load();
+			if (Gap > LongestHangS.load()) LongestHangS.store(Gap);
+			if (Gap < 1.0) { bLogged = false; continue; }
+			if (Gap > SimCruisePreflightRules::HangLogS && !bLogged)
+			{
+				bLogged = true;
+				uint64 Trace[48] = {};
+				const uint32 Depth = FPlatformStackWalk::CaptureThreadStackBackTrace(GGameThreadId, Trace, UE_ARRAY_COUNT(Trace));
+				UE_LOG(LogSimCruisePreflight, Warning, TEXT("Pre-flight: HANG: the game thread has not ticked for %.1f s; its stack (%u frames):"), Gap, Depth);
+				for (uint32 I = 0; I < Depth; ++I)
+				{
+					ANSICHAR Line[1024] = {};
+					FPlatformStackWalk::ProgramCounterToHumanReadableString(static_cast<int32>(I), Trace[I], Line, sizeof(Line));
+					UE_LOG(LogSimCruisePreflight, Warning, TEXT("  %s"), ANSI_TO_TCHAR(Line));
+				}
+			}
+		}
+	});
+}
+
+void ASimCruisePreflight::StopWatchdog()
+{
+	if (!Watchdog) return;
+	bWatchdogStop.store(true);
+	Watchdog->Join();
+	Watchdog.Reset();
+}
+
 void ASimCruisePreflight::BeginPlay()
 {
 	Super::BeginPlay();
+	StartWatchdog();
 	const TCHAR* Cmd = FCommandLine::Get();
 	FParse::Value(Cmd, TEXT("SimCruisePreflightSeconds="), DriveSeconds);
 	DriveSeconds = FMath::Clamp(DriveSeconds, 5.f, 600.f);
@@ -328,6 +374,7 @@ void ASimCruisePreflight::BeginPlay()
 
 void ASimCruisePreflight::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	StopWatchdog();
 	if (FrameHandle.IsValid())
 	{
 		UGameViewportClient::OnScreenshotCaptured().Remove(FrameHandle);
@@ -686,6 +733,7 @@ void ASimCruisePreflight::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	const double Now = FPlatformTime::Seconds();
+	HeartbeatS.store(Now);
 	ASimCruisePlayerController* Player = Cast<ASimCruisePlayerController>(UGameplayStatics::GetPlayerController(this, 0));
 	APawn* Pawn = Player ? Player->GetPawn() : nullptr;
 	ASimCruiseGameMode* Mode = GetWorld()->GetAuthGameMode<ASimCruiseGameMode>();
@@ -1478,12 +1526,13 @@ void ASimCruisePreflight::Finish()
 	UE_LOG(LogSimCruisePreflight, Display, TEXT("PREFLIGHT FRAMES road=%s car=%s mean=%.1fm/s %s"), *RoadName, *CarId, Stats.MeanSpeedMps, *FrameLine);
 
 	MeasureFrames(TimedFrameMs, Stats);
+	Stats.LongestHangS = static_cast<float>(LongestHangS.load());
 	const FString Reasons = Judge(Stats);
 	const FString InfoNotes = Notes(Stats);
 	const bool bPass = Reasons.IsEmpty();
 	Review.Finish(bPass ? TEXT("PASS") : TEXT("FAIL"), Reasons);
-	UE_LOG(LogSimCruisePreflight, Display, TEXT("PREFLIGHT CAR stuck=%.1fs hits=%d deck_jumps=%d max_deck=%.1fdeg wheels_off=%.1fs notes=%s"),
-		Stats.StuckSeconds, Stats.Hits, Stats.DeckJumps, Stats.MaxDeckDeg, Stats.WheelsOffSeconds, InfoNotes.IsEmpty() ? TEXT("none") : *InfoNotes);
+	UE_LOG(LogSimCruisePreflight, Display, TEXT("PREFLIGHT CAR stuck=%.1fs hits=%d deck_jumps=%d max_deck=%.1fdeg wheels_off=%.1fs longest_hang=%.1fs notes=%s"),
+		Stats.StuckSeconds, Stats.Hits, Stats.DeckJumps, Stats.MaxDeckDeg, Stats.WheelsOffSeconds, Stats.LongestHangS, InfoNotes.IsEmpty() ? TEXT("none") : *InfoNotes);
 	UE_LOG(LogSimCruisePreflight, Display,
 		TEXT("PREFLIGHT %s road=%s car=%s place=\"%s\" distance=%.0fm mean=%.1fm/s offroad=%.1fs rear_slip=%.1fdeg backwards=%.1fs past_edge=%.1fm/%.1fs frame_p95=%.1fms hitches=%d sky_white=%.0f%% tile_popin=%d car_popin=%d flashes=%d steps=%d max_step=%.1fcm gaps=%d jolts=%d border_jolts=%d stuck=%d cut_ins=%d through=%d turn_rounds=%d at_grade=%d junction_hold=%.1fs frames=%d reasons=%s"),
 		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place, Stats.DistanceM, Stats.MeanSpeedMps, Stats.OffRoadSeconds,
@@ -1505,7 +1554,7 @@ void ASimCruisePreflight::Finish()
 		TEXT("  \"peak_rear_slip_deg\": %.1f, \"peak_yaw_dps\": %.1f, \"backwards_seconds\": %.2f, \"forced_spin\": %s,\n")
 		TEXT("  \"max_past_edge_m\": %.2f, \"past_edge_seconds\": %.2f,\n")
 		TEXT("  \"timed_frames\": %d, \"frame_p95_ms\": %.1f, \"frames_over_50ms\": %d, \"hitches_over_100ms\": %d,\n")
-		TEXT("  \"stuck_seconds\": %.1f, \"hits\": %d, \"deck_jumps\": %d, \"max_deck_deg\": %.1f, \"wheels_off_seconds\": %.1f, \"notes\": \"%s\",\n")
+		TEXT("  \"stuck_seconds\": %.1f, \"hits\": %d, \"deck_jumps\": %d, \"max_deck_deg\": %.1f, \"wheels_off_seconds\": %.1f, \"longest_hang_s\": %.1f, \"notes\": \"%s\",\n")
 		TEXT("  \"reasons\": \"%s\"\n}\n"),
 		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place.ReplaceCharWithEscapedChar(),
 		Stats.DriveSeconds, Stats.DistanceM, Stats.MeanSpeedMps, Stats.OffRoadSeconds, B(Stats.bFellBack),
@@ -1518,7 +1567,7 @@ void ASimCruisePreflight::Finish()
 		Stats.PeakRearSlipDeg, Stats.PeakYawDps, Stats.ReversedSeconds, B(Stats.bForcedSpin),
 		Stats.MaxOffRibbonM, Stats.OffRibbonSeconds,
 		Stats.TimedFrames, Stats.FrameP95Ms, Stats.SlowFrames, Stats.Hitches,
-		Stats.StuckSeconds, Stats.Hits, Stats.DeckJumps, Stats.MaxDeckDeg, Stats.WheelsOffSeconds, *InfoNotes,
+		Stats.StuckSeconds, Stats.Hits, Stats.DeckJumps, Stats.MaxDeckDeg, Stats.WheelsOffSeconds, Stats.LongestHangS, *InfoNotes,
 		bPass ? TEXT("ok") : *Reasons);
 	FFileHelper::SaveStringToFile(Json, *FPaths::Combine(OutputDir, TEXT("preflight.json")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 

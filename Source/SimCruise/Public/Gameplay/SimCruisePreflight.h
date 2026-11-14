@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Async/Future.h"
+#include "HAL/Thread.h"
+#include <atomic>
 #include "Gameplay/SimCruiseReview.h"
 #include "SimCruisePreflight.generated.h"
 
@@ -73,6 +75,8 @@ struct SIMCRUISE_API FSimCruisePreflightStats
 	float MaxDeckDeg = 0.f;
 	/** Longest time (s) with two or more wheels off the ground while the car is on a road surface. */
 	float WheelsOffSeconds = 0.f;
+	/** Longest time (s) the game thread did not tick (the hang watchdog). */
+	float LongestHangS = 0.f;
 
 	/** -SimCruisePreflightStopAtJunction=N: the seconds asked for, and the seconds held at the stop line. */
 	float JunctionHoldAskedS = 0.f;
@@ -151,6 +155,9 @@ namespace SimCruisePreflightRules
 	constexpr double DeckDeg = 4.0;
 	constexpr double DeckWindowM = 5.0;
 	constexpr float MaxWheelsOffSeconds = 1.f;
+	/** The hang watchdog: a stack in the log after HangLogS without a tick; a note over that, a FAIL over HangFailS. */
+	constexpr double HangLogS = 10.0;
+	constexpr float HangFailS = 30.f;
 	/** Samples (time s, speed m/s) in time order: the largest speed loss within HitWindowS. */
 	SIMCRUISE_API double MaxSpeedDrop(const TArray<FVector2d>& TimeSpeed);
 	/** Samples (path m, pitch deg, roll deg) in path order: the largest change of pitch or roll within DeckWindowM. */
@@ -351,6 +358,14 @@ private:
 
 	/** Traffic off for the run (the default; -SimCruisePreflightTraffic keeps it). */
 	bool bTrafficOff = true;
+
+	/** The hang watchdog thread (see StartWatchdog). */
+	void StartWatchdog();
+	void StopWatchdog();
+	TUniquePtr<FThread> Watchdog;
+	std::atomic<double> HeartbeatS{0.0};
+	std::atomic<double> LongestHangS{0.0};
+	std::atomic<bool> bWatchdogStop{false};
 
 	/** The car's own state, measured each frame (see the rules). */
 	void WatchCar(ASimCruisePlayerController* Player, APawn* Pawn, float DeltaSeconds, bool bOnRoad);

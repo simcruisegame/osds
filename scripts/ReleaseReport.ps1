@@ -239,6 +239,7 @@ function Write-ReleaseReports {
             if ($Reasons -match 'stuck-at-rev-limit-[^,]*') { Add-Finding 'driving' 'P1' $R '-' "$Rel\review\ (event frames 'stuck')" $Matches[0] }
             if ($Reasons -match 'deck-not-smooth-[^,]*') { Add-Finding 'world' 'P1' $R '-' "$Rel\review\ (event frames 'deck-not-smooth')" "$($Matches[0]): the car's pitch or roll jumps on the road (hump, lip or warped deck)" }
             if ($Reasons -match 'wheels-off-ground-[^,]*') { Add-Finding 'driving' 'P1' $R '-' "$Rel\game.log" $Matches[0] }
+            if ($Reasons -match 'hang-\d+s') { Add-Finding 'release' 'P1' $R '-' "$Rel\game.log (Pre-flight: HANG, with the game thread's stack)" "$($Matches[0]): the game stood still (no tick)" }
             if ($Pre.PSObject.Properties['stuck_seconds']) {
                 $Numbers['driving'] += "| $Rel ($($R.Plan.Car)) | stuck at the limit / hits / deck jumps (max) / wheels off | $($Pre.stuck_seconds) s / $($Pre.hits) / $($Pre.deck_jumps) ($($Pre.max_deck_deg) deg) / $($Pre.wheels_off_seconds) s | 2 s / 0 / 0 (4 deg) / 1 s | $(if ([double]$Pre.stuck_seconds -gt 2 -or [int]$Pre.hits -or [int]$Pre.deck_jumps -or [double]$Pre.wheels_off_seconds -gt 1) { 'FAIL' } else { 'ok' }) |"
             }
