@@ -68,6 +68,8 @@ foreach ($Car in $Cars) {
     $Log = Join-Path $RunDir 'game.log'
     $GameArgs = @("`"$Project`"", '-game', '-SimCruiseWorld', '-SimCruiseBundledStart', '-SimCruiseNoLive', '-SimCruiseNoNeural', "-SimCruiseGraphics=$Graphics",
         '-SimCruiseUtc=2026-11-12T17:00:00Z', "-SimCruiseCar=$Car", "`"-SimCruiseHudShots=$RunDir`"",
+        # Traffic off (2.0.3 has none): sc.Feature.Traffic where it exists, and no cars either way.
+        '-DPCVars=simcruise.Traffic.Cars=0,sc.Feature.Traffic=0,sc.Feature.Aircraft=0',
         '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution)
     ("`"$Editor`" " + ($GameArgs -join ' ')) | Set-Content -Encoding utf8 (Join-Path $RunDir 'command-line.txt')
     if (-not (Enter-EditorLock -GpuTest -TimeoutMinutes $LockTimeoutMinutes -Why "HUD shots $Car on $Root")) { exit 1 }

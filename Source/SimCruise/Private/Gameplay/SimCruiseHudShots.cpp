@@ -84,7 +84,7 @@ namespace
 				if (Mode->IsDriveReady() && PC->HasVehicle()) Next(10.0);
 				break;
 			case 1:
-				if (ASimCruisePlayerCameraManager* Camera = PC->GetSimCamera()) Camera->SetView(ESimCruiseView::Driver);
+				if (ASimCruisePlayerCameraManager* Camera = Cast<ASimCruisePlayerCameraManager>(PC->PlayerCameraManager)) Camera->SetView(ESimCruiseView::Driver);
 				// Not remembered: the player's own choice stays as it was.
 				FSimCruiseDriveHud::SetMapAlways(true, false);
 				Next(3.0);
