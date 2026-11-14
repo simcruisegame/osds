@@ -325,7 +325,13 @@ bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bo
 	{
 		// Back along this same road (it has no other way on), where it is two-way.
 		const int32 Back = -Car.Dir;
-		UTurns.Add({ Car.Tile, Car.Ribbon, Back, DecisionS, 180.0, 1.0 });
+		// Only a true dead end: near a tile seam the road may go on in a tile not built yet, and a
+		// car there turned round in the middle of the road (it used to drive on out of sight).
+		const FVector Beyond = End.LocationCm + FVector(End.Heading.X, End.Heading.Y, 0.0) * 3000.0;
+		if (Streamer.IsValid() && Streamer->GetFrame().TileAtWorldCm(Beyond) == Streamer->GetFrame().TileAtWorldCm(End.LocationCm))
+		{
+			UTurns.Add({ Car.Tile, Car.Ribbon, Back, DecisionS, 180.0, 1.0 });
+		}
 	}
 	if (Options.IsEmpty()) Options = MoveTemp(UTurns);
 	if (Options.IsEmpty()) return false;
@@ -509,7 +515,8 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 				const bool bWillStop = OtherCar && OtherCar->StopState == 1;
 				// A driver kept waiting takes a shorter gap (5 s, after 10 s 3 s, after 20 s 2 s): a
 				// steady stream never holds a stop line for good.
-				const double Window = Car.WaitS > 20.0 ? 2.0 : Car.WaitS > 10.0 ? 3.0 : 5.0;
+				// Never a shorter gap in front of the player: the player is not a stream to cut into.
+				const double Window = !OtherCar ? 5.0 : Car.WaitS > 20.0 ? 2.0 : Car.WaitS > 10.0 ? 3.0 : 5.0;
 				return bTowards && !bWillStop && OtherSpeed > 1.0 && Dist > 2.0 && Dist / OtherSpeed < Window;
 			};
 			for (const ASimCruiseTrafficCar* Other : Cars)
@@ -546,7 +553,7 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 	if (bLeftTurn && Remaining < 25.0)
 	{
 		const FPose Centre = PoseAt(Car.Tile, Car.Ribbon, Car.Dir, Car.DecisionS, Car.Lane);
-		auto Oncoming = [&](const FVector& OtherCm, const FVector2d& OtherHeading, double OtherSpeed)
+		auto Oncoming = [&](const FVector& OtherCm, const FVector2d& OtherHeading, double OtherSpeed, bool bPlayer = false)
 		{
 			if (FVector2d::DotProduct(OtherHeading, Fwd) > -0.7 || OtherSpeed < 1.0) return false;
 			const FVector2d ToJ((Centre.LocationCm.X - OtherCm.X) / 100.0, (Centre.LocationCm.Y - OtherCm.Y) / 100.0);
@@ -554,7 +561,7 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 			// The gap a left-turner waits for shrinks as it waits in the junction (4.5 s, after 8 s 2.5 s,
 			// after 15 s 1.5 s): it never stands across the junction for good while oncoming cars stream
 			// past (Stonington, Maine: a Corvette held the robot for a minute).
-			const double Window = Car.StandS > 15.0 ? 1.5 : Car.StandS > 8.0 ? 2.5 : 4.5;
+			const double Window = bPlayer ? 4.5 : Car.StandS > 15.0 ? 1.5 : Car.StandS > 8.0 ? 2.5 : 4.5;
 			return Ahead > -2.0 && Ahead < 60.0 && Ahead / OtherSpeed < Window;
 		};
 		bool bYield = false;
@@ -565,7 +572,7 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 			const double Yaw = FMath::DegreesToRadians(Other->GetActorRotation().Yaw);
 			bYield = Oncoming(Other->GetActorLocation(), FVector2d(FMath::Cos(Yaw), FMath::Sin(Yaw)), Other->Speed);
 		}
-		if (!bYield) bYield = Oncoming(PlayerCm, PlayerHeading, PlayerVelCm.Size2D() / 100.0);
+		if (!bYield) bYield = Oncoming(PlayerCm, PlayerHeading, PlayerVelCm.Size2D() / 100.0, true);
 		if (bYield)
 		{
 			// The stopped car the IDM keeps 2 m behind stands at the junction's centre: the
