@@ -3,6 +3,8 @@
 Notable changes to SimCruise, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/) and versions follow [Semantic Versioning](https://semver.org/). Dates are release dates, not the survey dates of the data a release uses. The release notes written for Sunday Driver 1.0.0 to 1.0.8 are preserved word for word in [docs/history.md](docs/history.md).
 
 ## Unreleased
+- Pre-flight: the car stands on its parking brake from placement until the drive starts; an automatic creeps in Drive (the Mustang crept 3.7 m onto the grass bank at Welch, West Virginia, while the tiles and shaders finished).
+
 
 - **Known issues (v2.0.3)**:
   - Junction lips: where a driveway or a ramp joins a road, part of it stands above the road it joins: about 12 cm where two driveways meet Court Street in Welch, WV (tile 16/17916/25409, near 37.43300, -81.58373), about 6 cm at motorway ramp merges in Doraville, GA (tile 16/17429/26202, near 33.89359, -84.25539). The cause is still under study (not the join's choice of road: taking the most major road instead of the highest surface did not change them); the real fix is the first v2.0.4 item. `SimCruise.Debug.ReleaseFaultProbe` shows each join's columns against the road under them.
