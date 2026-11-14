@@ -15,6 +15,7 @@
 #include "World/SimCruiseStartPick.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseTileData.h"
+#include "World/SimCruiseTileDetail.h"
 #include "World/SimCruiseTileManager.h"
 #include "World/SimCruiseWorldStreamer.h"
 #include "World/SimCruiseWorldTile.h"
@@ -1114,6 +1115,139 @@ bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 	}
 	FFileHelper::SaveStringToFile(Md, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("BridgeFix"), FSimCruiseRoadNetwork::BridgeRuleOn() ? TEXT("changed-spans.md") : TEXT("before-rule.md")));
 	AddInfo(FString::Printf(TEXT("ROADOVERLAPS recorded: %d places, %d bridge spans changed, %d faults"), NumPlaces, Spans, Faults));
+	return true;
+}
+
+namespace SimCruiseStartTest
+{
+	/** Window rows the roof line cuts, and building triangles, in one build's Building layer (see World.BuildingTops). */
+	struct FFacadeCount { int32 CutRows = 0; int32 GridQuads = 0; int32 Triangles = 0; double WorstBandM = 1e9; };
+	FFacadeCount CountFacades(const FSimCruiseTileBuild& B)
+	{
+		namespace Kind = SimCruiseSurfaceKind;
+		FFacadeCount Out;
+		const FSimCruiseMeshData& M = B.Layer(ESimCruiseTileLayer::Building);
+		Out.Triangles = M.Indices.Num() / 3;
+		if (M.UV1.Num() != M.Positions.Num() || M.Colors.Num() != M.Positions.Num() || M.UV0.Num() != M.Positions.Num()) return Out;
+		for (int32 t = 0; t + 2 < M.Indices.Num(); t += 3)
+		{
+			const int32 I0 = M.Indices[t];
+			const float K = FMath::RoundToFloat(M.UV1[I0].X);
+			const bool bGrid = K == Kind::Wall || K == Kind::WallFront || K == Kind::DecoFront || K == Kind::DecoUpper;
+			if (!bGrid) continue;
+			// A vertical face only (the grid runs up walls).
+			const FVector3d P0(M.Positions[I0]), P1(M.Positions[M.Indices[t + 1]]), P2(M.Positions[M.Indices[t + 2]]);
+			if (FMath::Abs(FVector3d::CrossProduct(P1 - P0, P2 - P0).GetSafeNormal().Z) > 0.2) continue;
+			++Out.GridQuads;
+			double TopH = -1e9;
+			for (int32 v = 0; v < 3; ++v) TopH = FMath::Max(TopH, static_cast<double>(M.UV0[M.Indices[t + v]].Y));
+			// The shader's storey (vertex alpha) and the glass in the top storey this face reaches.
+			const float A = M.Colors[I0].A;
+			const double S = A > 0.995f ? 3.1 : 2.4 + 4.0 * A;
+			const int32 L = FMath::FloorToInt(TopH / S + 1e-6);
+			const double R = TopH - L * S;
+			const bool bShop = (K == Kind::WallFront || K == Kind::DecoFront) && L == 0;
+			const double GlassStart = bShop ? 0.35 : 0.95, GlassEnd = S - (bShop ? 0.45 : 0.68);
+			if (R > 1e-3 && R > GlassStart + 1e-3)
+			{
+				// The face ends inside a storey whose glass shows: its top must leave 0.4 m over the glass.
+				const double Band = R - FMath::Min(R, GlassEnd);
+				Out.WorstBandM = FMath::Min(Out.WorstBandM, Band);
+				if (Band < 0.4 - 1e-3) ++Out.CutRows;
+			}
+		}
+		return Out;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBuildingTopsTest, "SimCruise.World.BuildingTops", SimCruiseStartTest::Flags)
+bool FSimCruiseBuildingTopsTest::RunTest(const FString& Parameters)
+{
+	// Building tops (Detroit, Woodward, v2.0.3 release re-test: a top row of windows cut by the
+	// roof line read as battlements). The rule, then the built facades: no window row reaches into
+	// the last 0.4 m of a wall, before (old grid to the top) and after.
+	FRandomStream Rng(20261114);
+	for (int32 k = 0; k < 4000; ++k)
+	{
+		const double Storeys[] = { 3.0, 3.1, 3.2, 3.8, 4.2 };
+		const double S = Storeys[Rng.RandRange(0, 4)];
+		const double Ground = Rng.FRandRange(-5.0, 300.0);
+		const double WallTop = Ground + (k < 1000 ? Rng.FRandRange(2.0, 10.0) : Rng.FRandRange(3.0, 200.0)); // low walls first
+		const bool bShop = Rng.RandRange(0, 1) == 1;
+		const double Split = SimCruiseTileDetail::FacadeGridTop(Ground, WallTop, S, bShop);
+		const int32 Rows = FMath::RoundToInt((FMath::Min(Split, WallTop) - Ground) / S);
+		if (!TestTrue(TEXT("the grid never runs above the wall"), Split <= WallTop + 1e-6)) return false;
+		if (Rows > 0)
+		{
+			const double LastGlass = Ground + Rows * S - ((bShop && Rows == 1) ? 0.45 : 0.68);
+			if (!TestTrue(FString::Printf(TEXT("a %.2f m wall, %.1f m storeys: %.2f m over the last glass (>= 0.4)"), WallTop - Ground, S, WallTop - LastGlass), WallTop - LastGlass >= 0.4 - 1e-6)) return false;
+		}
+		// One more row would not fit.
+		const double NextGlass = Ground + (Rows + 1) * S - ((bShop && Rows == 0) ? 0.45 : 0.68);
+		if (!TestTrue(TEXT("every row that fits is drawn"), NextGlass + 0.4 > WallTop - 1e-6)) return false;
+	}
+	// Built facades: the bundled Miami Beach tiles (Ocean Drive's deco hotels), and the recorded
+	// Detroit Woodward and Detroit start tiles where present.
+	auto Run = [&](const FString& Name, const TArray<TSharedRef<FSimCruiseTileBuild>>& Builds, bool bAfter)
+	{
+		SimCruiseStartTest::FFacadeCount Sum;
+		for (const TSharedRef<FSimCruiseTileBuild>& B : Builds)
+		{
+			const SimCruiseStartTest::FFacadeCount C = SimCruiseStartTest::CountFacades(*B);
+			Sum.CutRows += C.CutRows; Sum.GridQuads += C.GridQuads; Sum.Triangles += C.Triangles; Sum.WorstBandM = FMath::Min(Sum.WorstBandM, C.WorstBandM);
+		}
+		AddInfo(FString::Printf(TEXT("FACADES %s %s: %d tiles, %d window-grid faces, %d with a row cut by the top, %d building triangles"),
+			*Name, bAfter ? TEXT("after") : TEXT("before"), Builds.Num(), Sum.GridQuads, Sum.CutRows, Sum.Triangles));
+		return Sum;
+	};
+	auto BuildAll = [&](TFunctionRef<void(TArray<TSharedRef<FSimCruiseTileBuild>>&)> Make)
+	{
+		TArray<TSharedRef<FSimCruiseTileBuild>> Out;
+		Make(Out);
+		return Out;
+	};
+	auto Bundled = [&](TArray<TSharedRef<FSimCruiseTileBuild>>& Out)
+	{
+		const FSimCruiseWorldFrame Frame = FSimCruiseWorldFrame::ForPlace(USimCruiseWorldSubsystem::BundledLon, USimCruiseWorldSubsystem::BundledLat);
+		TArray<FString> Files;
+		IFileManager::Get().FindFiles(Files, *FPaths::Combine(SimCruiseTileData::RepositoryRoot(), TEXT("data"), TEXT("tiles"), TEXT("*.json")), true, false);
+		for (const FString& File : Files)
+		{
+			FString X, Y;
+			if (!FPaths::GetBaseFilename(File).Split(TEXT("_"), &X, &Y) || !X.IsNumeric() || !Y.IsNumeric()) continue;
+			FSimCruiseTileData Data;
+			FString Error;
+			if (SimCruiseTileData::LoadFile(SimCruiseTileData::BundledTilePath(FIntPoint(FCString::Atoi(*X), FCString::Atoi(*Y))), Data, Error)) Out.Add(SimCruiseTileBuilder::Build(Data, Frame.TileSizeM));
+		}
+	};
+	auto Recorded = [&](const TCHAR* Place, TArray<TSharedRef<FSimCruiseTileBuild>>& Out)
+	{
+		FSimCruiseWorldFrame Frame;
+		TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
+		FVector StartCm;
+		if (SimCruiseStartTest::BuildPlace(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces"), Place), Frame, Built, StartCm))
+		{
+			for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built) Out.Add(Pair.Value);
+		}
+	};
+	struct FCase { FString Name; TFunction<void(TArray<TSharedRef<FSimCruiseTileBuild>>&)> Make; };
+	const TArray<FCase> Cases = {
+		{ TEXT("Miami Beach (bundled)"), Bundled },
+		{ TEXT("us-detroit-woodward"), [&](TArray<TSharedRef<FSimCruiseTileBuild>>& Out) { Recorded(TEXT("us-detroit-woodward"), Out); } },
+	};
+	for (const FCase& Case : Cases)
+	{
+		SimCruiseTileDetail::bFitFacadeGrid = false;
+		const SimCruiseStartTest::FFacadeCount Before = Run(Case.Name, BuildAll(Case.Make), false);
+		SimCruiseTileDetail::bFitFacadeGrid = true;
+		const SimCruiseStartTest::FFacadeCount After = Run(Case.Name, BuildAll(Case.Make), true);
+		if (After.GridQuads == 0) continue; // a place not recorded here
+		TestEqual(FString::Printf(TEXT("%s: window rows cut by the top"), *Case.Name), After.CutRows, 0);
+		const double Extra = Before.Triangles > 0 ? 100.0 * (After.Triangles - Before.Triangles) / Before.Triangles : 0.0;
+		AddInfo(FString::Printf(TEXT("FACADES %s: %d -> %d cut rows, building triangles %+.1f %% (%d -> %d)"), *Case.Name, Before.CutRows, After.CutRows, Extra, Before.Triangles, After.Triangles));
+		TestTrue(FString::Printf(TEXT("%s: building triangles up %.1f %% (<= 25 %%)"), *Case.Name, Extra), Extra <= 25.0);
+	}
+	SimCruiseTileDetail::bFitFacadeGrid = true;
 	return true;
 }
 

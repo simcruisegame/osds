@@ -210,6 +210,24 @@ namespace
 
 namespace SimCruiseTileDetail
 {
+	bool bFitFacadeGrid = true;
+
+	double FacadeGridTop(double GroundZ, double WallTop, double Storey, bool bShopFront, double BandMinM)
+	{
+		if (!bFitFacadeGrid) return WallTop;
+		Storey = FMath::Max(Storey, 1.0);
+		int32 Rows = 0;
+		while (Rows < 400)
+		{
+			// The glass of storey number Rows (the shader's window: up to 0.68 m under the storey's
+			// top, 0.45 m in a shop's ground storey).
+			const double GlassTop = GroundZ + (Rows + 1) * Storey - ((bShopFront && Rows == 0) ? 0.45 : 0.68);
+			if (GlassTop + BandMinM > WallTop + 1e-6) break;
+			++Rows;
+		}
+		return FMath::Min(GroundZ + Rows * Storey, WallTop);
+	}
+
 	FLinearColor WeatheredPaint(const FLinearColor& C, float Max)
 	{
 		const float L = C.GetLuminance();
@@ -820,14 +838,32 @@ namespace SimCruiseTileDetail
 				// coloured uplight wash that lights Ocean Drive at night. A rounded corner is
 				// plain stucco (its windows would be cut by the chords).
 				const float WallKind = Arc[i] ? Kind::Trim : !Front[i] ? Kind::Wall : bPorch ? (bDeco ? Kind::DecoUpper : Kind::Wall) : (bDeco ? Kind::DecoFront : Kind::WallFront);
+				// The window grid fits the wall (Detroit, Woodward: a top row of windows cut by the
+				// roof line read as battlements, shop glass ran up to the parapet, towers had windows
+				// to the top): rows on whole storeys only, the last one where its glass ends 0.4 m or
+				// more under the wall's top; above it a plain band in the wall's own colour (the
+				// shader's stucco without the grid, so no seam).
+				auto FacadeWall = [&](const FVector2d& P0, const FVector2d& P1, double Z0, double Zt, const FLinearColor& Colour, float WKind, double Along)
+				{
+					const bool bGrid = WKind == Kind::Wall || WKind == Kind::WallFront || WKind == Kind::DecoFront || WKind == Kind::DecoUpper;
+					const bool bShopKind = WKind == Kind::WallFront || WKind == Kind::DecoFront;
+					const double Split = bGrid ? FMath::Clamp(FacadeGridTop(Ground, Zt, FloorH, bShopKind), Z0, Zt) : Zt;
+					if (Split > Z0 + 0.01) W.Panel(P0, P1, Z0, Split, N2, Colour, WKind, Along, Ground);
+					if (Zt > FMath::Max(Split, Z0) + 0.01) W.Panel(P0, P1, FMath::Max(Split, Z0), Zt, N2, Colour, Kind::Trim, Along, Ground);
+				};
 				if (bCurtain)
 				{
 					// A glass curtain wall over a lobby storey: mullions every 1.5 m and a spandrel
-					// band at every floor slab.
+					// band at every floor slab; the glass ends at a slab line, the band above it in the
+					// frame's colour (not a missing floor).
 					const double Lobby = Ground + 4.5;
-					W.Panel(A, C, WallStart, Lobby, N2, Wall, Front[i] ? Kind::WallFront : Kind::Wall, Along0, Ground);
-					W.Panel(A, C, Lobby, Top + Parapet, N2, Wall, Kind::Railing, Along0, Ground);
 					const FLinearColor Frame = Srgb(TEXT("3A3F44"));
+					FacadeWall(A, C, WallStart, Lobby, Wall, Front[i] ? Kind::WallFront : Kind::Wall, Along0);
+					const double GlassTop = bFitFacadeGrid
+						? FMath::Clamp(Lobby + FMath::FloorToDouble(FMath::Max(Top + Parapet - 0.6 - Lobby, 0.0) / FloorH) * FloorH, Lobby, Top + Parapet)
+						: Top + Parapet;
+					if (GlassTop > Lobby + 0.01) W.Panel(A, C, Lobby, GlassTop, N2, Wall, Kind::Railing, Along0, Ground);
+					if (Top + Parapet > GlassTop + 0.01) W.Panel(A, C, GlassTop, Top + Parapet, N2, Frame, Kind::Metal, Along0, Ground);
 					const int32 Mullions = FMath::FloorToInt(Len / 1.5);
 					for (int32 k = 1; k < Mullions; ++k)
 					{
@@ -858,7 +894,7 @@ namespace SimCruiseTileDetail
 							LotWall = WeatheredPaint(LotWall);
 							LotWall.A = Wall.A;
 							const double Rise = 0.35 * (Hash(H, 240 + Lot) % 3);
-							W.Panel(L0, L1, WallStart, Top + Parapet + Rise, N2, LotWall, WallKind, -0.5 * Width, Ground);
+							FacadeWall(L0, L1, WallStart, Top + Parapet + Rise, LotWall, WallKind, -0.5 * Width);
 							if (Rise > 0.0) W.Panel(L1, L0, Top + Parapet, Top + Parapet + Rise, -N2, LotWall, Kind::Trim, -0.5 * Width, Ground);
 							if (S0 > 0.0) W.Slab(L0 - T * 0.15, L0 + T * 0.15, N2, 0.0, 0.07, WallStart, Top + Parapet - 0.3, LotWall * 0.85f, Kind::Trim, 0.0, Ground, false, false);
 							S0 += Width;
@@ -867,11 +903,18 @@ namespace SimCruiseTileDetail
 					}
 					else
 					{
-						W.Panel(A, C, WallStart, Top + Parapet, N2, Wall, WallKind, Along0, Ground);
+						FacadeWall(A, C, WallStart, Top + Parapet, Wall, WallKind, Along0);
 					}
 				}
 				// The parapet's inside, seen from above and from taller neighbours.
 				if (Parapet > 0.05) W.Panel(C, A, Top, Top + Parapet, -N2, Wall, Kind::Trim, Along0, Ground);
+				// A coping on the parapet (Detroit: flat roofs had no roof edge): 0.34 m across, 0.1 m
+				// high, a shade darker than the wall. Main Street fronts keep their cornice; curtain
+				// walls end in the frame band; rounded corners are chords.
+				if (bFitFacadeGrid && Parapet > 0.05 && !bCurtain && !Arc[i] && !(bMainStreet && Front[i]))
+				{
+					W.Slab(A, C, N2, -0.3, 0.04, Top + Parapet, Top + Parapet + 0.1, Wall * 0.82f, Kind::Trim, Along0, Ground, false, false);
+				}
 				// Main Street: a projecting cornice under the parapet's coping and a belt course
 				// over the shopfronts, in a cream or darker trim (the commercial blocks of 1880-1930).
 				if (bMainStreet && Front[i] && Len >= 2.0)

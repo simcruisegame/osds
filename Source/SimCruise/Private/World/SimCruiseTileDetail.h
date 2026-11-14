@@ -58,6 +58,17 @@ namespace SimCruiseTileDetail
 	 */
 	SIMCRUISE_API bool RoofColourFromAerial(const FContext& Context, const TArray<FVector2d>& RingM, FLinearColor& OutColour);
 
+	/**
+	 * Where a wall's window grid stops (m, absolute height): at the top of the last storey whose
+	 * glass ends BandMinM or more under the wall's top (the shader draws glass from 0.95 m to
+	 * Storey - 0.68 m above each storey's floor; a shop's ground storey to Storey - 0.45 m). The
+	 * wall above it is a plain band: no window row is ever cut by the roof line. Never above WallTop.
+	 */
+	SIMCRUISE_API double FacadeGridTop(double GroundZ, double WallTop, double Storey, bool bShopFront, double BandMinM = 0.4);
+
+	/** Off: the old facades (the grid to the wall top), for the tests' before/after counts. */
+	SIMCRUISE_API extern bool bFitFacadeGrid;
+
 	/** Footprints extruded by the place's recipe into the Building layer. */
 	SIMCRUISE_API void BuildBuildings(const FContext& Context);
 
