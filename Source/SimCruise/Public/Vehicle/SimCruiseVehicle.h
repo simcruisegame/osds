@@ -187,6 +187,8 @@ private:
 	/** Tyres, road and wind (the driven car only, while sound is on). */
 	UPROPERTY(Transient)
 	TObjectPtr<USimCruiseRoadNoiseComponent> RoadNoise;
+	/** The live wind at car height (m/s, world), as given to the physics: the wind noise follows the airspeed. */
+	FVector AirWindMps = FVector::ZeroVector;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<USpotLightComponent>> HeadLampLights;

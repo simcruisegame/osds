@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Vehicle/SimCruiseVehicle.h"
+#include "Vehicle/SimCruiseSurfaceKind.h"
 #include "Vehicle/SimCruiseSteeringGeometry.h"
 
 #include "Components/BoxComponent.h"
@@ -468,7 +469,8 @@ void ASimCruiseVehicle::Tick(float DeltaSeconds)
 			const double Density = PressurePa / (287.05 * (Weather.TemperatureC + 273.15));
 			const double Toward = FMath::DegreesToRadians(Weather.WindFromDeg + 180.0);
 			const FVector Wind(FMath::Sin(Toward), -FMath::Cos(Toward), 0.0);
-			VehicleMovement->SetAir(Density, Wind * (0.7 * Weather.WindSpeedMs));
+			AirWindMps = Wind * (0.7 * Weather.WindSpeedMs);
+			VehicleMovement->SetAir(Density, AirWindMps);
 		}
 	}
 	// Live mirrors for the car being driven, from the driver's seat (from outside they are
@@ -604,6 +606,18 @@ void ASimCruiseVehicle::UpdateRoadNoise(const FSimCruiseVehicleTelemetry& Teleme
 	}
 	In.Contact = Contacts / 4.0;
 	In.Grip = Contacts > 0 ? Grip / Contacts : 1.0;
+	// What the tyres roll on: the share on concrete (a kerb, a concrete road) and any kerb.
+	int32 OnConcrete = 0;
+	bool bAnyKerb = false;
+	for (int32 I = 0; I < 4; ++I)
+	{
+		OnConcrete += Drive.Wheels[I].SurfaceKind == static_cast<uint8>(ESimCruiseSurfaceKind::Concrete) ? 1 : 0;
+		bAnyKerb |= Drive.Wheels[I].bKerb;
+	}
+	In.ConcreteShare = Contacts > 0 ? OnConcrete / static_cast<double>(Contacts) : 0.0;
+	if (bAnyKerb) In.Bump = FMath::Max(In.Bump, 0.6);
+	// The wind noise follows the air past the car, not the road: a head wind is louder.
+	In.AirSpeedMps = (FVector(GetVelocity()) / 100.0 - AirWindMps).Size();
 	RoadNoise->SetRoadState(In);
 	if (!RoadNoise->IsPlaying())
 	{
