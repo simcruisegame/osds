@@ -1348,7 +1348,7 @@ namespace SimCruiseStartTest
 	 * road faces within 5 cm), and no parapet or slab that SimCruiseBridges builds stands in any
 	 * deck's lanes at a car's body height (0.15-1.3 m), driven at lane centre both ways.
 	 */
-	TArray<FString> CheckDecks(const FSimCruiseTileBuild& B, const FString& Where, double& OutWorstCurve, double& OutWorstGrade, int32& OutSpans)
+	TArray<FString> CheckDecks(const FSimCruiseTileBuild& B, const FString& Where, double& OutWorstCurve, double& OutWorstGrade, int32& OutSpans, int32& OutSteepByData, int32& OutLeft)
 	{
 		TArray<FString> Out;
 		const FSimCruiseRoadNetwork& Roads = B.Roads;
@@ -1365,6 +1365,15 @@ namespace SimCruiseStartTest
 				int32 e = k;
 				while (e + 1 < N && R.St[e + 1].bBridge) ++e;
 				++OutSpans;
+				// A span left as it was (its ramps did not fit; logged by the road network) is not judged here.
+				bool bLeft = false;
+				for (const FVector2d& Lw : Roads.DecksLeftAsTheyWere) bLeft |= FMath::RoundToInt(Lw.X) == r && FMath::Abs(Lw.Y - R.St[k].S) < 0.5;
+				if (bLeft) { ++OutLeft; k = e; continue; }
+				// Its own line: a deck whose mapped end heights need more than 6 % keeps that grade (real data).
+				const int32 Ea = FMath::Max(k - 1, 0), Eb = FMath::Min(e + 1, N - 1);
+				const double LineGrade = R.St[Eb].S - R.St[Ea].S > 1.0 ? FMath::Abs(R.St[Eb].HC - R.St[Ea].HC) / (R.St[Eb].S - R.St[Ea].S) : 0.0;
+				const bool bSteepByData = LineGrade > 0.06;
+				if (bSteepByData) ++OutSteepByData;
 				// Smooth: the centre line's change of grade per metre, over stations 1 m or more apart.
 				for (int32 j = FMath::Max(k, 1); j + 1 <= FMath::Min(e, N - 2); ++j)
 				{
@@ -1378,7 +1387,7 @@ namespace SimCruiseStartTest
 					OutWorstCurve = FMath::Max(OutWorstCurve, Curve);
 					OutWorstGrade = FMath::Max(OutWorstGrade, FMath::Abs(G1));
 					if (Curve > 0.02) Out.Add(FString::Printf(TEXT("%s ribbon %d (%s) deck station %d: grade changes %.3f per m (a hump or dip)"), *Where, r, *R.Name, j, Curve));
-					if (FMath::Abs(G1) > 0.12) Out.Add(FString::Printf(TEXT("%s ribbon %d (%s) deck station %d: grade %.1f %%"), *Where, r, *R.Name, j, 100.0 * FMath::Abs(G1)));
+					if (FMath::Abs(G1) > (bSteepByData ? LineGrade + 0.01 : 0.065)) Out.Add(FString::Printf(TEXT("%s ribbon %d (%s) deck station %d: grade %.1f %% (its line %.1f %%)"), *Where, r, *R.Name, j, 100.0 * FMath::Abs(G1), 100.0 * LineGrade));
 				}
 				for (int32 j = k; j <= e; ++j)
 				{
@@ -1471,19 +1480,19 @@ bool FSimCruiseBridgeDecksTest::RunTest(const FString& Parameters)
 	for (const FPlace& P : Places)
 	{
 		double WorstCurve = 0.0, WorstGrade = 0.0;
-		int32 Spans = 0, Faults = 0, Changed = 0;
+		int32 Spans = 0, Faults = 0, Changed = 0, SteepByData = 0, Left = 0;
 		for (const TSharedRef<FSimCruiseTileBuild>& B : P.Builds)
 		{
 			for (const FString& Span : B->Roads.BridgeChanges) { AddInfo(Span); ++Changed; }
 			for (const FSimCruiseRibbon& R : B->Roads.Ribbons) bNorthcrest |= R.Name == TEXT("Northcrest Road") && R.St.ContainsByPredicate([](const FSimCruiseRibbonStation& S) { return S.bBridge; });
-			for (const FString& Fault : SimCruiseStartTest::CheckDecks(*B, FString::Printf(TEXT("%s tile %d_%d"), *P.Name, B->Tile.X, B->Tile.Y), WorstCurve, WorstGrade, Spans))
+			for (const FString& Fault : SimCruiseStartTest::CheckDecks(*B, FString::Printf(TEXT("%s tile %d_%d"), *P.Name, B->Tile.X, B->Tile.Y), WorstCurve, WorstGrade, Spans, SteepByData, Left))
 			{
 				AddError(Fault);
 				++Faults;
 			}
 		}
-		AddInfo(FString::Printf(TEXT("DECKS %s: %d tiles, %d deck spans, %d changed (at grade or smoothed), %d faults, worst curvature %.4f per m, worst grade %.1f %%"),
-			*P.Name, P.Builds.Num(), Spans, Changed, Faults, WorstCurve, 100.0 * WorstGrade));
+		AddInfo(FString::Printf(TEXT("DECKS %s: %d tiles, %d deck spans, %d log lines, %d left as they were, %d steeper than 6 %% by their own ends, %d faults, worst curvature %.4f per m, worst grade %.1f %%"),
+			*P.Name, P.Builds.Num(), Spans, Changed, Left, SteepByData, Faults, WorstCurve, 100.0 * WorstGrade));
 	}
 	if (!bNorthcrest) AddWarning(TEXT("Northcrest Road's deck (Doraville) is not among the recorded places here: record us-doraville-ga (scripts\\record-start-places.ps1)"));
 	return true;

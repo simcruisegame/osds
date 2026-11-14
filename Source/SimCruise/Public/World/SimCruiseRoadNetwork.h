@@ -227,6 +227,8 @@ public:
 	TArray<FSimCruiseRibbon> Ribbons;
 	/** One line per bridge span the clearance rule lifted or de-decked in this build (also logged as "SimCruise BRIDGE"). */
 	TArray<FString> BridgeChanges;
+	/** Deck spans near grade over a crossed road whose ramps did not fit, left as they were: (ribbon, S of the span's first station). */
+	TArray<FVector2d> DecksLeftAsTheyWere;
 	TArray<FSimCruiseRoadPad> Pads;
 	double TileSizeM = 0.0;
 	int32 NumContractedEnds = 0;
