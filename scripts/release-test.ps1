@@ -60,7 +60,7 @@ param(
     # timed drive (a fresh worktree compiles shaders during its first drive). -NoWarm skips it.
     [switch]$NoWarm,
     # Words that must not show to the player (the owner asked that their name is not in the game).
-    [string[]]$ForbiddenNames = @(-join [char[]](65, 97, 114, 111, 110)) # the owner's first name, as character codes so it is not written in the repo
+    [string[]]$ForbiddenNames = @(-join [char[]](65, 97, 114, 111, 110)) # a private word, as character codes
 )
 
 $ErrorActionPreference = 'Stop'

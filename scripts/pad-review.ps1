@@ -28,7 +28,7 @@ param(
     [int]$TimeoutMinutes = 8,
     [int]$LockTimeoutMinutes = 120,
     # Words that must not show in any visible text (the owner asked that their name is not in the game).
-    [string[]]$ForbiddenNames = @(-join [char[]](65, 97, 114, 111, 110)) # the owner's first name, as character codes so it is not written in the repo,
+    [string[]]$ForbiddenNames = @(-join [char[]](65, 97, 114, 111, 110)), # a private word, as character codes
     # The car's display name the 'Your car' page must show for the default car.
     [string]$CarName = '2001 Miata'
 )
