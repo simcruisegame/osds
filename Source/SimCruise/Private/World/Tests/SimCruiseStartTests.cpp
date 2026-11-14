@@ -1402,4 +1402,83 @@ bool FSimCruiseBridgeDecksTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseMarkingsAndPolesTest, "SimCruise.World.MarkingsAndPoles", SimCruiseStartTest::Flags)
+bool FSimCruiseMarkingsAndPolesTest::RunTest(const FString& Parameters)
+{
+	// First-minute faults of the v2.0.3 review (Detroit, Woodward): lines painted off the road or
+	// across the road beside it, and street-light poles floating over a lower verge. Every painted
+	// piece's middle lies on a carriageway (a road or a turnaround pad, 0.15 m slack), and every
+	// pole's foot is at or under the ground beneath it (5 cm slack). Bundled Miami Beach tiles and,
+	// where recorded here, Detroit's Woodward Avenue and Doraville.
+	TArray<TPair<FString, TSharedRef<FSimCruiseTileBuild>>> Builds;
+	{
+		const FSimCruiseWorldFrame Frame = FSimCruiseWorldFrame::ForPlace(USimCruiseWorldSubsystem::BundledLon, USimCruiseWorldSubsystem::BundledLat);
+		TArray<FString> Files;
+		IFileManager::Get().FindFiles(Files, *FPaths::Combine(SimCruiseTileData::RepositoryRoot(), TEXT("data"), TEXT("tiles"), TEXT("*.json")), true, false);
+		for (const FString& File : Files)
+		{
+			FString X, Y;
+			if (!FPaths::GetBaseFilename(File).Split(TEXT("_"), &X, &Y) || !X.IsNumeric() || !Y.IsNumeric()) continue;
+			FSimCruiseTileData Data;
+			FString Error;
+			if (SimCruiseTileData::LoadFile(SimCruiseTileData::BundledTilePath(FIntPoint(FCString::Atoi(*X), FCString::Atoi(*Y))), Data, Error))
+			{
+				Builds.Add({ FString::Printf(TEXT("Miami %s"), *FPaths::GetBaseFilename(File)), SimCruiseTileBuilder::Build(Data, Frame.TileSizeM) });
+			}
+		}
+	}
+	for (const TCHAR* Key : { TEXT("us-detroit-woodward"), TEXT("us-doraville-ga") })
+	{
+		FSimCruiseWorldFrame Frame;
+		TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
+		FVector StartCm;
+		if (!SimCruiseStartTest::BuildPlace(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces"), Key), Frame, Built, StartCm)) continue;
+		for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built) Builds.Add({ FString::Printf(TEXT("%s %d_%d"), Key, Pair.Key.X, Pair.Key.Y), Pair.Value });
+	}
+	int32 Pieces = 0, OffRoad = 0, Poles = 0, Floating = 0;
+	for (const TPair<FString, TSharedRef<FSimCruiseTileBuild>>& Pair : Builds)
+	{
+		const FSimCruiseTileBuild& B = *Pair.Value;
+		const double Side = B.TileSizeM;
+		const FSimCruiseMeshData& Paint = B.Layer(ESimCruiseTileLayer::Paint);
+		for (int32 t = 0; t + 5 < Paint.Indices.Num(); t += 6)
+		{
+			// One painted quad: every corner on a carriageway (a road or a turnaround pad), 2 cm slack.
+			++Pieces;
+			for (int32 v = 0; v < 6; ++v)
+			{
+				const FVector3d Q = FVector3d(Paint.Positions[Paint.Indices[t + v]]) / 100.0;
+				const FVector2d P(Q.X, Q.Y);
+				if (P.X < 1.0 || P.Y < 1.0 || P.X > Side - 1.0 || P.Y > Side - 1.0) continue;
+				FSimCruiseRoadHit Hit;
+				if (!B.Roads.FindCarriageway(P, Hit, INDEX_NONE, 0.02))
+				{
+					if (++OffRoad <= 20) AddError(FString::Printf(TEXT("%s: a painted corner off every carriageway at (%.1f, %.1f)"), *Pair.Key, P.X, P.Y));
+					break;
+				}
+			}
+		}
+		// Street-light poles: the shaft's foot quads carry UV0 (0, 0) and (0.1, 0).
+		const FSimCruiseMeshData& Props = B.Layer(ESimCruiseTileLayer::Props);
+		if (B.TerrainN <= 0 || Props.UV0.Num() != Props.Positions.Num()) continue;
+		for (int32 v = 0; v + 1 < Props.Positions.Num(); ++v)
+		{
+			if (!Props.UV0[v].Equals(FVector2D(0.0, 0.0), 1e-6) || !Props.UV0[v + 1].Equals(FVector2D(0.1, 0.0), 1e-6)) continue;
+			const FVector3d Foot = FVector3d(Props.Positions[v]) / 100.0;
+			const FVector2d P(Foot.X, Foot.Y);
+			if (P.X < 0.5 || P.Y < 0.5 || P.X > Side - 0.5 || P.Y > Side - 0.5) continue;
+			++Poles;
+			const double Ground = B.TerrainHeightAt(P);
+			if (Foot.Z > Ground + 0.05)
+			{
+				if (++Floating <= 20) AddError(FString::Printf(TEXT("%s: a pole's foot %.2f m over the ground at (%.1f, %.1f)"), *Pair.Key, Foot.Z - Ground, P.X, P.Y));
+			}
+		}
+	}
+	AddInfo(FString::Printf(TEXT("MARKINGS AND POLES: %d builds, %d painted pieces (%d off the road), %d pole feet (%d over the ground)"), Builds.Num(), Pieces, OffRoad, Poles, Floating));
+	TestTrue(TEXT("painted pieces checked"), Pieces > 100);
+	TestTrue(TEXT("poles checked"), Poles > 10);
+	return true;
+}
+
 #endif

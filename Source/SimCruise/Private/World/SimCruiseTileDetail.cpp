@@ -1403,6 +1403,10 @@ namespace SimCruiseTileDetail
 						const float Seed = static_cast<float>(Unit(Hash(GetTypeHash(Base2.X * 10.0), GetTypeHash(Base2.Y * 10.0))));
 						FWriter W{ Props, Seed };
 						const double PoleH = bDeco ? 5.2 : 8.5;
+						// The pole's foot goes into the ground under it: the sidewalk top was its height, and where
+						// the verge or the ground is lower the pole floated (Detroit review).
+						const double GroundZ = B.TerrainN > 0 ? B.TerrainHeightAt(Base2) : Kerb;
+						const double Foot = FMath::Min(Kerb, GroundZ) - 0.3;
 						// Pole: a slim hexagonal shaft.
 						constexpr int32 PSides = 6;
 						const double Rb = bDeco ? 0.09 : 0.1, Rt = bDeco ? 0.06 : 0.065;
@@ -1411,7 +1415,7 @@ namespace SimCruiseTileDetail
 							const double Aa = UE_DOUBLE_TWO_PI * s / PSides, Ab = UE_DOUBLE_TWO_PI * (s + 1) / PSides;
 							const FVector2d Da(FMath::Cos(Aa), FMath::Sin(Aa)), Db(FMath::Cos(Ab), FMath::Sin(Ab));
 							const FVector2d Nm = (Da + Db).GetSafeNormal();
-							const FVector3d P[4] = { FVector3d(Base2.X + Da.X * Rb, Base2.Y + Da.Y * Rb, Kerb - 0.05), FVector3d(Base2.X + Db.X * Rb, Base2.Y + Db.Y * Rb, Kerb - 0.05),
+							const FVector3d P[4] = { FVector3d(Base2.X + Da.X * Rb, Base2.Y + Da.Y * Rb, Foot), FVector3d(Base2.X + Db.X * Rb, Base2.Y + Db.Y * Rb, Foot),
 								FVector3d(Base2.X + Db.X * Rt, Base2.Y + Db.Y * Rt, Kerb + PoleH), FVector3d(Base2.X + Da.X * Rt, Base2.Y + Da.Y * Rt, Kerb + PoleH) };
 							const FVector2D UV[4] = { FVector2D(0, 0), FVector2D(0.1, 0), FVector2D(0.1, PoleH), FVector2D(0, PoleH) };
 							W.Quad(P, FVector(Nm.X, Nm.Y, 0.0), PoleColour, UV, Kind::Metal);

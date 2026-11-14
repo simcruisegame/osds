@@ -600,6 +600,12 @@ if (kind < 0.5 || (kind > 10.5 && kind < 13.5))
 	// street) must not alias into a speckle under the temporal jitter.
 	float fx = max(fwidth(along), 1e-4), fy = max(fwidth(h), 1e-4), fm = max(fx, fy);
 	float inWin = saturate((x - x0) / fx + 0.5) * saturate((x0 + winW - x) / fx + 0.5) * saturate((y - y0) / fy + 0.5) * saturate((y1 - y) / fy + 0.5) * step(0.0, h);
+	// Far away (a pixel wider than half a window) the four edge filters multiply down to almost
+	// nothing and a facade turned plain wall colour (flat grey towers in Detroit): there the
+	// window's share of its bay and storey instead, so a far facade keeps its glass.
+	float winSize = max(min(winW, y1 - y0), 0.1);
+	float farWin = saturate((2.0 * fm - winSize) / winSize);
+	inWin = lerp(inWin, (winW / bayW) * saturate((y1 - y0) / storey) * step(0.0, h), farWin);
 	float edge = min(min(x - x0, x0 + winW - x), min(y - y0, y1 - y));
 	// Frames and mullions thinner than a pixel fade to their share of the window.
 	float thin = saturate(1.5 - fm / 0.06);
@@ -621,7 +627,9 @@ if (kind < 0.5 || (kind > 10.5 && kind < 13.5))
 	float below = y0 - y;
 	float streak = under * step(0.0, below) * exp(-below / 0.7) * (0.06 + 0.12 * frac(r * 5.3));
 	col *= 1.0 - streak;
-	col = lerp(col, float3(0.75, 0.75, 0.72), frame);
+	// Frames: pale on a pale wall, a dark bronze on a dark one (white frames on brick read as a
+	// glowing grid by day).
+	col = lerp(col, lerp(float3(0.26, 0.25, 0.23), float3(0.75, 0.75, 0.72), saturate(dot(VC.rgb, W) * 2.5)), frame);
 	col *= 1.0 - 0.45 * reveal * (1.0 - frame);
 	rough = lerp(0.9, 0.04, pane);
 	float lit = shop ? step(r, 0.72) : step(r, 0.36);
@@ -728,7 +736,9 @@ if (rPane > 0.0)
 	float lamp = rShop ? level * lerp(1.0, rLit, Lights) : level * rLit * Lights;
 	float3 toLamp = float3(0.5 * rBay, ceilH - 0.35, 0.5 * deep) - hit;
 	float near = rShop ? 1.0 : 2.25 / (dot(toLamp, toLamp) + 0.4); // a shop has rows of fixtures
-	float3 room = surf * shade * ((1.0 - Lights) * dayLux * float3(0.95, 1.0, 1.05) + lamp * near * lampTint) / 3.14159;
+	// Daylight in the room at 0.4: through a pane, from the sunny street, a room reads dim; at full
+	// strength the panes glowed white by day (Detroit review).
+	float3 room = surf * shade * ((1.0 - Lights) * dayLux * 0.4 * float3(0.95, 1.0, 1.05) + lamp * near * lampTint) / 3.14159;
 	// Blinds or curtains just inside the glass (homes and offices, not shops).
 	float u = (rx - rX0) / rW, v = (ry - rY0) / (rY1 - rY0);
 	float cover = 0.0;

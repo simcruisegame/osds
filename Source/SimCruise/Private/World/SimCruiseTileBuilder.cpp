@@ -1150,13 +1150,42 @@ namespace SimCruiseTileBuilder
 						}
 						for (const FVector2d& Piece : Pieces)
 						{
+							// Never inside another carriageway that runs through here (a twin
+							// carriageway's overlap, a flare, a road crossing at grade): a yellow line
+							// lay across the lanes of the road beside it (Detroit review). A road that
+							// ends into this one (a T's stem) does not stop it.
+							{
+								const double Tm = 0.5 * (Piece.X + Piece.Y);
+								const FVector2d Pm = FMath::Lerp(A.C, Bs.C, Tm) + FMath::Lerp(A.R, Bs.R, Tm).GetSafeNormal() * FMath::Lerp(Line.L, LB[l].L, Tm);
+								TArray<TPair<int32, int32>> Near;
+								Roads.GatherSegments(Pm, 1.0, Near);
+								bool bCovered = false;
+								for (const TPair<int32, int32>& Sg : Near)
+								{
+									if (Sg.Key == r) continue;
+									const FSimCruiseRoadHit Hit = Roads.Project(Sg.Key, Sg.Value, Pm);
+									if (FMath::Abs(Hit.Along) > 0.01 || FMath::Abs(Hit.Lateral) > Hit.HalfW - 0.3) continue;
+									const FSimCruiseRibbon& Other = Roads.Ribbons[Sg.Key];
+									const double FromStart = Other.St[Hit.Station].S + Hit.T * (Other.St[Hit.Station + 1].S - Other.St[Hit.Station].S) - Other.St[0].S;
+									const double FromEnd = Other.Length() - FromStart;
+									const double Stem = FMath::Lerp(A.HalfW, Bs.HalfW, Tm) + 1.5;
+									if ((!Other.bStartOnBoundary && FromStart < Stem) || (!Other.bEndOnBoundary && FromEnd < Stem)) continue;
+									bCovered = true;
+									break;
+								}
+								if (bCovered) continue;
+							}
 							FVector Q[4];
 							for (int32 e = 0; e < 2; ++e)
 							{
 								const double T = e == 0 ? Piece.X : Piece.Y;
 								const FVector2d C = FMath::Lerp(A.C, Bs.C, T);
 								const FVector2d R = FMath::Lerp(A.R, Bs.R, T).GetSafeNormal();
-								const double L = FMath::Lerp(Line.L, LB[l].L, T);
+								// On its own drawn carriageway: an edge or lane line stays 0.15 m or more
+								// inside the drawn edge where the width tapers or flares (lines lay on the
+								// sidewalk and the verge; Detroit review).
+								const double Lim = FMath::Max(FMath::Lerp(A.HalfW, Bs.HalfW, T) - 0.15 - 0.5 * Line.Width, 0.0);
+								const double L = FMath::Clamp(FMath::Lerp(Line.L, LB[l].L, T), -Lim, Lim);
 								for (int32 s = 0; s < 2; ++s)
 								{
 									const double Ls = L + (s == 0 ? -0.5 : 0.5) * Line.Width;
