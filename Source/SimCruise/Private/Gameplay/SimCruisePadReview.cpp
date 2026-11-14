@@ -11,6 +11,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/SimCruiseAtlasUI.h"
 #include "Gameplay/SimCruiseGameMode.h"
+#include "Gameplay/SimCruiseHudTextLog.h"
 #include "Gameplay/SimCruisePauseMenu.h"
 #include "Gameplay/SimCruisePlayerController.h"
 #include "Widgets/SWindow.h"
@@ -53,6 +54,7 @@ void ASimCruisePadReview::BeginPlay()
 	if (!FParse::Value(FCommandLine::Get(), TEXT("SimCruisePadReview="), Dir)) Dir = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("PadReview"));
 	IFileManager::Get().MakeDirectory(*Dir, true);
 	StartS = FPlatformTime::Seconds();
+	SimCruiseHudTextLog::Enable(true);
 	UE_LOG(LogSimCruisePadReview, Display, TEXT("Pad review: menus with pad buttons through Slate, frames -> %s"), *Dir);
 }
 
@@ -114,6 +116,8 @@ void ASimCruisePadReview::ScanTexts(const FString& Screen, const FString& MustSh
 	TArray<FString> Texts;
 	TSharedPtr<SWindow> Window = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWindow() : nullptr;
 	if (Window.IsValid()) CollectTexts(Window.ToSharedRef(), Texts);
+	// The HUD's canvas text (not Slate): what it drew in the last 2 s.
+	Texts.Append(SimCruiseHudTextLog::Recent(2.0));
 	// The owner's name must not show (-SimCruisePadForbid=a,b: the script gives the words).
 	TArray<FString> Forbid;
 	FString ForbidText;
