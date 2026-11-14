@@ -753,6 +753,67 @@ FSimCruiseTopSpeedResult SimCruiseRunTopSpeed(const FSimCruiseCarDefinition& Car
 	return Driver->Result;
 }
 
+namespace
+{
+	struct FPassingDriver
+	{
+		double Dt = 1.0 / 360.0;
+		double From = 13.4, To = 22.4;
+		double T = 0.0, SpeedI = 0.0, SteadySince = 0.0, Start = 0.0;
+		bool bRunning = false;
+		std::atomic<bool> bDone{ false };
+		FSimCruisePassingResult Result;
+
+		void Step(FSimCruiseVehicleDriverContext& C)
+		{
+			C.Controls = FSimCruiseVehicleControls();
+			if (bDone) return;
+			T += Dt;
+			C.Controls.bDirectRack = true;
+			C.Controls.RackAngleRad = 0.0;
+			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
+			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
+			const int32 Gear = C.Sim.State.Gear + 1;
+			if (!bRunning)
+			{
+				// Up to the start speed and hold it: the gearbox settles in its cruising gear.
+				SpeedI = FMath::Clamp(SpeedI + (From - Speed) * Dt * 0.3, 0.0, 0.9);
+				C.Controls.Throttle = FMath::Clamp((From - Speed) * 0.65 + SpeedI, 0.0, 1.0);
+				if (FMath::Abs(Speed - From) >= 0.15) SteadySince = T;
+				if (T - SteadySince >= 4.0)
+				{
+					bRunning = true;
+					Start = T;
+					Result.CruiseGear = Gear;
+					Result.KickdownGear = Gear;
+				}
+				if (T > 150.0) bDone = true;
+				return;
+			}
+			C.Controls.Throttle = 1.0;
+			Result.KickdownGear = FMath::Min(Result.KickdownGear, Gear);
+			if (Speed >= To) { Result.Seconds = T - Start; Result.bCompleted = true; bDone = true; }
+			else if (T - Start > 60.0) bDone = true;
+		}
+	};
+}
+
+FSimCruisePassingResult SimCruiseRunPassing(const FSimCruiseCarDefinition& Car, double FixedStepS, double FromMps, double ToMps)
+{
+	TSharedRef<FPassingDriver> Driver = MakeShared<FPassingDriver>();
+	Driver->Dt = FixedStepS;
+	Driver->From = FromMps;
+	Driver->To = ToMps;
+	const FVector3d Ground(0.0, 0.0, 0.15);
+	FSimCruiseVehicleBenchWorld World(FixedStepS, 20000.0);
+	if (!World.IsValid() || World.SpawnVehicle(Car, Ground, [Driver](FSimCruiseVehicleDriverContext& C) { Driver->Step(C); }) == nullptr)
+	{
+		return Driver->Result;
+	}
+	World.RunUntil([&Driver]() { return Driver->bDone.load(); }, 220.0);
+	return Driver->Result;
+}
+
 FSimCruiseCarTrackResult SimCruiseRunCarTrack(const FSimCruiseCarDefinition& Car, double FixedStepS,
 	double MaxWheelSubstepS, bool bAccelerationOnly)
 {

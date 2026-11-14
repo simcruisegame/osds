@@ -111,6 +111,18 @@ struct FSimCruiseTopSpeedResult
 
 FSimCruiseTopSpeedResult SimCruiseRunTopSpeed(const FSimCruiseCarDefinition& Car, double FixedStepS);
 
+/** A magazine passing time: cruise steady at FromMps in the automatic's own gear for 4 s, then
+ *  full pedal (kickdown allowed, as Car and Driver times an automatic) until ToMps. */
+struct FSimCruisePassingResult
+{
+	bool bCompleted = false;
+	double Seconds = 0.0;
+	int32 CruiseGear = 0;
+	int32 KickdownGear = 0;
+};
+
+FSimCruisePassingResult SimCruiseRunPassing(const FSimCruiseCarDefinition& Car, double FixedStepS, double FromMps, double ToMps);
+
 /** Static load balance after settling on the pad. */
 struct FSimCruiseStaticLoadResult
 {
