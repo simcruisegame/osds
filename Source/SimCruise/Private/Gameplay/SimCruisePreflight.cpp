@@ -410,6 +410,22 @@ void ASimCruisePreflight::Tick(float DeltaSeconds)
 	ASimCruiseGameMode* Mode = GetWorld()->GetAuthGameMode<ASimCruiseGameMode>();
 	ASimCruiseWorldStreamer* Stream = Mode ? Mode->GetStreamer() : nullptr;
 
+	// Until the drive starts the car stands on its parking brake: an automatic creeps in Drive, and a
+	// car placed on a slope rolls (the Mustang crept 3.7 m onto the grass bank at Welch, West
+	// Virginia, while the tiles and shaders finished). The cockpit test holds it itself while it runs.
+	if ((Stage == EStage::WaitReady || Stage == EStage::Settle) && Player && Pawn && !bHoldingParkingBrake)
+	{
+		bool bCockpitTestRunning = false;
+		for (TActorIterator<ASimCruiseCockpitTest> It(GetWorld()); It; ++It)
+		{
+			bCockpitTestRunning |= !It->IsFinished();
+		}
+		if (!bCockpitTestRunning)
+		{
+			bHoldingParkingBrake = true;
+			Player->InjectKey(EKeys::Gamepad_FaceButton_Right, true);
+		}
+	}
 	switch (Stage)
 	{
 	case EStage::WaitReady:

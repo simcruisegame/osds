@@ -4,6 +4,8 @@ Notable changes to SimCruise, newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+- Faster start: a car model's glTF and rig (most of a heavy model's build) now run on a worker thread from the moment a drive or a trip begins, for the player's car and every traffic model; only the meshes are built on the game thread while the start tiles load. The Miata's whole build took 27.7 s on the game thread at Welch, West Virginia; the log now splits each build (`built in ... s: ... s glTF and rig, ... s meshes`). Pre-flight: the car stands on its parking brake until the drive starts (the Mustang, an automatic, crept 3.7 m onto the grass bank at Welch while the tiles and shaders finished).
+
 - Drive robot: smooth hands. It steered from the frame-to-frame change of heading, which jumps with uneven frames and single-step contacts, and sawed the wheel in the Dragon's hairpins at 14-15 mph; it now feels a low-passed yaw rate (0.1 s) and moves the stick at most four full widths a second.
 
 - Fix: the drive robot no longer takes a ramp merge for a dead end. Its path ended where a ramp joins the motorway's side (not at a road's end), so it braked from 28 m/s to a stand and steered to full lock at Doraville, Georgia; it now goes on along the road it meets, the way it heads (within about 50 deg). A car ahead stops it only within 1.8 m of its own line, not one beside a merge or a bend. Traffic: a car kept waiting takes a shorter gap, so a steady stream never holds it for good: a left-turner waiting in the junction for oncoming cars accepts 4.5 s, after 8 s 2.5 s, after 15 s 1.5 s, and a car at a stop sign 5 s, after 10 s 3 s, after 20 s 2 s (a Corvette waiting to turn left held the robot at a Stonington junction for a minute).

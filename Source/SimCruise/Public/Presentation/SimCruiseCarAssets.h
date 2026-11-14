@@ -85,6 +85,12 @@ namespace SimCruiseCarAssets
 
 	SIMCRUISE_API void ClearCache();
 
+	/**
+	 * Start a car's CPU work (its glTF, its rig: most of a heavy model's build) on a worker thread;
+	 * Get then only builds the meshes on the game thread. Game thread only.
+	 */
+	SIMCRUISE_API void PrepareAsync(const FString& CarId);
+
 	/** Whether the car is built already (Get returns it at once). */
 	SIMCRUISE_API bool IsBuilt(const FString& CarId);
 
