@@ -803,6 +803,7 @@ void ASimCruiseGameMode::HandleRebased(const FVector& OffsetCm)
 		{
 			// Teleport keeps the body's velocity: the car drives on across the shift.
 			Pawn->AddActorWorldOffset(OffsetCm, false, nullptr, ETeleportType::TeleportPhysics);
+			UE_LOG(LogTemp, Display, TEXT("PLAYER MOVE rebase: the world shifted by X=%.1f Y=%.1f Z=%.1f cm (the car keeps its place in the world)"), OffsetCm.X, OffsetCm.Y, OffsetCm.Z);
 		}
 		if (ASimCruisePlayerCameraManager* Camera = Player ? Cast<ASimCruisePlayerCameraManager>(Player->PlayerCameraManager) : nullptr)
 		{
