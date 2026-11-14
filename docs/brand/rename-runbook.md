@@ -27,7 +27,7 @@ While the project repository is still named `simcruise`, it keeps serving `/simc
 
 ```powershell
 gh repo rename osds --repo simcruisegame/simcruise --yes
-gh repo edit simcruisegame/osds --homepage https://simcruisegame.github.io/osds/ --description "OSDS (Open Source Driving Simulator): free, open-source driving simulator for Windows. Type any US address and drive the real roads there, built live from OpenStreetMap, USGS elevation and aerial photos. Realistic car physics, traffic, GPS, wheel and Xbox controller support. Made in Unreal Engine 5."
+gh repo edit simcruisegame/osds --homepage https://simcruisegame.github.io/osds/ --description "OSDS (Open Source Driving Simulator): free, open-source driving simulator for Windows. Type any US address and drive the real roads there, built live from OpenStreetMap, USGS elevation and aerial photos. Realistic car physics, a GPS, wheel and Xbox controller support. Made in Unreal Engine 5."
 gh api repos/simcruisegame/osds/pages --jq .html_url     # must say https://simcruisegame.github.io/osds/
 ```
 
