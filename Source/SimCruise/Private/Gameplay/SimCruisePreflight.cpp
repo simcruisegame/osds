@@ -807,6 +807,7 @@ void ASimCruisePreflight::DriveTick(ASimCruisePlayerController* Player, float De
 	if (SpeedOverrideMps > 0.0) TargetMps = SpeedOverrideMps;
 	FCursor Ahead = Here;
 	FVector2d PrevTangent = TangentAt(Ahead);
+	double CurveDecelNeeded = 0.0;
 	for (int32 Step = 1; Step <= (bKeen ? 40 : 16); ++Step)
 	{
 		const double S = Step * 5.0;
@@ -822,6 +823,8 @@ void ASimCruisePreflight::DriveTick(ASimCruisePlayerController* Player, float De
 		const double Kappa = FMath::Max(Turn / 5.0, 1e-4);
 		const double CurveMps = FMath::Sqrt(Lat / Kappa);
 		TargetMps = FMath::Min(TargetMps, FMath::Sqrt(CurveMps * CurveMps + 2.0 * Decel * FMath::Max(0.0, S - 5.0)));
+		// The deceleration this curve asks for from here (a driver sees the bend and brakes for it).
+		CurveDecelNeeded = FMath::Max(CurveDecelNeeded, (Speed * Speed - CurveMps * CurveMps) / (2.0 * FMath::Max(S - 5.0, 2.0)));
 	}
 	// Traffic ahead in this lane (traffic cars do not all block traces): keep a 2 s gap plus 6 m.
 	for (TActorIterator<ASimCruiseTrafficCar> It(GetWorld()); It; ++It)
@@ -889,6 +892,16 @@ void ASimCruisePreflight::DriveTick(ASimCruisePlayerController* Player, float De
 	else if (Error < -0.8 && Speed > 0.5)
 	{
 		Brake = static_cast<float>(FMath::Clamp(0.2 * -Error, 0.05, 1.0));
+	}
+	// Braking for a bend: the pedal for the deceleration it needs, not only for the speed already
+	// too high. Braking on the error alone trailed the plan by the error that made the pedal (Bixby
+	// Creek, CA-1: into a 27 mph left at 33 mph, 0.36 brake, wide onto the cut bank). Full pedal
+	// is about the car's grip in g; on the plan's own profile the speed meets the bend.
+	if (CurveDecelNeeded > 0.5 && Speed > 3.0)
+	{
+		Throttle = 0.f;
+		const double FullPedalDecel = FMath::Max(Grip, 0.5) * 9.80665;
+		Brake = FMath::Max(Brake, static_cast<float>(FMath::Clamp(CurveDecelNeeded / FullPedalDecel + 0.1 * FMath::Max(-Error, 0.0), 0.0, 1.0)));
 	}
 	// What a driver does at the limit: no harder braking than the grip the corner leaves (the
 	// friction circle), and a lift as soon as the car starts to slide.
