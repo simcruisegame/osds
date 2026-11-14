@@ -557,7 +557,7 @@ namespace
 		double T = 0.0;
 		double SpeedI = 0.0;
 		double Gas = 0.0;
-		struct FSample { double T, Yaw, Beta, Speed; };
+		struct FSample { double T, Yaw, Beta, Speed, Roll = 0.0; };
 		TArray<FSample> Samples;
 		std::atomic<bool> bDone{ false };
 		FSimCruiseStepSteerResult Result;
@@ -623,7 +623,9 @@ namespace
 				C.Controls.RackAngleRad = -StepRackRad * FMath::Clamp(T / StepS, 0.0, 1.0);
 				const double Yaw = -C.Body.AngularVelocityRadPerSecond.Z;
 				const double Beta = SimCruiseUnits::ToDegrees(FMath::Atan2(C.Body.LinearVelocityMps.Dot(Right), FMath::Max(FMath::Abs(Speed), 0.5)));
-				Samples.Add({ T, Yaw, Beta, Speed });
+				// Body roll: the right side's height over its length (a left turn rolls the body to the right, outward).
+				const double Roll = SimCruiseUnits::ToDegrees(FMath::Asin(FMath::Clamp(-Right.Z, -1.0, 1.0)));
+				Samples.Add({ T, Yaw, Beta, Speed, Roll });
 				if (T >= 4.0 || FMath::Abs(Beta) > 30.0)
 				{
 					Finish();
@@ -638,7 +640,7 @@ namespace
 
 		void Finish()
 		{
-			double Steady = 0.0, SteadyV = 0.0;
+			double Steady = 0.0, SteadyV = 0.0, SteadyRoll = 0.0;
 			int32 N = 0;
 			for (const FSample& S : Samples)
 			{
@@ -646,9 +648,11 @@ namespace
 				{
 					Steady += S.Yaw;
 					SteadyV += S.Speed;
+					SteadyRoll += S.Roll;
 					++N;
 				}
 			}
+			SteadyRoll /= FMath::Max(N, 1);
 			Steady /= FMath::Max(N, 1);
 			SteadyV /= FMath::Max(N, 1);
 			double Peak = 0.0, Reach = -1.0;
@@ -663,6 +667,7 @@ namespace
 			}
 			Result.SteadyYawDegS = SimCruiseUnits::ToDegrees(Steady);
 			Result.SteadyLateralG = SteadyV * Steady / Gravity;
+			Result.RollDegPerG = Result.SteadyLateralG > 0.05 ? SteadyRoll / Result.SteadyLateralG : 0.0;
 			Result.YawResponseS = Reach < 0.0 ? TNumericLimits<double>::Max() : Reach - 0.5 * StepS;
 			Result.YawOvershoot = Peak / FMath::Max(Steady, 1.0e-4) - 1.0;
 			Result.RackDeg = SimCruiseUnits::ToDegrees(StepRackRad);
@@ -688,6 +693,63 @@ FSimCruiseStepSteerResult SimCruiseRunStepSteer(const FSimCruiseCarDefinition& C
 		return Driver->Result;
 	}
 	World.RunUntil([&Driver]() { return Driver->bDone.load(); }, 30.0);
+	return Driver->Result;
+}
+
+namespace
+{
+	struct FTopSpeedDriver
+	{
+		double Dt = 1.0 / 360.0;
+		double T = 0.0;
+		double Best = 0.0;
+		double BestAt = 0.0;
+		FVector3d Start = FVector3d::ZeroVector;
+		bool bStarted = false;
+		std::atomic<bool> bDone{ false };
+		FSimCruiseTopSpeedResult Result;
+
+		void Step(FSimCruiseVehicleDriverContext& C)
+		{
+			C.Controls = FSimCruiseVehicleControls();
+			if (bDone) return;
+			T += Dt;
+			C.Controls.bDirectRack = true;
+			C.Controls.RackAngleRad = 0.0;
+			if (T < 0.5) return;
+			if (!bStarted) { Start = C.Body.PositionM; bStarted = true; }
+			C.Controls.Throttle = 1.0;
+			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
+			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
+			// Top speed: no gain of 0.1 m/s in the last 8 s.
+			if (Speed > Best + 0.1) { Best = Speed; BestAt = T; }
+			const double Distance = (C.Body.PositionM - Start).Size();
+			if (T - BestAt > 8.0 || T > 400.0 || Distance > 19000.0)
+			{
+				Result.TopSpeedMps = Best;
+				Result.Gear = C.Sim.State.Gear + 1;
+				Result.Rpm = C.Sim.State.EngineOmegaRadPerSecond * 60.0 / Tau;
+				Result.SimSeconds = T;
+				Result.DistanceM = Distance;
+				Result.bCompleted = T - BestAt > 8.0;
+				bDone = true;
+			}
+		}
+	};
+}
+
+FSimCruiseTopSpeedResult SimCruiseRunTopSpeed(const FSimCruiseCarDefinition& Car, double FixedStepS)
+{
+	TSharedRef<FTopSpeedDriver> Driver = MakeShared<FTopSpeedDriver>();
+	Driver->Dt = FixedStepS;
+	// A pad 20 km each way from the start.
+	const FVector3d Ground(0.0, 0.0, 0.15);
+	FSimCruiseVehicleBenchWorld World(FixedStepS, 20000.0);
+	if (!World.IsValid() || World.SpawnVehicle(Car, Ground, [Driver](FSimCruiseVehicleDriverContext& C) { Driver->Step(C); }) == nullptr)
+	{
+		return Driver->Result;
+	}
+	World.RunUntil([&Driver]() { return Driver->bDone.load(); }, 420.0);
 	return Driver->Result;
 }
 

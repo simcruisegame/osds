@@ -90,10 +90,26 @@ struct FSimCruiseStepSteerResult
 	/** Peak yaw rate over the steady one, less 1. */
 	double YawOvershoot = 0.0;
 	double PeakBetaDeg = 0.0;
+	/** Body roll in the steady state over the steady lateral g (deg per g, positive: outward). */
+	double RollDegPerG = 0.0;
 };
 
 FSimCruiseStepSteerResult SimCruiseRunStepSteer(const FSimCruiseCarDefinition& Car, double FixedStepS,
 	double SpeedMps = 80.0 / 3.6, double LateralG = 0.4);
+
+/** Full throttle on a long flat pad, straight, until the speed stops rising: power against drag
+ *  and rolling resistance (and the rev limit in top gear). */
+struct FSimCruiseTopSpeedResult
+{
+	bool bCompleted = false;
+	double TopSpeedMps = 0.0;
+	int32 Gear = 0;
+	double Rpm = 0.0;
+	double SimSeconds = 0.0;
+	double DistanceM = 0.0;
+};
+
+FSimCruiseTopSpeedResult SimCruiseRunTopSpeed(const FSimCruiseCarDefinition& Car, double FixedStepS);
 
 /** Static load balance after settling on the pad. */
 struct FSimCruiseStaticLoadResult

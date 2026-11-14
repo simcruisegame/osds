@@ -295,14 +295,47 @@ namespace
 		{
 			return false;
 		}
-		const FString Line = FString::Printf(TEXT("STEPSTEER %-11s %.1f km/h  road wheels %.2f deg  steady %.1f deg/s %.2f g  t90 %.3f s  overshoot %+.2f  peak beta %.1f deg"),
-			CarId, R.SpeedMps * 3.6, R.RackDeg, R.SteadyYawDegS, R.SteadyLateralG, R.YawResponseS, R.YawOvershoot, R.PeakBetaDeg);
+		const FString Line = FString::Printf(TEXT("STEPSTEER %-11s %.1f km/h  road wheels %.2f deg  steady %.1f deg/s %.2f g  t90 %.3f s  overshoot %+.2f  peak beta %.1f deg  roll %.2f deg/g"),
+			CarId, R.SpeedMps * 3.6, R.RackDeg, R.SteadyYawDegS, R.SteadyLateralG, R.YawResponseS, R.YawOvershoot, R.PeakBetaDeg, R.RollDegPerG);
 		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
 		Test.AddInfo(Line);
+		// Roll per g: logged against no published figure yet (none sourced for these cars); only a
+		// sanity band here (road cars roll outward, a few degrees per g).
+		Test.TestTrue(TEXT("rolls outward, 0.5-9 deg/g"), R.RollDegPerG > 0.5 && R.RollDegPerG < 9.0);
 		Test.TestTrue(TEXT("turns (steady lateral 0.2-0.7 g)"), R.SteadyLateralG > 0.2 && R.SteadyLateralG < 0.7);
 		Test.TestTrue(TEXT("yaw response time 0.08-0.40 s"), R.YawResponseS > 0.08 && R.YawResponseS < 0.40);
 		Test.TestTrue(TEXT("yaw overshoot under 30 %"), R.YawOvershoot < 0.30);
 		Test.TestTrue(TEXT("no slide (sideslip under 4 deg)"), R.PeakBetaDeg < 4.0);
+		return true;
+	}
+}
+
+namespace
+{
+	/**
+	 * Top speed at full throttle on the flat. A reference only where it is published: the 2020
+	 * Corvette Stingray Z51, 194 mph (Chevrolet's specification). The others are logged until a
+	 * figure is sourced.
+	 */
+	bool RunTopSpeedTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, CarId, Car))
+		{
+			return false;
+		}
+		const FSimCruiseTopSpeedResult R = SimCruiseRunTopSpeed(Car, SimCruiseShippingFixedStepS);
+		const double Mph = R.TopSpeedMps * 3600.0 / 1609.344;
+		const bool bC8 = FString(CarId) == TEXT("meridian_z");
+		const FString Line = FString::Printf(TEXT("TOPSPEED %-11s %.1f mph in gear %d at %.0f rpm after %.0f s, %.1f km%s"),
+			CarId, Mph, R.Gear, R.Rpm, R.SimSeconds, R.DistanceM / 1000.0, bC8 ? TEXT(" (target 194 mph, Chevrolet)") : TEXT(" (no sourced figure: logged only)"));
+		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+		Test.AddInfo(Line);
+		Test.TestTrue(TEXT("speed levelled off on the pad"), R.bCompleted);
+		if (bC8)
+		{
+			Test.TestTrue(TEXT("C8 Z51 top speed 194 +/- 6 mph"), FMath::Abs(Mph - 194.0) <= 6.0);
+		}
 		return true;
 	}
 }
@@ -345,6 +378,9 @@ SIMCRUISE_VEHICLE_BENCH(LiftOff, f150raptor18)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, grandcherokee13)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, odyssey18)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, crv25)
+SIMCRUISE_VEHICLE_BENCH(TopSpeed, nb2001_aaron)
+SIMCRUISE_VEHICLE_BENCH(TopSpeed, mustang65)
+SIMCRUISE_VEHICLE_BENCH(TopSpeed, meridian_z)
 SIMCRUISE_VEHICLE_BENCH(StaticLoad, nb1999)
 SIMCRUISE_VEHICLE_BENCH(StaticLoad, nb2001)
 SIMCRUISE_VEHICLE_BENCH(StaticLoad, nb2001_aaron)
