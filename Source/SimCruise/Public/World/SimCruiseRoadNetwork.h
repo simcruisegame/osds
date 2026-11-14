@@ -242,6 +242,16 @@ public:
 
 	/** Every ribbon segment whose station centres pass within Reach of P (bins). */
 	void GatherSegments(const FVector2d& P, double Reach, TArray<TPair<int32, int32>>& Out) const;
+	/**
+	 * Whether a bridge parapet stands along ribbon RibbonIndex's Edge (-1 left, +1 right) from
+	 * station I to I + 1: not where that line runs inside another carriageway at the deck's level
+	 * (within 2 m: a merge gore, a road joining the deck, a crossing at grade), where it would be a
+	 * wall across that road. SimCruiseBridges builds by it; World.RoadOverlaps checks by it.
+	 */
+	bool ParapetAt(int32 RibbonIndex, int32 I, int32 Edge) const;
+
+	/** The bridge rule (deck clearance, level checks, parapets clipped): off with SIMCRUISE_NO_BRIDGE_RULE=1, for before/after numbers. */
+	static bool BridgeRuleOn();
 
 	/** Project P onto segment (Ribbon, I..I+1). */
 	FSimCruiseRoadHit Project(int32 RibbonIndex, int32 I, const FVector2d& P) const;
