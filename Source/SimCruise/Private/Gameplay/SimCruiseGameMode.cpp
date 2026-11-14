@@ -629,7 +629,7 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 		for (const FSimCruiseStartPose& Pick : Picks)
 		{
 			FString Why;
-			if (!GroundTraceOnRoad(Pick.LocationCm, Pick.Rotation, Why))
+			if (!GroundTraceOnRoad(Pick.CheckCm, Why))
 			{
 				UE_LOG(LogSimCruiseDrive, Display, TEXT("Start candidate at %s left out: %s"), *Pick.LocationCm.ToString(), *Why);
 				continue;
@@ -689,27 +689,30 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 	return true;
 }
 
-bool ASimCruiseGameMode::GroundTraceOnRoad(const FVector& PoseCm, const FRotator& Heading, FString& OutWhy) const
+bool ASimCruiseGameMode::GroundTraceOnRoad(const TArray<FVector>& PointsCm, FString& OutWhy) const
 {
-	const FVector Fwd = Heading.Vector().GetSafeNormal2D();
+	if (PointsCm.IsEmpty())
+	{
+		OutWhy = TEXT("no points to check");
+		return false;
+	}
 	const FCollisionObjectQueryParams Objects(ECC_WorldStatic);
 	const FCollisionQueryParams Params(SCENE_QUERY_STAT(SimCruiseStartTrace), true);
-	// The middle within 25 cm of the road's height; the car's front and back (2 m out) on the
-	// same surface within 60 cm (a 15 % grade).
-	const struct { double AlongCm; double TolCm; } Points[3] = { { 0.0, 25.0 }, { 200.0, 60.0 }, { -200.0, 60.0 } };
-	for (const auto& P : Points)
+	// Under the car's middle and its four corners, the first thing down from 5 m is the road at
+	// its own height (within 8 cm): a kerb or a sidewalk (15 cm), a bank, a building or a hole fails.
+	for (int32 i = 0; i < PointsCm.Num(); ++i)
 	{
-		const FVector At = PoseCm + Fwd * P.AlongCm;
+		const FVector& At = PointsCm[i];
 		FHitResult Hit;
 		if (!GetWorld()->LineTraceSingleByObjectType(Hit, At + FVector(0.0, 0.0, 500.0), At - FVector(0.0, 0.0, 500.0), Objects, Params))
 		{
-			OutWhy = FString::Printf(TEXT("no ground under %+.0f m"), P.AlongCm / 100.0);
+			OutWhy = FString::Printf(TEXT("no ground under point %d"), i);
 			return false;
 		}
-		const double Off = Hit.ImpactPoint.Z - PoseCm.Z;
-		if (FMath::Abs(Off) > P.TolCm)
+		const double Off = Hit.ImpactPoint.Z - At.Z;
+		if (FMath::Abs(Off) > 8.0)
 		{
-			OutWhy = FString::Printf(TEXT("the ground at %+.0f m is %+.2f m off the road's height"), P.AlongCm / 100.0, Off / 100.0);
+			OutWhy = FString::Printf(TEXT("the ground under point %d is %+.0f cm off the road's height"), i, Off);
 			return false;
 		}
 	}

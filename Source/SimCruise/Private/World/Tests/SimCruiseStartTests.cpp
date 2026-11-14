@@ -18,6 +18,8 @@
 #include "World/SimCruiseTileManager.h"
 #include "World/SimCruiseWorldStreamer.h"
 #include "World/SimCruiseWorldTile.h"
+#include "World/SimCruiseWorldSubsystem.h"
+#include "HAL/FileManager.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -71,6 +73,143 @@ bool FSimCruiseStartOnRoadTest::RunTest(const FString& Parameters)
 	// The ahead walk: from Main Street's middle eastward to its end (~250 m), not past it.
 	const double East = SimCruiseStartPick::AheadM(Tiles, Best.Tile, Best.Ribbon, B->Roads.Ribbons[Best.Ribbon].St[B->Roads.Ribbons[Best.Ribbon].St.Num() / 2].S, 1, 5000.0);
 	TestTrue(FString::Printf(TEXT("ahead to the road's end: %.0f m"), East), East > 150.0 && East < 400.0);
+	return true;
+}
+
+namespace SimCruiseStartTest
+{
+	/** Independent checks of a start (not the pick's own code): the footprint's distance to the
+	 * carriageway edge, the distance along its road to the nearest junction, the heading error. */
+	void CheckStart(FAutomationTestBase& Test, const FString& Where, const TArray<FSimCruiseStartTile>& Tiles, const FSimCruiseStartPose& P)
+	{
+		const FSimCruiseTileBuild& B = *Tiles[P.Tile].Build;
+		const FSimCruiseRibbon& R = B.Roads.Ribbons[P.Ribbon];
+		const FVector2d C = FVector2d(P.LocationCm.X - Tiles[P.Tile].OriginCm.X, P.LocationCm.Y - Tiles[P.Tile].OriginCm.Y) / 100.0;
+		const double Yaw = FMath::DegreesToRadians(P.Rotation.Yaw);
+		const FVector2d Fwd(FMath::Cos(Yaw), FMath::Sin(Yaw)), Right(-Fwd.Y, Fwd.X);
+		double Clear = TNumericLimits<double>::Max();
+		for (const FVector2d& Q : { C + Fwd * 2.3 + Right, C + Fwd * 2.3 - Right, C - Fwd * 2.3 + Right, C - Fwd * 2.3 - Right })
+		{
+			double Best = TNumericLimits<double>::Max(), Lat = 0.0, HalfW = 0.0;
+			for (int32 i = 0; i + 1 < R.St.Num(); ++i)
+			{
+				const FVector2d A = R.St[i].C, D = R.St[i + 1].C;
+				const double T = FMath::Clamp(FVector2d::DotProduct(Q - A, D - A) / FMath::Max((D - A).SizeSquared(), 1e-9), 0.0, 1.0);
+				const FVector2d On = FMath::Lerp(A, D, T);
+				const double Dist = FVector2d::Distance(Q, On);
+				if (Dist < Best) { Best = Dist; Lat = FVector2d::DotProduct(Q - On, FMath::Lerp(R.St[i].R, R.St[i + 1].R, T).GetSafeNormal()); HalfW = FMath::Lerp(R.St[i].HalfW, R.St[i + 1].HalfW, T); }
+			}
+			Clear = FMath::Min(Clear, HalfW - FMath::Abs(Lat));
+		}
+		Test.TestTrue(FString::Printf(TEXT("%s: the footprint %.2f m inside the carriageway edge (>= 0.5)"), *Where, Clear), Clear >= 0.5 - 1e-3);
+		// The nearest junction along the road: a cut station, or an end of the ribbon on another road.
+		const double S = R.St[P.Station].S;
+		double ToJunction = TNumericLimits<double>::Max();
+		for (int32 i = 0; i < R.St.Num(); ++i)
+		{
+			const bool bCut = (R.Sides[0].Cut.IsValidIndex(i) && R.Sides[0].Cut[i]) || (R.Sides[1].Cut.IsValidIndex(i) && R.Sides[1].Cut[i]);
+			if (bCut) ToJunction = FMath::Min(ToJunction, FMath::Abs(R.St[i].S - S));
+		}
+		for (const int32 End : { 0, R.St.Num() - 1 })
+		{
+			if ((End == 0 && R.bStartOnBoundary) || (End > 0 && R.bEndOnBoundary)) continue;
+			FSimCruiseRoadHit Hit;
+			if (B.Roads.FindCarriageway(R.St[End].C, Hit, P.Ribbon, 2.0)) ToJunction = FMath::Min(ToJunction, FMath::Abs(R.St[End].S - S));
+		}
+		Test.TestTrue(FString::Printf(TEXT("%s: %.0f m from the nearest junction (>= 30)"), *Where, ToJunction), ToJunction >= 30.0 - 0.5);
+		// The heading against the road's direction at the car (its own station's tangent, the way it drives).
+		const FVector2d Road = R.St[P.Station].T * static_cast<double>(P.Dir);
+		const double Error = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector2d::DotProduct(Road, Fwd), -1.0, 1.0)));
+		Test.TestTrue(FString::Printf(TEXT("%s: heading %.1f degrees off the road (< 5)"), *Where, Error), Error < 5.0);
+	}
+
+	/** Builds the tiles of one recorded place folder (x_y.json, place.txt with its order) in their order, with seam contracts. */
+	bool BuildPlace(const FString& Dir, FSimCruiseWorldFrame& OutFrame, TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& OutBuilt, FVector& OutStartCm)
+	{
+		TArray<FString> Lines;
+		if (!FFileHelper::LoadFileToStringArray(Lines, *FPaths::Combine(Dir, TEXT("place.txt")))) return false;
+		double Lat = 0.0, Lon = 0.0;
+		TArray<FIntPoint> Order;
+		for (const FString& L : Lines)
+		{
+			TArray<FString> W;
+			L.ParseIntoArrayWS(W);
+			if (W.Num() >= 3 && W[0] == TEXT("start")) { Lat = FCString::Atod(*W[1]); Lon = FCString::Atod(*W[2]); }
+			else if (W.Num() >= 2 && W[0] == TEXT("order")) { for (int32 k = 1; k < W.Num(); ++k) { FString X, Y; W[k].Split(TEXT("_"), &X, &Y); Order.Add(FIntPoint(FCString::Atoi(*X), FCString::Atoi(*Y))); } }
+		}
+		if (Order.IsEmpty()) return false;
+		OutFrame = FSimCruiseWorldFrame::ForPlace(Lon, Lat);
+		OutStartCm = OutFrame.LonLatToWorldCm(Lon, Lat);
+		for (const FIntPoint& Id : Order)
+		{
+			FSimCruiseTileData Data;
+			FString Error;
+			if (!SimCruiseTileData::LoadFile(FPaths::Combine(Dir, FString::Printf(TEXT("%d_%d.json"), Id.X, Id.Y)), Data, Error)) continue;
+			const TArray<FSimCruiseSeamEnd> Contracts = SimCruiseTileBuilder::NeighbourContracts(Id, OutFrame.TileSizeM, [&OutBuilt](const FIntPoint& T) -> const FSimCruiseTileBuild* { const TSharedRef<FSimCruiseTileBuild>* F = OutBuilt.Find(T); return F ? &F->Get() : nullptr; });
+			OutBuilt.Add(Id, SimCruiseTileBuilder::Build(Data, OutFrame.TileSizeM, Contracts));
+		}
+		return OutBuilt.Num() > 0;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseStartPlacesTest, "SimCruise.World.Start.EveryPlace", SimCruiseStartTest::Flags)
+bool FSimCruiseStartPlacesTest::RunTest(const FString& Parameters)
+{
+	// The start rules on real places, CPU only: from the middle of every bundled Miami Beach tile,
+	// and over every recorded place (Saved/StartPlaces/<key>/ and SIMCRUISE_PROBE_DIR: the
+	// helper's tile documents and place.txt, as Debug.ReleaseFaultProbe reads them; the 18 places of
+	// data/test-places.json go there with scripts\record-start-places.ps1). Every start: the
+	// footprint 0.5 m or more inside the carriageway, 30 m or more from a junction, facing the road
+	// within 5 degrees.
+	int32 Starts = 0;
+	{
+		const FSimCruiseWorldFrame Frame = FSimCruiseWorldFrame::ForPlace(USimCruiseWorldSubsystem::BundledLon, USimCruiseWorldSubsystem::BundledLat);
+		TArray<FString> Files;
+		IFileManager::Get().FindFiles(Files, *FPaths::Combine(SimCruiseTileData::RepositoryRoot(), TEXT("data"), TEXT("tiles"), TEXT("*.json")), true, false);
+		TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
+		for (const FString& File : Files)
+		{
+			FString X, Y;
+			if (!FPaths::GetBaseFilename(File).Split(TEXT("_"), &X, &Y) || !X.IsNumeric() || !Y.IsNumeric()) continue;
+			const FIntPoint Id(FCString::Atoi(*X), FCString::Atoi(*Y));
+			FSimCruiseTileData Data;
+			FString Error;
+			if (!SimCruiseTileData::LoadFile(SimCruiseTileData::BundledTilePath(Id), Data, Error)) continue;
+			Built.Add(Id, SimCruiseTileBuilder::Build(Data, Frame.TileSizeM));
+		}
+		TArray<FSimCruiseStartTile> Tiles;
+		for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built) Tiles.Add({ Frame.TileOriginCm(Pair.Key), &Pair.Value.Get() });
+		for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built)
+		{
+			const FVector Middle = Frame.TileOriginCm(Pair.Key) + FVector(Frame.TileSizeM * 50.0, Frame.TileSizeM * 50.0, 0.0);
+			const TArray<FSimCruiseStartPose> Picks = SimCruiseStartPick::Candidates(Tiles, FString(), Middle, 300.0, 1e10, 1);
+			if (Picks.IsEmpty()) continue;
+			SimCruiseStartTest::CheckStart(*this, FString::Printf(TEXT("Miami Beach tile %d_%d"), Pair.Key.X, Pair.Key.Y), Tiles, Picks[0]);
+			++Starts;
+		}
+	}
+	TArray<FString> Roots = { FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces")) };
+	const FString Probe = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_PROBE_DIR"));
+	if (!Probe.IsEmpty()) Roots.Add(Probe);
+	for (const FString& Root : Roots)
+	{
+		TArray<FString> Places;
+		IFileManager::Get().FindFiles(Places, *FPaths::Combine(Root, TEXT("*")), false, true);
+		for (const FString& Place : Places)
+		{
+			FSimCruiseWorldFrame Frame;
+			TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
+			FVector StartCm;
+			if (!SimCruiseStartTest::BuildPlace(FPaths::Combine(Root, Place), Frame, Built, StartCm)) continue;
+			TArray<FSimCruiseStartTile> Tiles;
+			for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built) Tiles.Add({ Frame.TileOriginCm(Pair.Key), &Pair.Value.Get() });
+			const TArray<FSimCruiseStartPose> Picks = SimCruiseStartPick::Candidates(Tiles, FString(), StartCm, 900.0, 1e10, 1);
+			if (!TestTrue(FString::Printf(TEXT("%s: a start"), *Place), Picks.Num() > 0)) continue;
+			SimCruiseStartTest::CheckStart(*this, Place, Tiles, Picks[0]);
+			++Starts;
+		}
+	}
+	TestTrue(FString::Printf(TEXT("starts checked: %d"), Starts), Starts >= 5);
 	return true;
 }
 

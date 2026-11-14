@@ -28,6 +28,8 @@ struct FSimCruiseStartPose
 	double DistanceM = 0.0;
 	/** Lower is better (DistanceM, plus penalties for a short road ahead or the wrong way). */
 	double Score = 0.0;
+	/** The road surface under the car's middle and its four corners (world cm): the ground trace checks them. */
+	TArray<FVector> CheckCm;
 };
 
 /**
@@ -45,6 +47,10 @@ namespace SimCruiseStartPick
 {
 	/** The road ahead the start wants (60 s of driving at about 13 m/s). */
 	constexpr double WantedAheadM = 800.0;
+	/** A start stays this far from any junction (along its road). */
+	constexpr double JunctionClearM = 30.0;
+	/** The car's footprint stays this far inside the carriageway's edge. */
+	constexpr double EdgeClearM = 0.5;
 
 	/**
 	 * How far the road goes on from station S of a ribbon in direction Dir (+1 along the
@@ -57,7 +63,7 @@ namespace SimCruiseStartPick
 	 * Whether a car's footprint at Pose stands on the carriageway of its ribbon with no ground
 	 * above the road under it; Why says what failed.
 	 */
-	SIMCRUISE_API bool OnCarriageway(const TArray<FSimCruiseStartTile>& Tiles, const FSimCruiseStartPose& Pose, FString* Why = nullptr);
+	SIMCRUISE_API bool OnCarriageway(const TArray<FSimCruiseStartTile>& Tiles, const FSimCruiseStartPose& Pose, FString* Why = nullptr, TArray<FVector>* OutCheckCm = nullptr);
 
 	/**
 	 * Start candidates within RadiusM of NearCm, best first (at most MaxCandidates): on the road

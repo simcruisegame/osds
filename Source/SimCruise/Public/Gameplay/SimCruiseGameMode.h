@@ -119,10 +119,10 @@ private:
 	void BeginTravel(const FSimCruisePlace& Place, bool bRestartWorld);
 
 	/**
-	 * A ground trace at a start pose: down onto the road surface at the pose's height (within
-	 * 25 cm at the middle, the car's ends on the same surface): no bank, building or hole there.
+	 * A ground trace at a start: down onto the road at its own height (within 8 cm) under the
+	 * car's middle and corners (FSimCruiseStartPose::CheckCm): no kerb, bank, building or hole.
 	 */
-	bool GroundTraceOnRoad(const FVector& PoseCm, const FRotator& Heading, FString& OutWhy) const;
+	bool GroundTraceOnRoad(const TArray<FVector>& PointsCm, FString& OutWhy) const;
 
 	bool bWorldDrive = false;
 	bool bCarPlaced = false;
