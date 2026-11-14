@@ -345,6 +345,11 @@ void ASimCruiseGameMode::BeginTravel(const FSimCruisePlace& Place, bool bRestart
 	WaitStartedSeconds = FPlatformTime::Seconds();
 	LastMessageSeconds = -100.0;
 	bStartCarBuilt = false;
+	// The car's model and the traffic models start on worker threads now (glTF and rig, most of a
+	// heavy model's time: the Miata's took 27.7 s on the game thread at Welch); the meshes are built
+	// on the game thread later, while the start tiles load.
+	SimCruiseCarAssets::PrepareAsync(CarId);
+	for (const FString& Model : SimCruiseParkedCars::AllCarIds()) SimCruiseCarAssets::PrepareAsync(Model);
 
 	// The sun and sky follow the place (unless the command line placed the observer).
 	double CommandLineLat = 0.0;
@@ -548,6 +553,7 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 		return false;
 	}
 	const bool bFirstPlacement = !bCarPlaced;
+	Stream->HoldRoadTops();
 	if (bFirstPlacement)
 	{
 		Stream->SetFocus(StartCm, FVector::ZeroVector);
@@ -625,11 +631,21 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 	// none passes, the nearest-road rule as before.
 	auto PickStart = [&](const FString& Name, double RadiusM) -> bool
 	{
-		const TArray<FSimCruiseStartPose> Picks = Stream->FindStartCandidates(Name, StartCm, RadiusM, PreferredYaw);
+		bStartByNearestRoad = false;
+		FString WhyNone;
+		const TArray<FSimCruiseStartPose> Picks = Stream->FindStartCandidates(Name, StartCm, RadiusM, PreferredYaw, &WhyNone);
+		// Never silent: a start by the old nearest-road rule is the fault the release test sees
+		// (Welch, WV, nose at the bank, when the pick saw no road faces on installed tiles).
+		if (Picks.IsEmpty())
+		{
+			// One fixed string the release judge fails on: "SimCruise START FALLBACK: start pick found no candidate".
+			UE_LOG(LogSimCruiseDrive, Warning, TEXT("SimCruise START FALLBACK: start pick found no candidate%s within %.0f m (%s); the nearest-road rule places the car"),
+				Name.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" on %s"), *Name), RadiusM, *WhyNone);
+		}
 		for (const FSimCruiseStartPose& Pick : Picks)
 		{
 			FString Why;
-			if (!GroundTraceOnRoad(Pick.LocationCm, Pick.Rotation, Why))
+			if (!GroundTraceOnRoad(Pick.CheckCm, Why))
 			{
 				UE_LOG(LogSimCruiseDrive, Display, TEXT("Start candidate at %s left out: %s"), *Pick.LocationCm.ToString(), *Why);
 				continue;
@@ -639,8 +655,14 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 			UE_LOG(LogSimCruiseDrive, Display, TEXT("Start: %.0f m from the start point, %.0f m of road ahead"), Pick.DistanceM, Pick.AheadM);
 			return true;
 		}
+		if (!Picks.IsEmpty())
+		{
+			UE_LOG(LogSimCruiseDrive, Warning, TEXT("SimCruise START FALLBACK: start pick found no candidate the ground trace confirms (%d left out); the nearest-road rule places the car"), Picks.Num());
+		}
+		bStartByNearestRoad = true;
 		return Stream->FindRoadPoseFacing(Name, StartCm, RadiusM, PreferredYaw, Ground, Heading);
 	};
+	bStartByNearestRoad = false;
 	const bool bNamed = !StartRoadName.IsEmpty() && PickStart(StartRoadName, NamedRadiusM);
 	if (!bNamed && !StartRoadName.IsEmpty())
 	{
@@ -689,27 +711,30 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 	return true;
 }
 
-bool ASimCruiseGameMode::GroundTraceOnRoad(const FVector& PoseCm, const FRotator& Heading, FString& OutWhy) const
+bool ASimCruiseGameMode::GroundTraceOnRoad(const TArray<FVector>& PointsCm, FString& OutWhy) const
 {
-	const FVector Fwd = Heading.Vector().GetSafeNormal2D();
+	if (PointsCm.IsEmpty())
+	{
+		OutWhy = TEXT("no points to check");
+		return false;
+	}
 	const FCollisionObjectQueryParams Objects(ECC_WorldStatic);
 	const FCollisionQueryParams Params(SCENE_QUERY_STAT(SimCruiseStartTrace), true);
-	// The middle within 25 cm of the road's height; the car's front and back (2 m out) on the
-	// same surface within 60 cm (a 15 % grade).
-	const struct { double AlongCm; double TolCm; } Points[3] = { { 0.0, 25.0 }, { 200.0, 60.0 }, { -200.0, 60.0 } };
-	for (const auto& P : Points)
+	// Under the car's middle and its four corners, the first thing down from 5 m is the road at
+	// its own height (within 8 cm): a kerb or a sidewalk (15 cm), a bank, a building or a hole fails.
+	for (int32 i = 0; i < PointsCm.Num(); ++i)
 	{
-		const FVector At = PoseCm + Fwd * P.AlongCm;
+		const FVector& At = PointsCm[i];
 		FHitResult Hit;
 		if (!GetWorld()->LineTraceSingleByObjectType(Hit, At + FVector(0.0, 0.0, 500.0), At - FVector(0.0, 0.0, 500.0), Objects, Params))
 		{
-			OutWhy = FString::Printf(TEXT("no ground under %+.0f m"), P.AlongCm / 100.0);
+			OutWhy = FString::Printf(TEXT("no ground under point %d"), i);
 			return false;
 		}
-		const double Off = Hit.ImpactPoint.Z - PoseCm.Z;
-		if (FMath::Abs(Off) > P.TolCm)
+		const double Off = Hit.ImpactPoint.Z - At.Z;
+		if (FMath::Abs(Off) > 8.0)
 		{
-			OutWhy = FString::Printf(TEXT("the ground at %+.0f m is %+.2f m off the road's height"), P.AlongCm / 100.0, Off / 100.0);
+			OutWhy = FString::Printf(TEXT("the ground under point %d is %+.0f cm off the road's height"), i, Off);
 			return false;
 		}
 	}

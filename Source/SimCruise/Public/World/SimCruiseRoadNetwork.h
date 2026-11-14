@@ -225,6 +225,8 @@ public:
 	void CollectSeamEnds(TArray<FSimCruiseSeamEnd>& Out) const;
 
 	TArray<FSimCruiseRibbon> Ribbons;
+	/** One line per bridge span the clearance rule lifted or de-decked in this build (also logged as "SimCruise BRIDGE"). */
+	TArray<FString> BridgeChanges;
 	TArray<FSimCruiseRoadPad> Pads;
 	double TileSizeM = 0.0;
 	int32 NumContractedEnds = 0;
@@ -240,6 +242,20 @@ public:
 
 	/** Every ribbon segment whose station centres pass within Reach of P (bins). */
 	void GatherSegments(const FVector2d& P, double Reach, TArray<TPair<int32, int32>>& Out) const;
+	/**
+	 * Whether a bridge parapet stands along ribbon RibbonIndex's Edge (-1 left, +1 right) from
+	 * station I to I + 1: not where that line runs inside another carriageway at the deck's level
+	 * (the deck from 0.7 m under to 2.5 m over it: a merge gore, a crossing at grade), where it would be a
+	 * wall across that road. SimCruiseBridges builds by it; World.RoadOverlaps checks by it.
+	 */
+	bool ParapetAt(int32 RibbonIndex, int32 I, int32 Edge) const;
+	/** Whether the deck's slab (its underside) stands from station I to I + 1: not over a road within 2.5 m under it. */
+	bool DeckUndersideAt(int32 RibbonIndex, int32 I) const;
+	/** Neither ParapetAt nor DeckUndersideAt finds a road at the deck's level at lateral Frac x HalfW (+ OutM outward) . */
+	bool DeckFaceClear(int32 RibbonIndex, int32 I, double Frac, double OutM) const;
+
+	/** The bridge rule (parapets and slab left out over a road at the deck's level): off with SIMCRUISE_NO_BRIDGE_RULE=1, for before/after numbers. */
+	static bool BridgeRuleOn();
 
 	/** Project P onto segment (Ribbon, I..I+1). */
 	FSimCruiseRoadHit Project(int32 RibbonIndex, int32 I, const FVector2d& P) const;

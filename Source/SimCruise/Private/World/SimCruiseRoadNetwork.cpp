@@ -2,6 +2,7 @@
 
 #include "World/SimCruiseRoadNetwork.h"
 
+#include "World/SimCruiseGeo.h"
 #include "World/SimCruiseTileData.h"
 
 #include <limits>
@@ -27,6 +28,7 @@ namespace
 	constexpr double PlanEndM = 6.0;          // chain ends keep their exact point and direction
 	constexpr double ContractBlendM = 10.0;   // a seam end takes the neighbour's direction and width over this
 	constexpr double BoundaryEps = 1e-3;      // m: a point this near the edge lies on it
+	constexpr double DeckFaceWindowM = 2.5;   // a deck within this of a road under it stands its parapet or slab in a car's way (0.85 over, 1.2 under the deck)
 
 	// Kerb evidence (RoadSurface.gd classify_edges).
 	constexpr double KerbSidewalkMinM = 0.3;
@@ -464,6 +466,7 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 {
 	Ribbons.Reset();
 	Pads.Reset();
+	BridgeChanges.Reset();
 	Bins.Reset();
 	NumContractedEnds = 0;
 	TileSizeM = InTileSizeM;
@@ -1311,6 +1314,38 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 			}
 		}
 	}
+
+	// One line per bridge span whose parapets or slab were left out over a road at its level.
+	for (int32 r = 0; r < Ribbons.Num() && BridgeRuleOn(); ++r)
+	{
+		const FSimCruiseRibbon& Rb = Ribbons[r];
+		const int32 N = Rb.St.Num();
+		for (int32 k = 0; k < N; ++k)
+		{
+			if (!Rb.St[k].bBridge) continue;
+			int32 e = k;
+			while (e + 1 < N && Rb.St[e + 1].bBridge) ++e;
+			double Clipped = 0.0;
+			FVector2d At = Rb.St[(k + e) / 2].C;
+			for (int32 j = FMath::Max(k - 1, 0); j < FMath::Min(e + 1, N - 1); ++j)
+			{
+				const bool bOut = !ParapetAt(r, j, -1) || !ParapetAt(r, j, 1) || !DeckUndersideAt(r, j);
+				if (!bOut) continue;
+				if (Clipped == 0.0) At = Rb.St[j].C;
+				Clipped += Rb.St[j + 1].S - Rb.St[j].S;
+			}
+			if (Clipped > 0.0)
+			{
+				double Lon = 0.0, Lat = 0.0;
+				SimCruiseGeo::TileToLonLat(FVector2d(Tile.Id.X, Tile.Id.Y) + At / FMath::Max(Side, 1.0), Lon, Lat);
+				const FString Span = FString::Printf(TEXT("Bridge span %d_%d/r%d at %.6f, %.6f: faces removed over %.0f m (parapet or deck inside another carriageway at its level), %s %s"),
+					Tile.Id.X, Tile.Id.Y, r, Lat, Lon, Clipped, *Rb.Class, Rb.Name.IsEmpty() ? TEXT("(unnamed)") : *Rb.Name);
+				BridgeChanges.Add(Span);
+				UE_LOG(LogTemp, Display, TEXT("%s"), *Span);
+			}
+			k = e;
+		}
+	}
 }
 
 void FSimCruiseRoadNetwork::AddToBins(int32 RibbonIndex)
@@ -1387,6 +1422,49 @@ FVector2d FSimCruiseRoadPad::OutlinePoint(int32 K) const
 {
 	const double A = 2.0 * UE_DOUBLE_PI * K / Radii.Num();
 	return Centre + FVector2d(FMath::Cos(A), FMath::Sin(A)) * Radii[K % Radii.Num()];
+}
+
+bool FSimCruiseRoadNetwork::BridgeRuleOn()
+{
+	static const bool bOn = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_NO_BRIDGE_RULE")) != TEXT("1");
+	return bOn;
+}
+
+bool FSimCruiseRoadNetwork::DeckFaceClear(int32 RibbonIndex, int32 I, double Frac, double OutM) const
+{
+	if (!BridgeRuleOn() || !Ribbons.IsValidIndex(RibbonIndex) || !Ribbons[RibbonIndex].St.IsValidIndex(I + 1)) return true;
+	const FSimCruiseRibbon& Rb = Ribbons[RibbonIndex];
+	const FSimCruiseRibbonStation& A = Rb.St[I];
+	const FSimCruiseRibbonStation& B = Rb.St[I + 1];
+	for (const double T : { 0.0, 0.5, 1.0 })
+	{
+		const FVector2d C = FMath::Lerp(A.C, B.C, T);
+		const FVector2d R = FMath::Lerp(A.R, B.R, T).GetSafeNormal();
+		const double HalfW = FMath::Lerp(A.HalfW, B.HalfW, T);
+		const double L = Frac * HalfW;
+		const FVector2d P = C + R * (L + FMath::Sign(Frac) * OutM);
+		const double Deck = FMath::Lerp(A.Height(L), B.Height(L), T);
+		TArray<TPair<int32, int32>> Segs;
+		GatherSegments(P, 1.0, Segs);
+		for (const TPair<int32, int32>& Sg : Segs)
+		{
+			if (Sg.Key == RibbonIndex) continue;
+			const FSimCruiseRoadHit Hit = Project(Sg.Key, Sg.Value, P);
+			if (FMath::Abs(Hit.Along) > 0.01 || FMath::Abs(Hit.Lateral) > Hit.HalfW) continue;
+			if (Deck > Hit.Height - 0.7 && Deck < Hit.Height + DeckFaceWindowM) return false;
+		}
+	}
+	return true;
+}
+
+bool FSimCruiseRoadNetwork::ParapetAt(int32 RibbonIndex, int32 I, int32 Edge) const
+{
+	return DeckFaceClear(RibbonIndex, I, Edge, 0.2);
+}
+
+bool FSimCruiseRoadNetwork::DeckUndersideAt(int32 RibbonIndex, int32 I) const
+{
+	return DeckFaceClear(RibbonIndex, I, -1.0, 0.0) && DeckFaceClear(RibbonIndex, I, 0.0, 0.0) && DeckFaceClear(RibbonIndex, I, 1.0, 0.0);
 }
 
 bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon, double Margin, int32 MinRank) const
