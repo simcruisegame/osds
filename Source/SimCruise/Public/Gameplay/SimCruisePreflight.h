@@ -62,6 +62,18 @@ struct SIMCRUISE_API FSimCruisePreflightStats
 	int32 TrafficTurnRounds = 0;
 	/** Traffic cars on a motorway ribbon that crossed our road at our level. */
 	int32 TrafficAtGrade = 0;
+	// The car's own state (2026-11-14: a 64-to-1 mph crash at Doraville and 27 s at the rev limit
+	// passed the judge).
+	/** Longest time (s) with the engine above StuckRpmShare of the redline and the car under 1 m/s. */
+	float StuckSeconds = 0.f;
+	/** Hits: the speed fell by more than HitDropMps within HitWindowS. */
+	int32 Hits = 0;
+	/** Places where the body's pitch or roll changed by more than DeckDeg within DeckWindowM of road. */
+	int32 DeckJumps = 0;
+	float MaxDeckDeg = 0.f;
+	/** Longest time (s) with two or more wheels off the ground while the car is on a road surface. */
+	float WheelsOffSeconds = 0.f;
+
 	/** -SimCruisePreflightStopAtJunction=N: the seconds asked for, and the seconds held at the stop line. */
 	float JunctionHoldAskedS = 0.f;
 	float JunctionHoldS = 0.f;
@@ -128,6 +140,22 @@ namespace SimCruisePreflightRules
 	/** No cut-in is counted below this speed of our car (m/s): at a stop line the crossing traffic has priority. */
 	constexpr double CutInMinSpeedMps = 2.0;
 
+	// The car's own state.
+	constexpr double StuckRpmShare = 0.8;
+	constexpr double StuckMaxMps = 1.0;
+	constexpr float MaxStuckSeconds = 2.f;
+	/** A hit: more speed lost in HitWindowS than the hardest braking gives (about 1.2 g). */
+	constexpr double HitDropMps = 6.0;
+	constexpr double HitWindowS = 0.5;
+	/** An uneven deck or road: pitch or roll changes by more than DeckDeg within DeckWindowM. */
+	constexpr double DeckDeg = 4.0;
+	constexpr double DeckWindowM = 5.0;
+	constexpr float MaxWheelsOffSeconds = 1.f;
+	/** Samples (time s, speed m/s) in time order: the largest speed loss within HitWindowS. */
+	SIMCRUISE_API double MaxSpeedDrop(const TArray<FVector2d>& TimeSpeed);
+	/** Samples (path m, pitch deg, roll deg) in path order: the largest change of pitch or roll within DeckWindowM. */
+	SIMCRUISE_API double MaxAngleChange(const TArray<FVector>& PathPitchRoll);
+
 	/** Samples (time s, yaw deg) in time order: true when the heading turned round within the window. */
 	SIMCRUISE_API bool IsTurnRound(const TArray<FVector2d>& TimeYawDeg);
 	/**
@@ -141,6 +169,9 @@ namespace SimCruisePreflightRules
 	SIMCRUISE_API bool Overlaps(double AlongM, double SideM, double TheirLengthM);
 	/** A motorway car crossing our road (45 to 135 deg) on it (|Side| < 8 m, -10 to 60 m ahead) at our level (|Dz| < 2.5 m). */
 	SIMCRUISE_API bool IsAtGradeMotorway(const FString& TheirClass, double AlongM, double SideM, double DzM, double RelHeadingDeg);
+
+	/** Information that is not a FAIL (the traffic counts), comma-separated. */
+	SIMCRUISE_API FString Notes(const FSimCruisePreflightStats& Stats);
 
 	/** Empty when the run passes, else the reasons (comma-separated). */
 	SIMCRUISE_API FString Judge(const FSimCruisePreflightStats& Stats);
@@ -317,6 +348,19 @@ private:
 	};
 	TMap<TWeakObjectPtr<AActor>, FTrafficWatch> TrafficWatch;
 	void WatchTraffic(const ASimCruiseWorldStreamer* Stream, APawn* Pawn, const FVector& CarCm, const FVector& Forward, double Speed);
+
+	/** Traffic off for the run (the default; -SimCruisePreflightTraffic keeps it). */
+	bool bTrafficOff = true;
+
+	/** The car's own state, measured each frame (see the rules). */
+	void WatchCar(ASimCruisePlayerController* Player, APawn* Pawn, float DeltaSeconds, bool bOnRoad);
+	TArray<FVector2d> SpeedHistory;
+	TArray<FVector> AngleHistory;
+	float StuckClock = 0.f;
+	float WheelsOffClock = 0.f;
+	double LastHitS = -100.0;
+	double LastDeckPathM = -100.0;
+	float WheelLogClock = 0.f;
 
 	/** -SimCruisePreflightStopAtJunction=N: stop at the first stop line ahead and hold N s, then go. */
 	float StopAtJunctionS = 0.f;

@@ -95,6 +95,46 @@ namespace SimCruisePreflightRules
 		return false;
 	}
 
+	double MaxSpeedDrop(const TArray<FVector2d>& TimeSpeed)
+	{
+		double Best = 0.0;
+		for (int32 I = 0; I < TimeSpeed.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < TimeSpeed.Num() && TimeSpeed[J].X - TimeSpeed[I].X <= HitWindowS; ++J)
+			{
+				Best = FMath::Max(Best, TimeSpeed[I].Y - TimeSpeed[J].Y);
+			}
+		}
+		return Best;
+	}
+
+	double MaxAngleChange(const TArray<FVector>& PathPitchRoll)
+	{
+		double Best = 0.0;
+		for (int32 I = 0; I < PathPitchRoll.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < PathPitchRoll.Num() && PathPitchRoll[J].X - PathPitchRoll[I].X <= DeckWindowM; ++J)
+			{
+				Best = FMath::Max(Best, FMath::Abs(FMath::FindDeltaAngleDegrees(PathPitchRoll[I].Y, PathPitchRoll[J].Y)));
+				Best = FMath::Max(Best, FMath::Abs(FMath::FindDeltaAngleDegrees(PathPitchRoll[I].Z, PathPitchRoll[J].Z)));
+			}
+		}
+		return Best;
+	}
+
+	FString Notes(const FSimCruisePreflightStats& S)
+	{
+		// Traffic: information only since the owner took traffic out for now (2026-11-14). Not a FAIL.
+		TArray<FString> R;
+		if (S.StuckTraffic > 0) R.Add(FString::Printf(TEXT("stuck-traffic-%d"), S.StuckTraffic));
+		if (S.TrafficCutIns > 0) R.Add(FString::Printf(TEXT("traffic-cut-in-%d"), S.TrafficCutIns));
+		if (S.TrafficOverlaps > 0) R.Add(FString::Printf(TEXT("traffic-through-our-car-%d"), S.TrafficOverlaps));
+		if (S.TrafficTurnRounds > 0) R.Add(FString::Printf(TEXT("traffic-turn-round-%d"), S.TrafficTurnRounds));
+		if (S.TrafficAtGrade > 0) R.Add(FString::Printf(TEXT("motorway-traffic-at-grade-%d"), S.TrafficAtGrade));
+		if (S.JunctionHoldAskedS > 0.f && S.JunctionHoldS < S.JunctionHoldAskedS - 0.5f) R.Add(FString::Printf(TEXT("junction-hold-%.0fs-of-%.0fs"), S.JunctionHoldS, S.JunctionHoldAskedS));
+		return FString::Join(R, TEXT(","));
+	}
+
 	bool IsCutIn(double AlongM, double SideM, double PrevSideM, double RelHeadingDeg, double OurSpeedMps, double TheirLengthM)
 	{
 		if (OurSpeedMps < CutInMinSpeedMps) return false;
@@ -129,12 +169,11 @@ namespace SimCruisePreflightRules
 		if (S.RoadSteps > 0) R.Add(FString::Printf(TEXT("road-steps-%d-max-%.0fcm"), S.RoadSteps, S.MaxStepCm));
 		if (S.RoadGaps > 0) R.Add(FString::Printf(TEXT("road-gaps-%d"), S.RoadGaps));
 		if (S.BorderJolts > 0) R.Add(FString::Printf(TEXT("jolts-at-tile-borders-%d"), S.BorderJolts));
-		if (S.StuckTraffic > 0) R.Add(FString::Printf(TEXT("stuck-traffic-%d"), S.StuckTraffic));
-		if (S.TrafficCutIns > 0) R.Add(FString::Printf(TEXT("traffic-cut-in-%d"), S.TrafficCutIns));
-		if (S.TrafficOverlaps > 0) R.Add(FString::Printf(TEXT("traffic-through-our-car-%d"), S.TrafficOverlaps));
-		if (S.TrafficTurnRounds > 0) R.Add(FString::Printf(TEXT("traffic-turn-round-%d"), S.TrafficTurnRounds));
-		if (S.TrafficAtGrade > 0) R.Add(FString::Printf(TEXT("motorway-traffic-at-grade-%d"), S.TrafficAtGrade));
-		if (S.JunctionHoldAskedS > 0.f && S.JunctionHoldS < S.JunctionHoldAskedS - 0.5f) R.Add(FString::Printf(TEXT("junction-hold-%.0fs-of-%.0fs"), S.JunctionHoldS, S.JunctionHoldAskedS));
+		// The car's own state: stuck at the limit, a hit, a pitch or roll jump on the road, wheels off the ground.
+		if (S.StuckSeconds > MaxStuckSeconds) R.Add(FString::Printf(TEXT("stuck-at-rev-limit-%.0fs"), S.StuckSeconds));
+		if (S.Hits > 0) R.Add(FString::Printf(TEXT("hit-%d"), S.Hits));
+		if (S.DeckJumps > 0) R.Add(FString::Printf(TEXT("deck-not-smooth-%d-max-%.0fdeg"), S.DeckJumps, S.MaxDeckDeg));
+		if (S.WheelsOffSeconds > MaxWheelsOffSeconds) R.Add(FString::Printf(TEXT("wheels-off-ground-%.1fs"), S.WheelsOffSeconds));
 		if (S.DriveSeconds > 0.f && S.Frames < S.DriveSeconds / 0.1f * 0.5f) R.Add(FString::Printf(TEXT("few-frames-%d"), S.Frames));
 		if (S.PeakRearSlipDeg > MaxRearSlipDeg || S.ReversedSeconds > MaxReversedSeconds)
 		{
@@ -238,7 +277,11 @@ void ASimCruisePreflight::BeginPlay()
 	// speed limit, corners at 75 % of the car's own skidpad grip, brakes at 70 % of it, up to 45 m/s,
 	// looking 200 m ahead, traffic off.
 	bKeen = FParse::Param(Cmd, TEXT("SimCruisePreflightKeen"));
-	if (bKeen)
+	// Traffic is off in every pre-flight run (the owner's decision, 2026-11-14: detail and driving feel
+	// first); -SimCruisePreflightTraffic keeps it on (a keen run never has it). Set again when the drive
+	// starts, after the saved preferences.
+	bTrafficOff = bKeen || !FParse::Param(Cmd, TEXT("SimCruisePreflightTraffic"));
+	if (bTrafficOff)
 	{
 		if (IConsoleVariable* Cars = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Traffic.Cars"))) Cars->Set(0, ECVF_SetByCode);
 	}
@@ -307,6 +350,84 @@ void ASimCruisePreflight::OnRebased(const FVector& OffsetCm)
 	for (TPair<TWeakObjectPtr<AActor>, FTrafficWatch>& Car : TrafficWatch)
 	{
 		Car.Value.LastCm += OffsetCm;
+	}
+}
+
+void ASimCruisePreflight::WatchCar(ASimCruisePlayerController* Player, APawn* Pawn, float DeltaSeconds, bool bOnRoad)
+{
+	using namespace SimCruisePreflightRules;
+	const FSimCruiseDriveTelemetry& T = Player->GetTelemetry();
+	const double Now = Stats.DriveSeconds;
+	const double Speed = T.BodyVelocityMps.Size();
+	double Redline = 7000.0;
+	if (const ISimCruiseVehicleControl* Control = Cast<ISimCruiseVehicleControl>(Pawn)) Redline = Control->GetVehicleSetup().RedlineRpm;
+
+	// STUCK: the engine near the limit and the car not moving (high-centred, wedged, wheels in the air).
+	if (T.EngineSpeedRpm > StuckRpmShare * Redline && Speed < StuckMaxMps)
+	{
+		StuckClock += DeltaSeconds;
+		if (StuckClock > MaxStuckSeconds && StuckClock - DeltaSeconds <= MaxStuckSeconds)
+		{
+			UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: STUCK at %.0f rpm and %.1f m/s for %.1f s at %.0f m (frame %d)"), T.EngineSpeedRpm, Speed, StuckClock, PathM, FrameIndex);
+			Review.Event(TEXT("stuck"), Stats.DriveSeconds);
+		}
+	}
+	else StuckClock = 0.f;
+	Stats.StuckSeconds = FMath::Max(Stats.StuckSeconds, StuckClock);
+
+	// HIT: more speed lost in half a second than braking can take away.
+	SpeedHistory.Add(FVector2d(Now, Speed));
+	while (SpeedHistory.Num() > 2 && Now - SpeedHistory[0].X > HitWindowS) SpeedHistory.RemoveAt(0);
+	const double Drop = MaxSpeedDrop(SpeedHistory);
+	if (Drop > HitDropMps && Now - LastHitS > 2.0)
+	{
+		LastHitS = Now;
+		++Stats.Hits;
+		UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: HIT: %.1f m/s lost in %.1f s at %.0f m, now %.1f m/s (frame %d)"), Drop, HitWindowS, PathM, Speed, FrameIndex);
+		Review.Event(TEXT("hit"), Stats.DriveSeconds);
+	}
+
+	// DECK NOT SMOOTH: pitch or roll jumps within a few metres of road (a hump, a lip, a warped deck).
+	const FRotator R = Pawn->GetActorRotation();
+	if (bOnRoad && Speed > 3.0)
+	{
+		AngleHistory.Add(FVector(PathM, R.Pitch, R.Roll));
+		while (AngleHistory.Num() > 2 && PathM - AngleHistory[0].X > DeckWindowM) AngleHistory.RemoveAt(0);
+		const double Change = MaxAngleChange(AngleHistory);
+		Stats.MaxDeckDeg = FMath::Max(Stats.MaxDeckDeg, static_cast<float>(Change));
+		if (Change > DeckDeg && PathM - LastDeckPathM > 10.0)
+		{
+			LastDeckPathM = PathM;
+			++Stats.DeckJumps;
+			UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: DECK NOT SMOOTH: pitch or roll changed %.1f deg within %.0f m at %.0f m (pitch %.1f, roll %.1f; frame %d)"), Change, DeckWindowM, PathM, R.Pitch, R.Roll, FrameIndex);
+			Review.Event(TEXT("deck-not-smooth"), Stats.DriveSeconds);
+		}
+	}
+	else AngleHistory.Reset();
+
+	// Wheels off the ground on a road surface (contact from the tyre model).
+	int32 Off = 0;
+	for (const FSimCruiseDriveWheelTelemetry& W : T.Wheels) Off += W.bContact ? 0 : 1;
+	if (bOnRoad && Off >= 2)
+	{
+		WheelsOffClock += DeltaSeconds;
+		if (WheelsOffClock > 0.3f && WheelsOffClock - DeltaSeconds <= 0.3f)
+		{
+			UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: %d wheels off the ground on the road at %.0f m, %.1f m/s, contact FL %d FR %d RL %d RR %d (frame %d)"),
+				Off, PathM, Speed, static_cast<int32>(T.Wheels[0].bContact), static_cast<int32>(T.Wheels[1].bContact), static_cast<int32>(T.Wheels[2].bContact), static_cast<int32>(T.Wheels[3].bContact), FrameIndex);
+			Review.Event(TEXT("wheels-off"), Stats.DriveSeconds);
+		}
+	}
+	else WheelsOffClock = 0.f;
+	Stats.WheelsOffSeconds = FMath::Max(Stats.WheelsOffSeconds, WheelsOffClock);
+	// A wheel-contact line once a second while the car stands with the engine high: "high-centred" is measured, not guessed.
+	WheelLogClock += DeltaSeconds;
+	if (StuckClock > 0.f && WheelLogClock > 1.f)
+	{
+		WheelLogClock = 0.f;
+		UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: wheel contact FL %d FR %d RL %d RR %d, loads %.0f %.0f %.0f %.0f N, pitch %.1f roll %.1f"),
+			static_cast<int32>(T.Wheels[0].bContact), static_cast<int32>(T.Wheels[1].bContact), static_cast<int32>(T.Wheels[2].bContact), static_cast<int32>(T.Wheels[3].bContact),
+			T.Wheels[0].NormalLoadN, T.Wheels[1].NormalLoadN, T.Wheels[2].NormalLoadN, T.Wheels[3].NormalLoadN, R.Pitch, R.Roll);
 	}
 }
 
@@ -631,6 +752,15 @@ void ASimCruisePreflight::Tick(float DeltaSeconds)
 			RebaseHandle = Stream->OnRebased.AddUObject(this, &ASimCruisePreflight::OnRebased);
 			FrameHandle = UGameViewportClient::OnScreenshotCaptured().AddUObject(this, &ASimCruisePreflight::OnFrame);
 			LastYawDeg = Pawn->GetActorRotation().Yaw;
+			if (bTrafficOff)
+			{
+				IConsoleVariable* Cars = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Traffic.Cars"));
+				if (Cars && Cars->GetInt() != 0)
+				{
+					Cars->Set(0, ECVF_SetByCode);
+					UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: traffic off (the saved preference had turned it on)"));
+				}
+			}
 			Stage = EStage::Drive;
 			StageStarted = Now;
 			Stats.DriveSeconds = 0.f;
@@ -1059,6 +1189,7 @@ void ASimCruisePreflight::MeasureTick(ASimCruisePlayerController* Player, float 
 	}
 	OffRoadNow = bUnderRoad ? 0.f : OffRoadNow + DeltaSeconds;
 	Stats.OffRoadSeconds = FMath::Max(Stats.OffRoadSeconds, OffRoadNow);
+	WatchCar(Player, Pawn, DeltaSeconds, bUnderRoad);
 
 	// Jolts: vertical acceleration of the body, from its velocity.
 	const double Vz = Player->GetTelemetry().BodyVelocityMps.Z;
@@ -1348,8 +1479,11 @@ void ASimCruisePreflight::Finish()
 
 	MeasureFrames(TimedFrameMs, Stats);
 	const FString Reasons = Judge(Stats);
+	const FString InfoNotes = Notes(Stats);
 	const bool bPass = Reasons.IsEmpty();
 	Review.Finish(bPass ? TEXT("PASS") : TEXT("FAIL"), Reasons);
+	UE_LOG(LogSimCruisePreflight, Display, TEXT("PREFLIGHT CAR stuck=%.1fs hits=%d deck_jumps=%d max_deck=%.1fdeg wheels_off=%.1fs notes=%s"),
+		Stats.StuckSeconds, Stats.Hits, Stats.DeckJumps, Stats.MaxDeckDeg, Stats.WheelsOffSeconds, InfoNotes.IsEmpty() ? TEXT("none") : *InfoNotes);
 	UE_LOG(LogSimCruisePreflight, Display,
 		TEXT("PREFLIGHT %s road=%s car=%s place=\"%s\" distance=%.0fm mean=%.1fm/s offroad=%.1fs rear_slip=%.1fdeg backwards=%.1fs past_edge=%.1fm/%.1fs frame_p95=%.1fms hitches=%d sky_white=%.0f%% tile_popin=%d car_popin=%d flashes=%d steps=%d max_step=%.1fcm gaps=%d jolts=%d border_jolts=%d stuck=%d cut_ins=%d through=%d turn_rounds=%d at_grade=%d junction_hold=%.1fs frames=%d reasons=%s"),
 		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place, Stats.DistanceM, Stats.MeanSpeedMps, Stats.OffRoadSeconds,
@@ -1371,6 +1505,7 @@ void ASimCruisePreflight::Finish()
 		TEXT("  \"peak_rear_slip_deg\": %.1f, \"peak_yaw_dps\": %.1f, \"backwards_seconds\": %.2f, \"forced_spin\": %s,\n")
 		TEXT("  \"max_past_edge_m\": %.2f, \"past_edge_seconds\": %.2f,\n")
 		TEXT("  \"timed_frames\": %d, \"frame_p95_ms\": %.1f, \"frames_over_50ms\": %d, \"hitches_over_100ms\": %d,\n")
+		TEXT("  \"stuck_seconds\": %.1f, \"hits\": %d, \"deck_jumps\": %d, \"max_deck_deg\": %.1f, \"wheels_off_seconds\": %.1f, \"notes\": \"%s\",\n")
 		TEXT("  \"reasons\": \"%s\"\n}\n"),
 		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place.ReplaceCharWithEscapedChar(),
 		Stats.DriveSeconds, Stats.DistanceM, Stats.MeanSpeedMps, Stats.OffRoadSeconds, B(Stats.bFellBack),
@@ -1383,6 +1518,7 @@ void ASimCruisePreflight::Finish()
 		Stats.PeakRearSlipDeg, Stats.PeakYawDps, Stats.ReversedSeconds, B(Stats.bForcedSpin),
 		Stats.MaxOffRibbonM, Stats.OffRibbonSeconds,
 		Stats.TimedFrames, Stats.FrameP95Ms, Stats.SlowFrames, Stats.Hitches,
+		Stats.StuckSeconds, Stats.Hits, Stats.DeckJumps, Stats.MaxDeckDeg, Stats.WheelsOffSeconds, *InfoNotes,
 		bPass ? TEXT("ok") : *Reasons);
 	FFileHelper::SaveStringToFile(Json, *FPaths::Combine(OutputDir, TEXT("preflight.json")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 

@@ -162,13 +162,49 @@ bool FSimCruisePreflightTrafficTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("a crossing street"), IsAtGradeMotorway(TEXT("primary"), 20.0, 2.0, 0.3, 88.0));
 	TestFalse(TEXT("a motorway alongside"), IsAtGradeMotorway(TEXT("motorway"), 20.0, 6.0, 0.3, 5.0));
 
+	// Traffic is information only (traffic is off for now): notes, never a FAIL.
 	FSimCruisePreflightStats S = SimCruisePreflightTest::Good();
-	S.TrafficCutIns = 1; TestTrue(TEXT("a cut-in fails"), Judge(S).Contains(TEXT("traffic-cut-in-1")));
-	S = SimCruisePreflightTest::Good(); S.TrafficOverlaps = 1; TestTrue(TEXT("a car through ours fails"), Judge(S).Contains(TEXT("traffic-through-our-car")));
-	S = SimCruisePreflightTest::Good(); S.TrafficTurnRounds = 2; TestTrue(TEXT("turn-rounds fail"), Judge(S).Contains(TEXT("traffic-turn-round-2")));
-	S = SimCruisePreflightTest::Good(); S.TrafficAtGrade = 1; TestTrue(TEXT("motorway at grade fails"), Judge(S).Contains(TEXT("motorway-traffic-at-grade")));
-	S = SimCruisePreflightTest::Good(); S.JunctionHoldAskedS = 10.f; S.JunctionHoldS = 0.f; TestTrue(TEXT("no stop line found fails"), Judge(S).Contains(TEXT("junction-hold-0s-of-10s")));
-	S = SimCruisePreflightTest::Good(); S.JunctionHoldAskedS = 10.f; S.JunctionHoldS = 10.f; TestEqual(TEXT("a held junction passes"), Judge(S), FString());
+	S.TrafficCutIns = 1; S.TrafficOverlaps = 1; S.TrafficTurnRounds = 2; S.TrafficAtGrade = 1; S.StuckTraffic = 3;
+	TestEqual(TEXT("traffic counts do not fail the run"), Judge(S), FString());
+	TestTrue(TEXT("a cut-in is noted"), Notes(S).Contains(TEXT("traffic-cut-in-1")));
+	TestTrue(TEXT("a car through ours is noted"), Notes(S).Contains(TEXT("traffic-through-our-car-1")));
+	TestTrue(TEXT("turn-rounds are noted"), Notes(S).Contains(TEXT("traffic-turn-round-2")));
+	TestTrue(TEXT("motorway at grade is noted"), Notes(S).Contains(TEXT("motorway-traffic-at-grade-1")));
+	S = SimCruisePreflightTest::Good(); S.JunctionHoldAskedS = 10.f; S.JunctionHoldS = 0.f; TestTrue(TEXT("no stop line found is noted"), Notes(S).Contains(TEXT("junction-hold-0s-of-10s")));
+	S = SimCruisePreflightTest::Good(); S.JunctionHoldAskedS = 10.f; S.JunctionHoldS = 10.f; TestEqual(TEXT("a held junction notes nothing"), Notes(S), FString());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruisePreflightCarStateTest, "SimCruise.Gameplay.Preflight.CarState", SimCruisePreflightTest::Flags)
+bool FSimCruisePreflightCarStateTest::RunTest(const FString& Parameters)
+{
+	using namespace SimCruisePreflightRules;
+	// HIT: the Doraville crash, 28.6 to 0.4 m/s in 0.4 s; hard braking at 1.1 g over 0.5 s is not one.
+	TArray<FVector2d> Crash = { FVector2d(30.3, 28.6), FVector2d(30.5, 14.0), FVector2d(30.7, 0.4) };
+	TestTrue(TEXT("a crash is a hit"), MaxSpeedDrop(Crash) > HitDropMps);
+	TArray<FVector2d> Brake;
+	for (int32 I = 0; I <= 10; ++I) Brake.Add(FVector2d(I * 0.05, 25.0 - 1.1 * 9.81 * I * 0.05));
+	TestFalse(TEXT("hard braking is not a hit"), MaxSpeedDrop(Brake) > HitDropMps);
+	TArray<FVector2d> Slow = { FVector2d(0.0, 20.0), FVector2d(1.0, 10.0) };
+	TestFalse(TEXT("a drop over a whole second is outside the window"), MaxSpeedDrop(Slow) > HitDropMps);
+
+	// DECK NOT SMOOTH: a 6 deg pitch kink within 3 m; a steady 8 % grade (4.6 deg) over 50 m; a 3 deg roll change.
+	TArray<FVector> Kink = { FVector(100.0, 0.0, 0.0), FVector(101.5, 3.0, 0.0), FVector(103.0, 6.0, 0.5) };
+	TestTrue(TEXT("a hump on a deck"), MaxAngleChange(Kink) > DeckDeg);
+	TArray<FVector> Grade;
+	for (int32 I = 0; I <= 50; ++I) Grade.Add(FVector(I * 1.0, 4.6, 0.0));
+	TestFalse(TEXT("a steady grade"), MaxAngleChange(Grade) > DeckDeg);
+	TArray<FVector> Camber = { FVector(0.0, 0.0, 0.0), FVector(4.0, 0.0, 3.0) };
+	TestFalse(TEXT("a camber change of 3 deg"), MaxAngleChange(Camber) > DeckDeg);
+	TArray<FVector> Seam = { FVector(0.0, 179.0, 0.0), FVector(2.0, -179.0, 0.0) };
+	TestFalse(TEXT("no false jump across +-180 deg"), MaxAngleChange(Seam) > DeckDeg);
+
+	FSimCruisePreflightStats S = SimCruisePreflightTest::Good();
+	S.StuckSeconds = 27.f; TestTrue(TEXT("27 s at the limit fails"), Judge(S).Contains(TEXT("stuck-at-rev-limit-27s")));
+	S = SimCruisePreflightTest::Good(); S.StuckSeconds = 1.5f; TestEqual(TEXT("a 1.5 s launch at the limit passes"), Judge(S), FString());
+	S = SimCruisePreflightTest::Good(); S.Hits = 1; TestTrue(TEXT("a hit fails"), Judge(S).Contains(TEXT("hit-1")));
+	S = SimCruisePreflightTest::Good(); S.DeckJumps = 2; S.MaxDeckDeg = 9.f; TestTrue(TEXT("a warped deck fails"), Judge(S).Contains(TEXT("deck-not-smooth-2-max-9deg")));
+	S = SimCruisePreflightTest::Good(); S.WheelsOffSeconds = 3.f; TestTrue(TEXT("wheels in the air fail"), Judge(S).Contains(TEXT("wheels-off-ground-3.0s")));
 	return true;
 }
 
