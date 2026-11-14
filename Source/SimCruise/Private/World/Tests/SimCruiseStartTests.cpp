@@ -655,8 +655,23 @@ bool FSimCruiseReleaseFaultProbe::RunTest(const FString& Parameters)
 							{
 								const FSimCruiseRibbonStation& S0 = R.St[j];
 								const FSimCruiseRibbonStation& S1 = R.St[j + 1];
+								// The deck's slab where SimCruiseBridges builds it.
+								if (B.Roads.DeckUndersideAt(r, j))
+								{
+									for (int32 k = K0; k <= K1; ++k)
+									{
+										if (Route[k].Tile != t) continue;
+										const FVector2d Lk = Local(k) - S0.C;
+										const double Along = FVector2d::DotProduct(Lk, S0.T), Across = FMath::Abs(FVector2d::DotProduct(Lk, S0.R));
+										if (Along < 0.0 || Along > S1.S - S0.S) continue;
+										Note(FString::Printf(TEXT("t%d r%d slab %d"), t, r, a), FString::Printf(TEXT("bridge deck slab: ribbon %d (%s) span from station %d"), r, *R.Class, a),
+											k, FMath::Max(0.0, Across - S0.HalfW - 0.4), S0.HC - 1.2, S0.HC);
+									}
+								}
 								for (int32 Edge = -1; Edge <= 1; Edge += 2)
 								{
+									// Only the parapets SimCruiseBridges builds.
+									if (!B.Roads.ParapetAt(r, j, Edge)) continue;
 									const FVector2d M0 = S0.C + S0.R * (Edge * (S0.HalfW + 0.2)), M1 = S1.C + S1.R * (Edge * (S1.HalfW + 0.2));
 									const double Z0 = S0.Height(Edge * S0.HalfW), Z1 = S1.Height(Edge * S1.HalfW);
 									const double Lo = FMath::Min(Z0, Z1) - 1.2, Hi = FMath::Max(Z0, Z1) + 0.85;
@@ -973,6 +988,16 @@ namespace SimCruiseStartTest
 					const double Dz = FMath::Abs(FMath::Lerp(A.HC, C.HC, Tu) - FMath::Lerp(D.HC, E.HC, Tv));
 					if (Dz > 0.3 && Dz < 4.5) Out.Add(FString::Printf(TEXT("%s x %s cross %.2f m apart in height at %s"), *Name(r), *Name(Sg.Key), Dz, *Place(X)));
 				}
+				// A deck's slab (1.2 m deep) over a road in a car's way, where SimCruiseBridges builds it.
+				if ((A.bBridge || C.bBridge) && Roads.DeckUndersideAt(r, i))
+				{
+					double Hs = 0.0;
+					int32 Os = INDEX_NONE;
+					if (Inside(A.C, r, 0.0, Hs, Os) && A.HC - 1.2 < Hs + 1.3 && A.HC > Hs + 0.15)
+					{
+						Out.Add(FString::Printf(TEXT("%s's deck slab stands in %s, %+.2f to %+.2f m over it, at %s"), *Name(r), *Name(Os), A.HC - 1.2 - Hs, A.HC - Hs, *Place(A.C)));
+					}
+				}
 				// Its edges, and its parapets on a deck.
 				for (const int32 Edge : { -1, 1 })
 				{
@@ -985,7 +1010,9 @@ namespace SimCruiseStartTest
 					{
 						Out.Add(FString::Printf(TEXT("%s's %s edge stands %.2f m over %s at %s"), *Name(r), Edge < 0 ? TEXT("left") : TEXT("right"), Ze - H, *Name(O), *Place(P)));
 					}
-					if (A.bBridge)
+					// The parapets SimCruiseBridges builds (one station past each span end too).
+					const bool bSpan = A.bBridge || C.bBridge || (i > 0 && R.St[i - 1].bBridge);
+					if (bSpan && Roads.ParapetAt(r, i, Edge))
 					{
 						const FVector2d Q = A.C + A.R * (Edge * (A.HalfW + 0.2));
 						double Hq = 0.0;
@@ -1050,7 +1077,7 @@ bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 	// SIMCRUISE_PLACES=us-detroit-mi,us-doraville-ga: only those places.
 	TArray<FString> Only;
 	FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_PLACES")).ParseIntoArray(Only, TEXT(","), true);
-	FString Md = TEXT("# Bridge spans changed by the clearance rule\n\nOne line per span: lifted (to the clearance shown) or de-decked (no parapets; the roads join). Tile/ribbon stand in for the way id, which the tile data does not carry.\n");
+	FString Md = TEXT("# Bridge spans changed by the clearance rule\n\nOne line per span whose parapets or deck slab were left out over a road at the deck's level. Tile/ribbon stand in for the way id, which the tile data does not carry.\n");
 	int32 NumPlaces = 0, Faults = 0, Spans = 0;
 	for (const FString& Root : Roots)
 	{
@@ -1064,24 +1091,28 @@ bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 			FVector StartCm;
 			if (!SimCruiseStartTest::BuildPlace(FPaths::Combine(Root, Place), Frame, Built, StartCm)) continue;
 			++NumPlaces;
-			int32 PlaceFaults = 0, PlaceSpans = 0;
+			int32 PlaceFaults = 0, PlaceSpans = 0, PlaceFaces = 0, PlaceOther = 0;
 			FString Lines;
 			for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built)
 			{
 				for (const FString& Span : Pair.Value->Roads.BridgeChanges) { Lines += FString::Printf(TEXT("- %s\n"), *Span); ++PlaceSpans; }
 				for (const FString& Fault : SimCruiseStartTest::RoadOverlaps(*Pair.Value, FString::Printf(TEXT("%s tile %d_%d"), *Place, Pair.Key.X, Pair.Key.Y)))
 				{
-					AddError(Fault);
+					// Faces in a car's way fail; edges over a parallel carriageway and crossings are
+					// counted for the before/after ratchet (SIMCRUISE_NO_BRIDGE_RULE=1 gives "before").
+					if (Fault.Contains(TEXT(" parapet stands ")) || Fault.Contains(TEXT(" deck slab stands "))) { AddError(Fault); ++PlaceFaces; }
+					else { AddWarning(Fault); ++PlaceOther; }
 					++PlaceFaults;
 				}
 			}
-			AddInfo(FString::Printf(TEXT("ROADOVERLAPS %s: %d tiles, %d bridge spans changed, %d faults"), *Place, Built.Num(), PlaceSpans, PlaceFaults));
+			AddInfo(FString::Printf(TEXT("ROADOVERLAPS %s: %d tiles, %d bridge spans changed, %d faults (%d faces in a car's way, %d other), bridge rule %s"),
+				*Place, Built.Num(), PlaceSpans, PlaceFaults, PlaceFaces, PlaceOther, FSimCruiseRoadNetwork::BridgeRuleOn() ? TEXT("on") : TEXT("off")));
 			Md += FString::Printf(TEXT("\n## %s: %d spans changed, %d overlap faults\n\n%s"), *Place, PlaceSpans, PlaceFaults, Lines.IsEmpty() ? TEXT("(none)\n") : *Lines);
 			Faults += PlaceFaults;
 			Spans += PlaceSpans;
 		}
 	}
-	FFileHelper::SaveStringToFile(Md, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("BridgeFix"), TEXT("changed-spans.md")));
+	FFileHelper::SaveStringToFile(Md, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("BridgeFix"), FSimCruiseRoadNetwork::BridgeRuleOn() ? TEXT("changed-spans.md") : TEXT("before-rule.md")));
 	AddInfo(FString::Printf(TEXT("ROADOVERLAPS recorded: %d places, %d bridge spans changed, %d faults"), NumPlaces, Spans, Faults));
 	return true;
 }

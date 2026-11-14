@@ -88,8 +88,9 @@ void ASimCruiseBridges::BuildTile(const FIntPoint& Id)
 	auto Cm = [](const FVector2d& P, double Z) { return FVector(P.X * 100.0, P.Y * 100.0, Z * 100.0); };
 	FBuffers B;
 	double Metres = 0.0;
-	for (const FSimCruiseRibbon& Ribbon : Build->Roads.Ribbons)
+	for (int32 RibbonIndex = 0; RibbonIndex < Build->Roads.Ribbons.Num(); ++RibbonIndex)
 	{
+		const FSimCruiseRibbon& Ribbon = Build->Roads.Ribbons[RibbonIndex];
 		const int32 N = Ribbon.St.Num();
 		for (int32 k = 0; k < N; ++k)
 		{
@@ -106,6 +107,9 @@ void ASimCruiseBridges::BuildTile(const FIntPoint& Id)
 				Metres += S1.S - S0.S;
 				for (int32 Edge = -1; Edge <= 1; Edge += 2)
 				{
+					// No wall across a road at the deck's level (a merge gore, a crossing at grade:
+					// Northcrest Road's parapets across I-285 in Doraville, GA stopped a car dead).
+					if (!Build->Roads.ParapetAt(RibbonIndex, j, Edge)) continue;
 					const FVector2d E0 = S0.C + S0.R * (Edge * S0.HalfW), E1 = S1.C + S1.R * (Edge * S1.HalfW);
 					const FVector2d O0 = S0.C + S0.R * (Edge * (S0.HalfW + ParapetWidthM)), O1 = S1.C + S1.R * (Edge * (S1.HalfW + ParapetWidthM));
 					const double Z0 = S0.Height(Edge * S0.HalfW), Z1 = S1.Height(Edge * S1.HalfW);
@@ -115,10 +119,11 @@ void ASimCruiseBridges::BuildTile(const FIntPoint& Id)
 					B.Quad(Cm(E0, Z0 + ParapetM), Cm(E1, Z1 + ParapetM), Cm(O1, Z1 + ParapetM), Cm(O0, Z0 + ParapetM), FVector::UpVector);
 					B.Quad(Cm(O0, Z0 + ParapetM), Cm(O1, Z1 + ParapetM), Cm(O1, Z1 - DeckDepthM), Cm(O0, Z0 - DeckDepthM), Out);
 				}
-				// The deck's underside.
+				// The deck's underside (not as a slab across a road just under the deck).
+				const bool bUnderside = Build->Roads.DeckUndersideAt(RibbonIndex, j);
 				const FVector2d L0 = S0.C - S0.R * (S0.HalfW + ParapetWidthM), L1 = S1.C - S1.R * (S1.HalfW + ParapetWidthM);
 				const FVector2d R0 = S0.C + S0.R * (S0.HalfW + ParapetWidthM), R1 = S1.C + S1.R * (S1.HalfW + ParapetWidthM);
-				B.Quad(Cm(L0, S0.HC - DeckDepthM), Cm(R0, S0.HC - DeckDepthM), Cm(R1, S1.HC - DeckDepthM), Cm(L1, S1.HC - DeckDepthM), -FVector::UpVector);
+				if (bUnderside) B.Quad(Cm(L0, S0.HC - DeckDepthM), Cm(R0, S0.HC - DeckDepthM), Cm(R1, S1.HC - DeckDepthM), Cm(L1, S1.HC - DeckDepthM), -FVector::UpVector);
 				// Piers where the deck stands high over the ground.
 				SincePier += S1.S - S0.S;
 				if (SincePier >= PierSpacingM && j > A && j + 1 < Z)
