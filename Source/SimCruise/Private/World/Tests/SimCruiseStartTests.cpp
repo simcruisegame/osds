@@ -188,6 +188,19 @@ bool FSimCruiseStartPlacesTest::RunTest(const FString& Parameters)
 			++Starts;
 		}
 	}
+	TestTrue(FString::Printf(TEXT("starts checked: %d"), Starts), Starts >= 5);
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseStartRecordedTest, "SimCruise.World.Start.RecordedPlaces", SimCruiseStartTest::Flags)
+bool FSimCruiseStartRecordedTest::RunTest(const FString& Parameters)
+{
+	// As World.Start.EveryPlace, over every recorded place (Saved/StartPlaces/<key>/ and
+	// SIMCRUISE_PROBE_DIR: the helper's tile documents and place.txt, as Debug.ReleaseFaultProbe reads
+	// them; the 18 places of data/test-places.json go there with scripts\record-start-places.ps1).
+	// About 200 tile builds: a slow test (Config/Tests/Tags.ini). Without recorded places it passes.
+	int32 Starts = 0;
 	TArray<FString> Roots = { FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces")) };
 	const FString Probe = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_PROBE_DIR"));
 	if (!Probe.IsEmpty()) Roots.Add(Probe);
@@ -209,10 +222,9 @@ bool FSimCruiseStartPlacesTest::RunTest(const FString& Parameters)
 			++Starts;
 		}
 	}
-	TestTrue(FString::Printf(TEXT("starts checked: %d"), Starts), Starts >= 5);
+	AddInfo(FString::Printf(TEXT("recorded places checked: %d"), Starts));
 	return true;
 }
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseLandscapeOutlierTest, "SimCruise.World.Landscape.NoSpikes", SimCruiseStartTest::Flags)
 bool FSimCruiseLandscapeOutlierTest::RunTest(const FString& Parameters)
 {
