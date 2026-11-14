@@ -225,6 +225,8 @@ public:
 	void CollectSeamEnds(TArray<FSimCruiseSeamEnd>& Out) const;
 
 	TArray<FSimCruiseRibbon> Ribbons;
+	/** One line per bridge span the clearance rule lifted or de-decked in this build (also logged as "SimCruise BRIDGE"). */
+	TArray<FString> BridgeChanges;
 	TArray<FSimCruiseRoadPad> Pads;
 	double TileSizeM = 0.0;
 	int32 NumContractedEnds = 0;

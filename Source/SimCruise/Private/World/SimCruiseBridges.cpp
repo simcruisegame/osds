@@ -125,7 +125,23 @@ void ASimCruiseBridges::BuildTile(const FIntPoint& Id)
 				{
 					SincePier = 0.0;
 					const double Top = S0.HC - DeckDepthM, Ground = GroundM(S0.C);
-					if (Top - Ground > PierMinHeightM)
+					// Never in a road under the deck (a lifted overpass over a motorway).
+					bool bOnRoad = false;
+					{
+						const FVector2d Tq = S0.T * PierHalfM, Rq = S0.R * FMath::Max(S0.HalfW * 0.6, 2.0);
+						for (const FVector2d& Q : { S0.C, S0.C - Tq - Rq, S0.C + Tq - Rq, S0.C + Tq + Rq, S0.C - Tq + Rq })
+						{
+							TArray<TPair<int32, int32>> Segs;
+							Build->Roads.GatherSegments(Q, 2.0, Segs);
+							for (const TPair<int32, int32>& Sg : Segs)
+							{
+								const FSimCruiseRoadHit Hit = Build->Roads.Project(Sg.Key, Sg.Value, Q);
+								if (FMath::Abs(Hit.Along) <= 0.01 && FMath::Abs(Hit.Lateral) <= Hit.HalfW + 1.0 && Hit.Height < Top - 1.0) { bOnRoad = true; break; }
+							}
+							if (bOnRoad) break;
+						}
+					}
+					if (Top - Ground > PierMinHeightM && !bOnRoad)
 					{
 						const FVector2d T = S0.T * PierHalfM, R = S0.R * FMath::Max(S0.HalfW * 0.6, 2.0);
 						const FVector2d C[4] = { S0.C - T - R, S0.C + T - R, S0.C + T + R, S0.C - T + R };
