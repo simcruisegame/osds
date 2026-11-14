@@ -124,6 +124,7 @@ The judge also watches our car every frame (`SimCruisePreflightRules`, tests `Si
 | `hit-<n>` | The speed fell by more than 6 m/s within 0.5 s (more than the hardest braking, about 1.2 g). | driving, P1 |
 | `deck-not-smooth-<n>-max-<deg>deg` | On a road surface or a bridge deck above 3 m/s, the body's pitch or roll changed by more than 4 deg within 5 m of path (a hump, a lip, a warped deck). | world, P1 |
 | `wheels-off-ground-<s>s` | Two or more wheels without contact on a road surface for more than 1 s. | driving, P1 |
+| `hang-<s>s` | The hang watchdog (a thread of its own) saw no tick of the game thread for more than 30 s. After 10 s it logs `Pre-flight: HANG` with the game thread's stack; 10-30 s is the note `game-thread-stall-<s>s`. (2026-11-14: a Detroit start stood still 5 min with no log line.) | release, P1 |
 
 ## Traffic and planes: off
 

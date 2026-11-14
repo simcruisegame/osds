@@ -205,6 +205,11 @@ bool FSimCruisePreflightCarStateTest::RunTest(const FString& Parameters)
 	S = SimCruisePreflightTest::Good(); S.Hits = 1; TestTrue(TEXT("a hit fails"), Judge(S).Contains(TEXT("hit-1")));
 	S = SimCruisePreflightTest::Good(); S.DeckJumps = 2; S.MaxDeckDeg = 9.f; TestTrue(TEXT("a warped deck fails"), Judge(S).Contains(TEXT("deck-not-smooth-2-max-9deg")));
 	S = SimCruisePreflightTest::Good(); S.WheelsOffSeconds = 3.f; TestTrue(TEXT("wheels in the air fail"), Judge(S).Contains(TEXT("wheels-off-ground-3.0s")));
+	// The hang watchdog: the Detroit start's 312 s fails; a 15 s stall is a note; 5 s is nothing.
+	S = SimCruisePreflightTest::Good(); S.LongestHangS = 312.f; TestTrue(TEXT("a 5-minute hang fails"), Judge(S).Contains(TEXT("hang-312s")));
+	S = SimCruisePreflightTest::Good(); S.LongestHangS = 15.f; TestEqual(TEXT("a 15 s stall passes"), Judge(S), FString());
+	TestTrue(TEXT("and is noted"), Notes(S).Contains(TEXT("game-thread-stall-15s")));
+	S = SimCruisePreflightTest::Good(); S.LongestHangS = 5.f; TestEqual(TEXT("a 5 s stall is not noted"), Notes(S), FString());
 	return true;
 }
 
