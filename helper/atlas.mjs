@@ -131,6 +131,9 @@ async function chunk(X,Y){
      if(p.surface==='unpaved'||p.surface==='paved'||bridge)road.push(p.surface==='unpaved'||p.surface==='paved'?p.surface:'');
      // Index 6 marks a structure: the deck comes from `bridges`, not the ground.
      if(bridge)road.push('bridge');
+     // Index 7: OSM layer where it is not 0 (a road under a bridge, layer -1, goes down into a cut).
+     const layer=Math.round(Number(p.layer??0))||0;
+     if(layer){while(road.length<7)road.push('');road.push(layer)}
      roads.push(road);
     }
     run=[];

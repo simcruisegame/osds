@@ -21,6 +21,7 @@ struct FSimCruiseRoadRow
 	double WidthM = 8.0;       // paved width (helper/road-widths.mjs)
 	FString Surface;           // "paved", "unpaved" or empty
 	bool bBridge = false;
+	int32 Layer = 0;           // OSM layer (helper row index 7; absent: 0)
 };
 
 /** helper `road_surface` station: [x, y, z m, e, tx, ty, w m] (road-grade.mjs roadSurface). */

@@ -1368,7 +1368,7 @@ namespace SimCruiseStartTest
 				// A span left as it was (its ramps did not fit; logged by the road network): its smoothness is not
 				// judged, but it is still driven (car corners on the road, nothing built in its lanes).
 				bool bLeft = false;
-				for (const FVector2d& Lw : Roads.DecksLeftAsTheyWere) bLeft |= FMath::RoundToInt(Lw.X) == r && FMath::Abs(Lw.Y - R.St[k].S) < 0.5;
+				for (int32 j = k; j <= e; ++j) bLeft |= R.St[j].bLeftAsItWas;
 				if (bLeft) ++OutLeft;
 				// Its own line: a deck whose mapped end heights need more than 6 % keeps that grade (real data).
 				const int32 Ea = FMath::Max(k - 1, 0), Eb = FMath::Min(e + 1, N - 1);

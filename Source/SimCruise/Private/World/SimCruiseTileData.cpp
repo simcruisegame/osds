@@ -229,6 +229,7 @@ namespace SimCruiseTileData
 			Road.WidthM = NumberAt(*Row, 4, 8.0);
 			Road.Surface = StringAt(*Row, 5);
 			Road.bBridge = StringAt(*Row, 6) == TEXT("bridge");
+			if (Row->Num() > 7 && (*Row)[7].IsValid() && (*Row)[7]->Type == EJson::Number) Road.Layer = static_cast<int32>((*Row)[7]->AsNumber());
 			if (Road.Points.Num() >= 2 && Road.WidthM > 0.5)
 			{
 				Out.Roads.Add(MoveTemp(Road));
