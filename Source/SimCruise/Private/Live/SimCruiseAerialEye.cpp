@@ -149,8 +149,13 @@ bool FSimCruiseAerialEye::Initialize()
 	}
 	bTried = true;
 	FString Choice;
-	if (!FParse::Value(FCommandLine::Get(), TEXT("SimCruiseScanEye="), Choice) || Choice.IsEmpty() || Choice.Equals(TEXT("none"), ESearchCase::IgnoreCase))
+	// On by default (owner's criterion 2026-11-14: the whole game looks real): the shipped student eye.
+	// -SimCruiseScanEye=none or -SimCruiseNoEye turns it off; =satlas_landcover picks the development teacher.
+	Choice = TEXT("aerial_student");
+	FParse::Value(FCommandLine::Get(), TEXT("SimCruiseScanEye="), Choice);
+	if (Choice.IsEmpty() || Choice.Equals(TEXT("none"), ESearchCase::IgnoreCase) || FParse::Param(FCommandLine::Get(), TEXT("SimCruiseNoEye")))
 	{
+		UE_LOG(LogSimCruiseAerialEye, Display, TEXT("Scan eye off"));
 		return false;
 	}
 	if (Choice.Equals(TEXT("satlas_landcover"), ESearchCase::IgnoreCase))

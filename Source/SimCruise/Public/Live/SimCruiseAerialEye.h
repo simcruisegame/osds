@@ -1,4 +1,4 @@
-// Copyright SimCruise contributors. All Rights Reserved.
+﻿// Copyright SimCruise contributors. All Rights Reserved.
 
 #pragma once
 
@@ -18,7 +18,8 @@
  *   our head, Saved/AI/scan-eye-satlas.onnx (development teacher, 352 MB, not in git;
  *   lab/scan/satlas_eye.py export).
  *
- * Off by default: -SimCruiseScanEye=aerial_student (or satlas_landcover) turns it on. Then the world
+ * On by default with aerial_student (lower 48 states; rules elsewhere); -SimCruiseScanEye=none or
+ * -SimCruiseNoEye turns it off, =satlas_landcover picks the development teacher. The world
  * streamer queues every tile with its photograph, and one thread at below-normal priority runs the
  * model with NNERuntimeORTCpu (the project's global ORT pool), never the game thread, never the GPU.
  * Results go to a disk cache, Saved/Scan/eyes/<eye>-v<version>/16/<x>/<y>.eye, so a tile costs its
