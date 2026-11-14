@@ -165,6 +165,30 @@ bool FSimCruiseTrafficPatienceTest::RunTest(const FString& Parameters)
 	const FVector NearSide = Corner + FVector(Size.X * 0.5, Size.Y - FMath::Sign(Size.Y) * 1000.0, 0.0);
 	TestFalse(TEXT("a road ending 10 m from its tile's side: not a dead end"), SimCruiseTrafficModel::IsTrueDeadEnd(Frame, NearSide, East));
 	TestFalse(TEXT("no world frame: never"), SimCruiseTrafficModel::IsTrueDeadEnd(FSimCruiseWorldFrame(), Middle, East));
+	// A motorway the data draws crossing a street at grade: traffic keeps off it. A ramp joining
+	// it is no crossing, nor a street that crosses on a mapped bridge.
+	auto Road = [](const FString& Class, const FVector2d& From, const FVector2d& To)
+	{
+		FSimCruiseRibbon R = SimCruiseTrafficTests::Straight(Class, 6.0, 0);
+		for (int32 I = 0; I < R.St.Num(); ++I)
+		{
+			const double F = I / double(R.St.Num() - 1);
+			R.St[I].C = FMath::Lerp(From, To, F);
+			R.St[I].S = F * (To - From).Size();
+		}
+		return R;
+	};
+	TArray<FSimCruiseRibbon> Ribbons;
+	Ribbons.Add(Road(TEXT("motorway"), FVector2d(0.0, 0.0), FVector2d(200.0, 0.0)));
+	Ribbons.Add(Road(TEXT("motorway_link"), FVector2d(80.0, 40.0), FVector2d(100.0, 0.0)));
+	TestFalse(TEXT("a ramp joining the motorway is no crossing"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	Ribbons.Add(Road(TEXT("residential"), FVector2d(120.0, 60.0), FVector2d(120.0, 2.0)));
+	TestFalse(TEXT("a street ending at the motorway's edge is no crossing"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	Ribbons.Add(Road(TEXT("primary"), FVector2d(150.0, -60.0), FVector2d(150.0, 60.0)));
+	TestTrue(TEXT("a street drawn across the motorway at grade (I-75 under Woodward)"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	for (FSimCruiseRibbonStation& St : Ribbons.Last().St) St.bBridge = true;
+	TestFalse(TEXT("the same street on a mapped bridge"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	TestFalse(TEXT("only motorways are judged"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 3));
 	return true;
 }
 #endif
