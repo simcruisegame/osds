@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "World/SimCruiseRoadNetwork.h"
+#include "World/SimCruiseScan.h"
 
 struct FSimCruiseTileData;
 class FStaticMeshRenderData;
@@ -182,6 +183,13 @@ struct SIMCRUISE_API FSimCruiseTileBuild
 	 */
 	TSharedPtr<const SimCruiseRoadCheck::FTopSurface, ESPMode::ThreadSafe> RoadTops;
 
+	/**
+	 * TINT by colour match (SimCruiseScan::MatchTints): the place's own grass, soil, sand and
+	 * paving hues from its aerial photograph, x1.0 where there is no photograph or too little of
+	 * a class. Always made (cheap); the scan's TINT starts from it and an eye may override it.
+	 */
+	SimCruiseScan::FTint Tint[64];
+
 	/** Palms to instance on this tile. */
 	TArray<FSimCruisePalmInstance> PalmInstances;
 
@@ -235,7 +243,7 @@ namespace SimCruiseTileBuilder
 	SIMCRUISE_API bool Triangulate(const TArray<FVector2d>& Ring, TArray<int32>& OutIndices);
 
 	/** World-anchored texture offset (m) for a tile: (tile * size) mod Period, so detail textures run on across seams. */
-	/** The ground materials' anchor period (64 m; the seamless 1664 m anchor with its shaders comes in v2.0.4). */
-	inline constexpr double TextureAnchorPeriodM = 64.0;
+	/** The ground materials' anchor period: every pattern period divides it (SeamCode, SimCruiseWorldResources.cpp). */
+	inline constexpr double TextureAnchorPeriodM = 1664.0;
 	SIMCRUISE_API FVector2d TextureAnchorM(const FIntPoint& Tile, double TileSizeM, double PeriodM = TextureAnchorPeriodM);
 }
