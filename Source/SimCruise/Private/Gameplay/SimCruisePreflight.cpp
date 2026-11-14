@@ -1385,6 +1385,8 @@ void ASimCruisePreflight::OnFrame(int32 Width, int32 Height, const TArray<FColor
 		JpegJobs.RemoveAll([](const TFuture<void>& Job) { return Job.IsReady(); });
 	}
 	Review.OnFrame(Width, Height, Pixels);
+	// frames.csv: the drive time of each video frame, so an event's clip is cut at the right place.
+	FrameTimes.Add(FString::Printf(TEXT("%d,%.3f,%.0f"), FrameIndex, Stats.DriveSeconds, PathM));
 	++FrameIndex;
 	Stats.Frames = FrameIndex;
 
@@ -1527,6 +1529,8 @@ void ASimCruisePreflight::Finish()
 
 	MeasureFrames(TimedFrameMs, Stats);
 	Stats.LongestHangS = static_cast<float>(LongestHangS.load());
+	FrameTimes.Insert(TEXT("frame,drive_s,path_m"), 0);
+	FFileHelper::SaveStringArrayToFile(FrameTimes, *FPaths::Combine(OutputDir, TEXT("frames.csv")));
 	const FString Reasons = Judge(Stats);
 	const FString InfoNotes = Notes(Stats);
 	const bool bPass = Reasons.IsEmpty();

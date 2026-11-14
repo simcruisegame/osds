@@ -359,6 +359,9 @@ private:
 	/** Traffic off for the run (the default; -SimCruisePreflightTraffic keeps it). */
 	bool bTrafficOff = true;
 
+	/** "frame,drive_s,path_m" per saved video frame (frames.csv). */
+	TArray<FString> FrameTimes;
+
 	/** The hang watchdog thread (see StartWatchdog). */
 	void StartWatchdog();
 	void StopWatchdog();
