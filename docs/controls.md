@@ -32,7 +32,7 @@ The Unreal client starts in the 2001 roadster in Ocean Drive's lane, Miami Beach
 
 The engine sound is on at the start.
 
-**Pause menu and GPS.** Tab (Menu) opens the pause menu. Up and down (D-pad, stick, arrows) choose a row, A (Enter) chooses it, left and right change a value, Y puts a slider back to stock, LB and RB (Q and E) change the page, B (Esc) goes back to the drive. On the Drive page: Where to?, Plan a route, Famous roads and the road atlas; X ends a route. In Plan a route the left stick (arrows, drag) moves the map under the cross, A (Enter, a click) adds a stop, X (Delete) removes the stop under the cross or the last one, LT and RT (- and +, the wheel) zoom, Y starts the route and B goes back. While you follow a route the turn sign is at the top, magenta chevrons are on the road ahead and the round map shows the course; leave the route for more than 30 m for 3 s and the GPS finds a new one from where you are.
+**Pause menu and GPS.** Tab (Menu) opens the pause menu. Up and down (D-pad, stick, arrows) choose a row, A (Enter) chooses it, left and right change a value, Y puts a slider back to stock, LB and RB (Q and E) change the page, B (Esc) goes back to the drive. On the Drive page: Where to?, Plan a route, Famous roads and the road atlas; X ends a route. In Plan a route the left stick (arrows, drag) moves the map under the cross, A (Enter, a click) adds a stop, X (Delete) removes the stop under the cross or the last one, LT and RT (- and +, the wheel) zoom, Y starts the route and B goes back. While you follow a route the turn sign is at the top, magenta chevrons are on the road ahead and the round map shows the course (in the driver's seat the map is at the top right); leave the route for more than 30 m for 3 s and the GPS finds a new one from where you are.
 
 **Menus with an Xbox controller.** Every button and row on every menu works with the pad alone. The pad's place always has a white border, so you can see where you are.
 
@@ -54,7 +54,9 @@ The engine sound is on at the start.
 
 **New pad layout in 2.0.0.** The clutch moved from LB to A, the parking brake from A to B, shift down from X to LB, the gearbox switch from B to the right-stick click, the engine restart from the right-stick click to D-pad left and the HUD from the left-stick click to X; the left-stick click does nothing (since 2.0.1: it changed the lens when pressed by accident while steering; the lens is F6 or the atlas's View setting). The reason: the clutch on LB used the same finger as the brake trigger, and hard steering pressed the left stick by accident.
 
-**Traffic.** The road atlas's Settings row sets the traffic: Normal (about 20 cars around you), Light (8) or Off; it is remembered.
+**Traffic.** In 2.0.3 there are no other cars on the road and no aircraft in the sky, so the menus have no Traffic setting. The code stays in the game behind two switches, `sc.Feature.Traffic` and `sc.Feature.Aircraft` (0 is off, the default). With `sc.Feature.Traffic 1` the Drive page and the road atlas's Settings row have the Traffic setting again: Normal (about 20 cars around you), Light (8) or Off, and it is remembered.
+
+**The round map.** Settings page, *Map*: *With route* (the default) shows the round map only while the GPS has a route; *Always* shows it all the time. The choice is saved. In the driver's seat the map is smaller (75 %) and sits in the top-right corner over the windscreen, so it never covers the gauges, the clock or the centre screen. In the other views it is in the bottom-right corner.
 
 **Seat & view.** Parked, open the menu and pick *Seat & view...* in the *Your car* row (D-pad to it, A). Seat height (up to 10 cm either way), seat fore-aft (15 cm), view tilt (8° up or down) and the view angle (Auto follows the lens; 30-75° tall) change the live picture behind the panel, held on the brakes; A saves them for this car, B puts the seat back. The view also widens slightly with speed (6 % by 130 km/h).
 

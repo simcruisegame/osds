@@ -13,6 +13,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Application/SlateUser.h"
 #include "Gameplay/SimCruiseAtlasUI.h"
+#include "Gameplay/SimCruiseFeatures.h"
 #include "Gameplay/SimCruisePauseMenu.h"
 #include "Gameplay/SimCruiseSeatUI.h"
 #include "Gameplay/SimCruiseTuningUI.h"
@@ -191,6 +192,11 @@ bool FSimCruisePadReachAllTest::RunTest(const FString& Parameters)
 		Pad.Press(EKeys::Gamepad_DPad_Up);
 		TestTrue(TEXT("Up on the tab row stays on it (no trap, no jump)"), Pad.On(Menu->GetTabWidget(3)));
 
+		// The rows the release has: no Traffic row while traffic is off; Settings has the HUD's Map row.
+		auto HasRow = [](int32 P, ESimCruiseMenuRow Row) { for (const SSimCruisePauseMenu::FRowInfo& R : SSimCruisePauseMenu::Rows(P)) if (R.Row == Row) return true; return false; };
+		TestEqual(TEXT("Drive has the Traffic row only while traffic is on"), HasRow(0, ESimCruiseMenuRow::Traffic), SimCruiseFeatures::IsTrafficEnabled());
+		TestTrue(TEXT("Settings has the Map row (with route or always)"), HasRow(3, ESimCruiseMenuRow::HudMap));
+
 		// Every tab opens with A (and Down), on its first row; every row is reached and used.
 		for (int32 P = 0; P < SSimCruisePauseMenu::NumPages; ++P)
 		{
@@ -304,7 +310,12 @@ bool FSimCruisePadReachAllTest::RunTest(const FString& Parameters)
 		FPadScreen Pad(Atlas);
 		TArray<TSharedPtr<SWidget>> All;
 		for (const TArray<TSharedPtr<SWidget>>& Row : Atlas->GetPadRows()) All.Append(Row);
-		TestEqual(TEXT("atlas: 23 buttons on the top panel"), All.Num(), 23);
+		// 23 with the Traffic setting; while traffic is off for the release it is not on the panel.
+		const bool bTraffic = SimCruiseFeatures::IsTrafficEnabled();
+		TestEqual(FString::Printf(TEXT("atlas: %d buttons on the top panel"), bTraffic ? 23 : 22), All.Num(), bTraffic ? 23 : 22);
+		bool bTrafficButton = false;
+		for (const TSharedPtr<SWidget>& B : All) bTrafficButton |= B.IsValid() && B->GetTag() == FName(TEXT("Setting.13"));
+		TestEqual(TEXT("atlas: the Traffic setting is on the panel only while traffic is on"), bTrafficButton, bTraffic);
 		TestTrue(TEXT("atlas: opens on the map"), Pad.On(Atlas));
 		Pad.Press(EKeys::Gamepad_DPad_Right);
 		TSet<SWidget*> Reached;
