@@ -595,11 +595,11 @@ namespace SimCruiseTileBuilder
 
 			double InsideTarget = TNumericLimits<double>::Max();
 			bool bInside = false;
-			// Under a deck the ground keeps its own height, but never stands into the deck: at most the
-			// deck's slab (1.2 m) and 0.3 m more under it, across the deck and 1 m beyond each edge (a
-			// steep abutment or a hillside under the end of a span stood over the carriageway, Bixby
-			// Creek's south end, 2026-11-15).
-			double DeckCap = TNumericLimits<double>::Max();
+			// The ground never stands over a carriageway: under every road ribbon, bridge or not, at
+			// most the road's surface less 0.15 m (its thickness and a little), across the carriageway
+			// (a deck 0.3 m past each edge, its parapet's foot). Under a bridge the ground otherwise keeps
+			// its own height. A hillside stood over a carriageway at Bixby Creek's south end, 2026-11-15.
+			double RoadCap = TNumericLimits<double>::Max();
 			double BestWeight = 0.0, BestTarget = H;
 
 			const double Natural = H;
@@ -652,9 +652,9 @@ namespace SimCruiseTileBuilder
 					if (Ribbon.St[Seg.Value].bBridge && Ribbon.St[Seg.Value + 1].bBridge)
 					{
 						const FSimCruiseRoadHit Under = Roads.Project(Seg.Key, Seg.Value, P);
-						if (FMath::Abs(Under.Along) <= 0.01 && FMath::Abs(Under.Lateral) <= Under.HalfW + 1.0)
+						if (FMath::Abs(Under.Along) <= 0.01 && FMath::Abs(Under.Lateral) <= Under.HalfW + 0.3)
 						{
-							DeckCap = FMath::Min(DeckCap, Under.Height - 1.5);
+							RoadCap = FMath::Min(RoadCap, Under.Height - 0.15);
 						}
 						continue;
 					}
@@ -687,11 +687,12 @@ namespace SimCruiseTileBuilder
 					const bool bRural = !Ribbon.bService && Ribbon.Sides[SideIndex].Edge.IsValidIndex(Seg.Value)
 						&& Ribbon.Sides[SideIndex].Edge[Seg.Value] == ESimCruiseRoadEdge::Rural && !Ribbon.Sides[SideIndex].Cut[Seg.Value];
 					Consider(FMath::Abs(Hit.Lateral), Hit.HalfW, Outer, Lowest, OuterH, Along, bRural);
+					if (Along <= 0.0 && FMath::Abs(Hit.Along) <= 0.01 && FMath::Abs(Hit.Lateral) <= Hit.HalfW) RoadCap = FMath::Min(RoadCap, Hit.Height - UnderDepthM);
 				}
 			}
 
 			if (bInside) H = InsideTarget;
-			H = FMath::Min(H, DeckCap);
+			H = FMath::Min(H, RoadCap);
 			else if (SectionDist < TNumericLimits<double>::Max()) H = SectionTarget;
 			else if (BestWeight > 0.0) H = FMath::Lerp(H, BestTarget, BestWeight);
 			if (FMath::Abs(H - B.NaturalHeights[K]) > 0.001) ++B.ConditionedVertices;
