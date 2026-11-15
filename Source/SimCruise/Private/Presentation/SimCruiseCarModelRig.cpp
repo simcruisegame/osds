@@ -711,6 +711,10 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 	Context.Inputs = Inputs;
 	Context.Out = &OutCar;
 
+	// Step timings (seconds), noted at the end: which step of a heavy model costs the time.
+	double StepStart = FPlatformTime::Seconds();
+	FString StepTimes;
+	auto StepDone = [&StepStart, &StepTimes](const TCHAR* Step) { const double Now = FPlatformTime::Seconds(); StepTimes += FString::Printf(TEXT(" %s %.2f"), Step, Now - StepStart); StepStart = Now; };
 	// 1. Every primitive in root space (glTF: +Y up after the exporter's root turn).
 	Context.Jobs.Reserve(Model.Primitives.Num());
 	for (int32 P = 0; P < Model.Primitives.Num(); ++P)
@@ -768,6 +772,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		return Box;
 	};
 
+	StepDone(TEXT("before-2"));
 	// 2. Upright (ModelRig.gd upright): the shortest axis is up, tyres sit low.
 	{
 		const FBox Box = Bounds();
@@ -797,6 +802,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		}
 	}
 
+	StepDone(TEXT("before-3"));
 	// 3. Root-space bounds and the long axis.
 	const FBox RootBox = Bounds();
 	const FVector Lo = RootBox.Min, Hi = RootBox.Max, Size = RootBox.GetSize();
@@ -804,6 +810,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 	Context.Note(FString::Printf(TEXT("bounds %s..%s size %s, long axis %s, %lld triangles"), *V3(Lo), *V3(Hi), *V3(Size),
 		bLongX ? TEXT("X") : TEXT("Z"), Model.NumTriangles()));
 
+	StepDone(TEXT("before-4"));
 	// 4. Wheel centres, by name or by the ground contacts.
 	FVector Centres[4];
 	bool bNamed = false;
@@ -923,6 +930,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 	Context.Note(FString::Printf(TEXT("%s wheels, model wheelbase %.4f units, scale %.5f m/unit"),
 		bNamed ? TEXT("named") : TEXT("geometric"), WheelbaseModel, S));
 
+	StepDone(TEXT("before-5"));
 	// 5. Frame: forward from the rear axle to the front.
 	const FVector MidAxles = (AxleFront + AxleRear) * 0.5;
 	FVector Fwd = AxleFront - AxleRear;
@@ -1057,6 +1065,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 	Context.Note(FString::Printf(TEXT("model vs car: tyre radius %.3f m (car %.3f), front track %.3f m (car %.3f), rear track %.3f m (car %.3f)"),
 		TyreRadiusM, Inputs.TireRadiusM, OutCar.ModelFrontTrackM, Inputs.FrontTrackM, OutCar.ModelRearTrackM, Inputs.RearTrackM));
 
+	StepDone(TEXT("before-6"));
 	// 6. Hidden surfaces: badges, logos and helpers by name or role.
 	TOptional<FRegexPattern> ExtraHide;
 	if (!Profile.HidePattern.IsEmpty())
@@ -1080,6 +1089,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		}
 	}
 
+	StepDone(TEXT("before-7"));
 	// 7. Wheels. Named: whole parts. Geometric: connected parts wholly inside a
 	// tyre cylinder (radius + 4 %, within a tyre width of the hub plane); a part
 	// that reaches outside (suspension arm, arch liner) stays on the body.
@@ -1200,6 +1210,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 			Parts.Num(), ClippedParts, MovedToWheels, MovedToUprights, HubEmblems.Num()));
 	}
 
+	StepDone(TEXT("before-7b"));
 	// 7b. Emblems (new, general): makers put their badge on the centreline of
 	// the nose and tail. A small, thin, detached part there (not paint, glass
 	// or a lamp) is a badge; a part that is joined to anything bigger stays.
@@ -1261,6 +1272,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		OutCar.BadgeTrianglesRemoved += Gone.Num();
 	}
 
+	StepDone(TEXT("before-8"));
 	// 8. Badge areas from the profile (boxes in the Unreal vehicle frame, metres).
 	for (const FSimCruiseBadgeArea& Area : Profile.BadgeAreas)
 	{
@@ -1298,6 +1310,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		Context.Note(FString::Printf(TEXT("badge '%s': %d triangles removed"), *Area.Note, Removed));
 	}
 
+	StepDone(TEXT("before-8a"));
 	// 8a. A dial's own needle, when the model welds it into the dash: the parts of the named material
 	// lying wholly inside the dial that reach its hub. Numerals, ticks and captions stand off the hub
 	// and stay; the turning needle mesh takes the needle's place.
@@ -1328,6 +1341,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		Context.Note(FString::Printf(TEXT("dial %s: the model's own needle, %d triangles removed"), *Spec.Quantity, Gone.Num()));
 	}
 
+	StepDone(TEXT("before-8b"));
 	// 8b. Surfaces that change role: their triangles move to a copy of the
 	// author material with the new role, so they get their own instance.
 	auto GiveRole = [&Context, &Model, &OutCar](const TArray<FTriRef>& Taken, ESimCruiseCarMaterialRole Role)
@@ -1415,6 +1429,12 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		}
 	}
 
+	StepDone(TEXT("before-9"));
+	// Each job's material role, once: looked up per triangle (a string match per lookup) it took
+	// 22 s of the NB's 30 s build, on every start.
+	TArray<ESimCruiseCarMaterialRole> JobRoles;
+	JobRoles.SetNum(Context.Jobs.Num());
+	for (int32 J = 0; J < Context.Jobs.Num(); ++J) JobRoles[J] = Profile.RoleFor(Context.Jobs[J].MaterialName, Context.Jobs[J].Label);
 	// 9. The cabin steering wheel (cars/rig-infra find_steering_wheel).
 	FTransform SteeringPivotG = FTransform::Identity; // Godot frame basis+origin (as a plain matrix carrier)
 	FVector SteerCentre = FVector::ZeroVector, SteerN = FVector::ZeroVector, SteerUp = FVector::ZeroVector;
@@ -1506,6 +1526,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 			if (N.Z < 0.0) N = -N; // toward the driver, who sits behind the wheel
 			FVector Centre = Ring.Centre;
 			double R = Ring.Radius;
+			StepDone(TEXT("before-9-ring"));
 			// The rim may be split into arcs, or the first ring found may be a
 			// horn ring inside it: look for arcs around the same axis that
 			// together close a bigger circle, and take the rim's radius.
@@ -1578,6 +1599,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 				const double Axial = D | N;
 				return Axial >= AxialMin && Axial <= AxialMax && (D - N * Axial).Size() <= RadiusLimit;
 			};
+			StepDone(TEXT("before-9-find"));
 			// Parts wholly inside the wheel's cylinder turn with it.
 			TArray<const FComponent*> Joined;
 			bool bHubTurns = false;
@@ -1603,8 +1625,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 				// Instrument faces, their marks and lamps, and glass, are never part of a wheel.
 				for (const FTriRef& Tri : Part.Tris)
 				{
-					const FJob& TriJob = Context.Jobs[Tri.Job];
-					const ESimCruiseCarMaterialRole TriRole = Profile.RoleFor(TriJob.MaterialName, TriJob.Label);
+					const ESimCruiseCarMaterialRole TriRole = JobRoles[Tri.Job];
 					if (TriRole != ESimCruiseCarMaterialRole::Gauge && TriRole != ESimCruiseCarMaterialRole::Glass) Turning.Add(Tri);
 				}
 				for (const FVector& V : Part.Points)
@@ -1621,6 +1642,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 					}
 				}
 			}
+			StepDone(TEXT("before-9-joined"));
 			// Spokes and hub welded to the column (the rim alone was found), or a
 			// loose badge turning while rim and spokes are welded to the column (the
 			// NB's Nardi wheel): cut the triangles inside the wheel's disc from the
@@ -1647,7 +1669,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 						const TArray<uint32>& List = Job.Dest[DestBody];
 						// Instrument faces, their marks and lamps, and glass are never part of a wheel, however
 						// near the hub they sit: the NB's white dial marks were cut with its rim and turned with it.
-						const ESimCruiseCarMaterialRole CutRole = Profile.RoleFor(Job.MaterialName, Job.Label);
+						const ESimCruiseCarMaterialRole CutRole = JobRoles[Tri.Job];
 						if (CutRole == ESimCruiseCarMaterialRole::Gauge || CutRole == ESimCruiseCarMaterialRole::Glass) continue;
 						// Only a slab around the rim's plane: the gauges and the column
 						// shroud a few centimetres further from the driver stay put.
@@ -1661,6 +1683,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 				}
 			}
 			{
+				StepDone(TEXT("before-9-cut"));
 				// The wheel itself turns, but pieces of it welded to something outside its disc (a
 				// spoke's trim touching the column shroud: the NB's leather and black trim) were left
 				// behind and sat still on the spokes as the wheel turned over them. Take the triangles of
@@ -1675,7 +1698,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 					{
 						if (Taken.Contains((uint64(uint32(Tri.Job)) << 32) | uint32(Tri.Offset))) continue;
 						const FJob& Job = Context.Jobs[Tri.Job];
-						const ESimCruiseCarMaterialRole TidyRole = Profile.RoleFor(Job.MaterialName, Job.Label);
+						const ESimCruiseCarMaterialRole TidyRole = JobRoles[Tri.Job];
 						if (TidyRole == ESimCruiseCarMaterialRole::Gauge || TidyRole == ESimCruiseCarMaterialRole::Glass) continue;
 						const TArray<uint32>& List = Job.Dest[DestBody];
 						bool bIn = true;
@@ -1718,6 +1741,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 				Context.Note(FString::Printf(TEXT("steering wheel turning parts by material:%s; deepest %.3f m toward the dash"), *Summary, Deepest));
 			}
 			MoveTris(Context, Turning, DestBody, DestSteering);
+			StepDone(TEXT("before-9-tidy"));
 			// What stays behind inside the wheel's own disc (a few centimetres either side of the rim's
 			// plane): pieces left there sit still while the wheel turns over them.
 			{
@@ -1763,6 +1787,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 			}
 			int32 Moved = 0;
 			for (const FJob& Job : Context.Jobs) Moved += Job.Dest[DestSteering].Num() / 3;
+			StepDone(TEXT("before-9-still"));
 			// The pivot and the axis from the rim itself: the found (or profile) ring can sit a few
 			// centimetres off the hub and a few degrees off the column, and a wheel turned about the
 			// wrong point wobbles (the hub swinging, the rim tilting). The rim's vertices (an annulus
@@ -1928,6 +1953,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 				}
 			}
 			// (After the rim fit: the hub's own centre and axis, not the profile's ring.)
+			StepDone(TEXT("before-9-pivot"));
 			// A badge on the hub drawn in an instrument material (the NB model's horn pad carries an
 			// "ND" emblem in its gauge texture "white"): instruments are kept still, so it stayed, and
 			// it is the wrong generation's badge. Gauge-material triangles on the hub itself (within
@@ -1966,6 +1992,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		}
 	}
 
+	StepDone(TEXT("before-10"));
 	// 10. Write the parts in Unreal axes (X forward, Y right, Z up, cm).
 	for (int32 W = 0; W < 4; ++W)
 	{
@@ -2062,6 +2089,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 		OutCar.Uprights[0].NumTriangles() + OutCar.Uprights[1].NumTriangles() + OutCar.Uprights[2].NumTriangles() + OutCar.Uprights[3].NumTriangles(),
 		OutCar.SteeringWheel.NumTriangles()));
 
+	StepDone(TEXT("before-11"));
 	// 11. Material census: where each author material ended up (Unreal frame, m).
 	for (int32 MaterialIndex = 0; MaterialIndex < Model.Materials.Num(); ++MaterialIndex)
 	{
@@ -2096,5 +2124,7 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 			return false;
 		}
 	}
+	StepDone(TEXT("11"));
+	Context.Note(FString::Printf(TEXT("rig step times (s, each up to the named step):%s"), *StepTimes));
 	return true;
 }
