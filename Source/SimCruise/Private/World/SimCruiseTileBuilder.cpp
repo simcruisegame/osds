@@ -530,6 +530,75 @@ namespace SimCruiseTileBuilder
 
 		// ---------------------------------------------------------------- roads
 		B.Roads.Build(Data, Side, NeighbourEnds);
+		{
+			// The ground on a tile's seam keeps the height both tiles share (no tile sees every road
+			// near its edge), so a road that runs along or near a seam cannot press it down: the road
+			// clears it instead. Where a carriageway lies within a cell and a half of the seam, its
+			// surface stays 5 cm over that shared ground, lifted on a 15 m ease along the road. Not at a
+			// road's own seam ends (their contract) and not where another road joins or crosses within
+			// 2 m (the junction made the two one surface: lifting one apart broke a Miami crossing).
+			const int32 SeamN = Data.Grid * FMath::Max(1, FMath::RoundToInt(Side / Data.Grid / FineCellTargetM));
+			const double Band = 1.5 * Side / FMath::Max(SeamN, 1);
+			for (int32 r = 0; r < B.Roads.Ribbons.Num(); ++r)
+			{
+				FSimCruiseRibbon& Ribbon = B.Roads.Ribbons[r];
+				const int32 NS = Ribbon.St.Num();
+				TArray<double> Need;
+				Need.Init(0.0, NS);
+				TArray<bool> Joined;
+				Joined.Init(false, NS);
+				bool bAny = false;
+				for (int32 k = 0; k < NS; ++k)
+				{
+					const FSimCruiseRibbonStation& St = Ribbon.St[k];
+					if ((Ribbon.bStartOnBoundary && St.S - Ribbon.St[0].S < 15.0) || (Ribbon.bEndOnBoundary && Ribbon.St.Last().S - St.S < 15.0)) continue;
+					for (int32 c = 0; c < 5 && !Joined[k]; ++c)
+					{
+						FSimCruiseRoadHit Other;
+						Joined[k] = B.Roads.FindCarriageway(St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW), Other, r, 2.0);
+					}
+					if (Joined[k]) continue;
+					for (int32 c = 0; c < 5; ++c)
+					{
+						const double L = FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW;
+						const FVector2d P = St.C + St.R * L;
+						const double DX = FMath::Min(P.X, Side - P.X), DY = FMath::Min(P.Y, Side - P.Y);
+						if (FMath::Min(DX, DY) > Band) continue;
+						FVector2d Q = P;
+						if (DX <= DY) Q.X = P.X < Side - P.X ? 0.0 : Side; else Q.Y = P.Y < Side - P.Y ? 0.0 : Side;
+						const double Ground = FMath::Max(Data.HeightAtUnit(Q / Side), Data.HeightAtUnit(FVector2d(FMath::Clamp(P.X, 0.0, Side), FMath::Clamp(P.Y, 0.0, Side)) / Side));
+						const double Lift = Ground + 0.05 - St.Height(L);
+						if (Lift > Need[k]) { Need[k] = Lift; bAny = true; }
+					}
+				}
+				if (!bAny) continue;
+				TArray<double> Lift;
+				Lift.Init(0.0, NS);
+				for (int32 k = 0; k < NS; ++k)
+				{
+					if (Need[k] <= 0.0) continue;
+					for (int32 m = 0; m < NS; ++m)
+					{
+						const double D = FMath::Abs(Ribbon.St[m].S - Ribbon.St[k].S);
+						if (D >= 15.0) continue;
+						Lift[m] = FMath::Max(Lift[m], Need[k] * (1.0 - FMath::SmoothStep(0.0, 1.0, D / 15.0)));
+					}
+				}
+				for (int32 k = 0; k < NS; ++k)
+				{
+					FSimCruiseRibbonStation& St = Ribbon.St[k];
+					if (Lift[k] <= 0.0 || Joined[k]) continue;
+					double Keep = 1.0;
+					// Eased to nothing at a joined station (the junction keeps the shared surface).
+					for (int32 m = 0; m < NS; ++m) if (Joined[m]) Keep = FMath::Min(Keep, FMath::SmoothStep(0.0, 1.0, FMath::Abs(Ribbon.St[m].S - St.S) / 15.0));
+					if (Ribbon.bStartOnBoundary) Keep = FMath::Min(Keep, FMath::SmoothStep(0.0, 1.0, (St.S - Ribbon.St[0].S) / 15.0));
+					if (Ribbon.bEndOnBoundary) Keep = FMath::Min(Keep, FMath::SmoothStep(0.0, 1.0, (Ribbon.St.Last().S - St.S) / 15.0));
+					const double Up = Lift[k] * Keep;
+					St.Z += Up;
+					for (int32 c = 0; c < 5; ++c) St.Column(c) += Up;
+				}
+			}
+		}
 		B.Roads.CollectSeamEnds(B.SeamEnds);
 		const FSimCruiseRoadNetwork& Roads = B.Roads;
 
@@ -687,8 +756,11 @@ namespace SimCruiseTileBuilder
 					if (Ribbon.St[Seg.Value].bBridge && Ribbon.St[Seg.Value + 1].bBridge)
 					{
 						const FSimCruiseRoadHit Under = Roads.Project(Seg.Key, Seg.Value, P);
-						if (FMath::Abs(Under.Along) <= 0.01 && FMath::Abs(Under.Lateral) <= Under.HalfW + 0.3) RoadCap = FMath::Min(RoadCap, Under.Height - 0.15);
-						else if (FMath::Abs(Under.Along) <= 0.01 && FMath::Abs(Under.Lateral) <= Under.HalfW + EdgeReach) EdgeCap = FMath::Min(EdgeCap, Under.Height - 0.15);
+						// Along: on a curve the station normals are not square to the chord, so a point off the
+						// centre line shows some Along even inside the segment (Bixby's south deck end: 0.1-0.3 m);
+						// 1.2 m, as the conditioning below.
+						if (FMath::Abs(Under.Along) <= 1.2 && FMath::Abs(Under.Lateral) <= Under.HalfW + 0.3) RoadCap = FMath::Min(RoadCap, Under.Height - 0.15);
+						else if (FMath::Abs(Under.Along) <= 1.2 && FMath::Abs(Under.Lateral) <= Under.HalfW + EdgeReach) EdgeCap = FMath::Min(EdgeCap, Under.Height - 0.15);
 						continue;
 					}
 					const FSimCruiseRoadHit Hit = Roads.Project(Seg.Key, Seg.Value, P);
@@ -720,7 +792,7 @@ namespace SimCruiseTileBuilder
 					const bool bRural = !Ribbon.bService && Ribbon.Sides[SideIndex].Edge.IsValidIndex(Seg.Value)
 						&& Ribbon.Sides[SideIndex].Edge[Seg.Value] == ESimCruiseRoadEdge::Rural && !Ribbon.Sides[SideIndex].Cut[Seg.Value];
 					Consider(FMath::Abs(Hit.Lateral), Hit.HalfW, Outer, Lowest, OuterH, Along, bRural);
-					if (Along <= 0.0 && FMath::Abs(Hit.Along) <= 0.01)
+					if (Along <= 0.0 && FMath::Abs(Hit.Along) <= 1.2)
 					{
 						if (FMath::Abs(Hit.Lateral) <= Hit.HalfW) RoadCap = FMath::Min(RoadCap, Hit.Height - UnderDepthM);
 						else if (FMath::Abs(Hit.Lateral) <= Hit.HalfW + EdgeReach) EdgeCap = FMath::Min(EdgeCap, Hit.Height - UnderDepthM);
