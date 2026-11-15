@@ -31,7 +31,12 @@ SimCruise: read this before you install
    are our estimate. If the game does not work on your PC, tell us:
    https://github.com/simcruisegame/simcruise/issues
 
-4. UNINSTALL
+4. WHEN THE GAME STARTS
+   The game examines your PC. If it finds a problem (an old graphics
+   card or driver, too little memory, no internet), it tells you on the
+   screen.
+
+5. UNINSTALL
    The uninstaller deletes the game, the map cache, the downloaded
    photos and the logs. It asks you before it deletes your settings and
    screenshots.

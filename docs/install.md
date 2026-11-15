@@ -29,7 +29,24 @@ The game picks a graphics preset for your GPU at the start (`Low`, `Medium`, `Hi
 
 ## Internet
 
-Only **Ocean Drive, Miami Beach** works with no internet: its streets are in the installer. All other places need an internet connection, because the game downloads their map, terrain and photos when you go there. With no connection, every start goes to Miami Beach.
+Only **Ocean Drive, Miami Beach** works with no internet: its streets are in the installer. All other places need an internet connection, because the game downloads their map, terrain and photos when you go there. With no connection, every start goes to Miami Beach, and the game tells you why.
+
+## When the game starts
+
+The game examines your PC at the start. When it finds a problem, it shows one line on the screen after the start hint, and writes `SYSTEMCHECK:` lines to the log (`%LOCALAPPDATA%\SimCruise\Saved\Logs\SimCruise.log`):
+
+| It finds | It says |
+|---|---|
+| No DirectX 12 with Shader Model 6 (an old card or driver) | The picture is simple. Update the graphics driver. |
+| The game runs on built-in graphics | If your PC has an NVIDIA or AMD card, select it in Windows graphics settings (**Settings > System > Display > Graphics**). |
+| Less than 6 GB of video memory | The game can be slow. Use lower graphics settings. |
+| Less than 16 GB of memory | The game can be slow or stop. |
+| No map helper (`SimCruise\tools\atlas.exe`) | Only Miami Beach works. Install the game again. |
+| No internet connection | Only Ocean Drive, Miami Beach works. |
+
+It shows a problem of the PC once (again when it changes), and "no internet" or "no map helper" at every start. To ask whether there is a connection, it sends one request to the weather server that the game uses (`api.open-meteo.com`) with the fixed point of Miami Beach, never your position.
+
+The game cannot tell you about a missing Visual C++ runtime, because without it the game does not start. The installer installs the runtime, and the launcher `SimCruise.exe` asks to install it when it is missing.
 
 ## Install with the installer
 

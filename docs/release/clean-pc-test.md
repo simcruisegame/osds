@@ -29,7 +29,7 @@ Test-Path C:\Windows\System32\vcruntime140_1.dll; Test-Path C:\Windows\System32\
 7. On the last page, keep **Launch SimCruise** ticked and click **Finish**.
 8. Drive for one minute on Ocean Drive. Press Esc and quit.
 9. Run the command from "Before you start" again. Both lines must now say `True`.
-10. Disconnect the internet. Start SimCruise from the Start menu. The game must start on Ocean Drive, Miami Beach. Connect the internet again.
+10. Disconnect the internet. Start SimCruise from the Start menu. The game must start on Ocean Drive, Miami Beach, and after the start hint it must say "No internet connection. Only Ocean Drive, Miami Beach works ...". Connect the internet again.
 11. Uninstall: **Settings > Apps > Installed apps > SimCruise > Uninstall**. When it asks "Do you also want to delete your SimCruise settings ...", click **No**.
 12. Open `%LOCALAPPDATA%\SimCruise` in File Explorer. Only `Saved\SimCruise`, `Saved\Config` (and `Saved\Screenshots`, if you took screenshots) may be there. `map-cache`, `Saved\Live` and `Saved\Logs` must be gone.
 
@@ -42,7 +42,7 @@ Optional, the "No" path: on a second clean PC, click **No** in step 6. The insta
 | 6 | Two permission prompts from "Microsoft Corporation", no error message | An error message, or a message "These Microsoft parts are not installed" after you clicked Yes |
 | 7-8 | The game window opens and you can drive | Nothing opens; "MSVCP140.dll was not found", "VCRUNTIME140_1.dll was not found" or "The Game Input Library is missing"; a crash window |
 | 9 | Both `True` | One is `False` |
-| 10 | Miami Beach | A black screen, a stop, or no message |
+| 10 | Miami Beach and the "No internet" line | A black screen, a stop, or no message |
 | 12 | Only your settings stay | `map-cache` or `Saved\Live` is still there |
 
 ## The logs, when something fails
@@ -50,7 +50,7 @@ Optional, the "No" path: on a second clean PC, click **No** in step 6. The insta
 - Installer log: run the installer from PowerShell with a log, then attach the log file to the issue:
   `.\SimCruise-<version>-windows-x64-setup.exe /LOG="$env:USERPROFILE\Desktop\simcruise-setup.log"`.
   The lines "Visual C++ runtime:" and "GameInput:" tell what it found and the exit code of each Microsoft installer.
-- Game log: `%LOCALAPPDATA%\SimCruise\Saved\Logs\SimCruise.log`.
+- Game log: `%LOCALAPPDATA%\SimCruise\Saved\Logs\SimCruise.log`. The `SYSTEMCHECK:` lines tell what the game found (graphics, memory, internet).
 - Crash: `%LOCALAPPDATA%\SimCruise\Saved\Crashes`.
 
 Also write down the Windows version (`winver`), the graphics card (**Task Manager > Performance > GPU**) and the memory.
