@@ -1,5 +1,7 @@
 // NASA Terra daily science-product visualization. Only opaque palette entries
 // documented as an NDSI measurement may change a rendered ground pixel.
+import fs from 'node:fs';
+import path from 'node:path';
 import {decode,encode} from 'fast-png';
 import values from './snow-colors.json' with {type:'json'};
 
@@ -11,7 +13,11 @@ function readTile(raw) {
  const lookup=src.palette.map(([r,g,b,a])=>a===255?(rgbIndex.get((r<<16)|(g<<8)|b)||0):0);
  return Uint8Array.from(src.data,k=>lookup[k]||0);
 }
-export async function regionalSnow(x,y,date,read) {
+// A tile with no answer for a date (not published yet, a gap, the server down) is not asked again
+// for a day: the game looks back up to seven days for a snow map, so without this one missing day
+// cost every region several requests on every look.
+const missDay=86400000;
+export async function regionalSnow(x,y,date,read,cache=null) {
  if(![x,y].every(v=>Number.isInteger(v)&&v>=0&&v<8192))throw Error('Invalid relief region');
  const acquired=new Date(date+'T00:00:00Z');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(+acquired)||acquired.toISOString().slice(0,10)!==date||date<'2000-02-24'||+acquired>Date.now())throw Error('Invalid observation date');
@@ -32,10 +38,12 @@ export async function regionalSnow(x,y,date,read) {
   const nx=(tx%256+256)%256,key=tx+','+ty;
   const name='snow-terra-'+date+'-8-'+nx+'-'+ty;
   const url='https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_L3_NDSI_Snow_Cover_Daily/default/'+date+'/GoogleMapsCompatible_Level8/8/'+ty+'/'+nx+'.png';
+  const miss=cache?path.join(cache,name+'.miss'):null;
+  if(miss&&Date.now()-(fs.statSync(miss,{throwIfNoEntry:false})?.mtimeMs??0)<missDay)continue;
   try {
    const data=await read(name,url,7*day,null,3300,125000);
    tiles.set(key,readTile(data));complete++;
-  } catch { /* Preserve ordinary ground in any unobserved tile. */ }
+  } catch { /* Preserve ordinary ground in any unobserved tile. */ if(miss)try{fs.writeFileSync(miss,'')}catch{} }
  }
  let positive=0;
  for(let row=0;row<pixels;row++){

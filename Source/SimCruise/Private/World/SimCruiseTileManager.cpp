@@ -20,6 +20,7 @@ uint32 FSimCruiseTileManager::Reset()
 	Resident.Reset();
 	InFlight.Reset();
 	RetryAt.Reset();
+	Failures.Reset();
 	bHasFocus = false;
 	return Generation;
 }
@@ -151,10 +152,11 @@ bool FSimCruiseTileManager::Complete(const FSimCruiseTileJobTicket& Ticket, bool
 	if (!bCurrent) return false;
 	if (!bSucceeded)
 	{
-		RetryAt.Add(Ticket.Tile, NowSeconds + RetryDelaySeconds);
+		RetryAt.Add(Ticket.Tile, NowSeconds + RetryDelay(++Failures.FindOrAdd(Ticket.Tile)));
 		return false;
 	}
 	RetryAt.Remove(Ticket.Tile);
+	Failures.Remove(Ticket.Tile);
 	Resident.Add(Ticket.Tile);
 	return true;
 }

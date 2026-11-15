@@ -178,7 +178,7 @@ try{
   try {result={...await summitSnow(+args[0],+args[1],args[2],cache,readCached),requests};}
   catch(error){result={x:+args[0],y:+args[1],date:args[2],status:'temporarily-unavailable',requests};}
  }
- else if(command==='snow'){result={...await regionalSnow(+args[0],+args[1],args[2],readCached),requests}}
+ else if(command==='snow'){result={...await regionalSnow(+args[0],+args[1],args[2],readCached,cache),requests}}
  else if(command==='landscape'){
   try{result={...await regionalTerrain(+args[0],+args[1],cache,readCached),requests};}
   catch(error){result={status:'unavailable',region:[+args[0],+args[1]],reason:error.message,requests};}

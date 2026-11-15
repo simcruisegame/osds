@@ -55,6 +55,8 @@ try{
  // A healthy mirror: rows come back, are cached for the neighbourhood and
  // the negative cache is cleared.
  for(const f of fs.readdirSync(cache))if(f.endsWith('.miss'))fs.rmSync(path.join(cache,f));
+ // The failures above paused the mirror (atlas-cache's growing backoff); the healthy case starts clean.
+ fs.rmSync(path.join(cache,'.source-state'),{recursive:true,force:true});
  let calls=0;
  const ok=async url=>{calls++;assert.match(decodeURIComponent(new URL(url).search),/barrier~"\^\(guard_rail\|jersey_barrier\)\$"/);return new Response(sample)};
  r=await mappedGuardRails(X,Y,cache,cacheReader(cache,()=>{},ok),{env,...clock});
