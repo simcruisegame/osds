@@ -83,6 +83,10 @@ namespace SimCruiseTileDetail
 	};
 	SIMCRUISE_API int32 WallMaterialFor(const FWallMaterialInput& In, bool* bOutFromData = nullptr);
 
+	/** How a region builds (wall materials, foundation heights): from the region and climate facts, else latitude and longitude. */
+	enum EBuildingBand : int32 { North, South, Dry, Tropic, Wet };
+	SIMCRUISE_API int32 BuildingBand(const FWallMaterialInput& In);
+
 	/** Off: every wall plain render (the look before wall materials), for an A/B and the tests. */
 	SIMCRUISE_API extern bool bWallMaterials;
 
