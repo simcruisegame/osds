@@ -112,6 +112,27 @@ The student: from random init on the 572 labelled tiles it reached only 0.50 agr
 on its own training tiles (it can fit two tiles to 0.99, so the network works: it has too little data).
 Next step: distillation on 1,800 more unlabelled tiles from 200 random places, labelled by the teacher.
 
+### The shipped eye: the lite student
+
+Distillation alone did not save the small network (0.73 pixel accuracy, water 0.03). The design that
+works keeps the **first two stages of the Satlas backbone** (2.1 M of its 89.6 M weights: the part
+that knows aerial textures) and adds our own context blocks at 1/16 and 1/32 and a decoder: 2.7 M
+weights, 11 MB ONNX, 0.53 s per tile on 2 threads (ONNX Runtime CPU). Trained on 572 labelled tiles
+and 2,400 teacher-labelled tiles (200 random places and 30 water places), 2,400 steps.
+
+| Held-out IoU | Road | Roof | Water | Tree | Grass | Crop | Bare | Built ground | Pixel acc |
+|---|---|---|---|---|---|---|---|---|---|
+| Teacher (Satlas + head) | 0.45 | 0.53 | 0.65 | 0.72 | 0.82 | 0.80 | 0.27 | 0.33 | 0.81 |
+| Lite student (shipped) | 0.40 | 0.52 | 0.15 | 0.69 | 0.81 | 0.85 | 0.22 | 0.33 | 0.77 |
+| Lite student trained longer with water drawn 12x more often | 0.38 | 0.52 | 0.44 | 0.69 | 0.69 | 0.84 | 0.20 | 0.33 | 0.72 |
+
+Gate (agreed with the coordinator): within 5 points of the teacher for the classes the eye decides
+(ground cover; roofs and roads are hints because map geometry wins in fusion); water outlines come
+from the map. The first row of the student passes; the second trades grass for water and fails.
+Pictures checked on held-out places: Seattle, Gilbert and Jasper look right; **Hilo, Hawaii fails**
+(the whole town reads as roof; Hawaii's NAIP photos are darker and bluer), so the student runs only on
+the lower 48 states (`FSimCruiseAerialEye::IsLower48`) until it learns Hawaii and Alaska.
+
 ## 7. Next (v2.0.4): restoration and generation on the CPU
 
 Budget v2 (agreed with the world thread, scan-map-spec.md H2): all AI up to 8 threads and 8 GB while
@@ -124,6 +145,14 @@ x4v3 (BSD-3, already in `data/ai/`) takes 0.39 s per 128 x 128 input window on 2
 about 6 s on 2 threads or 2-3 s on 6 threads, in pass 1 (within 30 m of a road) first. Work items:
 NAIP 4-band fetch with its date (helper), de-light before restoration, class-conditioned restoration
 (roof, road, yard: the eye's classes choose a fine-tuned head), self-check at 0.6 m against the source.
+
+First measured prototype (`lab/scan/restore_pages.py`, Ankeny, Iowa, 14 November 2026): NAIP
+NAIP_plus RGB at 1024 px over the z16 tile (0.45 m/px there), 64 pages within 30 m of a road, 0.20 s
+per page and 13 s per tile on 4 threads (Python, ONNX Runtime CPU), 0 pages rejected by the 0.6 m
+self-check. Picture: edges become crisp, but surfaces turn "painted" (flat plastic look), parked cars
+stay baked into the pavement, and window seams show. Before it can ship: remove cars and shadows
+before restoration (the eye needs a car class, or the map's parking rows), blend windows with a
+feather, and judge it under the class detail kit at driver height, not top-down.
 
 **Generation (GENR library, spec section K).** First the shared library: CC0 MatSynth materials plus
 regional sets made offline with the cleared SDXL pipeline; at runtime the eye's class masks and TINT

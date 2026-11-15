@@ -389,6 +389,8 @@ void ASimCruiseWorldStreamer::Launch(const FSimCruiseTileJobTicket& Ticket)
 		{
 			FString EyePath = SimCruiseTileData::BundledAerialPath(Data.AerialKey);
 			if (EyePath.IsEmpty() && Client.IsValid()) EyePath = FPaths::Combine(Client->GetConfig().CacheDir, Data.AerialKey);
+			// With the helper the eye also fetches each tile's zoom-16 photograph (clean photo albedo).
+			if (Client.IsValid() && Client->GetConfig().IsConfigured()) FSimCruiseAerialEye::SetAtlas(Client->GetConfig());
 			if (IFileManager::Get().FileExists(*EyePath)) FSimCruiseAerialEye::Get().Request(Data.Id, EyePath);
 		}
 		Result->FinishedAt = FPlatformTime::Seconds();
