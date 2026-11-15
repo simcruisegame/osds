@@ -56,6 +56,7 @@ function Get-ViewerEvents([string]$RunDir, [datetime]$FromUtc, [datetime]$ToUtc)
     $Rows = @(Import-Csv (Join-Path $RunDir 'viewer.csv') -ErrorAction SilentlyContinue)
     return @($Rows | Where-Object {
         $T = [datetime]::Parse($_.utc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime()
-        $T -ge $FromUtc -and $T -le $ToUtc -and ($_.event -eq 'focus' -and $_.detail -notmatch '^UnrealEditor#')
+        # The game: the editor's -game process, or a cooked package (SimCruise.exe and SimCruise-Win64-*.exe; OSDS* if the exe is ever renamed).
+        $T -ge $FromUtc -and $T -le $ToUtc -and ($_.event -eq 'focus' -and $_.detail -notmatch '^(UnrealEditor|SimCruise|OSDS)[^#]*#')
     })
 }
