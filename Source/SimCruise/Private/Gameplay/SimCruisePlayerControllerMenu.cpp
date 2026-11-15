@@ -12,6 +12,7 @@
 #include "Gameplay/SimCruiseAtlasUI.h"
 #include "Gameplay/SimCruiseDriveHud.h"
 #include "Gameplay/SimCruiseFamousRoads.h"
+#include "Gameplay/SimCruiseFeatures.h"
 #include "Gameplay/SimCruiseGameMode.h"
 #include "Gameplay/SimCruiseHUD.h"
 #include "Gameplay/SimCruisePauseMenu.h"
@@ -20,6 +21,7 @@
 #include "Gameplay/SimCruiseRoutePlanner.h"
 #include "Gameplay/SimCruiseRouteSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Live/SimCruiseLiveWorldSubsystem.h"
 #include "Vehicle/SimCruiseVehicle.h"
 
@@ -230,6 +232,7 @@ FSimCruiseMenuState ASimCruisePlayerController::MenuState() const
 	Set(ESimCruiseMenuRow::Seat, FString())->bUnavailable = !bSeatMenuReady();
 	Set(ESimCruiseMenuRow::Sound, bSoundOn ? TEXT("On") : TEXT("Off"));
 	Set(ESimCruiseMenuRow::HudLevel, AfterDot(1));
+	Set(ESimCruiseMenuRow::HudMap, FSimCruiseDriveHud::IsMapAlways() ? TEXT("Always") : TEXT("With route"));
 	Set(ESimCruiseMenuRow::SpeedUnits, SimCruiseSpeedUnits::Label(SimCruiseSpeedUnits::Get()))->Chosen = SimCruiseSpeedUnits::Get() == ESimCruiseSpeedUnits::Kmh ? 1 : 0;
 	const float Rumble = MenuVar(TEXT("simcruise.Rumble.Strength"));
 	Set(ESimCruiseMenuRow::Rumble, FString::FromInt(FMath::RoundToInt(Rumble * 100.f)), TEXT("%"), Along(RumbleLadder(), Rumble), 1.f);
@@ -278,11 +281,14 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 	case ESimCruiseMenuRow::PlanRoute: OpenRoutePlanner(); break;
 	case ESimCruiseMenuRow::FamousRoads: OpenFamousRoads(); break;
 	case ESimCruiseMenuRow::Atlas: OpenRoadAtlas(); break;
+	case ESimCruiseMenuRow::Quit: OpenQuitConfirm(); break;
 	case ESimCruiseMenuRow::EndRoute:
 		if (Gps) Gps->ClearRoute();
 		ShowMessage(TEXT("Route ended"), 2.f);
 		break;
 	case ESimCruiseMenuRow::Traffic:
+		// The row is hidden while traffic is off for the release (SimCruiseFeatures).
+		if (!SimCruiseFeatures::IsTrafficEnabled()) break;
 		if (bTrafficSettingReady()) ChangeSetting(13);
 		else ShowMessage(TEXT("The traffic setting comes with the next driving update"), 3.f);
 		break;
@@ -317,6 +323,11 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 	case ESimCruiseMenuRow::EyeDistance: StepLadder(TEXT("simcruise.Lens.ViewDistanceCm"), EyeLadder(), Dir, -1.f, TEXT("view_distance_cm"), 1.f); break;
 	case ESimCruiseMenuRow::Sound: OnToggleSound(); break;
 	case ESimCruiseMenuRow::HudLevel: OnCycleHud(); break;
+	case ESimCruiseMenuRow::HudMap:
+		// Two values: left is With route, right is Always, A switches.
+		if ((Dir < 0 && !FSimCruiseDriveHud::IsMapAlways()) || (Dir > 0 && FSimCruiseDriveHud::IsMapAlways())) break;
+		FSimCruiseDriveHud::SetMapAlways(!FSimCruiseDriveHud::IsMapAlways());
+		break;
 	case ESimCruiseMenuRow::SpeedUnits:
 		// Left picks mph, right km/h, A switches.
 		if ((Dir < 0 && SimCruiseSpeedUnits::Get() == ESimCruiseSpeedUnits::Mph) || (Dir > 0 && SimCruiseSpeedUnits::Get() == ESimCruiseSpeedUnits::Kmh)) break;
@@ -404,6 +415,40 @@ void ASimCruisePlayerController::OpenFamousRoads()
 		.OnBack_Lambda([this]() { LeaveSubScreen(); });
 	ListPanel = List;
 	ShowOverlay(List, List);
+}
+
+void ASimCruisePlayerController::OpenQuitConfirm()
+{
+	CloseOverlays();
+	TArray<SSimCruiseListMenu::FItem> Items;
+	SSimCruiseListMenu::FItem Stay;
+	Stay.Icon = SimCruiseTheme::EIcon::Drive;
+	Stay.Title = TEXT("Keep driving");
+	Stay.Note = TEXT("Back to the menu");
+	Items.Add(Stay);
+	SSimCruiseListMenu::FItem Quit;
+	Quit.Icon = SimCruiseTheme::EIcon::Back;
+	Quit.Title = TEXT("Quit to the desktop");
+	Quit.Note = TEXT("Close the game");
+	Items.Add(Quit);
+	TSharedRef<SSimCruiseListMenu> Confirm = SNew(SSimCruiseListMenu)
+		.Title(TEXT("Quit the game?"))
+		.Help(TEXT("Your settings and car setups are already saved."))
+		.Items(Items)
+		.bPad(bUsingGamepad)
+		.OnChoose_Lambda([this](int32 Index)
+		{
+			if (Index == 1)
+			{
+				UE_LOG(LogTemp, Display, TEXT("Quit to the desktop from the pause menu"));
+				UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+				return;
+			}
+			LeaveSubScreen();
+		})
+		.OnBack_Lambda([this]() { LeaveSubScreen(); });
+	ListPanel = Confirm;
+	ShowOverlay(Confirm, Confirm);
 }
 
 void ASimCruisePlayerController::OpenWhereTo()

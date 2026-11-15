@@ -155,6 +155,8 @@ namespace
 			Out.LateralForceN = W.LateralForceN;
 			Out.AligningTorqueNm = W.AligningTorqueNm;
 			Out.SurfaceGrip = W.SurfaceGrip;
+			Out.SurfaceKind = W.bContact ? W.SurfaceKind : 0;
+			Out.bKerb = W.bContact && W.bKerb;
 			Out.AbsRelease = W.AbsRelease;
 			Out.ContactPointCm = SimCruiseUnits::ToUnrealLength(W.ContactPointM);
 			Out.ContactNormal = W.ContactNormal;
@@ -332,10 +334,12 @@ static void StepVehicleOnPhysicsThread(FSimCruiseVehiclePhysicsState& S, double 
 		OutHit.NormalM = FVector3d(Hit.ImpactNormal).GetSafeNormal();
 		// The surface under the tyre: asphalt, gravel or the ground beside the road, and the rain on it.
 		float DryGrip = 1.f, WetLoss = 0.3f;
+		uint8 Kind = 0;
 		if (const ASimCruiseWorldTile* Tile = Cast<ASimCruiseWorldTile>(Hit.GetActor()))
 		{
-			Tile->SurfaceGripAtFace(Hit.FaceIndex, DryGrip, WetLoss);
+			Tile->SurfaceAtFace(Hit.FaceIndex, DryGrip, WetLoss, Kind);
 		}
+		OutHit.SurfaceKind = Kind;
 		OutHit.SurfaceGrip = DryGrip * (1.f - WetLoss * Wetness);
 		return true;
 	};

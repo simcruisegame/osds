@@ -176,6 +176,20 @@ bool FSimCruiseSteeringRangeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("stick centre is gentle at speed"), Small < 0.1 && Small > 0.0);
 	TestNearlyEqual(TEXT("full stick is full range"), SimCruiseShaping::ThumbstickCommand(Setup, 1.0, 30.0), 1.0, 1e-12);
 	TestNearlyEqual(TEXT("parking: stick is linear"), SimCruiseShaping::ThumbstickCommand(Setup, 0.3, 0.0), 0.3, 1e-9);
+	// The robot's inverse: the raw stick for a wanted command, back through the input's 0.12 dead
+	// zone, the player's dead zone (default 0), the fine centre and the quickness.
+	for (const double Speed : { 0.0, 11.0, 30.0 })
+	{
+		for (const double Want : { -0.6, -0.1, 0.05, 0.3, 0.9 })
+		{
+			const double Raw = SimCruiseShaping::PadStickForCommand(Setup, Want, Speed);
+			const double AfterInput = FMath::Sign(Raw) * FMath::Max(0.0, (FMath::Abs(Raw) - 0.12) / 0.88);
+			const double Pad = SimCruiseShaping::StickDeadZone(AfterInput, 0.0);
+			const double Quick = FMath::Clamp(Setup.SteeringQuickness, 0.5, 2.0);
+			const double Back = FMath::Clamp(SimCruiseShaping::ThumbstickCommand(Setup, Pad, Speed) * Quick, -1.0, 1.0);
+			TestNearlyEqual(*FString::Printf(TEXT("stick for command %.2f at %.0f m/s"), Want, Speed), Back, Want, 1e-4);
+		}
+	}
 	return true;
 }
 
@@ -368,7 +382,7 @@ bool FSimCruiseHapticsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("never falls as slip grows"), bMonotonic);
 
 	TestEqual(TEXT("ABS pulse on"), AbsPulse(true, 0.01), AbsOn);
-	TestEqual(TEXT("ABS pulse off half a cycle later (8 Hz)"), AbsPulse(true, 0.07), 0.0);
+	TestEqual(TEXT("ABS pulse off half a cycle later (17 Hz)"), AbsPulse(true, 0.04), 0.0);
 	TestEqual(TEXT("no pulse without ABS"), AbsPulse(false, 0.01), 0.0);
 
 	// Coasting straight on a smooth road: silence.
@@ -380,7 +394,8 @@ bool FSimCruiseHapticsTest::RunTest(const FString& Parameters)
 		Wheel.PeakSlipAngleRad = PlateauSlipAngleRad(Car);
 	}
 	FSimCruiseHapticsModel Model;
-	TestTrue(TEXT("coasting is quiet"), Model.Sample(Coast, 0.0, 0.0, 1.0 / 60.0).IsQuiet());
+	const FSimCruiseRumble Cruise = Model.Sample(Coast, 0.0, 0.0, 1.0 / 60.0);
+	TestTrue(TEXT("coasting on smooth asphalt: only a light road hum"), Cruise.LowFrequency == 0.f && Cruise.HighFrequency < 0.06f);
 
 	// Understeer: front tyres past the plateau buzz the high-frequency motor.
 	FSimCruiseDriveTelemetry Push = Coast;
@@ -393,7 +408,7 @@ bool FSimCruiseHapticsTest::RunTest(const FString& Parameters)
 	Spin.Wheels[2].bDriven = Spin.Wheels[3].bDriven = true;
 	Spin.Wheels[2].SlipRatio = Spin.Wheels[3].SlipRatio = 0.25;
 	const FSimCruiseRumble Over = Model.Sample(Spin, 1.0, 0.0, 1.0 / 60.0);
-	TestTrue(TEXT("wheelspin is the strong motor"), Over.LowFrequency > 0.6f && Over.HighFrequency == 0.f);
+	TestTrue(TEXT("wheelspin is the strong motor"), Over.LowFrequency > 0.6f && Over.HighFrequency < 0.06f);
 	TestTrue(TEXT("wheelspin in the throttle trigger"), Over.RightTrigger > 0.4f && Over.LeftTrigger == 0.f);
 
 	// Parked after a slide: a relaxed slip angle left on the tyres is not
@@ -425,6 +440,164 @@ bool FSimCruiseHapticsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("XInput high motor"), FMath::Max(X.LeftSmall, X.RightSmall) == 0.3f);
 	const FForceFeedbackValues GI = ToChannels(R, ESimCruiseRumbleBackend::GameInput);
 	TestTrue(TEXT("GameInput four motors"), GI.LeftLarge == 0.8f && GI.RightLarge == 0.3f && GI.LeftSmall == 0.5f && GI.RightSmall == 0.2f);
+	return true;
+}
+
+namespace SimCruiseGameplayTest
+{
+	/** Put a wheel on a kerb: its flag where the build has one, and the fallback's rough road and a quick suspension jump. */
+	template <typename TWheel>
+	void PutOnKerb(TWheel& Wheel, double TravelJumpM)
+	{
+		if constexpr (requires { Wheel.bKerb; }) Wheel.bKerb = true;
+		Wheel.SuspensionTravelM += TravelJumpM;
+	}
+
+	/** The wheel's surface where the build has the field (the grip says it otherwise). */
+	template <typename TWheel>
+	void SetSurface(TWheel& Wheel, uint8 Surface)
+	{
+		if constexpr (requires { Wheel.SurfaceKind; }) Wheel.SurfaceKind = Surface;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseHapticsSurfaceTest, "SimCruise.Gameplay.Haptics.Surfaces", Flags)
+bool FSimCruiseHapticsSurfaceTest::RunTest(const FString& Parameters)
+{
+	// Rumble you can read the road by: ABS pulses at 15-20 Hz, slip from 80 % of the peak, a kerb
+	// is a short sharp pulse on its side's motor, gravel a coarse random low rumble, concrete a
+	// fine joint tick, grass a soft wobble, asphalt almost nothing, the air nothing. Checked on the
+	// channels the pad gets (ToChannels, XInput: LeftLarge is the left motor, LeftSmall the right).
+	using namespace SimCruiseHaptics;
+	const FSimCruiseCarDefinition Car;
+
+	// ABS: count the pulses in one second.
+	int32 Rises = 0;
+	bool bWas = false;
+	for (int32 Ms = 0; Ms < 1000; ++Ms)
+	{
+		const bool bOn = AbsPulse(true, Ms / 1000.0) > 0.0;
+		Rises += bOn && !bWas ? 1 : 0;
+		bWas = bOn;
+	}
+	TestTrue(FString::Printf(TEXT("ABS pulses at 15-20 Hz (%d a second)"), Rises), Rises >= 15 && Rises <= 20);
+
+	// Slip: nothing below 80 % of the peak, felt above it.
+	TestEqual(TEXT("slip at 79 % of the peak is not felt"), SlipFeel(0.79), 0.0);
+	TestTrue(TEXT("slip at 90 % of the peak is felt"), SlipFeel(0.9) > 0.0);
+
+	// Surfaces at 15 m/s over two seconds.
+	auto Texture = [](uint8 Surface, double& MaxLow, double& MaxHigh, double& MinLow, int32& Ticks)
+	{
+		MaxLow = MaxHigh = 0.0; MinLow = 1e9; Ticks = 0;
+		bool bHigh = false;
+		for (int32 Ms = 0; Ms < 2000; Ms += 5)
+		{
+			double Low = 0.0, High = 0.0;
+			SurfaceTexture(Surface, 15.0, Ms / 1000.0, Low, High);
+			MaxLow = FMath::Max(MaxLow, Low); MaxHigh = FMath::Max(MaxHigh, High); MinLow = FMath::Min(MinLow, Low);
+			const bool bTick = High > 0.2;
+			Ticks += bTick && !bHigh ? 1 : 0;
+			bHigh = bTick;
+		}
+	};
+	double Lo, Hi, MinLo; int32 Ticks;
+	Texture(Asphalt, Lo, Hi, MinLo, Ticks);
+	TestTrue(FString::Printf(TEXT("asphalt: a light hum only (low %.2f, high %.2f)"), Lo, Hi), Lo == 0.0 && Hi > 0.0 && Hi < 0.06);
+	Texture(Concrete, Lo, Hi, MinLo, Ticks);
+	TestTrue(FString::Printf(TEXT("concrete: a fine joint tick on the high motor, about one per 4.5 m (%d in 30 m)"), Ticks), Lo == 0.0 && Ticks >= 6 && Ticks <= 7);
+	const double ConcreteHigh = Hi;
+	Texture(Gravel, Lo, Hi, MinLo, Ticks);
+	TestTrue(FString::Printf(TEXT("gravel: a coarse random low rumble (low %.2f..%.2f)"), MinLo, Lo), Lo > 0.25 && Lo - MinLo > 0.1);
+	const double GravelLow = Lo;
+	Texture(Grass, Lo, Hi, MinLo, Ticks);
+	TestTrue(FString::Printf(TEXT("grass: a soft low wobble, softer than gravel (low %.2f)"), Lo), Lo > 0.05 && Lo < GravelLow && Hi == 0.0);
+	Texture(Air, Lo, Hi, MinLo, Ticks);
+	TestTrue(TEXT("air: nothing"), Lo == 0.0 && Hi == 0.0);
+	double StillLow = 0.0, StillHigh = 0.0;
+	for (uint8 S = Asphalt; S <= Dirt; ++S) SurfaceTexture(S, 0.0, 0.3, StillLow, StillHigh);
+	TestTrue(TEXT("no surface texture at a standstill"), StillLow == 0.0 && StillHigh == 0.0);
+	TestTrue(TEXT("concrete ticks harder than the asphalt hum"), ConcreteHigh > 0.2);
+
+	// A car rolling at 15 m/s on asphalt.
+	FSimCruiseDriveTelemetry Road = SimCruiseGameplayTest::Moving(15.0);
+	for (FSimCruiseDriveWheelTelemetry& Wheel : Road.Wheels)
+	{
+		Wheel.bContact = true;
+		Wheel.NormalLoadN = 2500.0;
+		Wheel.SurfaceGrip = 1.0;
+		Wheel.PeakSlipAngleRad = PlateauSlipAngleRad(Car);
+	}
+	const double Dt = 1.0 / 60.0;
+
+	// A kerb under the left front wheel: a short sharp pulse on the left motor only.
+	{
+		FSimCruiseHapticsModel Model;
+		Model.Sample(Road, 0.0, 0.0, Dt);
+		FSimCruiseDriveTelemetry Kerb = Road;
+		Kerb.RoadRoughness = 1.0;
+		SimCruiseGameplayTest::PutOnKerb(Kerb.Wheels[0], 0.03);
+		const FForceFeedbackValues Hit = ToChannels(Model.Sample(Kerb, 0.0, 0.0, Dt), ESimCruiseRumbleBackend::XInput);
+		TestTrue(FString::Printf(TEXT("left kerb: the left motor pulses (%.2f), the right only has the rough road's texture (%.2f)"), Hit.LeftLarge, Hit.LeftSmall), Hit.LeftLarge >= 0.7f && Hit.LeftSmall < 0.3f);
+		FSimCruiseRumble After;
+		for (int32 F = 0; F < 6; ++F) After = Model.Sample(Kerb, 0.0, 0.0, Dt);
+		TestTrue(FString::Printf(TEXT("left kerb: the pulse is short (%.2f after 0.1 s on it)"), After.LowFrequency), After.LowFrequency < 0.1f);
+	}
+	// And under the right front wheel: the right motor.
+	{
+		FSimCruiseHapticsModel Model;
+		Model.Sample(Road, 0.0, 0.0, Dt);
+		FSimCruiseDriveTelemetry Kerb = Road;
+		Kerb.RoadRoughness = 1.0;
+		SimCruiseGameplayTest::PutOnKerb(Kerb.Wheels[1], 0.03);
+		const FForceFeedbackValues Hit = ToChannels(Model.Sample(Kerb, 0.0, 0.0, Dt), ESimCruiseRumbleBackend::XInput);
+		TestTrue(FString::Printf(TEXT("right kerb: the right motor pulses (%.2f), the left stays quiet (%.2f)"), Hit.LeftSmall, Hit.LeftLarge), Hit.LeftSmall >= 0.7f && Hit.LeftLarge < 0.1f);
+	}
+	// A rough road with no wheel jumping is no kerb (the fallback needs both).
+	{
+		FSimCruiseHapticsModel Model;
+		FSimCruiseDriveTelemetry Rough = Road;
+		Rough.RoadRoughness = 1.0;
+		Model.Sample(Rough, 0.0, 0.0, Dt);
+		const FSimCruiseRumble R = Model.Sample(Rough, 0.0, 0.0, Dt);
+		TestTrue(FString::Printf(TEXT("rough road, steady wheels: no kerb pulse (low %.2f)"), R.LowFrequency), R.LowFrequency < 0.1f);
+	}
+	// Loose ground under all four wheels (the grip of a verge): the coarse low rumble.
+	{
+		FSimCruiseHapticsModel Model;
+		FSimCruiseDriveTelemetry Loose = Road;
+		for (FSimCruiseDriveWheelTelemetry& Wheel : Loose.Wheels)
+		{
+			Wheel.SurfaceGrip = 0.7;
+			SimCruiseGameplayTest::SetSurface(Wheel, Gravel);
+		}
+		double MaxLow = 0.0;
+		for (int32 F = 0; F < 60; ++F) MaxLow = FMath::Max(MaxLow, static_cast<double>(ToChannels(Model.Sample(Loose, 0.0, 0.0, Dt), ESimCruiseRumbleBackend::XInput).LeftLarge));
+		TestTrue(FString::Printf(TEXT("loose ground: the low motor rumbles (%.2f)"), MaxLow), MaxLow > 0.2);
+	}
+	// ABS on the channels: both main motors' low one pulses while ABS acts.
+	{
+		FSimCruiseHapticsModel Model;
+		FSimCruiseDriveTelemetry Abs = Road;
+		Abs.bServiceBrakeOn = true;
+		for (FSimCruiseDriveWheelTelemetry& Wheel : Abs.Wheels) { Wheel.bAbsActive = true; Wheel.SlipRatio = -0.1; }
+		int32 On = 0, Off = 0;
+		for (int32 F = 0; F < 100; ++F)
+		{
+			const float L = ToChannels(Model.Sample(Abs, 0.0, 1.0, 0.005), ESimCruiseRumbleBackend::XInput).LeftLarge;
+			(L >= 0.6f ? On : Off) += 1;
+		}
+		TestTrue(FString::Printf(TEXT("ABS: the left motor pulses on and off (%d on, %d off in 0.5 s)"), On, Off), On > 20 && Off > 20);
+	}
+	// In the air: no rumble at all, even with the engine working.
+	{
+		FSimCruiseHapticsModel Model;
+		FSimCruiseDriveTelemetry Air = Road;
+		Air.EngineLoad = 1.0;
+		for (FSimCruiseDriveWheelTelemetry& Wheel : Air.Wheels) Wheel.bContact = false;
+		const FForceFeedbackValues V = ToChannels(Model.Sample(Air, 1.0, 0.0, Dt), ESimCruiseRumbleBackend::XInput);
+		TestTrue(TEXT("in the air: every channel is still"), V.LeftLarge == 0.f && V.LeftSmall == 0.f && V.RightLarge == 0.f && V.RightSmall == 0.f);
+	}
 	return true;
 }
 

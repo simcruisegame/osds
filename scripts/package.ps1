@@ -53,24 +53,51 @@ $Stale = Join-Path $Out 'Windows'
 if (Test-Path $Stale) { Remove-Item -Recurse -Force $Stale }
 Write-Host "BuildCookRun Win64 $Configuration"
 & (Join-Path $EngineDir 'Engine\Build\BatchFiles\RunUAT.bat') BuildCookRun "-project=$Project" -noP4 -platform=Win64 `
-    "-clientconfig=$Configuration" -build -cook -map=/Engine/Maps/Entry -stage -pak -archive "-archivedirectory=$Out" -unattended -utf8output
+    "-clientconfig=$Configuration" -build -cook -map=/Engine/Maps/Entry -stage -pak -prereqs -archive "-archivedirectory=$Out" -unattended -utf8output
 if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 }
 
 $Game = Join-Path $Out 'Windows\SimCruise'
 if (-not (Test-Path $Game)) { throw "No staged game at $Game" }
+
+# The runtimes a clean Windows does not have (scripts\dep-check.py lists the DLLs): the
+# Visual C++ 2015-2022 x64 runtime (MSVCP140, MSVCP140_1, VCRUNTIME140, VCRUNTIME140_1) and
+# GameInput (racing wheels). -prereqs stages Microsoft's redistributable installers from the
+# engine; they are copied here too, so a -NoBuild run or an older package also has them. The
+# launcher SimCruise.exe offers to run them when they are missing, and the installer runs them
+# (packaging\windows\simcruise.iss). Terms: licenses\microsoft-redistributables.md.
+$Redist = Join-Path $Out 'Windows\Engine\Extras\Redist\en-us'
+New-Item -ItemType Directory -Force $Redist | Out-Null
+# vc_redist.arm64.exe: the launcher asks for it on Windows on Arm (the game runs there in emulation).
+foreach ($Name in 'vc_redist.x64.exe', 'vc_redist.arm64.exe', 'GameInputRedist.msi') {
+    $From = Join-Path $EngineDir "Engine\Extras\Redist\en-us\$Name"
+    if (-not (Test-Path $From)) { throw "The engine has no $From (a clean PC cannot start the game without it)" }
+    Copy-Item $From $Redist -Force
+    if ((Get-AuthenticodeSignature (Join-Path $Redist $Name)).Status -ne 'Valid') { throw "$Name has no valid signature" }
+}
 Write-Host 'Copying the loose data the game reads from disk'
 # Only the car models a profile uses, and not data\observed (the Godot client's; unread here).
 $Profiles = Get-Content -Raw (Join-Path $Root 'Content\Vehicles\CarPresentation.json') | ConvertFrom-Json
 $Used = @($Profiles.cars.PSObject.Properties | ForEach-Object { ($_.Value.model -split '/')[3] } | Where-Object { $_ })
 $Skip = @(Join-Path $Root 'data\observed') + @(Get-ChildItem -Directory (Join-Path $Root 'data\art\traffic') |
     Where-Object { $Used -notcontains $_.Name } | ForEach-Object { $_.FullName })
-# The AI models' weights were trained on data released for research or non-commercial use
-# only (Cityscapes; DIV2K, Flickr2K, OST), so they are development tools and never shipped
-# (docs/data-sources.md); the game runs without them. Every data/ai/*.onnx is left out, so a
-# new model is not shipped by accident; scripts\release.ps1 refuses a zip with any .onnx.
+# AI models: only the ones cleared for shipping (scripts\ShippedModels.ps1, CREDITS.md). The
+# copy leaves every .onnx out, so a new model is not shipped by accident, then puts in exactly
+# the listed ones; scripts\release.ps1 fails on any other .onnx in the zip.
+. (Join-Path $PSScriptRoot 'ShippedModels.ps1')
 robocopy (Join-Path $Root 'data') (Join-Path $Game 'data') /MIR /XD @Skip /XF *.onnx /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "Copying data failed ($LASTEXITCODE)" }
+# An earlier copy's other models go (robocopy /MIR leaves excluded files in place).
+Get-ChildItem (Join-Path $Game 'data') -Recurse -Filter *.onnx -ErrorAction SilentlyContinue | Where-Object {
+    $script:ShippedModels -notcontains ('data/' + $_.FullName.Substring((Join-Path $Game 'data').Length + 1).Replace('\', '/'))
+} | Remove-Item -Force
+foreach ($Model in $script:ShippedModels) {
+    $From = Join-Path $Root $Model
+    if (-not (Test-Path $From)) { throw "A shipped model is missing: $Model" }
+    $To = Join-Path $Game $Model
+    New-Item -ItemType Directory -Force (Split-Path $To) | Out-Null
+    Copy-Item $From $To -Force
+}
 foreach ($Dir in $Skip) {
     # robocopy /MIR leaves excluded folders in place; an earlier copy's go now.
     $Copied = Join-Path $Game ('data' + $Dir.Substring((Join-Path $Root 'data').Length))

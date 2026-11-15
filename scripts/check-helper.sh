@@ -1,4 +1,4 @@
-#!/bin/sh
+﻿#!/bin/sh
 # Run the map helper's offline tests and print a pass/fail table.
 #
 #   sh scripts/check-helper.sh
@@ -16,9 +16,9 @@ logs=${CHECK_LOG_DIR:-$root/build/check-logs}/helper
 mkdir -p "$logs"
 [ -d node_modules ] || "$bun" install --frozen-lockfile >/dev/null
 
-offline="cache-check check-cache-eviction check-ground-reflectance check-guard-rails check-lane-counts check-panoramax
-check-pedestrian check-rangeland check-road-pipeline check-regional-height-outliers check_civic_trees
-check_overture_heights check_regional_aerial check_signal_controls
+offline="cache-check check-cache-eviction check-crown-segments check-ground-reflectance check-guard-rails check-lane-counts check-panoramax
+check-pedestrian check-rangeland check-snow-miss check-road-pipeline check-regional-height-outliers check_civic_trees
+check_overture_heights check_aerial16 check_regional_aerial check_signal_controls
 check_verified_footprints nsi-check optional-street-objects street-appearance-check
 street_sample_check verify-road-banks"
 # node:test suites run under Bun's test runner.

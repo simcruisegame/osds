@@ -124,14 +124,17 @@ if (all(q >= 0.0) && all(q <= 1.0))
 		if (p.x < 0.0 || p.x > 1.0) continue;
 		int mask = masks[digits[c]];
 		const float t = 0.07, tv = 0.12;
+		// Segments with edges a screen pixel wide (fwidth): hard steps aliased into garble at the
+		// few pixels a cluster digit covers from the seat (Jasper review).
+		float fx = max(fwidth(p.x), 1e-4), fy = max(fwidth(p.y), 1e-4);
 		float s = 0.0;
-		s += ((mask >> 0) & 1) * step(abs(p.y - 0.05), t) * step(abs(p.x - 0.5), 0.34);
-		s += ((mask >> 1) & 1) * step(abs(p.x - 0.88), tv) * step(abs(p.y - 0.27), 0.2);
-		s += ((mask >> 2) & 1) * step(abs(p.x - 0.88), tv) * step(abs(p.y - 0.73), 0.2);
-		s += ((mask >> 3) & 1) * step(abs(p.y - 0.95), t) * step(abs(p.x - 0.5), 0.34);
-		s += ((mask >> 4) & 1) * step(abs(p.x - 0.12), tv) * step(abs(p.y - 0.73), 0.2);
-		s += ((mask >> 5) & 1) * step(abs(p.x - 0.12), tv) * step(abs(p.y - 0.27), 0.2);
-		s += ((mask >> 6) & 1) * step(abs(p.y - 0.5), t) * step(abs(p.x - 0.5), 0.34);
+		s += ((mask >> 0) & 1) * saturate((t - abs(p.y - 0.05)) / fy + 0.5) * saturate((0.34 - abs(p.x - 0.5)) / fx + 0.5);
+		s += ((mask >> 1) & 1) * saturate((tv - abs(p.x - 0.88)) / fx + 0.5) * saturate((0.2 - abs(p.y - 0.27)) / fy + 0.5);
+		s += ((mask >> 2) & 1) * saturate((tv - abs(p.x - 0.88)) / fx + 0.5) * saturate((0.2 - abs(p.y - 0.73)) / fy + 0.5);
+		s += ((mask >> 3) & 1) * saturate((t - abs(p.y - 0.95)) / fy + 0.5) * saturate((0.34 - abs(p.x - 0.5)) / fx + 0.5);
+		s += ((mask >> 4) & 1) * saturate((tv - abs(p.x - 0.12)) / fx + 0.5) * saturate((0.2 - abs(p.y - 0.73)) / fy + 0.5);
+		s += ((mask >> 5) & 1) * saturate((tv - abs(p.x - 0.12)) / fx + 0.5) * saturate((0.2 - abs(p.y - 0.27)) / fy + 0.5);
+		s += ((mask >> 6) & 1) * saturate((t - abs(p.y - 0.5)) / fy + 0.5) * saturate((0.34 - abs(p.x - 0.5)) / fx + 0.5);
 		ink = max(ink, saturate(s));
 	}
 	col = lerp(col, float3(0.95, 0.95, 0.95), ink);

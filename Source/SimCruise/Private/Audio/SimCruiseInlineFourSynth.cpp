@@ -156,7 +156,7 @@ void FSimCruiseInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& 
 		const double Speed = FMath::Clamp(FiringHz / SpeedHz, 0.0, 1.0);
 		const double Pulse = FMath::Lerp(Quiet, Loaded, Charge) * PulseGain * CutGain;
 		const double ExhaustLevel = (.17 + .34 * Charge + .14 * Pull + .08 * Speed - .045 * Overrun) * ExhaustPresence;
-		const double InletLevel = (.02 + .42 * Throttle * Charge) * (In.bCabin ? .50 : 1.0) * CutGain;
+		const double InletLevel = (.02 + .42 * Throttle * Charge) * (In.bCabin ? FMath::Clamp(In.CabinInletGain, 0.0, 1.0) : 1.0) * CutGain;
 		const double Airflow = (.036 + .13 * Charge + .08 * Overrun) * (.55 + Speed) + .05 * (1.0 - CutGain);
 		PopEnv *= PopDecay;
 		PopLow += .35 * (White * PopEnv - PopLow);

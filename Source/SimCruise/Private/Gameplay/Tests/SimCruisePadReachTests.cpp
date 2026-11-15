@@ -13,6 +13,10 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Application/SlateUser.h"
 #include "Gameplay/SimCruiseAtlasUI.h"
+#include "Gameplay/SimCruiseFeatures.h"
+#include "Gameplay/SimCruiseInputConfig.h"
+#include "Gameplay/SimCruiseRoutePlanner.h"
+#include "Misc/Crc.h"
 #include "Gameplay/SimCruisePauseMenu.h"
 #include "Gameplay/SimCruiseSeatUI.h"
 #include "Gameplay/SimCruiseTuningUI.h"
@@ -125,6 +129,16 @@ namespace SimCruisePadReachTest
 			Tick();
 		}
 
+		/** One analog event of the left stick, not let go (a held stick); then a frame. */
+		void Hold(const FKey& Axis, float Value)
+		{
+			FSlateApplication& App = FSlateApplication::Get();
+			const FAnalogInputEvent Event(Axis, FModifierKeysState(), 0, false, 0, 0, Value);
+			if (GSlateRoutes && Routable()) App.ProcessAnalogInputEvent(Event);
+			else for (const TSharedPtr<SWidget>& W : FocusChain()) if (W->OnAnalogValueChanged(W->GetCachedGeometry(), Event).IsEventHandled()) break;
+			Tick();
+		}
+
 		static TSharedPtr<SWidget> Focus() { return FSlateApplication::Get().GetUserFocusedWidget(0); }
 
 		/** Is the pad's focus on this widget (or inside it, as in a text box)? */
@@ -190,6 +204,11 @@ bool FSimCruisePadReachAllTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Left from Drive goes to Settings"), Pad.On(Menu->GetTabWidget(3)));
 		Pad.Press(EKeys::Gamepad_DPad_Up);
 		TestTrue(TEXT("Up on the tab row stays on it (no trap, no jump)"), Pad.On(Menu->GetTabWidget(3)));
+
+		// The rows the release has: no Traffic row while traffic is off; Settings has the HUD's Map row.
+		auto HasRow = [](int32 P, ESimCruiseMenuRow Row) { for (const SSimCruisePauseMenu::FRowInfo& R : SSimCruisePauseMenu::Rows(P)) if (R.Row == Row) return true; return false; };
+		TestEqual(TEXT("Drive has the Traffic row only while traffic is on"), HasRow(0, ESimCruiseMenuRow::Traffic), SimCruiseFeatures::IsTrafficEnabled());
+		TestTrue(TEXT("Settings has the Map row (with route or always)"), HasRow(3, ESimCruiseMenuRow::HudMap));
 
 		// Every tab opens with A (and Down), on its first row; every row is reached and used.
 		for (int32 P = 0; P < SSimCruisePauseMenu::NumPages; ++P)
@@ -304,7 +323,12 @@ bool FSimCruisePadReachAllTest::RunTest(const FString& Parameters)
 		FPadScreen Pad(Atlas);
 		TArray<TSharedPtr<SWidget>> All;
 		for (const TArray<TSharedPtr<SWidget>>& Row : Atlas->GetPadRows()) All.Append(Row);
-		TestEqual(TEXT("atlas: 23 buttons on the top panel"), All.Num(), 23);
+		// 23 with the Traffic setting; while traffic is off for the release it is not on the panel.
+		const bool bTraffic = SimCruiseFeatures::IsTrafficEnabled();
+		TestEqual(FString::Printf(TEXT("atlas: %d buttons on the top panel"), bTraffic ? 23 : 22), All.Num(), bTraffic ? 23 : 22);
+		bool bTrafficButton = false;
+		for (const TSharedPtr<SWidget>& B : All) bTrafficButton |= B.IsValid() && B->GetTag() == FName(TEXT("Setting.13"));
+		TestEqual(TEXT("atlas: the Traffic setting is on the panel only while traffic is on"), bTrafficButton, bTraffic);
 		TestTrue(TEXT("atlas: opens on the map"), Pad.On(Atlas));
 		Pad.Press(EKeys::Gamepad_DPad_Right);
 		TSet<SWidget*> Reached;
@@ -410,15 +434,27 @@ bool FSimCruisePadReachAllTest::RunTest(const FString& Parameters)
 			SimCruiseTheme::FocusPad(Keys[R][C]);
 			Pad.Press(EKeys::Gamepad_FaceButton_Bottom);
 		};
-		Pad.Press(EKeys::Gamepad_FaceButton_Top);
-		TestEqual(TEXT("Where to?: Y types a space"), Search->GetQuery(), FString(TEXT(" ")));
+		// The pad keyboard's buttons: X a space, B deletes, A types at the cursor, LB and RB move it.
 		Pad.Press(EKeys::Gamepad_FaceButton_Left);
+		TestEqual(TEXT("Where to?: X types a space"), Search->GetQuery(), FString(TEXT(" ")));
+		Pad.Press(EKeys::Gamepad_FaceButton_Right);
+		TestEqual(TEXT("Where to?: B deletes"), Search->GetQuery(), FString());
+		TestTrue(TEXT("Where to?: B with something to delete keeps the keyboard open"), Search->IsPadKeyboardOpen());
 		TypeAt(3, 6); TypeAt(1, 7); TypeAt(2, 0);
 		TestEqual(TEXT("Where to?: A types the key the pad is on"), Search->GetQuery(), FString(TEXT("mia")));
-		Pad.Press(EKeys::Gamepad_FaceButton_Left);
-		TestEqual(TEXT("Where to?: X deletes"), Search->GetQuery(), FString(TEXT("mi")));
+		Pad.Press(EKeys::Gamepad_LeftShoulder);
+		Pad.Press(EKeys::Gamepad_LeftShoulder);
+		TestEqual(TEXT("Where to?: LB moves the cursor left"), Search->GetTextCursor(), 1);
+		TypeAt(1, 2);
+		TestEqual(TEXT("Where to?: A types at the cursor"), Search->GetQuery(), FString(TEXT("meia")));
+		Pad.Press(EKeys::Gamepad_RightShoulder);
 		Pad.Press(EKeys::Gamepad_FaceButton_Right);
-		TestTrue(TEXT("Where to?: B closes the pad keyboard, back on the box, text kept"), !Search->IsPadKeyboardOpen() && Pad.On(Search->GetField()) && Search->GetQuery() == TEXT("mi") && Closed == 0);
+		TestEqual(TEXT("Where to?: RB moves the cursor right; B deletes before it"), Search->GetQuery(), FString(TEXT("mea")));
+		for (int32 i = 0; i < 4; ++i) Pad.Press(EKeys::Gamepad_RightShoulder);
+		for (int32 i = 0; i < 3; ++i) Pad.Press(EKeys::Gamepad_FaceButton_Right);
+		TestEqual(TEXT("Where to?: B deletes it all"), Search->GetQuery(), FString());
+		Pad.Press(EKeys::Gamepad_FaceButton_Right);
+		TestTrue(TEXT("Where to?: B on an empty box closes the pad keyboard, back on the box"), !Search->IsPadKeyboardOpen() && Pad.On(Search->GetField()) && Closed == 0);
 		Pad.Press(EKeys::Gamepad_FaceButton_Right);
 		TestEqual(TEXT("Where to?: B closes the screen"), Closed, 1);
 	}
@@ -443,6 +479,404 @@ bool FSimCruisePadReachAllTest::RunTest(const FString& Parameters)
 		Pad.Press(EKeys::Gamepad_DPad_Down);
 		Pad.Press(EKeys::Gamepad_FaceButton_Right);
 		TestTrue(TEXT("B cancels Seat & view"), Closed == 1 && !Seat->WasSaved());
+	}
+	return true;
+}
+
+namespace SimCruisePadReachTest
+{
+	/** One screen in one mode for the hint check: the widget, what it shows now, its hints, and how to get it into the mode. */
+	struct FMade
+	{
+		TSharedPtr<SWidget> Widget;
+		TFunction<FString()> State;
+		TFunction<TArray<SimCruiseTheme::FHint>()> Hints;
+		TFunction<void(FPadScreen&)> Prepare;
+		/** Hint glyphs not pressed here, and why (for example: needs the GPS). */
+		TMap<FString, FString> Skip;
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruisePadHintsMatchTest, "SimCruise.UI.PadHintsMatch", SimCruisePadReachTest::Flags)
+bool FSimCruisePadHintsMatchTest::RunTest(const FString& Parameters)
+{
+	// Every button hint on every screen says what the button does there: each hinted button (pressed
+	// on a fresh screen in that mode) changes what the screen shows or does, and a face button with no
+	// hint (A, B, X, Y) changes nothing. The help lines are made from these same hint lists.
+	using namespace SimCruisePadReachTest;
+	if (!FSlateApplication::IsInitialized())
+	{
+		AddWarning(TEXT("No Slate application: the hint test needs one"));
+		return true;
+	}
+	int32 Checked = 0;
+	auto Run = [this, &Checked](const FString& ScreenName, TFunction<FMade()> Make)
+	{
+		TArray<SimCruiseTheme::FHint> Hints;
+		{
+			FMade Probe = Make();
+			FPadScreen Pad(Probe.Widget.ToSharedRef());
+			if (Probe.Prepare) Probe.Prepare(Pad);
+			Hints = Probe.Hints();
+		}
+		TestTrue(FString::Printf(TEXT("%s: has hints"), *ScreenName), Hints.Num() > 0);
+		// What one key does on a fresh screen in this mode: the state before and after.
+		auto Try = [&Make](const FKey& Key, FString& Before, FString& After)
+		{
+			FMade M = Make();
+			FPadScreen Pad(M.Widget.ToSharedRef());
+			if (M.Prepare) M.Prepare(Pad);
+			Before = M.State() + TEXT(" | focus ") + Name(FPadScreen::Focus());
+			Pad.Press(Key);
+			After = M.State() + TEXT(" | focus ") + Name(FPadScreen::Focus());
+		};
+		TSet<FKey> Hinted;
+		FMade Info = Make();
+		for (const SimCruiseTheme::FHint& Hint : Hints)
+		{
+			const TArray<FKey> Keys = SimCruiseTheme::PadKeysOf(Hint.Glyph);
+			Hinted.Append(Keys);
+			if (Keys.Num() == 0) continue; // "Stick": no button
+			if (const FString* Why = Info.Skip.Find(Hint.Glyph)) { AddInfo(FString::Printf(TEXT("%s: %s (%s) not pressed: %s"), *ScreenName, *Hint.Glyph, *Hint.Text, **Why)); continue; }
+			// A D-pad hint holds when a way it names does something; a button hint, when each button does.
+			const bool bDpad = Hint.Glyph.StartsWith(TEXT("D-pad")) || Hint.Glyph.Contains(TEXT("D-pad"));
+			int32 Changed = 0;
+			FString Seen;
+			for (const FKey& Key : Keys)
+			{
+				FString Before, After;
+				Try(Key, Before, After);
+				const bool bChanged = Before != After;
+				Changed += bChanged ? 1 : 0;
+				Seen += FString::Printf(TEXT(" [%s: %s -> %s]"), *Key.ToString(), *Before, *After);
+				if (!bDpad) TestTrue(FString::Printf(TEXT("%s: hint '%s: %s' - %s does something%s"), *ScreenName, *Hint.Glyph, *Hint.Text, *Key.ToString(), bChanged ? TEXT("") : *Seen), bChanged);
+				++Checked;
+			}
+			if (bDpad) TestTrue(FString::Printf(TEXT("%s: hint '%s: %s' - the D-pad does something%s"), *ScreenName, *Hint.Glyph, *Hint.Text, Changed ? TEXT("") : *Seen), Changed > 0);
+		}
+		// No hidden face-button actions.
+		for (const FKey& Key : { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left, EKeys::Gamepad_FaceButton_Top })
+		{
+			if (Hinted.Contains(Key)) continue;
+			FString Before, After;
+			Try(Key, Before, After);
+			TestEqual(FString::Printf(TEXT("%s: %s has no hint, so it does nothing"), *ScreenName, *Key.ToString()), After, Before);
+			++Checked;
+		}
+	};
+
+	// ------------------------------------------------------------------ pause menu, each kind of row
+	auto Pause = [](bool bRoute, TFunction<void(FPadScreen&)> Prepare) -> TFunction<FMade()>
+	{
+		return [bRoute, Prepare]()
+		{
+			TSharedRef<int32> Actions = MakeShared<int32>(0), Closed = MakeShared<int32>(0);
+			TSharedRef<SSimCruisePauseMenu> Menu = SNew(SSimCruisePauseMenu)
+				.GetState_Lambda([bRoute]() { FSimCruiseMenuState S; S.bRoute = bRoute; S.bPad = true; return S; })
+				.OnAction_Lambda([Actions](ESimCruiseMenuRow, int32) { ++*Actions; })
+				.OnClose_Lambda([Closed]() { ++*Closed; });
+			FMade M;
+			M.Widget = Menu;
+			M.State = [Menu, Actions, Closed]() { return FString::Printf(TEXT("page %d row %d tabs %d tab %d actions %d closed %d"), Menu->GetPage(), Menu->GetSelected(), Menu->IsOnTabs() ? 1 : 0, Menu->GetTabCursor(), *Actions, *Closed); };
+			M.Hints = [Menu]() { return Menu->GetPadHints(); };
+			M.Prepare = Prepare;
+			return M;
+		};
+	};
+	Run(TEXT("Pause menu, an action row"), Pause(false, nullptr));
+	Run(TEXT("Pause menu, Drive with a route"), Pause(true, nullptr));
+	// LB from Drive goes to Settings: its first row (Sound) is a value row; Rumble, four down, a slider.
+	Run(TEXT("Pause menu, a value row"), Pause(false, [](FPadScreen& Pad) { Pad.Press(EKeys::Gamepad_LeftShoulder); }));
+	Run(TEXT("Pause menu, a slider row"), Pause(false, [](FPadScreen& Pad)
+	{
+		Pad.Press(EKeys::Gamepad_LeftShoulder);
+		for (int32 i = 0; i < SSimCruisePauseMenu::Rows(3).Num(); ++i)
+		{
+			if (SSimCruisePauseMenu::Rows(3)[i].Row == ESimCruiseMenuRow::Rumble) break;
+			Pad.Press(EKeys::Gamepad_DPad_Down);
+		}
+	}));
+	Run(TEXT("Pause menu, the tab row"), Pause(false, [](FPadScreen& Pad) { Pad.Press(EKeys::Gamepad_DPad_Up); }));
+
+	// ------------------------------------------------------------------ list menu
+	Run(TEXT("List menu"), []()
+	{
+		TArray<SSimCruiseListMenu::FItem> Items;
+		for (const TCHAR* T : { TEXT("One"), TEXT("Two"), TEXT("Three") }) { SSimCruiseListMenu::FItem I; I.Title = T; Items.Add(I); }
+		TSharedRef<int32> Chosen = MakeShared<int32>(0), Back = MakeShared<int32>(0);
+		TSharedRef<SSimCruiseListMenu> List = SNew(SSimCruiseListMenu).Title(TEXT("List")).Items(Items)
+			.OnChoose_Lambda([Chosen](int32) { ++*Chosen; }).OnBack_Lambda([Back]() { ++*Back; });
+		FMade M;
+		M.Widget = List;
+		M.State = [List, Chosen, Back]() { return FString::Printf(TEXT("row %d chosen %d back %d"), List->GetSelected(), *Chosen, *Back); };
+		M.Hints = []() { return SSimCruiseListMenu::GetPadHints(); };
+		return M;
+	});
+
+	// ------------------------------------------------------------------ Where to? and its pad keyboard
+	auto Search = [](bool bKeyboard) -> TFunction<FMade()>
+	{
+		return [bKeyboard]()
+		{
+			TSharedRef<int32> Chosen = MakeShared<int32>(0), Surprised = MakeShared<int32>(0), Closed = MakeShared<int32>(0);
+			TSharedRef<SSimCruisePlaceSearch> S = SNew(SSimCruisePlaceSearch)
+				.OnChoose_Lambda([Chosen](const FSimCruisePlace&) { ++*Chosen; })
+				.OnSurprise_Lambda([Surprised]() { ++*Surprised; return true; })
+				.OnClose_Lambda([Closed]() { ++*Closed; });
+			FMade M;
+			M.Widget = S;
+			M.State = [S, Chosen, Surprised, Closed]() { return FString::Printf(TEXT("query '%s' cursor %d keys %d chosen %d surprise %d closed %d"), *S->GetQuery(), S->GetTextCursor(), S->IsPadKeyboardOpen() ? 1 : 0, *Chosen, *Surprised, *Closed); };
+			M.Hints = [S]() { return S->GetPadHints(); };
+			M.Prepare = [S, bKeyboard](FPadScreen& Pad)
+			{
+				S->FocusFirst(true);
+				Pad.Tick();
+				if (!bKeyboard) return;
+				SimCruiseTheme::FocusPad(S->GetField());
+				Pad.Tick();
+				S->OpenPadKeyboard();
+				Pad.Tick();
+				// Something to delete, and the cursor inside it (so LB and RB both move it).
+				S->TypeKey(TEXT("a"));
+				S->TypeKey(TEXT("b"));
+				S->MoveCursor(-1);
+			};
+			return M;
+		};
+	};
+	Run(TEXT("Where to?"), Search(false));
+	Run(TEXT("Where to?, the pad keyboard"), Search(true));
+
+	// ------------------------------------------------------------------ road atlas: the map, and its buttons
+	auto Atlas = [](bool bButtons) -> TFunction<FMade()>
+	{
+		return [bButtons]()
+		{
+			TSharedRef<int32> Chosen = MakeShared<int32>(0), Found = MakeShared<int32>(0), Cars = MakeShared<int32>(0), Gears = MakeShared<int32>(0), Closed = MakeShared<int32>(0), Surprised = MakeShared<int32>(0);
+			TSharedRef<SSimCruiseRoadAtlas> A = SNew(SSimCruiseRoadAtlas)
+				.OnChoose_Lambda([Chosen](const FSimCruisePlace&) { ++*Chosen; })
+				.OnSurprise_Lambda([Surprised]() { ++*Surprised; return true; })
+				.OnFindPlace_Lambda([Found]() { ++*Found; })
+				.OnCycleCar_Lambda([Cars]() { ++*Cars; })
+				.OnToggleTransmission_Lambda([Gears]() { ++*Gears; })
+				.OnClose_Lambda([Closed]() { ++*Closed; });
+			FMade M;
+			M.Widget = A;
+			M.State = [A, Chosen, Found, Cars, Gears, Closed, Surprised]()
+			{
+				return FString::Printf(TEXT("centre %.1f,%.1f zoom %d chosen %d find %d car %d gear %d closed %d surprise %d"), A->GetCenterM().X, A->GetCenterM().Y, A->GetLevel(), *Chosen, *Found, *Cars, *Gears, *Closed, *Surprised);
+			};
+			M.Hints = [A]() { return A->GetPadHints(); };
+			// No map frame here (it would fetch real map tiles): Drive here needs a place under the centre.
+			if (!bButtons) M.Skip = { { TEXT("A"), TEXT("Drive here needs a place under the map centre (a world frame); the game's pad review drives it") } };
+			M.Prepare = [A, bButtons](FPadScreen& Pad)
+			{
+				// The map off the car (so Recenter moves it), then onto a button in the middle of the panel.
+				Pad.Press(EKeys::Right);
+				if (!bButtons) return;
+				SimCruiseTheme::FocusPad(A->GetPadRows()[1][1]);
+				Pad.Tick();
+			};
+			return M;
+		};
+	};
+	Run(TEXT("Road atlas, the map"), Atlas(false));
+	Run(TEXT("Road atlas, the buttons"), Atlas(true));
+
+	// ------------------------------------------------------------------ Tune car and Seat & view
+	Run(TEXT("Tune car"), []()
+	{
+		TSharedRef<int32> Closed = MakeShared<int32>(0);
+		TSharedRef<SSimCruiseTuningMenu> T = SNew(SSimCruiseTuningMenu).OnClose_Lambda([Closed]() { ++*Closed; });
+		FMade M;
+		M.Widget = T;
+		M.State = [T, Closed]() { return FString::Printf(TEXT("row %d setup %08x confirm %d result %d closed %d"), T->GetSelected(), FCrc::MemCrc32(&T->GetWorking(), sizeof(FSimCruiseTuning)), T->IsConfirmingReset() ? 1 : 0, static_cast<int32>(T->GetResult()), *Closed); };
+		M.Hints = []() { return SSimCruiseTuningMenu::GetPadHints(); };
+		// A changed row (so X has something to reset).
+		// The damping row (it has a range with no car), changed so X has something to reset.
+		M.Prepare = [T](FPadScreen&) { T->Select(2); T->Nudge(1); };
+		return M;
+	});
+	Run(TEXT("Seat & view"), []()
+	{
+		TSharedRef<int32> Closed = MakeShared<int32>(0);
+		TSharedRef<SSimCruiseSeatMenu> S = SNew(SSimCruiseSeatMenu).OnClose_Lambda([Closed]() { ++*Closed; });
+		FMade M;
+		M.Widget = S;
+		M.State = [S, Closed]() { const FSimCruiseSeat& W = S->GetWorking(); return FString::Printf(TEXT("row %d seat %.2f,%.2f,%.2f,%.2f saved %d closed %d"), S->GetSelected(), W.UpCm, W.ForwardCm, W.PitchDeg, W.FovDeg, S->WasSaved() ? 1 : 0, *Closed); };
+		M.Hints = []() { return SSimCruiseSeatMenu::GetPadHints(); };
+		M.Prepare = [S](FPadScreen&) { S->Select(0); S->Nudge(1); };
+		return M;
+	});
+
+	// ------------------------------------------------------------------ Plan a route (no GPS here: A and X need it)
+	Run(TEXT("Plan a route"), []()
+	{
+		TSharedRef<int32> Started = MakeShared<int32>(0), Back = MakeShared<int32>(0);
+		TSharedRef<SSimCruiseRoutePlanner> R = SNew(SSimCruiseRoutePlanner)
+			.OnStart_Lambda([Started]() { ++*Started; })
+			.OnBack_Lambda([Back]() { ++*Back; });
+		FMade M;
+		M.Widget = R;
+		M.State = [R, Started, Back]() { return FString::Printf(TEXT("cross %.1f,%.1f zoom %d start %d back %d"), R->GetCrossM().X, R->GetCrossM().Y, R->GetLevel(), *Started, *Back); };
+		M.Hints = []() { return SSimCruiseRoutePlanner::GetPadHints(); };
+		M.Skip = { { TEXT("A"), TEXT("adding a stop needs the GPS (a world subsystem); these Slate tests have none") }, { TEXT("X"), TEXT("removing a stop needs the GPS") } };
+		return M;
+	});
+
+	AddInfo(FString::Printf(TEXT("pad hints: %d button presses checked"), Checked));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruisePadWalkAllTest, "SimCruise.UI.PadWalkAll", SimCruisePadReachTest::Flags)
+bool FSimCruisePadWalkAllTest::RunTest(const FString& Parameters)
+{
+	// Everything with a pad only, beyond SimCruise.UI.PadReachAll (every menu row, tab, atlas button
+	// and pad-keyboard key): the driving controls, quitting with a confirm, every row of Tune car and
+	// Seat & view (D-pad and stick), and Plan a route.
+	using namespace SimCruisePadReachTest;
+
+	// ------------------------------------------------------------------ driving: each control has a pad button
+	{
+		auto PadKeyOf = [](const TCHAR* Action)
+		{
+			TArray<FKey> Keys;
+			for (const FSimCruiseBindingSpec& B : USimCruiseInputConfig::Bindings()) if (B.Action == FName(Action) && B.Key.IsGamepadKey()) Keys.Add(B.Key);
+			return Keys;
+		};
+		// docs/controls.md: the 2.0.0 pad layout.
+		const TArray<TPair<const TCHAR*, FKey>> Expected = {
+			{ TEXT("SteerPad"), EKeys::Gamepad_LeftX }, { TEXT("ThrottlePad"), EKeys::Gamepad_RightTriggerAxis }, { TEXT("BrakePad"), EKeys::Gamepad_LeftTriggerAxis },
+			{ TEXT("Clutch"), EKeys::Gamepad_FaceButton_Bottom }, { TEXT("ParkingBrake"), EKeys::Gamepad_FaceButton_Right },
+			{ TEXT("ShiftUp"), EKeys::Gamepad_RightShoulder }, { TEXT("ShiftDown"), EKeys::Gamepad_LeftShoulder },
+			{ TEXT("ToggleTransmission"), EKeys::Gamepad_RightThumbstick }, { TEXT("StartEngine"), EKeys::Gamepad_DPad_Left },
+			{ TEXT("CycleCamera"), EKeys::Gamepad_FaceButton_Top }, { TEXT("CycleHud"), EKeys::Gamepad_FaceButton_Left },
+			{ TEXT("ToggleAtlas"), EKeys::Gamepad_Special_Right }, { TEXT("Recover"), EKeys::Gamepad_Special_Left },
+			{ TEXT("MinimapIn"), EKeys::Gamepad_DPad_Up }, { TEXT("MinimapOut"), EKeys::Gamepad_DPad_Down }, { TEXT("Tuning"), EKeys::Gamepad_DPad_Right },
+		};
+		for (const TPair<const TCHAR*, FKey>& E : Expected)
+		{
+			const TArray<FKey> Keys = PadKeyOf(E.Key);
+			TestTrue(FString::Printf(TEXT("driving: %s is on the pad's %s"), E.Key, *E.Value.ToString()), Keys.Contains(E.Value));
+		}
+		// One driving action per pad button.
+		TMap<FKey, FName> Used;
+		for (const FSimCruiseBindingSpec& B : USimCruiseInputConfig::Bindings())
+		{
+			if (!B.Key.IsGamepadKey()) continue;
+			if (const FName* Other = Used.Find(B.Key)) TestTrue(FString::Printf(TEXT("driving: %s is on one action only (%s, %s)"), *B.Key.ToString(), *Other->ToString(), *FName(B.Action).ToString()), *Other == FName(B.Action));
+			else Used.Add(B.Key, B.Action);
+		}
+		// The right stick looks around (the controller reads it), so no action takes it.
+		TestFalse(TEXT("driving: the right stick is free for looking around"), Used.Contains(EKeys::Gamepad_RightX) || Used.Contains(EKeys::Gamepad_RightY));
+		// The left-stick click stays free (pressed by accident in hard steering, 2.0.1): the lens is in Seat & view.
+		TestFalse(TEXT("driving: the left-stick click does nothing while driving"), Used.Contains(EKeys::Gamepad_LeftThumbstick));
+		// The rest have no button of their own; the pad reaches them in the pause menu.
+		auto HasRow = [](int32 P, ESimCruiseMenuRow Row) { for (const SSimCruisePauseMenu::FRowInfo& R : SSimCruisePauseMenu::Rows(P)) if (R.Row == Row) return true; return false; };
+		TestTrue(TEXT("pad: the sound is in Settings"), PadKeyOf(TEXT("ToggleSound")).Num() > 0 || HasRow(3, ESimCruiseMenuRow::Sound));
+		TestTrue(TEXT("pad: the headlights are in Your car"), PadKeyOf(TEXT("ToggleLights")).Num() > 0 || HasRow(1, ESimCruiseMenuRow::Lights));
+		TestTrue(TEXT("pad: Where to? is on the Drive page"), PadKeyOf(TEXT("FindPlace")).Num() > 0 || HasRow(0, ESimCruiseMenuRow::WhereTo));
+		TestTrue(TEXT("pad: the lens is in Seat & view"), PadKeyOf(TEXT("CycleLens")).Num() > 0 || HasRow(2, ESimCruiseMenuRow::Lens));
+		TestTrue(TEXT("pad: the HUD level and the map are in Settings"), HasRow(3, ESimCruiseMenuRow::HudLevel) && HasRow(3, ESimCruiseMenuRow::HudMap));
+		TestTrue(TEXT("pad: quitting is on the Drive page"), HasRow(0, ESimCruiseMenuRow::Quit));
+	}
+
+	if (!FSlateApplication::IsInitialized())
+	{
+		AddWarning(TEXT("No Slate application: the menu part needs one"));
+		return true;
+	}
+
+	// ------------------------------------------------------------------ quit, with a confirm (the controller's list)
+	{
+		TArray<SSimCruiseListMenu::FItem> Items;
+		for (const TCHAR* T : { TEXT("Keep driving"), TEXT("Quit to the desktop") }) { SSimCruiseListMenu::FItem I; I.Title = T; Items.Add(I); }
+		int32 Chosen = -1, Back = 0;
+		TSharedRef<SSimCruiseListMenu> Confirm = SNew(SSimCruiseListMenu).Title(TEXT("Quit the game?")).Items(Items)
+			.OnChoose_Lambda([&Chosen](int32 i) { Chosen = i; }).OnBack_Lambda([&Back]() { ++Back; });
+		FPadScreen Pad(Confirm);
+		TestTrue(TEXT("quit: opens on Keep driving (a stray A keeps you driving)"), Pad.On(Confirm->GetRowWidget(0)));
+		Pad.Press(EKeys::Gamepad_FaceButton_Bottom);
+		TestEqual(TEXT("quit: A on Keep driving"), Chosen, 0);
+		Pad.Press(EKeys::Gamepad_DPad_Down);
+		Pad.Press(EKeys::Gamepad_FaceButton_Bottom);
+		TestEqual(TEXT("quit: Down, A quits"), Chosen, 1);
+		Pad.Press(EKeys::Gamepad_FaceButton_Right);
+		TestEqual(TEXT("quit: B goes back"), Back, 1);
+	}
+
+	// ------------------------------------------------------------------ Tune car and Seat & view: every row, D-pad and stick
+	{
+		TSharedRef<SSimCruiseTuningMenu> Tune = SNew(SSimCruiseTuningMenu);
+		// A real car's numbers (an NB Miata's, about), so every row has a range to move in.
+		FSimCruiseTuning Stock;
+		Stock.FrontSpringLbIn = 280.0; Stock.RearSpringLbIn = 190.0; Stock.FinalDrive = 4.1; Stock.SteeringRatio = 15.0;
+		Tune->SetSetup(Stock, Stock);
+		FPadScreen Pad(Tune);
+		TSet<int32> Rows;
+		for (int32 i = 0; i < 40 && !Rows.Contains(Tune->GetSelected()); ++i)
+		{
+			Rows.Add(Tune->GetSelected());
+			const uint32 Before = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FSimCruiseTuning));
+			Pad.Press(EKeys::Gamepad_DPad_Right);
+			const uint32 Up = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FSimCruiseTuning));
+			Pad.Press(EKeys::Gamepad_DPad_Left);
+			Pad.Press(EKeys::Gamepad_DPad_Left);
+			const uint32 Down = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FSimCruiseTuning));
+			TestTrue(FString::Printf(TEXT("Tune car: row %d changes with the D-pad"), Tune->GetSelected()), Up != Before || Down != Before);
+			Pad.Press(EKeys::Gamepad_DPad_Down);
+		}
+		AddInfo(FString::Printf(TEXT("Tune car: %d rows walked with the D-pad"), Rows.Num()));
+		TestTrue(TEXT("Tune car: the D-pad comes round to the first row"), Tune->GetSelected() == 0 && Rows.Num() >= 8);
+		Pad.Stick(EKeys::Gamepad_LeftY, -1.f);
+		TestEqual(TEXT("Tune car: one stick push down is one row"), Tune->GetSelected(), 1);
+		Pad.Hold(EKeys::Gamepad_LeftY, -1.f);
+		Pad.Hold(EKeys::Gamepad_LeftY, -1.f);
+		TestEqual(TEXT("Tune car: a held stick is one step (until the repeat delay)"), Tune->GetSelected(), 2);
+		Pad.Hold(EKeys::Gamepad_LeftY, 0.f);
+		const uint32 Before = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FSimCruiseTuning));
+		Pad.Stick(EKeys::Gamepad_LeftX, 1.f);
+		TestTrue(TEXT("Tune car: the stick right changes the row"), FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FSimCruiseTuning)) != Before);
+		TestTrue(TEXT("Tune car: the pad stays on the menu"), Pad.On(Tune));
+	}
+	{
+		TSharedRef<SSimCruiseSeatMenu> Seat = SNew(SSimCruiseSeatMenu);
+		FPadScreen Pad(Seat);
+		for (int32 Row = 0; Row < 4; ++Row)
+		{
+			TestEqual(FString::Printf(TEXT("Seat & view: the D-pad reaches row %d"), Row), Seat->GetSelected(), Row);
+			const FSimCruiseSeat Before = Seat->GetWorking();
+			Pad.Press(EKeys::Gamepad_DPad_Right);
+			Pad.Press(EKeys::Gamepad_DPad_Right);
+			const FSimCruiseSeat After = Seat->GetWorking();
+			TestTrue(FString::Printf(TEXT("Seat & view: row %d changes with the D-pad"), Row), FMemory::Memcmp(&Before, &After, sizeof(FSimCruiseSeat)) != 0);
+			Pad.Press(EKeys::Gamepad_FaceButton_Left);
+			Pad.Press(EKeys::Gamepad_DPad_Down);
+		}
+		TestEqual(TEXT("Seat & view: Down from the last row comes round"), Seat->GetSelected(), 0);
+		Pad.Stick(EKeys::Gamepad_LeftY, -1.f);
+		TestEqual(TEXT("Seat & view: one stick push down is one row"), Seat->GetSelected(), 1);
+		Pad.Stick(EKeys::Gamepad_LeftY, 1.f);
+		TestEqual(TEXT("Seat & view: one stick push up is one row"), Seat->GetSelected(), 0);
+	}
+
+	// ------------------------------------------------------------------ Plan a route: move, zoom, start and back with the pad
+	{
+		int32 Started = 0, Back = 0;
+		TSharedRef<SSimCruiseRoutePlanner> Planner = SNew(SSimCruiseRoutePlanner)
+			.OnStart_Lambda([&Started]() { ++Started; })
+			.OnBack_Lambda([&Back]() { ++Back; });
+		FPadScreen Pad(Planner);
+		const FVector2D Cross = Planner->GetCrossM();
+		Pad.Press(EKeys::Gamepad_DPad_Right);
+		TestTrue(TEXT("Plan a route: the D-pad moves the cross"), Planner->GetCrossM().X > Cross.X);
+		const int32 Level = Planner->GetLevel();
+		Pad.Press(EKeys::Gamepad_RightTrigger);
+		TestTrue(TEXT("Plan a route: RT zooms"), Planner->GetLevel() != Level);
+		Pad.Press(EKeys::Gamepad_FaceButton_Top);
+		TestEqual(TEXT("Plan a route: Y starts the route"), Started, 1);
+		Pad.Press(EKeys::Gamepad_FaceButton_Right);
+		TestEqual(TEXT("Plan a route: B goes back"), Back, 1);
 	}
 	return true;
 }

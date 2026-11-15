@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Gameplay/SimCruiseUiTheme.h"
 #include "Vehicle/SimCruiseTuning.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SCompoundWidget.h"
@@ -39,6 +40,13 @@ public:
 	void Nudge(int32 Steps);
 	void Select(int32 Row) { Selected = FMath::Clamp(Row, 0, NumRows() - 1); }
 	const FSimCruiseTuning& GetWorking() const { return Working; }
+	int32 GetSelected() const { return Selected; }
+	/** A real car's setup with no car in the world (tests): the stock values set each row's range. */
+	void SetSetup(const FSimCruiseTuning& InStock, const FSimCruiseTuning& InWorking) { Stock = InStock; Working = InWorking; }
+	/** Y was pressed once: the next Y puts everything back as the real car. */
+	bool IsConfirmingReset() const { return bConfirmReset; }
+	/** The pad hints at the bottom (the help line is made from them). */
+	static TArray<SimCruiseTheme::FHint> GetPadHints();
 
 private:
 	struct FRow
@@ -61,7 +69,8 @@ private:
 	FSimCruiseTuning Stock;
 	TArray<FRow> Rows;
 	int32 Selected = 0;
-	double StickHeldUntil = 0.0;
+	/** The left stick as the D-pad: one push one step, held it repeats (SimCruiseTheme::StickNav). */
+	SimCruiseTheme::FStickRepeat Stick;
 	bool bConfirmReset = false;
 	FText Notice;
 	ETuningResult Result = ETuningResult::Open;

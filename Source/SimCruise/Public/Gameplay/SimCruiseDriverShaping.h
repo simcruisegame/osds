@@ -72,6 +72,11 @@ namespace SimCruiseShaping
 	 *  lane corrections, the ends still reach the full range. Returns -1..1. */
 	SIMCRUISE_API double ThumbstickCommand(const FSimCruiseVehicleSetup& Setup, double Stick, double ForwardSpeedMps);
 
+	/** The raw stick (before the input's 0.12 axial dead zone) that asks for Command (-1..1 of the
+	 *  range toward that side): the inverse of the dead zones, ThumbstickCommand, the linearity
+	 *  setting and the car's quickness. For the test robot, whose wanted wheel angle is linear. */
+	SIMCRUISE_API double PadStickForCommand(const FSimCruiseVehicleSetup& Setup, double Command, double ForwardSpeedMps);
+
 	/** How fast a held key moves the rack, rad/s. */
 	SIMCRUISE_API double KeyRackRateRadPerS(const FSimCruiseVehicleSetup& Setup, double ForwardSpeedMps);
 
