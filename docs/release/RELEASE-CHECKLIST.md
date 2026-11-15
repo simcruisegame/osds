@@ -25,10 +25,13 @@ Copy this list into the release's report (`docs/release/v<version>-report.md`) a
   - writes `SimCruise-<version>-SHA256SUMS.txt`,
   - runs the packaged game's self-test (`-SimCruiseShellSelfTest`).
 - [ ] The zip has no `.pdb` files and no `Saved` folder.
+- [ ] The package has `Engine\Extras\Redist\en-us\vc_redist.x64.exe` and `GameInputRedist.msi`, both signed by Microsoft (`scripts\installer.ps1` stops without them), and `python scripts\dep-check.py <package>` finds no DLL that is neither shipped, part of Windows, nor installed by those two.
 
 ## 4. Installer test (on the release PC, as a normal user)
 
-- [ ] Run the setup; choose "Install for me only". It installs without administrator rights.
+The release PC already has the Microsoft runtimes, so this test cannot prove a clean PC. Do the clean test too: [clean-pc-test.md](clean-pc-test.md), on a PC or Windows Sandbox that never had them, and write its result in the release report.
+
+- [ ] Run the setup; choose "Install for me only". It installs without administrator rights. The log (`/LOG=<file>`) says "Visual C++ runtime: already installed" and "GameInput: already installed".
 - [ ] Start SimCruise from the Start menu. The car drives (pad and keyboard), the camera changes, the sound plays.
 - [ ] Quit, start again: the settings are kept.
 - [ ] Uninstall from Settings > Apps. The program folder and the Start menu entry are gone.
