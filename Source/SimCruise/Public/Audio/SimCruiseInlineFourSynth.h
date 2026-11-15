@@ -41,6 +41,8 @@ public:
 		bool bCabin = true;
 		/** Engine speed where the powertrain cuts fuel (the car file's fuel_cut_rpm): the limiter's stutter starts here. */
 		double LimiterRpm = DefaultLimiterRpm;
+		/** The intake's level in the cabin against outside: 0.5 for an engine ahead of the dash. */
+		double CabinInletGain = 0.5;
 	};
 
 	FSimCruiseInlineFourSynth();

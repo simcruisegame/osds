@@ -1737,6 +1737,26 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 						}
 					}
 				}
+				// Diagnostic (-SimCruiseHideStillInDisc): take those still pieces out (instruments and glass
+				// kept), to tell whether the dark bits on the spokes in sunlight are their shadows.
+				if (FParse::Param(FCommandLine::Get(), TEXT("SimCruiseHideStillInDisc")))
+				{
+					int32 Hidden = 0;
+					for (FJob& Job : Context.Jobs)
+					{
+						const ESimCruiseCarMaterialRole StillRole = Profile.RoleFor(Job.MaterialName, Job.Label);
+						if (StillRole == ESimCruiseCarMaterialRole::Gauge || StillRole == ESimCruiseCarMaterialRole::Glass) continue;
+						TArray<uint32>& List = Job.Dest[DestBody];
+						TArray<uint32> Kept;
+						for (int32 K = 0; K + 2 < List.Num(); K += 3)
+						{
+							if (InDisc(Job.Pos[List[K]], -0.1, 0.09, R * 1.08) && InDisc(Job.Pos[List[K + 1]], -0.1, 0.09, R * 1.08) && InDisc(Job.Pos[List[K + 2]], -0.1, 0.09, R * 1.08)) { ++Hidden; continue; }
+							Kept.Add(List[K]); Kept.Add(List[K + 1]); Kept.Add(List[K + 2]);
+						}
+						if (Kept.Num() != List.Num()) List = MoveTemp(Kept);
+					}
+					Context.Note(FString::Printf(TEXT("steering wheel: diagnostic, %d still triangles inside the wheel's disc hidden"), Hidden));
+				}
 				FString LeftSummary;
 				for (const TPair<FString, FVector>& Pair : Left) LeftSummary += FString::Printf(TEXT(" %s %d (r to %.3f, ax to %.3f)"), *Pair.Key, int32(Pair.Value.X), Pair.Value.Y, Pair.Value.Z);
 				Context.Note(FString::Printf(TEXT("steering wheel disc, left still:%s"), *LeftSummary));
@@ -1906,6 +1926,31 @@ bool SimCruiseCarModelRig::Build(const FSimCruiseGltfModel& Model, const FSimCru
 					}
 				}
 				}
+			}
+			// (After the rim fit: the hub's own centre and axis, not the profile's ring.)
+			// A badge on the hub drawn in an instrument material (the NB model's horn pad carries an
+			// "ND" emblem in its gauge texture "white"): instruments are kept still, so it stayed, and
+			// it is the wrong generation's badge. Gauge-material triangles on the hub itself (within
+			// 30 % of the rim's radius of the axis, no deeper than 3 cm behind the rim's plane) are
+			// no instrument: the cluster lies well behind the wheel. They go.
+			{
+				int32 HubBadge = 0;
+				for (FJob& Job : Context.Jobs)
+				{
+					if (Profile.RoleFor(Job.MaterialName, Job.Label) != ESimCruiseCarMaterialRole::Gauge) continue;
+					TArray<uint32>& List = Job.Dest[DestBody];
+					TArray<uint32> Kept;
+					Kept.Reserve(List.Num());
+					for (int32 K = 0; K + 2 < List.Num(); K += 3)
+					{
+						bool bOnHub = true;
+						for (int32 M = 0; M < 3 && bOnHub; ++M) bOnHub = InDisc(Job.Pos[List[K + M]], -0.03, 0.09, 0.3 * R);
+						if (bOnHub) { ++HubBadge; continue; }
+						Kept.Add(List[K]); Kept.Add(List[K + 1]); Kept.Add(List[K + 2]);
+					}
+					if (Kept.Num() != List.Num()) List = MoveTemp(Kept);
+				}
+				if (HubBadge > 0) Context.Note(FString::Printf(TEXT("steering wheel: %d instrument-material triangles on the hub removed (a badge, not an instrument)"), HubBadge));
 			}
 			SteerCentre = Centre;
 			SteerN = N;

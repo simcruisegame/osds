@@ -295,14 +295,109 @@ namespace
 		{
 			return false;
 		}
-		const FString Line = FString::Printf(TEXT("STEPSTEER %-11s %.1f km/h  road wheels %.2f deg  steady %.1f deg/s %.2f g  t90 %.3f s  overshoot %+.2f  peak beta %.1f deg"),
-			CarId, R.SpeedMps * 3.6, R.RackDeg, R.SteadyYawDegS, R.SteadyLateralG, R.YawResponseS, R.YawOvershoot, R.PeakBetaDeg);
+		const FString Line = FString::Printf(TEXT("STEPSTEER %-11s %.1f km/h  road wheels %.2f deg  steady %.1f deg/s %.2f g  t90 %.3f s  overshoot %+.2f  peak beta %.1f deg  roll %.2f deg/g"),
+			CarId, R.SpeedMps * 3.6, R.RackDeg, R.SteadyYawDegS, R.SteadyLateralG, R.YawResponseS, R.YawOvershoot, R.PeakBetaDeg, R.RollDegPerG);
 		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
 		Test.AddInfo(Line);
+		// Roll per g: logged against no published figure yet (none sourced for these cars); only a
+		// sanity band here (road cars roll outward, a few degrees per g).
+		Test.TestTrue(TEXT("rolls outward, 0.5-9 deg/g"), R.RollDegPerG > 0.5 && R.RollDegPerG < 9.0);
 		Test.TestTrue(TEXT("turns (steady lateral 0.2-0.7 g)"), R.SteadyLateralG > 0.2 && R.SteadyLateralG < 0.7);
 		Test.TestTrue(TEXT("yaw response time 0.08-0.40 s"), R.YawResponseS > 0.08 && R.YawResponseS < 0.40);
 		Test.TestTrue(TEXT("yaw overshoot under 30 %"), R.YawOvershoot < 0.30);
 		Test.TestTrue(TEXT("no slide (sideslip under 4 deg)"), R.PeakBetaDeg < 4.0);
+		return true;
+	}
+}
+
+namespace
+{
+	/**
+	 * Top speed at full throttle on the flat. A reference only where it is published: the 2020
+	 * Corvette Stingray Z51, 194 mph (Chevrolet's specification). The others are logged until a
+	 * figure is sourced.
+	 */
+	bool RunTopSpeedTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, CarId, Car))
+		{
+			return false;
+		}
+		const FSimCruiseTopSpeedResult R = SimCruiseRunTopSpeed(Car, SimCruiseShippingFixedStepS);
+		const double Mph = R.TopSpeedMps * 3600.0 / 1609.344;
+		const bool bC8 = FString(CarId) == TEXT("meridian_z");
+		const FString Line = FString::Printf(TEXT("TOPSPEED %-11s %.1f mph in gear %d at %.0f rpm after %.0f s, %.1f km%s"),
+			CarId, Mph, R.Gear, R.Rpm, R.SimSeconds, R.DistanceM / 1000.0, bC8 ? TEXT(" (target 194 mph, Chevrolet)") : TEXT(" (no sourced figure: logged only)"));
+		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+		Test.AddInfo(Line);
+		Test.TestTrue(TEXT("speed levelled off on the pad"), R.bCompleted);
+		if (bC8)
+		{
+			Test.TestTrue(TEXT("C8 Z51 top speed 194 +/- 6 mph"), FMath::Abs(Mph - 194.0) <= 6.0);
+		}
+		if (FString(CarId) == TEXT("mustang65") && Car.ForwardGearRatios.Num() > 0)
+		{
+			// Car Life's 289/200 four-speed: 24.7 mph per 1000 rpm in top (3.00 axle), from the tyre's
+			// rolling radius; the free radius here, so within 4 %.
+			const double PerThousand = 1000.0 / (Car.ForwardGearRatios.Last() * Car.FinalDriveRatio) * 2.0 * UE_DOUBLE_PI * Car.TireFreeRadiusM() / 60.0 * 3600.0 / 1609.344;
+			Test.AddInfo(FString::Printf(TEXT("mustang65 top gear %.1f mph per 1000 rpm (Car Life 24.7)"), PerThousand));
+			Test.TestTrue(TEXT("Mustang top gear 24.7 mph per 1000 rpm +/- 4 %"), FMath::Abs(PerThousand / 24.7 - 1.0) <= 0.04);
+		}
+		return true;
+	}
+
+	/**
+	 * The automatic on a road (the Dragon review's faults): no change back within 2 s of the last
+	 * one (hunting), and in gear with the clutch home the engine turns with the road (no 19 mph in
+	 * first at 851 rpm).
+	 */
+	bool RunShiftDriveTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, CarId, Car))
+		{
+			return false;
+		}
+		const FSimCruiseShiftDriveResult R = SimCruiseRunShiftDrive(Car, SimCruiseShippingFixedStepS);
+		const FString Line = FString::Printf(TEXT("SHIFTDRIVE %-11s %d changes, %d back within 2 s, engine off the road by up to %.0f %% in gear, lowest road speed in gear %.0f rpm"),
+			CarId, R.Shifts, R.QuickReversals, 100.0 * R.WorstRpmGap, R.LowestRoadRpm);
+		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+		Test.AddInfo(Line);
+		Test.TestTrue(TEXT("drive completed"), R.bCompleted);
+		Test.TestEqual(TEXT("no hunting (no change back within 2 s)"), R.QuickReversals, 0);
+		Test.TestTrue(TEXT("in gear, the engine turns with the road (within 8 %)"), R.WorstRpmGap < 0.08);
+		return true;
+	}
+
+	/**
+	 * Passing at full pedal from a steady cruise, kickdown allowed. Reference only where sourced:
+	 * the Corvette Stingray Z51, Car and Driver (Z51 long-term test, the 2020-21 LT2 and eight-speed
+	 * DCT): 30-50 mph 1.8 s, 50-70 mph 2.5 s. The others are logged from their sourced inputs.
+	 */
+	bool RunPassingTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, CarId, Car))
+		{
+			return false;
+		}
+		const double Mph = 1609.344 / 3600.0;
+		const bool bC8 = FString(CarId) == TEXT("meridian_z");
+		struct FCase { double From, To, Target; };
+		for (const FCase& Case : { FCase{ 30.0, 50.0, 1.8 }, FCase{ 50.0, 70.0, 2.5 } })
+		{
+			const FSimCruisePassingResult R = SimCruiseRunPassing(Car, SimCruiseShippingFixedStepS, Case.From * Mph, Case.To * Mph);
+			const FString Line = FString::Printf(TEXT("PASSING %-11s %.0f-%.0f mph %.2f s (cruise gear %d, kickdown to %d)%s"), CarId, Case.From, Case.To, R.Seconds,
+				R.CruiseGear, R.KickdownGear, bC8 ? *FString::Printf(TEXT(" target %.1f s (Car and Driver)"), Case.Target) : TEXT(" (no sourced figure: logged only)"));
+			UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+			Test.AddInfo(Line);
+			Test.TestTrue(TEXT("passing run completed"), R.bCompleted);
+			if (bC8)
+			{
+				Test.TestTrue(*FString::Printf(TEXT("C8 %.0f-%.0f mph %.1f +/- 0.3 s"), Case.From, Case.To, Case.Target), FMath::Abs(R.Seconds - Case.Target) <= 0.3);
+			}
+		}
 		return true;
 	}
 }
@@ -345,6 +440,15 @@ SIMCRUISE_VEHICLE_BENCH(LiftOff, f150raptor18)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, grandcherokee13)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, odyssey18)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, crv25)
+SIMCRUISE_VEHICLE_BENCH(TopSpeed, nb2001_aaron)
+SIMCRUISE_VEHICLE_BENCH(TopSpeed, mustang65)
+SIMCRUISE_VEHICLE_BENCH(TopSpeed, meridian_z)
+SIMCRUISE_VEHICLE_BENCH(ShiftDrive, nb2001_aaron)
+SIMCRUISE_VEHICLE_BENCH(ShiftDrive, mustang65)
+SIMCRUISE_VEHICLE_BENCH(ShiftDrive, meridian_z)
+SIMCRUISE_VEHICLE_BENCH(Passing, nb2001_aaron)
+SIMCRUISE_VEHICLE_BENCH(Passing, mustang65)
+SIMCRUISE_VEHICLE_BENCH(Passing, meridian_z)
 SIMCRUISE_VEHICLE_BENCH(StaticLoad, nb1999)
 SIMCRUISE_VEHICLE_BENCH(StaticLoad, nb2001)
 SIMCRUISE_VEHICLE_BENCH(StaticLoad, nb2001_aaron)

@@ -90,10 +90,52 @@ struct FSimCruiseStepSteerResult
 	/** Peak yaw rate over the steady one, less 1. */
 	double YawOvershoot = 0.0;
 	double PeakBetaDeg = 0.0;
+	/** Body roll in the steady state over the steady lateral g (deg per g, positive: outward). */
+	double RollDegPerG = 0.0;
 };
 
 FSimCruiseStepSteerResult SimCruiseRunStepSteer(const FSimCruiseCarDefinition& Car, double FixedStepS,
 	double SpeedMps = 80.0 / 3.6, double LateralG = 0.4);
+
+/** Full throttle on a long flat pad, straight, until the speed stops rising: power against drag
+ *  and rolling resistance (and the rev limit in top gear). */
+struct FSimCruiseTopSpeedResult
+{
+	bool bCompleted = false;
+	double TopSpeedMps = 0.0;
+	int32 Gear = 0;
+	double Rpm = 0.0;
+	double SimSeconds = 0.0;
+	double DistanceM = 0.0;
+};
+
+FSimCruiseTopSpeedResult SimCruiseRunTopSpeed(const FSimCruiseCarDefinition& Car, double FixedStepS);
+
+/** A magazine passing time: cruise steady at FromMps in the automatic's own gear for 4 s, then
+ *  full pedal (kickdown allowed, as Car and Driver times an automatic) until ToMps. */
+struct FSimCruisePassingResult
+{
+	bool bCompleted = false;
+	double Seconds = 0.0;
+	int32 CruiseGear = 0;
+	int32 KickdownGear = 0;
+};
+
+FSimCruisePassingResult SimCruiseRunPassing(const FSimCruiseCarDefinition& Car, double FixedStepS, double FromMps, double ToMps);
+
+/** The automatic on a road: full pedal, a moving pedal, braking down, full pedal again. */
+struct FSimCruiseShiftDriveResult
+{
+	bool bCompleted = false;
+	int32 Shifts = 0;
+	/** Changes back the other way within 2 s of the last change (hunting). */
+	int32 QuickReversals = 0;
+	/** In gear with the clutch home: the largest gap of the engine from the road's speed (fraction). */
+	double WorstRpmGap = 0.0;
+	double LowestRoadRpm = 1.0e9;
+};
+
+FSimCruiseShiftDriveResult SimCruiseRunShiftDrive(const FSimCruiseCarDefinition& Car, double FixedStepS);
 
 /** Static load balance after settling on the pad. */
 struct FSimCruiseStaticLoadResult

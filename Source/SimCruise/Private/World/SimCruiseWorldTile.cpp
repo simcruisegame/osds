@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseWorldTile.h"
+#include "Vehicle/SimCruiseSurfaceKind.h"
 
 #include "World/SimCruiseCellContext.h"
 #include "World/SimCruiseScan.h"
@@ -121,6 +122,13 @@ FLinearColor SimCruiseParkedCars::ColourFor(uint8 Byte)
 
 void ASimCruiseWorldTile::SurfaceGripAtFace(int32 FaceIndex, float& OutDryGrip, float& OutWetLoss) const
 {
+	uint8 Kind = 0;
+	SurfaceAtFace(FaceIndex, OutDryGrip, OutWetLoss, Kind);
+}
+
+void ASimCruiseWorldTile::SurfaceAtFace(int32 FaceIndex, float& OutDryGrip, float& OutWetLoss, uint8& OutKind) const
+{
+	OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Unknown);
 	// Peak friction relative to dry asphalt (0.8-0.9), from Wong, Theory of Ground Vehicles,
 	// table 1.3: wet asphalt or concrete 0.5-0.7 (about 0.7 of dry), gravel 0.6 (0.7 of dry,
 	// little changed when wet), earth road 0.68 dry and 0.55 wet (0.8 and 0.65 of dry asphalt;
@@ -149,17 +157,24 @@ void ASimCruiseWorldTile::SurfaceGripAtFace(int32 FaceIndex, float& OutDryGrip, 
 	{
 	case ESimCruiseTileLayer::Asphalt:
 	{
+		OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Asphalt);
 		const int32 Local = FaceIndex - Map->AsphaltFirstFace;
 		if (Map->GravelAsphalt.IsValidIndex(Local) && Map->GravelAsphalt[Local])
 		{
 			OutDryGrip = 0.7f;
 			OutWetLoss = 0.1f;
+			OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Gravel);
 		}
 		break;
 	}
+	case ESimCruiseTileLayer::Concrete:
+		// Kerb, gutter and sidewalk: concrete grips as asphalt does (Wong, table 1.3).
+		OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Concrete);
+		break;
 	case ESimCruiseTileLayer::Terrain:
 		OutDryGrip = 0.8f;
 		OutWetLoss = 0.19f;
+		OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Grass);
 		break;
 	default:
 		break;

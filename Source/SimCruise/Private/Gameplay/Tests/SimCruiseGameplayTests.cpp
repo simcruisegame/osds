@@ -176,6 +176,20 @@ bool FSimCruiseSteeringRangeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("stick centre is gentle at speed"), Small < 0.1 && Small > 0.0);
 	TestNearlyEqual(TEXT("full stick is full range"), SimCruiseShaping::ThumbstickCommand(Setup, 1.0, 30.0), 1.0, 1e-12);
 	TestNearlyEqual(TEXT("parking: stick is linear"), SimCruiseShaping::ThumbstickCommand(Setup, 0.3, 0.0), 0.3, 1e-9);
+	// The robot's inverse: the raw stick for a wanted command, back through the input's 0.12 dead
+	// zone, the player's dead zone (default 0), the fine centre and the quickness.
+	for (const double Speed : { 0.0, 11.0, 30.0 })
+	{
+		for (const double Want : { -0.6, -0.1, 0.05, 0.3, 0.9 })
+		{
+			const double Raw = SimCruiseShaping::PadStickForCommand(Setup, Want, Speed);
+			const double AfterInput = FMath::Sign(Raw) * FMath::Max(0.0, (FMath::Abs(Raw) - 0.12) / 0.88);
+			const double Pad = SimCruiseShaping::StickDeadZone(AfterInput, 0.0);
+			const double Quick = FMath::Clamp(Setup.SteeringQuickness, 0.5, 2.0);
+			const double Back = FMath::Clamp(SimCruiseShaping::ThumbstickCommand(Setup, Pad, Speed) * Quick, -1.0, 1.0);
+			TestNearlyEqual(*FString::Printf(TEXT("stick for command %.2f at %.0f m/s"), Want, Speed), Back, Want, 1e-4);
+		}
+	}
 	return true;
 }
 
