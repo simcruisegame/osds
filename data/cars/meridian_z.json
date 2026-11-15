@@ -111,10 +111,6 @@
  "fuel_cut_rpm": 6600.0,
  "max_gear_rpm": 6800.0,
  "engine_inertia": 0.3,
- "engine_friction_nm": 40.2,
- "engine_friction_per_rpm": 0.0168,
- "engine_pumping_nm": 26.8,
- "engine_pumping_per_rpm": 0.0034,
  "max_omega": 720.0,
  "gears": [
   2.91,
@@ -178,7 +174,6 @@
   "calibration": "Car and Driver: 2.8 s to 60 mph and 149 ft from 70 mph (first test), 148 ft and 1.03 g (long-term 2021 Z51); 3647 lb measured; 40/60 weight split (Chevrolet). The 0-60 target is timed with Car and Driver's 1 ft rollout (target_0_60_rollout).",
   "engine": "495 hp at 6450 rpm, 470 lb-ft at 5150 rpm with the Z51 exhaust (Chevrolet); curve shape estimated.",
   "gearing": "TREMEC TR-9080 dual clutch: 2.91/1.76/1.22/0.88/0.65/0.51/0.40/0.33, reverse 2.63; Z51 final drive 5.17 (1.46 transfer gear x 3.55 ring and pinion; National Corvette Museum gear table, corvsport 2022 specifications).",
-  "engine_friction": "Motoring friction and closed-throttle pumping scaled from the NB 1.8 L four by displacement (LT2 6.2 L (376 cu in) / 1.84 L = 3.35): the same friction mean effective pressure (about 1.9 bar at 3000 rpm, Heywood, Internal Combustion Engine Fundamentals, ch. 13) and pumping MEP (about 0.7 bar on a closed throttle) on the larger swept volume: 91 N m friction and 37 N m pumping at 3000 rpm. Was the 1.8 L default (16 N m, no pumping), which left the V8 with almost no engine braking. Full-throttle torque is unchanged (the published curve is brake torque).",
   "tyres": "Staggered 245/35ZR19 front, 305/30ZR20 rear: the rear axle grips 25 % harder (axle_grip, estimate); the model uses one rolling radius, the rear's.",
   "launch": "Automatic launch at 3000 rpm at full pedal (1800 + 1200 per unit of throttle; estimate, 580 Nm on this curve). The launch is tyre-limited with traction control on, so a higher speed only revs the engine longer before the clutch bites (4000 rpm: 3.61 s, 3000 rpm: 3.58 s on CarTrack).",
   "estimates": "Centre of gravity, inertia (scaled, 15 % less yaw for the mid engine), spring and bar rates (2.0/2.2 Hz), dampers, launch, brakes, tyre grip (calibrated).",
