@@ -212,6 +212,11 @@ protected:
 	FString SelfTestFailure;
 	int32 SelfTestViewBefore = 0;
 	int32 SelfTestHudBefore = 0;
+	// The driving pad pass (stages 12-29): every pad control while driving.
+	int32 SelfTestIntBefore = 0;
+	bool bSelfTestManualBefore = false;
+	/** Recover requests (the View button), for the self-test. */
+	int32 RecoverCount = 0;
 
 	// Capture script state.
 	float CaptureClock = -1.f;
