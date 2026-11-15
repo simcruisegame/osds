@@ -32,7 +32,7 @@ November 2026. An update keeps your settings and map cache.
    Core i9-10885H and 32 GB of memory. We did not test AMD or Intel
    graphics cards, other NVIDIA cards, or Windows 10. The values above
    are our estimate. If the game does not work on your PC, tell us:
-   https://github.com/simcruisegame/simcruise/issues
+   https://github.com/simcruisegame/osds/issues
 
 4. UNINSTALL
    The uninstaller deletes the game, the map cache, the downloaded

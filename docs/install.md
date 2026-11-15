@@ -1,6 +1,6 @@
 # Installing OSDS
 
-OSDS 2.0 and later is the Unreal Engine 5.8 client, for Windows. Downloads are on the [Releases page](https://github.com/simcruisegame/simcruise/releases):
+OSDS 2.0 and later is the Unreal Engine 5.8 client, for Windows. Downloads are on the [Releases page](https://github.com/simcruisegame/osds/releases):
 
 | File | Type |
 |---|---|
@@ -14,7 +14,7 @@ There is no macOS build of the Unreal client yet (it needs a Mac to build on). T
 
 ## System requirements
 
-**We tested the game on one PC only:** Windows 11, an NVIDIA GeForce RTX 2070 Super with Max-Q Design (a laptop GPU, 8 GB), an 8-core Intel Core i9-10885H and 32 GB of memory. We did not test AMD or Intel graphics cards, other NVIDIA cards, or Windows 10. The "Minimum" column is our estimate, not a test result. If the game does not work on your PC, [open an issue](https://github.com/simcruisegame/simcruise/issues) with your Windows version, graphics card and memory.
+**We tested the game on one PC only:** Windows 11, an NVIDIA GeForce RTX 2070 Super with Max-Q Design (a laptop GPU, 8 GB), an 8-core Intel Core i9-10885H and 32 GB of memory. We did not test AMD or Intel graphics cards, other NVIDIA cards, or Windows 10. The "Minimum" column is our estimate, not a test result. If the game does not work on your PC, [open an issue](https://github.com/simcruisegame/osds/issues) with your Windows version, graphics card and memory.
 
 | | Minimum (estimate, not tested) | Tested |
 |---|---|---|
