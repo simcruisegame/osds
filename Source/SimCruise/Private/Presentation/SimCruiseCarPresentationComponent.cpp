@@ -259,6 +259,11 @@ UStaticMeshComponent* USimCruiseCarPresentationComponent::MakeMeshComponent(USce
 	}
 	// Glass and lenses let the sun into the cabin.
 	Component->SetCastShadow(!bAllGlass);
+	// No screen-space contact shadows from the car's own parts: from the driver's seat the
+	// binnacle, column and dash are a few centimetres apart in depth, and the screen-space march
+	// drew black stair-stepped streaks across them in direct sun (release review, Miata binnacle).
+	// The virtual shadow map already draws the car's shadows.
+	Component->bCastContactShadow = false;
 	Component->RegisterComponent();
 	Parts.Add(Component);
 	return Component;
@@ -748,8 +753,16 @@ void USimCruiseCarPresentationComponent::TickComponent(float DeltaTime, ELevelTi
 		// changes slowly next to the road ahead.
 		static IConsoleVariable* Interval = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Mirrors.Interval"));
 		const uint32 Every = static_cast<uint32>(FMath::Max(Interval ? Interval->GetInt() : 3, 1));
-		if (++MirrorFrame % Every == 0u)
+		if (MirrorCaptures == 1u)
 		{
+			// The first capture has rendered: show it (until then the glass shows its plain tint,
+			// not the black of an empty target: 1.8 s of black glass after a long stall).
+			for (UMaterialInstanceDynamic* Mirror : MirrorMaterials) { Mirror->SetScalarParameterValue(TEXT("HasCapture"), 1.f); }
+		}
+		if (MirrorCaptures < 2u && MirrorCaptures > 0u) ++MirrorCaptures;
+		if (MirrorCaptures == 0u || ++MirrorFrame % Every == 0u)
+		{
+			if (MirrorCaptures == 0u) MirrorCaptures = 1u;
 			MirrorCapture->CaptureSceneDeferred();
 		}
 		const FTransform Eye = MirrorCapture->GetComponentTransform();
@@ -811,6 +824,7 @@ void USimCruiseCarPresentationComponent::SetMirrorsLive(bool bLive, USceneCompon
 	if (!bLive)
 	{
 		if (MirrorCapture) { MirrorCapture->DestroyComponent(); MirrorCapture = nullptr; }
+		MirrorCaptures = 0u;
 		if (CabinFill) { CabinFill->DestroyComponent(); CabinFill = nullptr; }
 		for (UMaterialInstanceDynamic* Mirror : MirrorMaterials) { Mirror->SetScalarParameterValue(TEXT("HasCapture"), 0.f); }
 		return;
@@ -852,6 +866,7 @@ void USimCruiseCarPresentationComponent::SetMirrorsLive(bool bLive, USceneCompon
 	{
 		MirrorTarget = NewObject<UTextureRenderTarget2D>(this);
 		MirrorTarget->RenderTargetFormat = RTF_RGBA16f;
+		MirrorTarget->bAutoGenerateMips = true; // the glass samples mips (blocky when small without them)
 		MirrorTarget->ClearColor = FLinearColor::Black;
 		MirrorTarget->InitAutoFormat(SizeX, SizeY);
 		MirrorTarget->UpdateResourceImmediate(true);
@@ -900,7 +915,7 @@ void USimCruiseCarPresentationComponent::SetMirrorsLive(bool bLive, USceneCompon
 	for (UMaterialInstanceDynamic* Mirror : MirrorMaterials)
 	{
 		Mirror->SetTextureParameterValue(TEXT("Capture"), MirrorTarget);
-		Mirror->SetScalarParameterValue(TEXT("HasCapture"), 1.f);
+		Mirror->SetScalarParameterValue(TEXT("HasCapture"), 0.f); // until the first capture renders (Tick)
 		Mirror->SetScalarParameterValue(TEXT("TanHalf"), TanHalf);
 		Mirror->SetScalarParameterValue(TEXT("Aspect"), static_cast<float>(SizeX) / SizeY);
 	}
