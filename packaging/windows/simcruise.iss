@@ -97,8 +97,8 @@ FinishedLabel=Setup has installed [name] on your computer. Start it from the Sta
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [InstallDelete]
-; An install over 2.0.0 must not keep its neural-network weights (research-only training data);
-; since 2.0.1 the game ships none, so any .onnx left in the folder is old.
+; Every .onnx from an earlier install goes before the files are copied: 2.0.0 shipped weights that
+; may not ship now, and from 2.0.3 the package brings exactly the cleared ones (scripts\ShippedModels.ps1).
 Type: files; Name: "{app}\SimCruise\data\ai\*.onnx"
 
 [Files]
