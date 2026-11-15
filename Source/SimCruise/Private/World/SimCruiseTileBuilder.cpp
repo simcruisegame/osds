@@ -530,6 +530,69 @@ namespace SimCruiseTileBuilder
 
 		// ---------------------------------------------------------------- roads
 		B.Roads.Build(Data, Side, NeighbourEnds);
+		{
+			// The ground on a tile's seam keeps the height both tiles share (no tile sees every road
+			// near its edge), so a road that runs along or near a seam cannot press it down: the road
+			// clears it instead. Where a carriageway lies within a cell and a half of the seam, its
+			// surface stays 5 cm over that shared ground, lifted on a 15 m ease along the road. A
+			// road's own ends on the seam keep their contract (the seam lift there is the network's).
+			// World.TerrainNeverOverRoad: Anchorage's H Street along a seam stood up to 0.2 m under it.
+			const int32 SeamN = Data.Grid * FMath::Max(1, FMath::RoundToInt(Side / Data.Grid / FineCellTargetM));
+			const double Band = 1.5 * Side / FMath::Max(SeamN, 1);
+			for (FSimCruiseRibbon& Ribbon : B.Roads.Ribbons)
+			{
+				const int32 NS = Ribbon.St.Num();
+				TArray<double> Need;
+				Need.Init(0.0, NS);
+				bool bAny = false;
+				for (int32 k = 0; k < NS; ++k)
+				{
+					const FSimCruiseRibbonStation& St = Ribbon.St[k];
+					// Away from a ribbon end that sits on the seam (its contract holds the height there).
+					if ((Ribbon.bStartOnBoundary && St.S - Ribbon.St[0].S < 15.0) || (Ribbon.bEndOnBoundary && Ribbon.St.Last().S - St.S < 15.0)) continue;
+					for (int32 c = 0; c < 5; ++c)
+					{
+						const double L = FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW;
+						const FVector2d P = St.C + St.R * L;
+						const double DX = FMath::Min(P.X, Side - P.X), DY = FMath::Min(P.Y, Side - P.Y);
+						if (FMath::Min(DX, DY) > Band) continue;
+						// The shared ground at the nearest point of the seam.
+						FVector2d Q = P;
+						if (DX <= DY) Q.X = P.X < Side - P.X ? 0.0 : Side; else Q.Y = P.Y < Side - P.Y ? 0.0 : Side;
+						const double Ground = FMath::Max(Data.HeightAtUnit(Q / Side), Data.HeightAtUnit(FVector2d(FMath::Clamp(P.X, 0.0, Side), FMath::Clamp(P.Y, 0.0, Side)) / Side));
+						const double Lift = Ground + 0.05 - St.Height(L);
+						if (Lift > Need[k]) { Need[k] = Lift; bAny = true; }
+					}
+				}
+				if (!bAny) continue;
+				// Eased along the road: each station takes the largest need within 15 m, smoothly.
+				TArray<double> Lift;
+				Lift.Init(0.0, NS);
+				for (int32 k = 0; k < NS; ++k)
+				{
+					if (Need[k] <= 0.0) continue;
+					for (int32 m = 0; m < NS; ++m)
+					{
+						const double D = FMath::Abs(Ribbon.St[m].S - Ribbon.St[k].S);
+						if (D >= 15.0) continue;
+						const double W = 1.0 - FMath::SmoothStep(0.0, 1.0, D / 15.0);
+						Lift[m] = FMath::Max(Lift[m], Need[k] * W);
+					}
+				}
+				for (int32 k = 0; k < NS; ++k)
+				{
+					FSimCruiseRibbonStation& St = Ribbon.St[k];
+					if (Lift[k] <= 0.0) continue;
+					// Nothing at a seam end, full 15 m in: the end keeps its contract with no step.
+					double Keep = 1.0;
+					if (Ribbon.bStartOnBoundary) Keep = FMath::Min(Keep, FMath::SmoothStep(0.0, 1.0, (St.S - Ribbon.St[0].S) / 15.0));
+					if (Ribbon.bEndOnBoundary) Keep = FMath::Min(Keep, FMath::SmoothStep(0.0, 1.0, (Ribbon.St.Last().S - St.S) / 15.0));
+					const double Up = Lift[k] * Keep;
+					St.Z += Up;
+					for (int32 c = 0; c < 5; ++c) St.Column(c) += Up;
+				}
+			}
+		}
 		B.Roads.CollectSeamEnds(B.SeamEnds);
 		const FSimCruiseRoadNetwork& Roads = B.Roads;
 

@@ -1408,8 +1408,12 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 								Big += Over > 1.0 ? 1 : 0;
 								double Lon = 0.0, Lat = 0.0;
 								SimCruiseGeo::TileToLonLat(FVector2d(B.Tile.X, B.Tile.Y) + P / FMath::Max(Side, 1.0), Lon, Lat);
-								Spots.Add({ Over, FString::Printf(TEXT("%s tile %d_%d ribbon %d (%s %s%s) station %d%s: the ground stands %.2f m over the road at %.6f, %.6f"),
-									*Place, B.Tile.X, B.Tile.Y, r, *R.Class, *R.Name, A.bBridge ? TEXT(", deck") : TEXT(""), i, bSeam ? TEXT(", on the seam") : TEXT(""), Over, Lat, Lon) });
+								bool bPad = false;
+								for (const FSimCruiseRoadPad& Pad : B.Roads.Pads) bPad |= FVector2d::Distance(P, Pad.Centre) <= Pad.RadiusAt(P) + 0.5;
+								const bool bEnd = i < 2 || i + 3 > R.St.Num();
+								Spots.Add({ Over, FString::Printf(TEXT("%s tile %d_%d ribbon %d (%s %s%s) station %d of %d%s%s%s: the ground stands %.2f m over the road (road %.2f m, ground %.2f m, %+.1f m across) at %.6f, %.6f"),
+									*Place, B.Tile.X, B.Tile.Y, r, *R.Class, *R.Name, A.bBridge ? TEXT(", deck") : TEXT(""), i, R.St.Num(), bSeam ? TEXT(", on the seam") : TEXT(""),
+									bPad ? TEXT(", on a junction pad") : TEXT(""), bEnd ? TEXT(", at the ribbon's end") : TEXT(""), Over, Road, Ground, L, Lat, Lon) });
 							}
 						}
 					}
