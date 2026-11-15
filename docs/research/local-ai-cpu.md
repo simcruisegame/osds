@@ -162,3 +162,34 @@ place, 0.1-0.5 s per material on the CPU, once per library key.
 
 **Standstill ladder (spec J3).** When the car is slow or stopped, the free threads go to L1 (RSTR in
 view), L2 (GENR facades), L4 (unique 4 mm/px pages within 10 m). Each level is cached by surface id.
+
+## 8. v2.0.3 candidate (15 November 2026)
+
+**In the candidate (v203-candidate 477ed1a):** the aerial_student eye ON by default in the lower 48
+states (land cover and TINT from the zoom-14 photo; `-SimCruiseScanEye=none` turns it off). Fast tier
+191 passed, 0 failed. Pre-flights with the eye at Ankeny IA and Jasper AR: PASS, frame p95 16.7 ms,
+0 hitches; the eye takes 0.46-0.95 s of one below-normal thread per tile.
+
+**In the code, off by default (`simcruise.Eye.Photo16 1`): the clean photo albedo (PHTX).** The helper
+command `aerial16` fetches each zoom-16 tile's own 1024 px photograph (USGS, about 0.45-0.6 m); the eye
+reads it (the kind of photo it learned on) and writes `albedo_photo_r/g/b/mask` at 1056 x 1056 (1024 +
+2 x 16 guard, 2 cells per scan cell). Inside grass, crop, shrub and bare ground, shadows and stray dark
+or bright pixels (grown by one pixel) are replaced by the nearby clean pixel of the same class that is
+closest to the class's typical brightness, chosen in an order fixed by the global pixel position, so
+two tiles agree along their shared edge (test `SimCruise.AI.AerialEye.CleanPhotoSeams`). Tree canopy,
+roads, roofs, water and unsure cells keep the photo. It stays off until the renderer draws it, so the
+game sends no photo requests that nobody sees. Pictures: tree-row shadows leave the field; faint rings
+remain (grow the mask by 2 px next). One drive with it on (Ankeny) found a 5.1 cm road step (limit 5);
+the same place passed with 3.8 cm before: to be checked by the world lane.
+
+**Material heads (the eye picks library keys).** First try, road surface from OSM `surface=*` tags
+(Overpass, cached): the tags in our tiles are 80 % asphalt, so the head learned "asphalt" (concrete
+recall about 0): not shipped. It needs the rural places' gravel and dirt roads and FHWA HPMS surface
+types first. Then roofs (OSM `roof:material`), then the wall "imagine" head (Census SOC tables; NSI may
+not be used for training: its terms allow run-time use only, without saved raw responses).
+
+**Wall and roof library (GENR):** 51 keys in `lab/walls/wall_library.py` (brick, stucco, wood, vinyl and
+fiber-cement siding, log, concrete and block, stone, metal, glass and storefront; 10 roofs; 11 ground
+materials), each with regions, era, building uses and the NSI construction class it fits, generated
+offline with SDXL (CreativeML Open RAIL++-M) in a GPU slot; the scan picks a key per building from
+the world lane's facts and tints it with the place's colours.
