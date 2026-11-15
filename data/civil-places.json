@@ -327,13 +327,6 @@
   },
   {
    "kind": "multi-storey-parking",
-   "source": "random",
-   "area": null,
-   "osm": null,
-   "note": "not found in 12 seeded areas"
-  },
-  {
-   "kind": "multi-storey-parking",
    "source": "world-lane",
    "area": "Detroit",
    "lat": 42.3667,
@@ -431,13 +424,6 @@
   },
   {
    "kind": "ferry",
-   "source": "random",
-   "area": null,
-   "osm": null,
-   "note": "not found in 12 seeded areas"
-  },
-  {
-   "kind": "ferry",
    "source": "world-lane",
    "area": "Miami",
    "lat": 25.79,
@@ -473,6 +459,58 @@
    "lon": -114.7377,
    "osm": null,
    "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "multi-storey-parking",
+   "source": "random",
+   "seed": 20261115,
+   "area": "Oklahoma City",
+   "osm": "way/394751615",
+   "name": "Parking Garage",
+   "lat": 35.476493,
+   "lon": -97.580776,
+   "heading_deg": 179.8,
+   "heading_back_deg": 359.8,
+   "approach_a": [
+    35.476498,
+    -97.578563
+   ],
+   "approach_b": [
+    35.478737,
+    -97.581321
+   ],
+   "length_m": 232
+  },
+  {
+   "kind": "ferry",
+   "source": "random",
+   "seed": 20261115,
+   "area": "San Francisco Bay",
+   "osm": "way/662437193",
+   "name": "Harbor Bay - San Francisco Ferry Building",
+   "lat": 37.795263,
+   "lon": -122.38975,
+   "heading_deg": 104.2,
+   "heading_back_deg": 284.2,
+   "approach_a": [
+    37.792629,
+    -122.391398
+   ],
+   "approach_b": [
+    37.735034,
+    -122.255086
+   ],
+   "length_m": 13530
+  }
+ ],
+ "reruns": [
+  {
+   "seed": 20261115,
+   "kinds": [
+    "multi-storey-parking",
+    "ferry"
+   ],
+   "made_utc": "2026-11-15T00:26:55Z"
   }
  ]
 }
