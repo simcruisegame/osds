@@ -979,7 +979,12 @@ void ASimCruiseTrees::Refresh()
 		Rings[i]->AddInstances(Lists[i], false, true, false);
 		if (Rings[i]->NumCustomDataFloats == 3 && Lists[i].Num() > 0)
 		{
-			Rings[i]->SetCustomData(0, Lists[i].Num() - 1, Colours[i], false);
+			// One instance at a time: the hierarchical component's own SetCustomData keeps its
+			// instance order (it hides the engine's range form).
+			for (int32 n = 0; n < Lists[i].Num(); ++n)
+			{
+				Rings[i]->SetCustomData(n, TArrayView<const float>(Colours[i].GetData() + 3 * n, 3), false);
+			}
 		}
 		Rings[i]->BuildTreeIfOutdated(false, true);
 	}

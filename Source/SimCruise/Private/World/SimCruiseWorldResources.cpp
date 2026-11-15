@@ -635,6 +635,7 @@ if (wallMat > 0.5 && (kind < 0.5 || (kind > 10.5 && kind < 13.5)))
 	#undef SC_JOINT
 	stucco = built;
 }
+)HLSL") TEXT(R"HLSL(
 float3 col = stucco;
 float rough = 0.88;
 float metal = 0.0;

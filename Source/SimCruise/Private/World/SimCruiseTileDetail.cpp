@@ -1001,14 +1001,14 @@ namespace SimCruiseTileDetail
 			Street.Init(false, N);
 			FVector2d FrontDir = FVector2d::ZeroVector;
 			{
-				double Longest = 0.0;
+				double LongestStreet = 0.0;
 				for (int32 i = 0; i < N; ++i)
 				{
 					const FVector2d Ai = Ring[i], Ci = Ring[(i + 1) % N];
 					const double L = FVector2d::Distance(Ai, Ci);
 					if (Arc[i] || L < 2.0) continue;
 					Street[i] = Front[i] || (bDetailed && StreetRankFaced(Roads, (Ai + Ci) * 0.5, EdgeNormal(i)) >= 0);
-					if (Street[i] && L > Longest) { Longest = L; FrontDir = EdgeNormal(i); }
+					if (Street[i] && L > LongestStreet) { LongestStreet = L; FrontDir = EdgeNormal(i); }
 				}
 			}
 			const FString UseLower = Row.Use.ToLower();
@@ -1037,15 +1037,15 @@ namespace SimCruiseTileDetail
 			double DoorS = 0.0, DoorW = 0.91, DoorH = 2.03, DoorDepth = 0.12, FloorUp = 0.0;
 			if (bDetailed && !bCurtain && !bMainStreet)
 			{
-				double Longest = 0.0;
+				double LongestDoor = 0.0;
 				for (int32 i = 0; i < N; ++i)
 				{
 					const double L = FVector2d::Distance(Ring[i], Ring[(i + 1) % N]);
-					if (Street[i] && !Front[i] && !PorchEdge[i] && L > Longest) { Longest = L; DoorEdge = i; }
+					if (Street[i] && !Front[i] && !PorchEdge[i] && L > LongestDoor) { LongestDoor = L; DoorEdge = i; }
 				}
 				if (DoorEdge != INDEX_NONE)
 				{
-					const double Len = Longest;
+					const double Len = LongestDoor;
 					if (bOutbuilding) { DoorW = 2.44; DoorH = 2.13; DoorDepth = 0.08; }
 					else if (!bHome) { DoorW = 0.91; DoorH = 2.13; DoorDepth = 0.2; }
 					// Floor height: a house's foundation by region (FEMA/NSI defaults: slab 0.75 ft,

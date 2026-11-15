@@ -50,7 +50,7 @@ public:
 	double RetryMaxSeconds = 900.0;   // ... up to 15 minutes (a host that is down is not asked again and again)
 
 	/** The wait after a tile's n-th failure in a row. */
-	double RetryDelay(int32 Failures) const { return FMath::Min(RetryMaxSeconds, RetryDelaySeconds * FMath::Pow(2.0, FMath::Clamp(Failures - 1, 0, 16))); }
+	double RetryDelay(int32 InFailures) const { return FMath::Min(RetryMaxSeconds, RetryDelaySeconds * FMath::Pow(2.0, FMath::Clamp(InFailures - 1, 0, 16))); }
 
 	/** Forget everything and start a new place. Returns the new generation. */
 	uint32 Reset();

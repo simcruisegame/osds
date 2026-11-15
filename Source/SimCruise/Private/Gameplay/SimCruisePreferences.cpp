@@ -156,15 +156,16 @@ namespace SimCruisePreferences
 				bChanged = true;
 			}
 		}
+		// The keys as plain strings (the JSON object's own key type changes between engine versions).
 		TArray<FString> Keys;
-		Doc.Values.GetKeys(Keys);
+		for (const auto& Pair : Doc.Values) Keys.Add(FString(*Pair.Key));
 		for (const FString& Key : Keys)
 		{
 			if (!Key.StartsWith(TEXT("seat_"))) continue;
 			const FString* NewId = NewIdFor(Key.Mid(5));
 			if (!NewId) continue;
 			const FString NewKey = TEXT("seat_") + *NewId;
-			if (!Doc.HasField(NewKey)) Doc.SetField(NewKey, Doc.Values[Key]);
+			if (!Doc.HasField(NewKey)) Doc.SetField(NewKey, Doc.TryGetField(Key));
 			Doc.RemoveField(Key);
 			bChanged = true;
 		}
