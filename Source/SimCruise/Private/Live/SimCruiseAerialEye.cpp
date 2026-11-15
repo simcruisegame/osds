@@ -1,4 +1,4 @@
-﻿// Copyright SimCruise contributors. All Rights Reserved.
+// Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Live/SimCruiseAerialEye.h"
 
@@ -52,6 +52,8 @@ namespace SimCruiseAerialEyeLocal
 	const uint32 Magic = 0x32455953; // "SYE2"
 	/** A cell is "sure" of a class at this probability. */
 	const uint8 SureLevel = 153; // 0.6 x 255
+	/** Stops a helper fetch at process exit (defined with the photo-true albedo below). */
+	std::atomic<bool>& Cancel();
 
 	/** Class colours of the dump pictures (lab/scan/scan_data.py PALETTE). */
 	const FColor Palette[12] = {
