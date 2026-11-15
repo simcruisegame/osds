@@ -675,6 +675,10 @@ bool FSimCruiseCarDefinitionLoader::ParseJson(const FString& JsonText, const FSt
 	SIMCRUISE_READ_NUMBER("launch_control_rpm", LaunchControlRpm);
 	SIMCRUISE_READ_NUMBER("manual_clutch_stiffness", ManualClutchCouplingNmPerRadPerSecond);
 	SIMCRUISE_READ_STRING("transmission", TransmissionKind);
+	{
+		FString Aspiration;
+		if (Root->TryGetStringField(TEXT("aspiration"), Aspiration)) Candidate.bTurbocharged = Aspiration == TEXT("turbo");
+	}
 	SIMCRUISE_READ_STRING("layout", DrivetrainLayout);
 	SIMCRUISE_READ_NUMBER("awd_front_share", AwdFrontTorqueShareFraction);
 	SIMCRUISE_READ_NUMBER("front_diff_bias", FrontDifferentialBiasRatio);

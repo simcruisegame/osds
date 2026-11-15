@@ -94,6 +94,28 @@ namespace SimCruiseShaping
 		return Stick * (CentreGain + (1.0 - CentreGain) * Stick * Stick);
 	}
 
+	double PadStickForCommand(const FSimCruiseVehicleSetup& Setup, double Command, double ForwardSpeedMps)
+	{
+		const double Quick = FMath::Clamp(Setup.SteeringQuickness, 0.5, 2.0);
+		const double Want = FMath::Clamp(FMath::Abs(Command) / Quick, 0.0, 1.0);
+		if (Want <= 0.0) return 0.0;
+		const double Linearity = FMath::Clamp(static_cast<double>(CVarPadSteerLinearity.GetValueOnAnyThread()), 0.0, 1.0);
+		// Shaped(P) rises monotonically from 0 to 1 over P in 0..1: bisect.
+		double Lo = 0.0, Hi = 1.0;
+		for (int32 I = 0; I < 30; ++I)
+		{
+			const double Mid = 0.5 * (Lo + Hi);
+			const double Shaped = FMath::Lerp(ThumbstickCommand(Setup, Mid, ForwardSpeedMps), Mid, Linearity);
+			(Shaped < Want ? Lo : Hi) = Mid;
+		}
+		const double Pad = 0.5 * (Lo + Hi);
+		// Back through the player's dead zone (StickDeadZone) and the input's fixed axial 0.12.
+		const double Dead = FMath::Clamp(static_cast<double>(CVarPadSteerDeadZone.GetValueOnAnyThread()), 0.0, 0.25);
+		const double AfterInput = Dead + Pad * (1.0 - Dead);
+		const double Raw = 0.12 + AfterInput * (1.0 - 0.12);
+		return FMath::Sign(Command) * FMath::Min(Raw, 1.0);
+	}
+
 	double KeyRackRateRadPerS(const FSimCruiseVehicleSetup& Setup, double ForwardSpeedMps)
 	{
 		const double Parking = 2.75 * Setup.ParkingRackAngleRad;

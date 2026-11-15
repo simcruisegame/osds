@@ -69,6 +69,10 @@ struct FSimCruiseDriveWheelTelemetry
 	double SuspensionTravelM = 0.0;
 	/** Surface grip multiplier under the tyre: about 1 paved, 0.7 gravel or verge. */
 	double SurfaceGrip = 1.0;
+	/** What the tyre stands on (ESimCruiseSurfaceKind, Vehicle/SimCruiseSurfaceKind.h), Unknown in the air. */
+	uint8 SurfaceKind = 0;
+	/** The tyre is on a kerb: carried by a step of more than 3 cm, or on a kerb's slope. */
+	bool bKerb = false;
 };
 
 /** Per-frame state of the car. Missing data keeps its default, so a partial

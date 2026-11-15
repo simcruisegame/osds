@@ -937,6 +937,8 @@
     ],
     "near_gain": 1.0,
     "far_gain": 0.62,
+    "cabin_engine_distance_m": 0.9,
+    "cabin_engine_note": "Mid engine: the eye sits 1.30 m ahead of the rear axle (driver_eye, half the 2723 mm wheelbase) and the LT2 about 0.5 m ahead of that axle with its intake on top (estimate from the C8 layout), so about 0.9 m from the ear against about 2 m for a front engine ahead of the dash: the intake is as loud in the cabin as outside (inverse distance, limited to 1).",
     "source": "GM LT2 6.2 L V8: firing order 1-8-7-2-6-5-4-3, odd cylinders on the left (driver's side) bank and even on the right (GM numbering); quad tips, the driver's-side pair nearer. Bank gains 1.0 / 0.62 are an estimate (no recording synchronised with rpm)."
    },
    "credit": "\"2019 Chevrolet Corvette C8 Stingray\" by Hari Prasath R (https://sketchfab.com/Haris3D), CC BY 4.0",

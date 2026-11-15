@@ -382,6 +382,45 @@ bool FSimCruiseVehicleModelClutchChatterTest::RunTest(const FString& Parameters)
 	}
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelAltitudeTest, "SimCruise.Vehicle.Model.AltitudePower", VehicleTestFlags)
+bool FSimCruiseVehicleModelAltitudeTest::RunTest(const FString& Parameters)
+{
+	// A naturally aspirated engine revs up slower in thin air: in neutral at full pedal, the rise
+	// in 0.15 s at Denver's air (ISA at 1609 m and 15 C: about 1.04 kg/m3) against 1.225.
+	FSimCruiseCarDefinition Car;
+	if (!SimCruiseLoadBenchCar(*this, TEXT("nb2001"), Car))
+	{
+		return false;
+	}
+	auto Rise = [&Car](double Density, bool bTurbo)
+	{
+		FSimCruiseCarDefinition C = Car;
+		C.bTurbocharged = bTurbo;
+		FSimCruiseVehicleSim Sim;
+		Sim.Initialize(C);
+		Sim.SetManual(true, 0.0);
+		Sim.SelectRatio(0);
+		Sim.AirDensityKgPerM3 = Density;
+		FSimCruiseBodyState Body;
+		Body.PositionM = FVector3d(0.0, 0.0, 5.0);
+		Body.CenterOfMassM = Body.PositionM + Sim.GetCenterOfMassLocalM();
+		auto Air = [](const FVector3d&, const FVector3d&, FSimCruiseGroundHit&) { return false; };
+		FSimCruiseVehicleControls Controls;
+		Controls.bDirectRack = true;
+		FSimCruiseBodyForces Forces;
+		for (int32 Step = 0; Step < 180; ++Step) Sim.Step(1.0 / 360.0, 1, Controls, Body, Air, Forces);
+		const double From = Sim.State.EngineRpm;
+		Controls.Throttle = 1.0;
+		for (int32 Step = 0; Step < 54; ++Step) Sim.Step(1.0 / 360.0, 1, Controls, Body, Air, Forces);
+		return Sim.State.EngineRpm - From;
+	};
+	const double Sea = Rise(1.225, false), Denver = Rise(1.04, false), Turbo = Rise(1.04, true);
+	AddInfo(FString::Printf(TEXT("ALTITUDE nb2001 rev rise in 0.15 s: %.0f rpm at sea level, %.0f at Denver, %.0f with a turbo's held boost"), Sea, Denver, Turbo));
+	TestTrue(TEXT("thin air: a slower rise, about the density ratio (0.85) or less"), Denver < 0.93 * Sea && Denver > 0.6 * Sea);
+	TestNearlyEqual(TEXT("a turbo holds its boost"), Turbo, Sea, 0.02 * Sea);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelDrivetrainTest, "SimCruise.Vehicle.Model.Drivetrain", VehicleTestFlags)
 bool FSimCruiseVehicleModelDrivetrainTest::RunTest(const FString& Parameters)
 {
