@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "World/SimCruiseRoadNetwork.h"
+#include "World/SimCruiseScan.h"
 
 struct FSimCruiseTileData;
 class FStaticMeshRenderData;
@@ -43,6 +44,42 @@ namespace SimCruiseSurfaceKind
 	inline constexpr float WallFront = 11.f;  // a street facade: shopfront glass in the ground storey
 	inline constexpr float DecoFront = 12.f;  // an Art Deco hotel's street facade with shops, washed in coloured light at night
 	inline constexpr float DecoUpper = 13.f;  // an Art Deco street facade above a porch, washed in coloured light at night
+}
+
+/**
+ * A wall's windows by its role (side, back, garage): the fraction added to a window-grid kind in
+ * UV1.x (the shaders round the kind). The share of the wall's bays that have a window, in ninths,
+ * and whether a house's windows come in pairs. No fraction: every bay.
+ */
+namespace SimCruiseWindowRole
+{
+	inline float Encode(double Share, bool bPairs)
+	{
+		const int32 Q = FMath::Clamp(FMath::RoundToInt(Share * 9.0), 0, 9);
+		return (static_cast<float>((bPairs ? 10 : 0) + Q) + 0.5f) / 48.f;
+	}
+}
+
+/**
+ * What a building's walls are built of: the integer part of UV1.y on the building mesh (the
+ * fraction is the building's seed). The building shader draws its coursing on the wall kinds.
+ */
+namespace SimCruiseWallMaterial
+{
+	inline constexpr int32 Render = 0;    // painted render or stucco: the plain wall
+	inline constexpr int32 Brick = 1;     // US modular brick, running bond
+	inline constexpr int32 Siding = 2;    // lap siding (wood, vinyl, fibre cement)
+	inline constexpr int32 Block = 3;     // concrete block (CMU), painted or bare
+	inline constexpr int32 Stone = 4;     // ashlar stone
+	inline constexpr int32 Concrete = 5;  // cast or precast concrete panels
+	inline constexpr int32 Metal = 6;     // ribbed metal panels
+
+	/** The UV1.y a building writes: its material plus its 0-1 seed, put mid-bin of the shader's 4096 seed bins. */
+	inline float Pack(int32 Material, float Seed01)
+	{
+		const float Bin = FMath::Clamp(FMath::FloorToFloat(Seed01 * 4096.f), 0.f, 4095.f);
+		return static_cast<float>(Material) + (Bin + 0.5f) / 4096.f;
+	}
 }
 
 /** Plain mesh buffers in tile-local centimetres (x east, y south, z up). */
@@ -182,6 +219,13 @@ struct SIMCRUISE_API FSimCruiseTileBuild
 	 */
 	TSharedPtr<const SimCruiseRoadCheck::FTopSurface, ESPMode::ThreadSafe> RoadTops;
 
+	/**
+	 * TINT by colour match (SimCruiseScan::MatchTints): the place's own grass, soil, sand and
+	 * paving hues from its aerial photograph, x1.0 where there is no photograph or too little of
+	 * a class. Always made (cheap); the scan's TINT starts from it and an eye may override it.
+	 */
+	SimCruiseScan::FTint Tint[64];
+
 	/** Palms to instance on this tile. */
 	TArray<FSimCruisePalmInstance> PalmInstances;
 
@@ -235,7 +279,7 @@ namespace SimCruiseTileBuilder
 	SIMCRUISE_API bool Triangulate(const TArray<FVector2d>& Ring, TArray<int32>& OutIndices);
 
 	/** World-anchored texture offset (m) for a tile: (tile * size) mod Period, so detail textures run on across seams. */
-	/** The ground materials' anchor period (64 m; the seamless 1664 m anchor with its shaders comes in v2.0.4). */
-	inline constexpr double TextureAnchorPeriodM = 64.0;
+	/** The ground materials' anchor period: every pattern period divides it (SeamCode, SimCruiseWorldResources.cpp). */
+	inline constexpr double TextureAnchorPeriodM = 1664.0;
 	SIMCRUISE_API FVector2d TextureAnchorM(const FIntPoint& Tile, double TileSizeM, double PeriodM = TextureAnchorPeriodM);
 }

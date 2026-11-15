@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseWorldTile.h"
+#include "Vehicle/SimCruiseSurfaceKind.h"
 
 #include "World/SimCruiseCellContext.h"
 #include "World/SimCruiseScan.h"
@@ -121,6 +122,13 @@ FLinearColor SimCruiseParkedCars::ColourFor(uint8 Byte)
 
 void ASimCruiseWorldTile::SurfaceGripAtFace(int32 FaceIndex, float& OutDryGrip, float& OutWetLoss) const
 {
+	uint8 Kind = 0;
+	SurfaceAtFace(FaceIndex, OutDryGrip, OutWetLoss, Kind);
+}
+
+void ASimCruiseWorldTile::SurfaceAtFace(int32 FaceIndex, float& OutDryGrip, float& OutWetLoss, uint8& OutKind) const
+{
+	OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Unknown);
 	// Peak friction relative to dry asphalt (0.8-0.9), from Wong, Theory of Ground Vehicles,
 	// table 1.3: wet asphalt or concrete 0.5-0.7 (about 0.7 of dry), gravel 0.6 (0.7 of dry,
 	// little changed when wet), earth road 0.68 dry and 0.55 wet (0.8 and 0.65 of dry asphalt;
@@ -149,17 +157,24 @@ void ASimCruiseWorldTile::SurfaceGripAtFace(int32 FaceIndex, float& OutDryGrip, 
 	{
 	case ESimCruiseTileLayer::Asphalt:
 	{
+		OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Asphalt);
 		const int32 Local = FaceIndex - Map->AsphaltFirstFace;
 		if (Map->GravelAsphalt.IsValidIndex(Local) && Map->GravelAsphalt[Local])
 		{
 			OutDryGrip = 0.7f;
 			OutWetLoss = 0.1f;
+			OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Gravel);
 		}
 		break;
 	}
+	case ESimCruiseTileLayer::Concrete:
+		// Kerb, gutter and sidewalk: concrete grips as asphalt does (Wong, table 1.3).
+		OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Concrete);
+		break;
 	case ESimCruiseTileLayer::Terrain:
 		OutDryGrip = 0.8f;
 		OutWetLoss = 0.19f;
+		OutKind = static_cast<uint8>(ESimCruiseSurfaceKind::Grass);
 		break;
 	default:
 		break;
@@ -410,17 +425,20 @@ void ASimCruiseWorldTile::Install(const TSharedRef<FSimCruiseTileBuild>& InBuild
 			const float GrassDry = bGrassDryOverride ? GrassDryOverride : (InBuild->Context.IsValid() ? FMath::Clamp(InBuild->Context->GrassDry, 0.f, 1.f) : 0.f);
 			MID->SetScalarParameterValue(TEXT("GrassField"), bGrassField ? 1.f : 0.f);
 			MID->SetScalarParameterValue(TEXT("GrassDry"), GrassDry);
-			// The scan's TINT (the place's own grass, soil and sand colours, from the eye): x1 without one.
-			if (InBuild->Scan.IsValid())
+			// TINT (the place's own grass, soil, sand and paving hues): the scan's when there is one
+			// (an eye may have filled it), else the build's colour match; x1 without a photograph.
 			{
-				auto Tint = [&](SimCruiseScan::EClass C) { const SimCruiseScan::FTint& T = InBuild->Scan->Tint[static_cast<int32>(C)]; return FLinearColor(T.R / 128.f, T.G / 128.f, T.B / 128.f, 1.f); };
+				const SimCruiseScan::FTint* Tints = InBuild->Scan.IsValid() ? InBuild->Scan->Tint : InBuild->Tint;
+				auto Tint = [Tints](SimCruiseScan::EClass C) { const SimCruiseScan::FTint& T = Tints[static_cast<int32>(C)]; return FLinearColor(T.R / 128.f, T.G / 128.f, T.B / 128.f, 1.f); };
 				MID->SetVectorParameterValue(TEXT("TintGrass"), Tint(SimCruiseScan::EClass::GrassShort));
 				MID->SetVectorParameterValue(TEXT("TintSoil"), Tint(SimCruiseScan::EClass::BareSoil));
 				MID->SetVectorParameterValue(TEXT("TintSand"), Tint(SimCruiseScan::EClass::Sand));
+				MID->SetVectorParameterValue(TEXT("TintPaved"), Tint(SimCruiseScan::EClass::Paving));
 			}
 			// The AI detail kit (world-detail-methods.md): on unless -SimCruiseNoDetailLayer.
 			static const bool bDetailLayer = !FParse::Param(FCommandLine::Get(), TEXT("SimCruiseNoDetailLayer"));
 			MID->SetTextureParameterValue(TEXT("DetailAlb"), Resources->DetailAlbTexture);
+			if (Resources->FieldNoiseTexture) MID->SetTextureParameterValue(TEXT("FieldNoise"), Resources->FieldNoiseTexture);
 			MID->SetTextureParameterValue(TEXT("DetailNrm"), Resources->DetailNrmTexture);
 			MID->SetScalarParameterValue(TEXT("DetailLayer"), bDetailLayer ? 1.f : 0.f);
 			Materials.Add(MID);

@@ -1,4 +1,4 @@
-﻿// Copyright SimCruise contributors. All Rights Reserved.
+// Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Live/SimCruiseAerialEye.h"
 
@@ -24,10 +24,13 @@
 #include "Serialization/MemoryWriter.h"
 #include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
+#include "Atlas/SimCruiseAtlasClient.h"
 #include "World/SimCruiseWorldResources.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSimCruiseAerialEye, Log, All);
 
+static TAutoConsoleVariable<int32> CVarSimCruiseEyePhoto16(TEXT("simcruise.Eye.Photo16"), 0,
+	TEXT("1: the eye fetches each tile's zoom-16 photograph through the helper and writes the clean photo albedo (PHTX). Off until the renderer reads it (no fetches nobody sees)."));
 static TAutoConsoleVariable<int32> CVarSimCruiseEyeDump(TEXT("simcruise.Eye.Dump"), 0,
 	TEXT("1: the aerial eye also writes photo | classes PNGs of each tile it reads to Saved/Scan/eyes/dump."));
 
@@ -51,6 +54,8 @@ namespace SimCruiseAerialEyeLocal
 	const uint32 Magic = 0x32455953; // "SYE2"
 	/** A cell is "sure" of a class at this probability. */
 	const uint8 SureLevel = 153; // 0.6 x 255
+	/** Stops a helper fetch at process exit (defined with the photo-true albedo below). */
+	std::atomic<bool>& Cancel();
 
 	/** Class colours of the dump pictures (lab/scan/scan_data.py PALETTE). */
 	const FColor Palette[12] = {
@@ -91,6 +96,14 @@ bool FSimCruiseAerialEye::IsGameSlow()
 	return GSimCruiseEyeFrameSeconds.load(std::memory_order_relaxed) > 1.1f / 60.f;
 }
 
+bool FSimCruiseAerialEye::IsLower48(const FIntVector& TileZXY)
+{
+	const double N = FMath::Pow(2.0, TileZXY.X);
+	const double Lon = (TileZXY.Y + 0.5) / N * 360.0 - 180.0;
+	const double Lat = FMath::RadiansToDegrees(FMath::Atan(FMath::Sinh(PI * (1.0 - 2.0 * (TileZXY.Z + 0.5) / N))));
+	return Lon > -125.5 && Lon < -66.5 && Lat > 24.0 && Lat < 49.5;
+}
+
 FSimCruiseAerialEye& FSimCruiseAerialEye::Get()
 {
 	static FSimCruiseAerialEye* Instance = new FSimCruiseAerialEye();
@@ -120,7 +133,7 @@ const TArray<FName>& FSimCruiseAerialEye::ChannelNames()
 FString FSimCruiseAerialEye::Licence() const
 {
 	return bStudent
-		? TEXT("SimCruise aerial student (MIT, SimCruise contributors). Contains information from OpenStreetMap, (c) OpenStreetMap contributors, ODbL.")
+		? TEXT("SimCruise aerial student (MIT, SimCruise contributors), which contains the first two stages of the Satlas Aerial_SwinB_SI backbone (Allen Institute for AI, ODC-BY 1.0). Contains information from OpenStreetMap, (c) OpenStreetMap contributors, ODbL.")
 		: TEXT("Satlas Aerial_SwinB_SI backbone (Allen Institute for AI, ODC-BY 1.0) + SimCruise head (MIT). Contains information from OpenStreetMap, (c) OpenStreetMap contributors, ODbL.");
 }
 
@@ -128,7 +141,7 @@ FString FSimCruiseAerialEye::TrainingDataLicence() const
 {
 	FString Ours = TEXT("USGS The National Map aerial imagery (public domain); OpenStreetMap via OpenFreeMap (ODbL); Meta and WRI canopy height map v2 (CC BY 4.0); ESA WorldCover 2021 v200 (CC BY 4.0)");
 	return bStudent
-		? Ours + TEXT("; soft labels of the satlas_landcover eye")
+		? Ours + TEXT("; soft labels of the satlas_landcover eye on 2,100 more USGS aerial tiles; its first two stages by the Satlas makers on SatlasPretrain (NAIP public domain, OpenStreetMap and Microsoft Buildings ODbL, ESA WorldCover CC BY 4.0, own annotations ODC-BY) from an ImageNet start")
 		: Ours + TEXT(" for the head; the Satlas backbone by its makers on SatlasPretrain (NAIP public domain, OpenStreetMap and Microsoft Buildings ODbL, ESA WorldCover CC BY 4.0, own annotations ODC-BY) from an ImageNet start");
 }
 
@@ -141,8 +154,13 @@ bool FSimCruiseAerialEye::Initialize()
 	}
 	bTried = true;
 	FString Choice;
-	if (!FParse::Value(FCommandLine::Get(), TEXT("SimCruiseScanEye="), Choice) || Choice.IsEmpty() || Choice.Equals(TEXT("none"), ESearchCase::IgnoreCase))
+	// On by default (owner's criterion 2026-11-14: the whole game looks real): the shipped student eye.
+	// -SimCruiseScanEye=none or -SimCruiseNoEye turns it off; =satlas_landcover picks the development teacher.
+	Choice = TEXT("aerial_student");
+	FParse::Value(FCommandLine::Get(), TEXT("SimCruiseScanEye="), Choice);
+	if (Choice.IsEmpty() || Choice.Equals(TEXT("none"), ESearchCase::IgnoreCase) || FParse::Param(FCommandLine::Get(), TEXT("SimCruiseNoEye")))
 	{
+		UE_LOG(LogSimCruiseAerialEye, Display, TEXT("Scan eye off"));
 		return false;
 	}
 	if (Choice.Equals(TEXT("satlas_landcover"), ESearchCase::IgnoreCase))
@@ -203,7 +221,7 @@ bool FSimCruiseAerialEye::Initialize()
 	FModuleManager::LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
 	Model = M;
 	bReady = true;
-	FCoreDelegates::OnPreExit.AddLambda([]() { Get().bStop = true; });
+	FCoreDelegates::OnPreExit.AddLambda([]() { Get().bStop = true; SimCruiseAerialEyeLocal::Cancel() = true; });
 	// The game thread hands its frame time to the worker (FApp's time may only be read on the game thread).
 	FCoreDelegates::OnEndFrame.AddLambda([]() { NoteFrameSeconds(static_cast<float>(FApp::GetDeltaTime())); });
 	UE_LOG(LogSimCruiseAerialEye, Display, TEXT("Scan eye ready: %s v%d, %s (%d classes) on NNERuntimeORTCpu"), *EyeName.ToString(), EyeVersion, *ModelPath, M->NumClasses);
@@ -242,7 +260,13 @@ void FSimCruiseAerialEye::InputsFromPhoto(const TArray<FColor>& Photo, int32 Pho
 
 bool FSimCruiseAerialEye::CanRun(const FSimCruiseScanInputs& Inputs) const
 {
-	return bReady && Inputs.AerialSize >= 64 && Inputs.AerialRGB.Num() >= Inputs.AerialSize * Inputs.AerialSize && Inputs.Cells > 0;
+	if (!bReady || Inputs.AerialSize < 64 || Inputs.AerialRGB.Num() < Inputs.AerialSize * Inputs.AerialSize || Inputs.Cells <= 0)
+	{
+		return false;
+	}
+	// The student learned on the lower 48 states' photographs; on Hawaii's and Alaska's it is wrong
+	// (checked: Hilo reads as one roof). There the scan rules decide until it learns them.
+	return !bStudent || IsLower48(Inputs.TileZXY);
 }
 
 bool FSimCruiseAerialEye::Run(const FSimCruiseScanInputs& Inputs, TArray<FSimCruiseScanChannel>& OutChannels, TArray<FSimCruiseScanPoint>& OutPoints)
@@ -351,6 +375,233 @@ void FSimCruiseAerialEye::ComputeTints(const FSimCruiseScanInputs& Inputs, const
 	}
 }
 
+// ---- Photo-true ground albedo ----------------------------------------------------------------------
+
+namespace SimCruiseAerialEyeLocal
+{
+	FCriticalSection& AtlasLock() { static FCriticalSection* L = new FCriticalSection(); return *L; }
+	FSimCruiseAtlasConfig*& AtlasConfig() { static FSimCruiseAtlasConfig* C = nullptr; return C; }
+	std::atomic<bool>& Cancel() { static std::atomic<bool>* B = new std::atomic<bool>(false); return *B; }
+
+	/** A well-mixed 64-bit hash of a global pixel and a counter (splitmix64). */
+	uint64 Mix(uint64 X)
+	{
+		X += 0x9E3779B97F4A7C15ull;
+		X = (X ^ (X >> 30)) * 0xBF58476D1CE4E5B9ull;
+		X = (X ^ (X >> 27)) * 0x94D049BB133111EBull;
+		return X ^ (X >> 31);
+	}
+
+	int32 Luma(const FColor& C) { return (C.R * 77 + C.G * 150 + C.B * 29) >> 8; }
+
+	/** The natural classes the clean albedo works on (model output order). */
+	bool IsNatural(int32 K) { return K == 5 || K == 6 || K == 7 || K == 8; } // grass, crop, shrub, bare (tree canopy keeps its own shading)
+}
+
+void FSimCruiseAerialEye::SetAtlas(const FSimCruiseAtlasConfig& Config)
+{
+	using namespace SimCruiseAerialEyeLocal;
+	FScopeLock Guard(&AtlasLock());
+	if (!AtlasConfig())
+	{
+		AtlasConfig() = new FSimCruiseAtlasConfig(Config); // never destroyed, like the eye
+	}
+}
+
+bool FSimCruiseAerialEye::Photo16(const FIntPoint& Tile16, bool bFetch, TArray<FColor>& Out)
+{
+	using namespace SimCruiseAerialEyeLocal;
+	FSimCruiseAtlasConfig Config;
+	{
+		FScopeLock Guard(&AtlasLock());
+		if (!AtlasConfig() || !AtlasConfig()->IsConfigured())
+		{
+			return false;
+		}
+		Config = *AtlasConfig();
+	}
+	const FString Path = FPaths::Combine(Config.CacheDir, FString::Printf(TEXT("a16-%d-%d.jpg"), Tile16.X, Tile16.Y));
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		if (!bFetch || bStop)
+		{
+			return false;
+		}
+		FSimCruiseAtlasRequest Request;
+		Request.Command = TEXT("aerial16");
+		Request.Args = {FString::FromInt(Tile16.X), FString::FromInt(Tile16.Y)};
+		Request.TimeoutSeconds = 60.0;
+		FSimCruiseAtlasClient::RunBlocking(Config, Request, &Cancel());
+		if (!IFileManager::Get().FileExists(*Path))
+		{
+			return false;
+		}
+	}
+	int32 W = 0, H = 0;
+	Out.Reset();
+	return USimCruiseWorldResources::DecodeImageFile(Path, Out, W, H) && W == PhotoCells && H == PhotoCells;
+}
+
+bool FSimCruiseAerialEye::BuildMosaic(const FIntPoint& Tile16, TFunctionRef<bool(const FIntPoint&, TArray<FColor>&)> PhotoOf, TArray<FColor>& OutMosaic)
+{
+	const int32 N = PhotoCells, S = PhotoStored, G = PhotoGuard;
+	TArray<FColor> Own;
+	if (!PhotoOf(Tile16, Own) || Own.Num() != N * N)
+	{
+		return false;
+	}
+	// The eight neighbours (only their edges are used).
+	TArray<FColor> Near[3][3];
+	bool bHave[3][3] = {};
+	for (int32 DY = -1; DY <= 1; ++DY)
+	{
+		for (int32 DX = -1; DX <= 1; ++DX)
+		{
+			if (DX || DY)
+			{
+				bHave[DY + 1][DX + 1] = PhotoOf(Tile16 + FIntPoint(DX, DY), Near[DY + 1][DX + 1]) && Near[DY + 1][DX + 1].Num() == N * N;
+			}
+		}
+	}
+	OutMosaic.SetNumUninitialized(S * S);
+	for (int32 J = 0; J < S; ++J)
+	{
+		for (int32 I = 0; I < S; ++I)
+		{
+			const int32 GX = I - G, GY = J - G;
+			const int32 DX = GX < 0 ? -1 : (GX >= N ? 1 : 0), DY = GY < 0 ? -1 : (GY >= N ? 1 : 0);
+			if ((DX || DY) && bHave[DY + 1][DX + 1])
+			{
+				OutMosaic[J * S + I] = Near[DY + 1][DX + 1][(GY - DY * N) * N + (GX - DX * N)];
+			}
+			else
+			{
+				// No neighbour: mirror the tile's own photo across its edge.
+				const int32 MX = GX < 0 ? -1 - GX : (GX >= N ? 2 * N - 1 - GX : GX);
+				const int32 MY = GY < 0 ? -1 - GY : (GY >= N ? 2 * N - 1 - GY : GY);
+				OutMosaic[J * S + I] = Own[MY * N + MX];
+			}
+		}
+	}
+	return true;
+}
+
+void FSimCruiseAerialEye::CleanPhoto(const TArray<FColor>& Mosaic, const FIntPoint& Tile16, const TArray<FSimCruiseScanChannel>& LandCover,
+	TArray<FSimCruiseScanChannel>& OutAlbedo, int32* OutCleaned)
+{
+	using namespace SimCruiseAerialEyeLocal;
+	const int32 S = PhotoStored, G = PhotoGuard;
+	OutAlbedo.Reset();
+	if (Mosaic.Num() != S * S || LandCover.Num() < 12 || LandCover[0].Size <= 0)
+	{
+		return;
+	}
+	const int32 L = LandCover[0].Size;
+	// Class of every mosaic pixel (nearest land-cover cell) and whether the eye is sure (p >= 0.6).
+	TArray<uint8> Class;
+	Class.SetNumUninitialized(S * S);
+	for (int32 J = 0; J < S; ++J)
+	{
+		const int32 CY = FMath::Min(L - 1, J * L / S);
+		for (int32 I = 0; I < S; ++I)
+		{
+			const int32 C = CY * L + FMath::Min(L - 1, I * L / S);
+			int32 Best = 0;
+			for (int32 K = 1; K < 12; ++K) if (LandCover[K].Data[C] > LandCover[Best].Data[C]) Best = K;
+			Class[J * S + I] = (LandCover[Best].Data[C] >= 153 && IsNatural(Best)) ? static_cast<uint8>(Best) : 255;
+		}
+	}
+	// Per natural class: luminance median and spread over the tile's interior.
+	int32 Median[12] = {}, Spread[12] = {};
+	FColor Mean[12];
+	for (int32 K = 0; K < 12; ++K)
+	{
+		if (!IsNatural(K)) continue;
+		TArray<int32> Hist;
+		Hist.Init(0, 256);
+		uint64 R = 0, Gr = 0, B = 0, Count = 0;
+		for (int32 J = G; J < S - G; ++J) for (int32 I = G; I < S - G; ++I)
+		{
+			if (Class[J * S + I] != K) continue;
+			const FColor& P = Mosaic[J * S + I];
+			++Hist[Luma(P)]; R += P.R; Gr += P.G; B += P.B; ++Count;
+		}
+		if (Count < 64) { Median[K] = -1; continue; }
+		auto Quantile = [&](double Q) { uint64 Sum = 0; for (int32 V = 0; V < 256; ++V) { Sum += Hist[V]; if (Sum >= Q * Count) return V; } return 255; };
+		Median[K] = Quantile(0.5);
+		Spread[K] = FMath::Max(4, (Quantile(0.84) - Quantile(0.16)) / 2);
+		Mean[K] = FColor(uint8(R / Count), uint8(Gr / Count), uint8(B / Count), 255);
+	}
+	auto IsOutlier = [&](int32 Index, int32 K)
+	{
+		const int32 Y = Luma(Mosaic[Index]);
+		return Y < Median[K] - 2 * Spread[K] - 6 || Y > Median[K] + 3 * Spread[K] + 10;
+	};
+	// The pixels to replace: outliers of their class, grown by one pixel so a shadow's soft edge goes too.
+	TArray<uint8> Bad;
+	Bad.Init(0, S * S);
+	for (int32 Index = 0; Index < S * S; ++Index)
+	{
+		const int32 K = Class[Index];
+		if (K != 255 && Median[K] >= 0 && IsOutlier(Index, K)) Bad[Index] = 2;
+	}
+	for (int32 J = 1; J < S - 1; ++J)
+	{
+		for (int32 I = 1; I < S - 1; ++I)
+		{
+			const int32 Index = J * S + I;
+			if (Bad[Index] || Class[Index] == 255) continue;
+			if (Bad[Index - 1] == 2 || Bad[Index + 1] == 2 || Bad[Index - S] == 2 || Bad[Index + S] == 2) Bad[Index] = 1;
+		}
+	}
+	TArray<FColor> Out = Mosaic;
+	int32 Cleaned = 0;
+	const int64 OX = int64(Tile16.X) * PhotoCells - G, OY = int64(Tile16.Y) * PhotoCells - G;
+	for (int32 J = 0; J < S; ++J)
+	{
+		for (int32 I = 0; I < S; ++I)
+		{
+			const int32 Index = J * S + I;
+			const int32 K = Class[Index];
+			if (!Bad[Index] || K == 255 || Median[K] < 0) continue;
+			// Nearby clean pixels of the same class, in an order fixed by the GLOBAL position (two tiles that
+			// see the same pixels near their shared edge pick the same one); of the first four found, the one
+			// closest to the class's typical brightness, so no bright or dark specks are copied in.
+			const uint64 Seed = Mix((uint64(OX + I) << 32) ^ uint64(OY + J));
+			int32 Best = -1, BestError = MAX_int32, Found = 0;
+			for (int32 T = 0; T < 32 && Found < 4; ++T)
+			{
+				const uint64 H = Mix(Seed + T);
+				const int32 DX = int32(H % 33) - 16, DY = int32((H >> 16) % 33) - 16;
+				const int32 X = I + DX, Y = J + DY;
+				if (X < 0 || Y < 0 || X >= S || Y >= S) continue;
+				const int32 C = Y * S + X;
+				if (Class[C] != K || Bad[C]) continue;
+				++Found;
+				const int32 Error = FMath::Abs(Luma(Mosaic[C]) - Median[K]);
+				if (Error < BestError) { BestError = Error; Best = C; }
+			}
+			Out[Index] = Best >= 0 ? Mosaic[Best] : Mean[K];
+			++Cleaned;
+		}
+	}
+	const TCHAR* Names[3] = {TEXT("albedo_photo_r"), TEXT("albedo_photo_g"), TEXT("albedo_photo_b")};
+	for (int32 Ch = 0; Ch < 4; ++Ch)
+	{
+		FSimCruiseScanChannel& C = OutAlbedo.AddDefaulted_GetRef();
+		C.Name = Ch < 3 ? FName(Names[Ch]) : FName(TEXT("albedo_photo_mask"));
+		C.Size = S;
+		C.Confidence = 1.f;
+		C.Data.SetNumUninitialized(S * S);
+		for (int32 Index = 0; Index < S * S; ++Index)
+		{
+			const FColor& P = Out[Index];
+			C.Data[Index] = Ch == 0 ? P.R : Ch == 1 ? P.G : Ch == 2 ? P.B : (Class[Index] != 255 ? 255 : 0);
+		}
+	}
+	if (OutCleaned) *OutCleaned = Cleaned;
+}
+
 void FSimCruiseAerialEye::Request(const FIntPoint& Tile16, const FString& AerialPath)
 {
 	if (!bReady || bStop || AerialPath.IsEmpty())
@@ -432,21 +683,45 @@ void FSimCruiseAerialEye::RunWorker()
 				FScopeLock Guard(&Lock);
 				++BackOffs;
 			}
-			if (!M.PhotoPath.IsEmpty())
+			// The tile's own zoom-16 photograph (4 x the detail) when the helper has it: the eye reads it
+			// (the kind of photo it learned on) and the clean photo albedo is made from it.
+			TArray<FColor> Mosaic;
+			const bool bMosaic = CVarSimCruiseEyePhoto16.GetValueOnAnyThread() > 0 && (!bStudent || IsLower48(FIntVector(16, Tile.X, Tile.Y)))
+				&& BuildMosaic(Tile, [this](const FIntPoint& T, TArray<FColor>& P) { return Photo16(T, true, P); }, Mosaic);
+			if (bMosaic || !M.PhotoPath.IsEmpty())
 			{
 				FSimCruiseScanInputs Inputs;
-				InputsFromPhoto(M.Photo, M.PhotoSize, Tile, Inputs);
+				if (bMosaic)
+				{
+					Inputs.TileZXY = FIntVector(16, Tile.X, Tile.Y);
+					Inputs.Cells = Cells;
+					Inputs.GuardCells = GuardCells;
+					Inputs.AerialRGB = Mosaic;
+					Inputs.AerialSize = PhotoStored;
+				}
+				else
+				{
+					InputsFromPhoto(M.Photo, M.PhotoSize, Tile, Inputs);
+				}
 				TArray<FSimCruiseScanPoint> Points;
 				const double T0 = FPlatformTime::Seconds();
 				bOk = Run(Inputs, Channels, Points);
+				int32 Cleaned = 0;
+				if (bOk && bMosaic)
+				{
+					TArray<FSimCruiseScanChannel> Albedo;
+					CleanPhoto(Mosaic, Tile, Channels, Albedo, &Cleaned);
+					ComputeTints(Inputs, Channels, Tints);
+					Channels.Append(MoveTemp(Albedo));
+				}
 				Seconds = FPlatformTime::Seconds() - T0;
 				if (bOk)
 				{
-					ComputeTints(Inputs, Channels, Tints);
+					if (!bMosaic) ComputeTints(Inputs, Channels, Tints);
 					TArray<uint8> Bytes;
 					Encode(Channels, Tints, Bytes);
 					FFileHelper::SaveArrayToFile(Bytes, *CachePath(Tile));
-					UE_LOG(LogSimCruiseAerialEye, Log, TEXT("SCANEYE eye=%s tile=%d,%d ms=%.0f"), *EyeName.ToString(), Tile.X, Tile.Y, Seconds * 1000.0);
+					UE_LOG(LogSimCruiseAerialEye, Log, TEXT("SCANEYE eye=%s tile=%d,%d photo=%s ms=%.0f cleaned=%d"), *EyeName.ToString(), Tile.X, Tile.Y, bMosaic ? TEXT("z16") : TEXT("z14"), Seconds * 1000.0, Cleaned);
 					if (CVarSimCruiseEyeDump.GetValueOnAnyThread() > 0)
 					{
 						DumpPicture(Inputs, Tile, Channels);
@@ -478,28 +753,45 @@ void FSimCruiseAerialEye::RunWorker()
 void FSimCruiseAerialEye::DumpPicture(const FSimCruiseScanInputs& Inputs, const FIntPoint& Tile16, const TArray<FSimCruiseScanChannel>& Channels) const
 {
 	using namespace SimCruiseAerialEyeLocal;
-	if (Channels.Num() != 12 || Inputs.AerialSize <= 0)
+	if (Channels.Num() < 12 || Inputs.AerialSize <= 0)
 	{
 		return;
 	}
 	const int32 S = Channels[0].Size;
+	// Photo | classes, and a third panel with the clean photo albedo when the tile has one.
+	const FSimCruiseScanChannel* AR = Channels.FindByPredicate([](const FSimCruiseScanChannel& C) { return C.Name == FName(TEXT("albedo_photo_r")); });
+	const FSimCruiseScanChannel* AG = Channels.FindByPredicate([](const FSimCruiseScanChannel& C) { return C.Name == FName(TEXT("albedo_photo_g")); });
+	const FSimCruiseScanChannel* AB = Channels.FindByPredicate([](const FSimCruiseScanChannel& C) { return C.Name == FName(TEXT("albedo_photo_b")); });
+	const int32 Panels = (AR && AG && AB) ? 3 : 2;
 	TArray<FColor> Pic;
-	Pic.SetNumUninitialized(2 * S * S);
+	Pic.SetNumUninitialized(Panels * S * S);
+	if (Panels == 3)
+	{
+		const int32 A = AR->Size;
+		for (int32 Y = 0; Y < S; ++Y)
+		{
+			for (int32 X = 0; X < S; ++X)
+			{
+				const int32 I = FMath::Min(A - 1, Y * A / S) * A + FMath::Min(A - 1, X * A / S);
+				Pic[Y * 3 * S + 2 * S + X] = FColor(AR->Data[I], AG->Data[I], AB->Data[I], 255);
+			}
+		}
+	}
 	const double In = static_cast<double>(Inputs.AerialSize) / S;
 	for (int32 Y = 0; Y < S; ++Y)
 	{
 		for (int32 X = 0; X < S; ++X)
 		{
 			const FLinearColor C = Sample(Inputs.AerialRGB, Inputs.AerialSize, Inputs.AerialSize, (X + 0.5) * In, (Y + 0.5) * In);
-			Pic[Y * 2 * S + X] = FColor(static_cast<uint8>(C.R), static_cast<uint8>(C.G), static_cast<uint8>(C.B), 255);
+			Pic[Y * Panels * S + X] = FColor(static_cast<uint8>(C.R), static_cast<uint8>(C.G), static_cast<uint8>(C.B), 255);
 			int32 Best = 0;
 			for (int32 K = 1; K < 12; ++K) if (Channels[K].Data[Y * S + X] > Channels[Best].Data[Y * S + X]) Best = K;
-			Pic[Y * 2 * S + S + X] = Palette[Best];
+			Pic[Y * Panels * S + S + X] = Palette[Best];
 		}
 	}
 	IImageWrapperModule* Wrappers = FModuleManager::GetModulePtr<IImageWrapperModule>(TEXT("ImageWrapper"));
 	TSharedPtr<IImageWrapper> Png = Wrappers ? Wrappers->CreateImageWrapper(EImageFormat::PNG) : nullptr;
-	if (Png.IsValid() && Png->SetRaw(Pic.GetData(), Pic.Num() * sizeof(FColor), 2 * S, S, ERGBFormat::BGRA, 8))
+	if (Png.IsValid() && Png->SetRaw(Pic.GetData(), Pic.Num() * sizeof(FColor), Panels * S, S, ERGBFormat::BGRA, 8))
 	{
 		const TArray64<uint8>& Bytes = Png->GetCompressed();
 		FFileHelper::SaveArrayToFile(Bytes, *(FPaths::ProjectSavedDir() / FString::Printf(TEXT("Scan/eyes/dump/16-%d-%d.png"), Tile16.X, Tile16.Y)));

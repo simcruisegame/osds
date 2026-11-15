@@ -479,6 +479,18 @@ void SimCruiseCarAssets::ClearCache()
 	SimCruiseCarAssetsPrivate::Cache.Reset();
 }
 
+bool SimCruiseCarAssets::IsReadyToGet(const FString& CarId)
+{
+	using namespace SimCruiseCarAssetsPrivate;
+	if (CarId.IsEmpty() || Cache.Contains(CarId)) return true;
+	if (const TFuture<TSharedPtr<FPrepared>>* Running = Pending.Find(CarId))
+	{
+		return Running->IsReady();
+	}
+	PrepareAsync(CarId);
+	return false;
+}
+
 bool SimCruiseCarAssets::IsBuilt(const FString& CarId)
 {
 	return SimCruiseCarAssetsPrivate::Cache.Contains(CarId);

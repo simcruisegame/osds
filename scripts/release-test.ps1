@@ -60,7 +60,7 @@ param(
     # timed drive (a fresh worktree compiles shaders during its first drive). -NoWarm skips it.
     [switch]$NoWarm,
     # Words that must not show to the player (the owner asked that their name is not in the game).
-    [string[]]$ForbiddenNames = @('Aaron')
+    [string[]]$ForbiddenNames = @(-join [char[]](65, 97, 114, 111, 110)) # a private word, as character codes
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,7 +79,7 @@ New-Item -ItemType Directory -Force (Join-Path $RunDir 'teams') | Out-Null
 $Started = Get-Date
 
 # The places: the hero roads with the cars turning round them, then the seeded ordinary places.
-$Cars = @('nb2001_aaron', 'mustang65', 'meridian_z')
+$Cars = @('nb2001_lowered', 'mustang65', 'meridian_z')
 $Heroes = @('ocean-drive', 'dragon', 'nebraska', 'big-sur')
 $Plan = @()
 for ($I = 0; $I -lt $Heroes.Count; $I++) {

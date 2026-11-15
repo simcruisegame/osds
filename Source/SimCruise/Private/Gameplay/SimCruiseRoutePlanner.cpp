@@ -70,8 +70,7 @@ void SSimCruiseRoutePlanner::Construct(const FArguments& InArgs)
 		[
 			SNew(SBorder).BorderImage(RoundedBrush(Glass(), 14.f)).Padding(FMargin(24.f, 12.f))
 			[
-				Hints({ { TEXT("A"), TEXT("Add a stop here"), TEXT("Enter") }, { TEXT("X"), TEXT("Remove stop"), TEXT("Del") }, { TEXT("Y"), TEXT("Start the route"), TEXT("Y") },
-					{ TEXT("LT RT"), TEXT("Zoom"), TEXT("- +") }, { TEXT("B"), TEXT("Back"), TEXT("Esc") } }, Pad)
+				Hints(GetPadHints(), Pad)
 			]
 		]
 	];
@@ -302,6 +301,12 @@ FReply SSimCruiseRoutePlanner::OnKeyDown(const FGeometry& MyGeometry, const FKey
 	default: break;
 	}
 	return FReply::Handled();
+}
+
+TArray<SimCruiseTheme::FHint> SSimCruiseRoutePlanner::GetPadHints()
+{
+	return { { TEXT("Stick / D-pad"), TEXT("Move the cross"), TEXT("Arrows") }, { TEXT("A"), TEXT("Add a stop here"), TEXT("Enter") }, { TEXT("X"), TEXT("Remove stop"), TEXT("Del") },
+		{ TEXT("Y"), TEXT("Start the route"), TEXT("Y") }, { TEXT("LT RT"), TEXT("Zoom"), TEXT("- +") }, { TEXT("B"), TEXT("Back"), TEXT("Esc") } };
 }
 
 FReply SSimCruiseRoutePlanner::OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& InAnalogInputEvent)

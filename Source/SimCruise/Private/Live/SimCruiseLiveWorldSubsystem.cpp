@@ -16,6 +16,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Live/SimCruiseAerialEye.h"
 #include "Live/SimCruiseLiveSky.h"
+#include "Atlas/SimCruiseUserAgent.h"
 #include "Live/SimCruiseNeuralDetail.h"
 #include "Live/SimCruiseSceneParser.h"
 #include "Components/StaticMeshComponent.h"
@@ -38,6 +39,11 @@ namespace SimCruiseLiveWorldPrivate
 {
 	constexpr double MoveRefetchKm = 5.0;
 	constexpr int32 AircraftRadiusNm = 25;
+
+	// Planes are out of v2.0.3: no aircraft are drawn and the adsb.lol feed (a community server)
+	// is not asked at all. When they return, the feed runs every 60 s, not every 10 s.
+	TAutoConsoleVariable<int32> CVarFeaturePlanes(TEXT("sc.Feature.Planes"), 0,
+		TEXT("1: live aircraft in the sky from adsb.lol, polled every 60 s (read each poll). 0 (default): planes are out of the game for now, nothing is fetched."));
 
 	FAutoConsoleCommandWithWorldAndArgs GReport(
 		TEXT("SimCruise.Live.Report"), TEXT("SimCruise.Live.Report: log the live real-world data and the state of each feed"),
@@ -110,7 +116,7 @@ double USimCruiseLiveWorldSubsystem::PeriodSeconds(EFeed Feed)
 	case EFeed::Sea: return 1800.0;
 	case EFeed::TideStations: return 30.0 * 86400.0;
 	case EFeed::Tide: return 360.0;
-	case EFeed::Aircraft: return 10.0;
+	case EFeed::Aircraft: return 60.0;
 	case EFeed::State: return 7.0 * 86400.0;
 	case EFeed::Roads: return 7.0 * 86400.0;
 	case EFeed::Photos: return 7.0 * 86400.0;
@@ -407,8 +413,12 @@ void USimCruiseLiveWorldSubsystem::Tick(float DeltaTime)
 			break;
 		case EFeed::Photos: Fetch(Feed, FSimCruiseLiveData::PhotosUrl(FeedLat, FeedLon)); break;
 		case EFeed::Aircraft:
-			// Only where the world is drawn: the aircraft need the map frame.
-			if (Sky)
+			// Only where the world is drawn (the aircraft need the map frame), and only with planes on.
+			if (CVarFeaturePlanes.GetValueOnGameThread() == 0)
+			{
+				State.NextAt = Clock + 60.0;
+			}
+			else if (Sky)
 			{
 				Fetch(Feed, FSimCruiseLiveData::AircraftUrl(Lat, Lon, AircraftRadiusNm));
 			}
@@ -457,7 +467,7 @@ void USimCruiseLiveWorldSubsystem::TickPhotoDownloads()
 	const TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = FHttpModule::Get().CreateRequest();
 	Request->SetURL(Photos[Index].ThumbUrl);
 	Request->SetVerb(TEXT("GET"));
-	Request->SetHeader(TEXT("User-Agent"), TEXT("SimCruise/2.0 (+https://github.com/simcruisegame/simcruise)"));
+	Request->SetHeader(TEXT("User-Agent"), SimCruiseUserAgent::Get());
 	Request->SetTimeout(30.0f);
 	TWeakObjectPtr<USimCruiseLiveWorldSubsystem> Weak(this);
 	Request->OnProcessRequestComplete().BindLambda([Weak, Title, File](FHttpRequestPtr Req, FHttpResponsePtr Response, bool bConnected)
@@ -601,7 +611,7 @@ void USimCruiseLiveWorldSubsystem::Fetch(EFeed Feed, const FString& Url)
 	static const bool bOffline = FParse::Param(FCommandLine::Get(), TEXT("SimCruiseLiveOffline"));
 	Request->SetURL(bOffline ? FString(TEXT("http://127.0.0.1:9/offline")) : Url);
 	Request->SetVerb(TEXT("GET"));
-	Request->SetHeader(TEXT("User-Agent"), TEXT("SimCruise/2.0 (+https://github.com/simcruisegame/simcruise)"));
+	Request->SetHeader(TEXT("User-Agent"), SimCruiseUserAgent::Get());
 	Request->SetHeader(TEXT("Accept"), TEXT("application/json"));
 	Request->SetTimeout(Feed == EFeed::TideStations ? 60.0f : 20.0f);
 	TWeakObjectPtr<USimCruiseLiveWorldSubsystem> Weak(this);

@@ -75,6 +75,13 @@ struct SIMCRUISE_API FSimCruiseWheelTelemetry
 	UPROPERTY(BlueprintReadOnly, Category = "SimCruise|Vehicle")
 	double SurfaceGrip = 1.0;
 
+	/** ESimCruiseSurfaceKind under the tyre (Unknown 0, Asphalt, Concrete, Gravel, Grass, Dirt). */
+	UPROPERTY(BlueprintReadOnly, Category = "SimCruise|Vehicle")
+	uint8 SurfaceKind = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "SimCruise|Vehicle")
+	bool bKerb = false;
+
 	/** ABS pressure fraction (1 = full pedal pressure reaches the caliper). */
 	UPROPERTY(BlueprintReadOnly, Category = "SimCruise|Vehicle")
 	double AbsRelease = 1.0;

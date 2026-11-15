@@ -145,6 +145,8 @@ public:
 	void OpenRoutePlanner();
 	void OpenFamousRoads();
 	void OpenWhereTo();
+	/** "Quit the game?": Keep driving (first, so a stray A keeps you driving) or Quit to the desktop; B goes back. */
+	void OpenQuitConfirm();
 	TSharedPtr<SSimCruisePauseMenu> GetPauseMenu() const { return PausePanel; }
 	TSharedPtr<SSimCruiseRoutePlanner> GetRoutePlanner() const { return PlannerPanel; }
 	/** What a pause menu row does (Dir 0 choose, -1 / +1 change, 2 back to stock). */

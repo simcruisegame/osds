@@ -69,6 +69,10 @@ struct FSimCruiseGroundHit
 	FVector3d NormalM = FVector3d::UnitZ();
 	/** Grip of this surface relative to dry asphalt. */
 	double SurfaceGrip = 1.0;
+	/** ESimCruiseSurfaceKind of the face hit, and whether the tyre stands on a kerb (a step carried
+	 *  it, or the steep part of a kerb's concrete). */
+	uint8 SurfaceKind = 0;
+	bool bKerb = false;
 	/** Road roughness under the tyre (m, + raises the road) and its rate (m/s). */
 	double RoadProfileM = 0.0;
 	double RoadProfileRateMps = 0.0;
@@ -99,6 +103,8 @@ struct FSimCruiseWheelState
 	double InclinationRad = 0.0;
 	double FrictionCoefficient = 0.0;
 	double SurfaceGrip = 1.0;
+	uint8 SurfaceKind = 0;
+	bool bKerb = false;
 	double ForwardSpeedMps = 0.0;
 	double LateralSpeedMps = 0.0;
 	/** Interval-mean tyre forces in the wheel's ground frame. */
@@ -135,6 +141,10 @@ struct FSimCruiseVehicleSimState
 	double TcSlipFiltered = 0.0;
 	bool bClutchSaturated = false;
 	double ShiftTimeS = 0.0;
+	/** The automatic's last change (+1 up, -1 down) and the time since it: no change back the
+	 *  other way within 2 s (no hunting). */
+	int32 LastShiftDirection = 0;
+	double SinceShiftS = 100.0;
 	/** Steering input fraction (-1..1, + right) and the rack angle it gives. */
 	double SteeringInput = 0.0;
 	double SteeringRad = 0.0;

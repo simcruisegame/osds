@@ -25,10 +25,13 @@ Copy this list into the release's report (`docs/release/v<version>-report.md`) a
   - writes `OSDS-<version>-SHA256SUMS.txt`,
   - runs the packaged game's self-test (`-SimCruiseShellSelfTest`).
 - [ ] The zip has no `.pdb` files and no `Saved` folder.
+- [ ] The package has `Engine\Extras\Redist\en-us\vc_redist.x64.exe` and `GameInputRedist.msi`, both signed by Microsoft (`scripts\installer.ps1` stops without them), and `python scripts\dep-check.py <package>` finds no DLL that is neither shipped, part of Windows, nor installed by those two.
 
 ## 4. Installer test (on the release PC, as a normal user)
 
-- [ ] Run the setup; choose "Install for me only". It installs without administrator rights.
+The release PC already has the Microsoft runtimes, so this test cannot prove a clean PC. Do the clean test too: [clean-pc-test.md](clean-pc-test.md), on a PC or Windows Sandbox that never had them, and write its result in the release report.
+
+- [ ] Run the setup; choose "Install for me only". It installs without administrator rights. The log (`/LOG=<file>`) says "Visual C++ runtime: already installed" and "GameInput: already installed".
 - [ ] Start SimCruise from the Start menu. The car drives (pad and keyboard), the camera changes, the sound plays.
 - [ ] Quit, start again: the settings are kept.
 - [ ] Uninstall from Settings > Apps. The program folder and the Start menu entry are gone.
@@ -56,7 +59,7 @@ Copy this list into the release's report (`docs/release/v<version>-report.md`) a
 - [ ] `README.md` and `docs/index.html` say the same things (platforms, cars, famous roads, questions). The famous roads come from `Source/SimCruise/Private/Gameplay/SimCruiseFamousRoads.cpp`.
 - [ ] Every screenshot has alt text that says the place, the car and the view.
 - [ ] Repository description and topics are current: `gh repo view simcruisegame/osds --json description,homepageUrl,repositoryTopics`. The homepage is the website. Remove a topic that is no longer true.
-- [ ] `docs/images/social-preview.png` (1280 x 640) still shows the game as it is; if you change it, ask Aaron to upload it again in Settings > General > Social preview.
+- [ ] `docs/images/social-preview.png` (1280 x 640) still shows the game as it is; if you change it, ask the project owner to upload it again in Settings > General > Social preview.
 - [ ] `CREDITS.md`: each new model, data source, car, texture, font or library has its maker, licence and link.
 - [ ] After the push, open the website and check that the page, the images and the download link work. Check GitHub search: `gh search repos "driving simulator" --limit 50 --json fullName` and write the rank in the release report.
 

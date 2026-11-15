@@ -28,6 +28,7 @@ import {streetSample} from './street-samples.mjs';
 import {estimateStreetAppearance} from './street-appearance.mjs';
 import {recent} from './recent.mjs';
 import {canopyObservation} from './canopy.mjs';
+import {segmentCrowns} from './crown-segments.mjs';
 import {signalControls} from './signal-controls.mjs';
 import {applyMunicipalCrowns} from './municipal-crowns.mjs';
 import {anchorCrowns,cityInventory} from './civic-trees.mjs';
@@ -74,6 +75,23 @@ async function photograph(mx,my){
   const photo=await data(id,url);
   if(photo[0]!==255||photo[1]!==216){fs.rmSync(path.join(cache,id),{force:true});throw Error('Invalid aerial image')}
   return {aerial:id,requests};
+ }catch{fs.writeFileSync(miss,'');return {requests}}
+}
+// One zoom-16 tile at 1024 px (about 0.45-0.6 m a pixel) for the scan eye's photo-true ground
+// albedo: the same USGS public-domain imagery as the zoom-14 photograph, four times the detail.
+// Lower 48 only (the eye's area): regional sources (Hawaii, Alaska) answer nothing.
+async function photograph16(x,y){
+ const source=aerialSource(x>>2,y>>2);
+ if(!source||source.regional)return {requests};
+ const size=40075016.68557849/65536,west=x*size-20037508.342789244,north=20037508.342789244-y*size;
+ const id='a16-'+x+'-'+y+'.jpg',bounds=[west,north-size,west+size,north].join(',');
+ const url='https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/export?bbox='+bounds+'&bboxSR=3857&imageSR=3857&size=1024,1024&format=jpg&f=image';
+ const miss=path.join(cache,id+'.miss');
+ if(Date.now()-(fs.statSync(miss,{throwIfNoEntry:false})?.mtimeMs??0)<3600000)return {requests};
+ try{
+  const photo=await data(id,url);
+  if(photo[0]!==255||photo[1]!==216){fs.rmSync(path.join(cache,id),{force:true});throw Error('Invalid aerial image')}
+  return {aerial16:id,requests};
  }catch{fs.writeFileSync(miss,'');return {requests}}
 }
 // Lane counts for the tile command: from the cache only, so the lane query is
@@ -177,7 +195,7 @@ try{
   try {result={...await summitSnow(+args[0],+args[1],args[2],cache,readCached),requests};}
   catch(error){result={x:+args[0],y:+args[1],date:args[2],status:'temporarily-unavailable',requests};}
  }
- else if(command==='snow'){result={...await regionalSnow(+args[0],+args[1],args[2],readCached),requests}}
+ else if(command==='snow'){result={...await regionalSnow(+args[0],+args[1],args[2],readCached,cache),requests}}
  else if(command==='landscape'){
   try{result={...await regionalTerrain(+args[0],+args[1],cache,readCached),requests};}
   catch(error){result={status:'unavailable',region:[+args[0],+args[1]],reason:error.message,requests};}
@@ -231,11 +249,18 @@ try{
    args.includes('--signal-controls')?signalControls(x,y,cache,readCached):null,
   ]);
   const side=611.496/Math.cosh(Math.PI*(1-2*(y+.5)/65536));
-  const merged=anchorCrowns(base.crowns,survey.stems,side,base.grid);
+  // --segment: crowns by classic segmentation of the canopy grid (crown-segments.mjs) instead of
+  // the coarse peak finder; their shapes in "shapes", one per row, in the order of the first rows
+  // of "trees" (anchorCrowns and the municipal crowns keep that order and only append).
+  const segmented=args.includes('--segment')&&base.grid?segmentCrowns(base.grid,side):null;
+  const crowns=segmented?segmented.map(c=>[c.u,c.v,c.h,c.w]):base.crowns;
+  const merged=anchorCrowns(crowns,survey.stems,side,base.grid);
   const geometry=await applyMunicipalCrowns(x,y,merged.trees,survey.stems,cache,()=>requests++);
-  result={...merged,...geometry,inventorySource:survey.source,...(controls?{signalControls:controls}:{}),requests};
+  const shapes=segmented?{shapes:segmented.map(c=>[...c.radii,c.base])}:{};
+  result={...merged,...geometry,...shapes,inventorySource:survey.source,...(controls?{signalControls:controls}:{}),requests};
  }
  else if(command==='aerial'){result=await photograph(+args[0],+args[1])}
+ else if(command==='aerial16'){result=await photograph16(+args[0],+args[1])}
  else if(command==='search'){
   let q=args[0].trim().slice(0,200);let j=JSON.parse((await data('s-'+Bun.hash(q).toString(16),'https://photon.komoot.io/api/?limit=6&lang=en&q='+encodeURIComponent(q),7*day)).toString());
   const norm=s=>String(s??'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').trim().replace(/\s+/g,' ');

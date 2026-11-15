@@ -220,6 +220,9 @@ struct FSimCruiseCarDefinition
 	 * car from it, as a magazine's launch-control run does.
 	 */
 	double LaunchControlRpm = 0.0;
+	/** "aspiration": "turbo" (else natural). A naturally aspirated engine's torque follows the air's
+	 *  density (thin air at altitude, hot air); a turbo's wastegate holds its boost, so it does not. */
+	bool bTurbocharged = false;
 	double ManualClutchCouplingNmPerRadPerSecond = 10.0;
 	FString TransmissionKind = TEXT("manual");
 	FString DrivetrainLayout = TEXT("rwd");

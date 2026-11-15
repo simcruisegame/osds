@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Vehicle/SimCruiseVehicleSim.h"
+#include "Vehicle/SimCruiseSurfaceKind.h"
 
 #include "Vehicle/SimCruiseVehicleDynamics.h"
 #include "Vehicle/SimCruiseUnits.h"
@@ -503,6 +504,8 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 							Hit.PointM += Up * (Height - (Hit.PointM - Source).Dot(Up) - Hit.RoadProfileM);
 							Hit.NormalM = Probe.NormalM;
 						}
+						// A step of more than 3 cm under a shoulder: the tyre is on a kerb.
+						if (Height > CentreHeight + 0.03 && CentreHeight > -1.0e8) Hit.bKerb = true;
 					}
 				}
 			}
@@ -569,6 +572,9 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			Wheel.ContactPointM = Hit.PointM;
 			Wheel.ContactNormal = Hit.NormalM;
 			Wheel.SurfaceGrip = Hit.SurfaceGrip;
+			Wheel.SurfaceKind = Hit.SurfaceKind;
+			// The kerb's own slope (gutter edge, face, batter) also counts, past about 18 deg.
+			Wheel.bKerb = Hit.bKerb || (Hit.SurfaceKind == static_cast<uint8>(ESimCruiseSurfaceKind::Concrete) && Hit.NormalM.Dot(Up) < 0.95);
 			Wheel.ForwardSpeedMps = Row.ForwardSpeed;
 			Wheel.LateralSpeedMps = Row.LateralSpeed;
 			++State.WheelContactCount;
@@ -614,17 +620,41 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 	double ForwardRatio = (State.bInReverse ? Car.ReverseGearRatio : Car.ForwardGearRatios[State.Gear]) * Car.FinalDriveRatio;
 	const double SignDirection = State.bInReverse ? -1.0 : 1.0;
 	State.ShiftTimeS = FMath::Max(0.0, State.ShiftTimeS - Dt);
+	State.SinceShiftS += Dt;
 	if (!State.bManual && State.ShiftTimeS <= 0.0 && !State.bInReverse)
 	{
 		// The shift map follows the pedal (Throttle is the driver's pedal here,
-		// before traction control trims it).
-		const int32 Next = SimCruiseDynamics::SelectAutomaticGear(Car, State.Gear, State.EngineRpm,
+		// before traction control trims it). It reads the road speed, as a gearbox's
+		// controller reads its output shaft, not the engine's speed: through a shift and
+		// with the clutch slipping the engine runs apart from the road (it dropped to idle
+		// and called down shift after shift: 19 mph in first at 851 rpm on the Dragon).
+		// The output shaft: the driven wheels' speed through the gear (a few percent of tyre slip
+		// over the road at full load, as a real controller sees it). The upshift guard below still
+		// reads the car's own speed, so a spinning launch does not change up.
+		const double RoadRpm = FMath::Abs(DrivenOmega()) * ForwardRatio * 60.0 / Tau;
+		const int32 Next = SimCruiseDynamics::SelectAutomaticGear(Car, State.Gear, RoadRpm,
 			FMath::Abs(Speed) * ForwardRatio / R, Throttle, State.bServiceBrake || BrakeAmount > 0.01,
 			Speed * Omega.Z / SimCruiseDynamics::GravityMps2);
-		if (Next != State.Gear)
+		int32 NextGear = Next;
+		// At the limiter, change up: a driven tyre's slip at speed (a few percent) keeps the road's
+		// speed under the upshift point while the engine sits on its fuel cut (the C8 held 5th at
+		// 6619 rpm and 153 mph, its road speed reading 6350).
+		if (NextGear == State.Gear && State.Gear < Car.ForwardGearRatios.Num() - 1 && !(State.bServiceBrake || BrakeAmount > 0.01) &&
+			State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98 && FMath::Abs(Speed) * ForwardRatio / R * 60.0 / Tau > Car.AutomaticUpshiftSpeedRpm * 0.85)
 		{
-			State.Gear = Next;
+			NextGear = State.Gear + 1;
+		}
+		const int32 Direction = NextGear > State.Gear ? 1 : NextGear < State.Gear ? -1 : 0;
+		// No change back the other way within 2 s of the last one (the Dragon's D5-D4-D2-D4 and
+		// 1-2-1-2 hunting as the pedal moved), unless the engine is at its limiter.
+		const bool bReversal = Direction != 0 && Direction == -State.LastShiftDirection && State.SinceShiftS < 2.0;
+		const bool bAtLimit = Direction > 0 && State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98;
+		if (Direction != 0 && (!bReversal || bAtLimit))
+		{
+			State.Gear = NextGear;
 			State.ShiftTimeS = Car.GearShiftDurationS;
+			State.LastShiftDirection = Direction;
+			State.SinceShiftS = 0.0;
 			ForwardRatio = Car.ForwardGearRatios[State.Gear] * Car.FinalDriveRatio;
 		}
 	}
@@ -709,10 +739,22 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			for (int32 WheelIndex = 0; WheelIndex < 4; ++WheelIndex)
 			{
 				const FSimCruiseWheelState& Wheel = State.Wheels[WheelIndex];
-				if (Car.IsDrivenWheel(WheelIndex) && Wheel.LoadN > 0.0)
+				if (!Car.IsDrivenWheel(WheelIndex)) continue;
+				if (Wheel.LoadN > 0.0)
 				{
 					Ratio = FMath::Max(Ratio, Wheel.TractionControlSlip * SignDirection /
 						FMath::Max(FMath::Max(Car.TractionControlTargetSlipRatio, Wheel.PeakSlip), 0.01));
+				}
+				else
+				{
+					// A driven wheel off the ground (the Corvette beached on a wall end at Doraville,
+					// rear wheels free: 6600 rpm in first at 0 mph, full pedal). The real system reads
+					// wheel-speed sensors, not tyre force: a wheel turning faster than the car moves
+					// is slip, with or without load (3 m/s floor, as a sensor's reference speed).
+					const double Surface = Wheel.AngularSpeedRadPerSecond * TireRadiusM * SignDirection;
+					const double Ground = Wheel.ForwardSpeedMps * SignDirection;
+					const double FreeSlip = (Surface - Ground) / FMath::Max(FMath::Abs(Ground), 3.0);
+					Ratio = FMath::Max(Ratio, FreeSlip / FMath::Max(Car.TractionControlTargetSlipRatio, 0.01));
 				}
 			}
 			State.TcSlipFiltered += (Ratio - State.TcSlipFiltered) * (1.0 - FMath::Exp(-Ds / TcFilterS));
@@ -752,7 +794,12 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			// The pedal opens the throttle plate; the cylinders fill by how much air that opening
 			// passes against what the engine draws at this speed (SimCruiseDynamics::EngineLoad).
 			const double Load = SimCruiseDynamics::EngineLoad(Car, Throttle, Rpm);
-			double Torque = Rpm < Car.FuelCutSpeedRpm ? (SimCruiseDynamics::SampleEngineTorqueNm(Car, Rpm) + Friction) * Load : 0.0;
+			// The cylinders burn the air they take in: a naturally aspirated engine's indicated torque
+			// (the published brake torque plus its friction) follows the air's density, against the
+			// 1.225 kg/m3 the cars are calibrated in. Denver's 1600 m takes about 15 % (the rule of
+			// thumb, about 3 % per 1000 ft); a turbo holds its boost.
+			const double AirCharge = Car.bTurbocharged ? 1.0 : FMath::Clamp(AirDensityKgPerM3 / 1.225, 0.5, 1.2);
+			double Torque = Rpm < Car.FuelCutSpeedRpm ? (SimCruiseDynamics::SampleEngineTorqueNm(Car, Rpm) + Friction) * AirCharge * Load : 0.0;
 			double Drag = Friction * (Rpm > Car.IdleSpeedRpm ? 1.0 : 0.5);
 			// A closed throttle also pumps against manifold vacuum; at full throttle that loss is
 			// already in the published curve.
@@ -803,7 +850,11 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 				const double EngineAhead = Engaged * (Torque + Governor - Drag) * Ds / Car.EngineRotationalInertiaKgM2;
 				ClutchLoad = State.SelectedGear == 0 ? 0.0 : FMath::Clamp((Gap + EngineAhead) * ManualCoupling, -Capacity, Capacity);
 			}
-			else if (AxleSpeed * ForwardRatio * 60.0 / Tau < LaunchTargetRpm && ClutchLoad > 0.0)
+			// Pulling away the clutch slips to hold the launch speed: in first (and reverse) only,
+			// unless a torque converter does it (it slips in any gear). It held every gear: in 3rd at
+			// 36 mph the Mustang's clutch slipped its engine to 4672 rpm against the road's 1900.
+			else if ((State.Gear == 0 || State.bInReverse || Car.TransmissionKind == TEXT("automatic")) &&
+				AxleSpeed * ForwardRatio * 60.0 / Tau < LaunchTargetRpm && ClutchLoad > 0.0)
 			{
 				ClutchLoad = FMath::Min(ClutchLoad, FMath::Max(0.0, Torque - Drag + (Rpm - LaunchTargetRpm) * 0.16));
 			}

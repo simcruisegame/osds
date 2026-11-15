@@ -23,13 +23,13 @@ class SWidgetSwitcher;
 enum class ESimCruiseMenuRow : uint8
 {
 	// Drive
-	Continue, WhereTo, PlanRoute, FamousRoads, Traffic, Atlas,
+	Continue, WhereTo, PlanRoute, FamousRoads, Traffic, Atlas, Quit,
 	// Your car
 	Car, Transmission, Tune, Lights,
 	// Seat & view
 	Lens, HeadMotion, ScreenSize, EyeDistance, Seat,
 	// Settings
-	Sound, HudLevel, SpeedUnits, Rumble, StickSpeed, StickResponse, StickDeadZone, Trigger,
+	Sound, HudLevel, HudMap, SpeedUnits, Rumble, StickSpeed, StickResponse, StickDeadZone, Trigger,
 	// Not a row: X on the Drive page while a route is on.
 	EndRoute,
 	Count,
@@ -118,6 +118,8 @@ public:
 	const FSimCruiseMenuState& GetStateNow() const { return State; }
 	/** Is the pad on the tab row (and on which tab)? */
 	bool IsOnTabs() const { return bTabs; }
+	/** The pad hints at the bottom now (they follow the row or tab the pad is on). */
+	TArray<SimCruiseTheme::FHint> GetPadHints() const;
 	/** Do the button hints show the pad's buttons (else the keyboard's keys)? */
 	bool ShowsPadHints() const { return SimCruiseTheme::IsPadInUse(); }
 	/** Has the tab bar the pad's focus (SimCruise.UI.PadNavigation asks this)? */
@@ -189,6 +191,8 @@ public:
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 	void Navigate(SimCruiseTheme::ENav Nav);
 	int32 GetSelected() const { return Selected; }
+	/** The pad hints at the bottom. */
+	static TArray<SimCruiseTheme::FHint> GetPadHints();
 	int32 NumItems() const { return Items.Num(); }
 	TSharedPtr<SWidget> GetRowWidget(int32 Index) const { return RowWidgets.IsValidIndex(Index) ? RowWidgets[Index] : nullptr; }
 

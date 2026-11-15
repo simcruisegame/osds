@@ -68,9 +68,8 @@ void SSimCruiseSeatMenu::Construct(const FArguments& InArgs)
 					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 18))
 					.ColorAndOpacity(Paper())
 					.AutoWrapText(true)
-					.Text(SimCruiseTheme::PadOrKeys(
-						TEXT("D-pad Up/Down choose   Left/Right change (the view moves as you go)\nX reset this row   Y reset all   A save for this car   B or Menu cancel"),
-						TEXT("Up/Down choose   Left/Right change (the view moves as you go)\nBackspace reset this row   Delete reset all   Enter save for this car   Esc cancel")))
+					// From the hint list (GetPadHints), so the help says what the keys do (SimCruise.UI.PadHintsMatch).
+					.Text_Lambda([]() { SimCruiseTheme::EnsurePadWatcher(); return FText::FromString(SimCruiseTheme::HintLine(GetPadHints(), SimCruiseTheme::IsPadInUse())); })
 				]
 			]
 		]
@@ -138,7 +137,8 @@ void SSimCruiseSeatMenu::Close(bool bSave)
 	if (bSave)
 	{
 		Working.Clamp();
-		Working.Save(CarId);
+		// Saved per car; with no car (a test) nothing is written.
+		if (!CarId.IsEmpty()) Working.Save(CarId);
 	}
 	else
 	{
@@ -176,17 +176,27 @@ FReply SSimCruiseSeatMenu::OnKeyDown(const FGeometry& MyGeometry, const FKeyEven
 
 FReply SSimCruiseSeatMenu::OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& InAnalogInputEvent)
 {
-	const double Now = FPlatformTime::Seconds();
-	const float Value = InAnalogInputEvent.GetAnalogValue();
-	if (FMath::Abs(Value) < 0.6f || Now < StickHeldUntil)
-	{
-		return FReply::Unhandled();
-	}
-	StickHeldUntil = Now + 0.18;
+	// The left stick is the D-pad here (the menus' rule, SimCruiseTheme::StickNav): one push one
+	// step, held it repeats; all of the stick is the menu's.
+	using namespace SimCruiseTheme;
 	const FKey Key = InAnalogInputEvent.GetKey();
-	if (Key == EKeys::Gamepad_LeftY) { Selected = (Selected + (Value > 0.f ? 3 : 1)) % 4; return FReply::Handled(); }
-	if (Key == EKeys::Gamepad_LeftX) { Nudge(Value > 0.f ? 1 : -1); return FReply::Handled(); }
-	return FReply::Unhandled();
+	if (!IsLeftStick(Key)) return FReply::Unhandled();
+	switch (StickNav(Key, InAnalogInputEvent.GetAnalogValue(), Stick, FPlatformTime::Seconds()))
+	{
+	case ENav::Up: Selected = (Selected + 3) % 4; break;
+	case ENav::Down: Selected = (Selected + 1) % 4; break;
+	case ENav::Left: Nudge(-1); break;
+	case ENav::Right: Nudge(1); break;
+	default: break;
+	}
+	return FReply::Handled();
+}
+
+TArray<SimCruiseTheme::FHint> SSimCruiseSeatMenu::GetPadHints()
+{
+	return { { TEXT("D-pad Up Down"), TEXT("Choose"), TEXT("Up Down") }, { TEXT("D-pad Left Right"), TEXT("Change (the view moves as you go)"), TEXT("Left Right") },
+		{ TEXT("X"), TEXT("Reset this row"), TEXT("Backspace") }, { TEXT("Y"), TEXT("Reset all"), TEXT("Delete") },
+		{ TEXT("A"), TEXT("Save for this car"), TEXT("Enter") }, { TEXT("B / Menu"), TEXT("Cancel"), TEXT("Esc") } };
 }
 
 #undef LOCTEXT_NAMESPACE
