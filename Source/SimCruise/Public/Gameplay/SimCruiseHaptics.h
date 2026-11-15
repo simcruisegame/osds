@@ -126,13 +126,16 @@ namespace SimCruiseHaptics
 	uint8 SurfaceOf(const TWheel& Wheel)
 	{
 		if (!Wheel.bContact) return Air;
-		if constexpr (requires { Wheel.SurfaceKind; }) return static_cast<uint8>(Wheel.SurfaceKind);
-		else return Wheel.SurfaceGrip >= 0.92 ? Asphalt : Gravel;
+		// The wheel's own surface when it reports one; a wheel on the ground whose surface is not
+		// known (Unknown, 0) is judged by its grip, never taken for one in the air.
+		if constexpr (requires { Wheel.SurfaceKind; }) { if (static_cast<uint8>(Wheel.SurfaceKind) != Air) return static_cast<uint8>(Wheel.SurfaceKind); }
+		return Wheel.SurfaceGrip >= 0.92 ? Asphalt : Gravel;
 	}
 	template <typename TWheel>
 	bool KerbOf(const TWheel& Wheel, bool bFallback)
 	{
-		if constexpr (requires { Wheel.bKerb; }) return Wheel.bKerb;
+		// The wheel's kerb flag, and the rough-road jump as before (a kerb the flag misses is still felt).
+		if constexpr (requires { Wheel.bKerb; }) return Wheel.bKerb || bFallback;
 		else return bFallback;
 	}
 }
