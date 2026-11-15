@@ -36,6 +36,10 @@ $Root = Split-Path -Parent $PSScriptRoot
 if (-not $OutRoot) { $OutRoot = (Get-ReviewRoot $Root) + '-bridges' }
 New-Item -ItemType Directory -Force $OutRoot | Out-Null
 $Cases = @(
+    # Doraville, Northcrest Road over I-285 (spans 17430_26202/r12 and r13): the owner's "bridge was warped" (2026-11-14);
+    # approaches about 250 m south and north of the deck, on Northcrest Road.
+    @{ Name = 'doraville-northcrest-south'; Start = '33.8944,-84.2503'; Road = 'Northcrest Road'; Car = 'meridian_z'; Utc = '2026-11-12T17:37:01Z' },
+    @{ Name = 'doraville-northcrest-north'; Start = '33.8998,-84.2511'; Road = 'Northcrest Road'; Car = 'meridian_z'; Utc = '2026-11-12T17:37:01Z' },
     @{ Name = 'bixby-north'; Start = '36.3745,-121.9035'; Road = 'Cabrillo Highway'; Car = 'meridian_z'; Utc = '2026-11-12T20:08:00Z' },
     @{ Name = 'bixby-south'; Start = '36.3690,-121.9012'; Road = 'Cabrillo Highway'; Car = 'meridian_z'; Utc = '2026-11-12T20:08:00Z' },
     @{ Name = 'detroit-woodward-north'; Start = '42.3445,-83.0560'; Road = 'Woodward Avenue'; Car = 'nb2001_aaron'; Utc = '2026-11-12T17:32:14Z' },
