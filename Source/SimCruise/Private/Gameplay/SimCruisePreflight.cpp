@@ -326,6 +326,15 @@ void ASimCruisePreflight::BeginPlay()
 	// -SimCruisePreflightKeen: a keen driver on an empty road (the owner's acceptance drive): no
 	// speed limit, corners at 75 % of the car's own skidpad grip, brakes at 70 % of it, up to 45 m/s,
 	// looking 200 m ahead, traffic off.
+	// First, the settings the review needs to see in the log (defaults can change between candidates).
+	{
+		FString Line;
+		for (const TCHAR* Name : { TEXT("simcruise.Eye.Photo16"), TEXT("simcruise.Traffic.Cars"), TEXT("sg.GlobalIlluminationQuality"), TEXT("r.ScreenPercentage"), TEXT("r.DynamicRes.OperationMode") })
+		{
+			if (IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(Name)) Line += FString::Printf(TEXT(" %s=%s"), Name, *Var->GetString());
+		}
+		UE_LOG(LogSimCruisePreflight, Display, TEXT("PREFLIGHT SETTINGS%s"), *Line);
+	}
 	bKeen = FParse::Param(Cmd, TEXT("SimCruisePreflightKeen"));
 	// Traffic is off in every pre-flight run (the owner's decision, 2026-11-14: detail and driving feel
 	// first); -SimCruisePreflightTraffic keeps it on (a keen run never has it). Set again when the drive
