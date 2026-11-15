@@ -1,7 +1,7 @@
 ; OSDS (Open Source Driving Simulator) Windows installer (Inno Setup 6).
 ; OSDS was named SimCruise until November 2026: the AppId, the program file
 ; (SimCruise.exe), the package folder and %LOCALAPPDATA%\SimCruise keep the old
-; name so that an update installs over 2.0.2 and older and keeps the player's settings.
+; name so that an update installs over 2.0.3 and older and keeps the player's settings.
 ;
 ; Build with scripts\installer.ps1, which packages nothing itself: it reads the
 ; Shipping package in Saved\Package\Windows (scripts\package.ps1 -Configuration
@@ -39,7 +39,7 @@ AppSupportURL=https://github.com/simcruisegame/simcruise/issues
 AppUpdatesURL=https://github.com/simcruisegame/simcruise/releases
 DefaultDirName={autopf}\OSDS
 DefaultGroupName=OSDS
-; An update from 2.0.2 or older moves the Start menu entry from the old SimCruise folder to OSDS.
+; An update from 2.0.3 or older moves the Start menu entry from the old SimCruise folder to OSDS.
 UsePreviousGroup=no
 DisableProgramGroupPage=yes
 LicenseFile={#SourceDir}\LICENSE.txt
@@ -73,7 +73,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; An install over 2.0.0 must not keep its neural-network weights (research-only training data);
 ; since 2.0.1 the game ships none, so any .onnx left in the folder is old.
 Type: files; Name: "{app}\SimCruise\data\ai\*.onnx"
-; The shortcuts up to 2.0.2 had the old name, SimCruise.
+; The shortcuts up to 2.0.3 had the old name, SimCruise.
 Type: filesandordirs; Name: "{autoprograms}\SimCruise"
 Type: files; Name: "{autodesktop}\SimCruise.lnk"
 

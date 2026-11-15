@@ -8,7 +8,7 @@ OSDS 2.0 and later is the Unreal Engine 5.8 client, for Windows. Downloads are o
 | `OSDS-<version>-windows-x64.zip` | Portable folder: unzip and run `SimCruise.exe` |
 | `OSDS-<version>-SHA256SUMS.txt` | SHA-256 checksums of the two files above |
 
-OSDS was named SimCruise until November 2026. Releases up to 2.0.2 use the old name: their files start with `SimCruise-` and the Start menu entry is **SimCruise**. In all versions the program file is `SimCruise.exe`.
+OSDS was named SimCruise until November 2026. Releases up to 2.0.3 use the old name: their files start with `SimCruise-` and the Start menu entry is **SimCruise**. In all versions the program file is `SimCruise.exe`.
 
 There is no macOS build of the Unreal client yet (it needs a Mac to build on). The Godot 1.x releases for macOS and Windows stay on the Releases page; their source is at the git tag `godot-final`.
 
