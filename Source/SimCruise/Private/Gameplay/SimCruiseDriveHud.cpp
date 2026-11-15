@@ -19,6 +19,7 @@
 #include "Gameplay/SimCruiseHUD.h"
 #include "Gameplay/SimCruisePlayerCameraManager.h"
 #include "Gameplay/SimCruisePlayerController.h"
+#include "Gameplay/SimCruisePreferences.h"
 #include "Gameplay/SimCruiseRouteSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Knowledge/SimCruisePlaceGraphSubsystem.h"
@@ -33,6 +34,14 @@ using namespace SimCruiseTheme;
 static TAutoConsoleVariable<int32> CVarHudLook(
 	TEXT("simcruise.Hud.Look"), 1,
 	TEXT("1: the guide-sign HUD with the GPS (2.0.2). 0: the earlier HUD."));
+
+static TAutoConsoleVariable<int32> CVarHudMapAlways(
+	TEXT("simcruise.Hud.MapAlways"), 0,
+	TEXT("1: the round map is always on the HUD. 0: only while the GPS has a route (Settings > Map)."));
+
+static TAutoConsoleVariable<int32> CVarHudTestSpeed(
+	TEXT("simcruise.Hud.TestSpeed"), -1,
+	TEXT("Captures only: the HUD shows this speed instead of the car's (-1: the car's)."));
 
 namespace
 {
@@ -78,6 +87,23 @@ namespace
 bool FSimCruiseDriveHud::IsEnabled()
 {
 	return CVarHudLook.GetValueOnGameThread() != 0;
+}
+
+bool FSimCruiseDriveHud::IsMapAlways()
+{
+	return CVarHudMapAlways.GetValueOnGameThread() != 0;
+}
+
+void FSimCruiseDriveHud::SetMapAlways(bool bAlways, bool bRemember)
+{
+	CVarHudMapAlways->Set(bAlways ? 1 : 0, ECVF_SetByCode);
+	if (bRemember) SimCruisePreferences::SetBool(TEXT("hud_map_always"), bAlways);
+}
+
+bool FSimCruiseDriveHud::IsCockpitView(const ASimCruiseHUD& Hud)
+{
+	const ASimCruisePlayerCameraManager* Camera = Hud.PlayerOwner ? Cast<ASimCruisePlayerCameraManager>(Hud.PlayerOwner->PlayerCameraManager) : nullptr;
+	return Camera && Camera->GetShownView() == ESimCruiseView::Driver;
 }
 
 FDateTime FSimCruiseDriveHud::LocalTime(const UWorld* World, double Lon)
@@ -202,30 +228,37 @@ namespace SimCruiseHudFonts
 
 namespace
 {
-	/** The canvas scale for a text of Px pixels at 1080p already multiplied by the HUD scale (24 pt base, 0.75 pt a pixel). */
-	float FontScale(float ScaledPx) { return ScaledPx * 0.75f / 24.f; }
+	/**
+	 * The font at the size it is drawn (0.75 pt a pixel, the screen's pixels at the HUD scale),
+	 * whole points. The canvas rasterises a runtime font at its font info's size; the item's
+	 * Scale only stretches that bitmap, which is what blurred the 132 px speed (a 24 pt glyph
+	 * stretched about four times).
+	 */
+	FSlateFontInfo HudFontInfo(EWeight Weight, float ScaledPx)
+	{
+		return FSlateFontInfo(SimCruiseHudFonts::Get(Weight), FMath::Max(1.f, FMath::RoundToFloat(ScaledPx * 0.75f)));
+	}
 }
 
 FVector2D FSimCruiseDriveHud::Measure(const FString& Text, EWeight Weight, float Px) const
 {
-	if (Text.IsEmpty() || !Canvas) return FVector2D::ZeroVector;
-	float W = 0.f, H = 0.f;
-	const float K = FontScale(P(Px));
-	Canvas->TextSize(SimCruiseHudFonts::Get(Weight), Text, W, H, K, K);
-	return FVector2D(W, H);
+	if (Text.IsEmpty() || !Canvas || !FSlateApplication::IsInitialized()) return FVector2D::ZeroVector;
+	const TSharedRef<FSlateFontMeasure> FontMeasure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
+	return FontMeasure->Measure(Text, HudFontInfo(Weight, P(Px)), 1.f);
 }
 
 float FSimCruiseDriveHud::TextAt(const FString& Text, EWeight Weight, float Px, float X, float Y, const FLinearColor& Color, int32 Align, bool bTabular, bool bShadow)
 {
 	if (Text.IsEmpty() || !Canvas) return 0.f;
 	SimCruiseHudTextLog::Note(Text);
-	UFont* HudFont = SimCruiseHudFonts::Get(Weight);
-	const float K = FontScale(P(Px));
+	const FSlateFontInfo FontInfo = HudFontInfo(Weight, P(Px));
+	// A hard shadow: whole pixels (at least 2) straight down, nearly opaque.
+	const float ShadowPx = FMath::Max(2.f, FMath::RoundToFloat(P(2.f)));
 	auto Item = [&](const FString& Part, float AtX)
 	{
-		FCanvasTextItem T(FVector2D(AtX, Y), FText::FromString(Part), HudFont, Color);
-		T.Scale = FVector2D(K, K);
-		if (bShadow) T.EnableShadow(FLinearColor(0.f, 0.f, 0.f, 0.5f * Color.A), FVector2D(0.f, P(2.f)));
+		// On whole pixels: a glyph between pixels is filtered soft.
+		FCanvasTextItem T(FVector2D(FMath::RoundToFloat(AtX), FMath::RoundToFloat(Y)), FText::FromString(Part), FontInfo, Color);
+		if (bShadow) T.EnableShadow(FLinearColor(0.f, 0.f, 0.f, 0.85f * Color.A), FVector2D(0.f, ShadowPx));
 		Canvas->DrawItem(T);
 	};
 	if (!bTabular)
@@ -259,6 +292,7 @@ void FSimCruiseDriveHud::Draw(ASimCruiseHUD& Hud, float DeltaTimeS)
 	if (!Canvas) return;
 	Scale = Canvas->ClipY / 1080.f;
 	Clock += DeltaTimeS;
+	TopCornerReserveX = 0.f;
 	UWorld* World = Hud.GetWorld();
 	const USimCruiseRouteSubsystem* Gps = USimCruiseRouteSubsystem::Get(World);
 	const bool bRoute = Gps && Gps->HasRoute();
@@ -317,12 +351,15 @@ void FSimCruiseDriveHud::DrawSpeed(ASimCruiseHUD& Hud, float Alpha)
 	const float CardY = Bottom - CardH;
 	RoundRect(X - P(24.f), CardY, CardW, CardH, P(16.f), A(Glass(0.55f), Alpha));
 
-	// The number: 132 px Overpass Black, three digit cells, right-aligned.
+	// The number: 132 px Overpass Black (900), three tabular digit cells, right-aligned. The
+	// speed and the gear never fade: in Glance only the card and the small print do.
 	const float NumberRight = X + Measure(TEXT("000"), EWeight::Black, 132.f).X;
 	const float NumberY = CardY - P(6.f);
-	TextAt(FString::FromInt(Hud.Readout.Speed), EWeight::Black, 132.f, NumberRight, NumberY, A(White(), Alpha), 2, true);
+	const int32 TestSpeed = CVarHudTestSpeed.GetValueOnGameThread();
+	const int32 Speed = TestSpeed >= 0 ? TestSpeed : Hud.Readout.Speed;
+	TextAt(FString::FromInt(Speed), EWeight::Black, 132.f, NumberRight, NumberY, White(), 2, true);
 	const float SideX = NumberRight + P(18.f);
-	TextAt(SimCruiseHudRules::GearText(Hud.Gear, Hud.bManual), EWeight::ExtraBold, 56.f, SideX, CardY + P(26.f), A(Amber(), Alpha));
+	TextAt(SimCruiseHudRules::GearText(Hud.Gear, Hud.bManual), EWeight::ExtraBold, 56.f, SideX, CardY + P(26.f), Amber());
 	TextAt(SimCruiseSpeedUnits::Label(Hud.Readout.Units), EWeight::Bold, 26.f, SideX + P(2.f), CardY + P(94.f), A(Mist(), Alpha));
 	if (Hud.bAbs)
 	{
@@ -373,7 +410,8 @@ void FSimCruiseDriveHud::DrawTurnSign(const USimCruiseRouteSubsystem& Gps)
 	const float TextW = FMath::Max(Measure(Instruction, EWeight::Bold, 32.f).X, Measure(Number + TEXT(" ") + Unit, EWeight::ExtraBold, 56.f).X) + P(56.f);
 	const FString ThenStreet = Then ? (Then->Street.IsEmpty() ? SimCruiseRouteText::TurnVerb(Then->Turn) : Then->Street) : FString();
 	const float ThenW = Then ? P(64.f) + P(44.f) + Measure(ThenStreet, EWeight::Bold, 26.f).X + P(40.f) : 0.f;
-	const float W = FMath::Min(ArrowW + TextW + ThenW, Canvas->ClipX - P(80.f));
+	// Centred, and clear of the map when it is in a top corner (the driver's seat).
+	const float W = FMath::Min(ArrowW + TextW + ThenW, Canvas->ClipX - FMath::Max(P(80.f), 2.f * TopCornerReserveX));
 	const float X = (Canvas->ClipX - W) * 0.5f, Y = P(28.f);
 
 	RoundRect(X, Y, W, H, P(14.f), A(Guide(), Alpha));
@@ -598,8 +636,33 @@ void FSimCruiseDriveHud::DrawRoundMap(ASimCruiseHUD& Hud, const USimCruiseRouteS
 	const APawn* Car = Hud.GetOwningPawn();
 	if (!Stream || !Car || !Stream->GetFrame().IsValid()) return;
 	const bool bRoute = Gps && Gps->HasRoute();
-	const float R = P(165.f);
-	const FVector2D Centre(Canvas->ClipX - P(64.f) - R, Canvas->ClipY - P(bRoute ? 128.f : 56.f) - R);
+	// Settings > Map: with a route only (the default), or always.
+	const bool bDrawMap = bRoute || IsMapAlways();
+	// From the driver's seat the bottom of the screen is the dash (gauges, clock, the centre
+	// screen) and the rear-view mirror hangs at the top, centre to right (the Corvette's at the
+	// top-right edge). The map goes to the top-left corner at 75 %, over the A-pillar and the
+	// sky, inside the 5 % title-safe margin; the route lines go under it and the co-driver's card
+	// to its right, below the turn sign. Checked in the Miata, Mustang and Corvette
+	// (scripts/hud-shots.ps1). The other views keep the map at the bottom right.
+	const bool bCockpit = IsCockpitView(Hud);
+	const float R = P(165.f) * (bCockpit ? 0.75f : 1.f);
+	const float SafeX = FMath::RoundToFloat(Canvas->ClipX * 0.05f), SafeY = FMath::RoundToFloat(Canvas->ClipY * 0.05f);
+	const FVector2D Centre = bCockpit
+		? FVector2D(FMath::RoundToFloat(SafeX + R), FMath::RoundToFloat(SafeY + R))
+		: FVector2D(Canvas->ClipX - P(64.f) - R, Canvas->ClipY - P(bRoute ? 128.f : 56.f) - R);
+	TopCornerReserveX = bCockpit && bDrawMap ? SafeX + 2.f * R + P(24.f) : 0.f;
+	// The turn sign's bottom (DrawTurnSign: 28 + 132 px) and a gap.
+	const float BelowSign = P(176.f);
+	if (!bDrawMap)
+	{
+		// No map: the co-driver's card takes its corner.
+		if (!Hud.bOnTestPad)
+		{
+			if (bCockpit) DrawPlaceCard(Hud, SafeX, SafeY, true, true);
+			else DrawPlaceCard(Hud, Canvas->ClipX - P(64.f), Canvas->ClipY - P(56.f), false, false);
+		}
+		return;
+	}
 	Disc(Centre, R + P(4.f), A(FLinearColor(1.f, 1.f, 1.f, 0.55f), Alpha), 64);
 	Disc(Centre, R, A(Glass(0.86f), Alpha), 64);
 
@@ -698,30 +761,39 @@ void FSimCruiseDriveHud::DrawRoundMap(ASimCruiseHUD& Hud, const USimCruiseRouteS
 		const FSimCruiseRoute& Route = Gps->GetRoute();
 		const FSimCruiseRouteStop* Stop = Route.GetNextStop();
 		const FSimCruiseRouteProgress& Progress = Route.GetProgress();
-		const float TX = Centre.X + R, TY = Centre.Y + R + P(12.f);
-		TextAt(SimCruiseRouteText::Distance(Progress.LegRemainingM), EWeight::ExtraBold, 40.f, TX, TY, White(), 2, true);
+		// Under the map: right-aligned to it at the bottom right, left-aligned in the driver's seat.
+		const int32 Align = bCockpit ? 0 : 2;
+		const float TX = bCockpit ? Centre.X - R : Centre.X + R, TY = Centre.Y + R + P(12.f);
+		TextAt(SimCruiseRouteText::Distance(Progress.LegRemainingM), EWeight::ExtraBold, bCockpit ? 34.f : 40.f, TX, TY, White(), Align, true);
 		double Lon = 0.0, Lat = 0.0;
 		Gps->GetFrame().WorldCmToLonLat(CarCm, Lon, Lat);
 		const FDateTime Arrive = LocalTime(Hud.GetWorld(), Lon) + FTimespan::FromSeconds(Progress.LegRemainingS);
-		TextAt(FString::Printf(TEXT("to %s, %s"), Stop ? *Stop->Title : TEXT("the stop"), *SimCruiseRouteText::Clock(Arrive)), EWeight::SemiBold, 22.f, TX, TY + P(52.f), Mist(), 2);
+		TextAt(FString::Printf(TEXT("to %s, %s"), Stop ? *Stop->Title : TEXT("the stop"), *SimCruiseRouteText::Clock(Arrive)), EWeight::SemiBold, 22.f, TX, TY + P(bCockpit ? 44.f : 52.f), Mist(), Align);
 	}
-	if (!Hud.bOnTestPad) DrawPlaceCard(Hud, Centre.Y - R - P(22.f));
+	if (Hud.bOnTestPad) return;
+	// In the driver's seat the card is right of the map, below the turn sign; elsewhere it stands on top of the map.
+	if (bCockpit) DrawPlaceCard(Hud, Centre.X + R + P(20.f), FMath::Max(BelowSign, Centre.Y - R), true, true);
+	else DrawPlaceCard(Hud, Canvas->ClipX - P(64.f), Centre.Y - R - P(22.f), false, false);
 }
 
-void FSimCruiseDriveHud::DrawPlaceCard(ASimCruiseHUD& Hud, float Bottom)
+void FSimCruiseDriveHud::DrawPlaceCard(ASimCruiseHUD& Hud, float X, float Edge, bool bFromTop, bool bLeft)
 {
 	const USimCruisePlaceGraphSubsystem* Graph = USimCruisePlaceGraphSubsystem::Get(Hud.GetWorld());
 	FSimCruisePlaceCard Card;
 	if (!Graph || !Graph->GetPlaceCard(Card)) return;
-	const float Right = Canvas->ClipX - P(64.f);
 	const FVector2D T = Measure(Card.Title, EWeight::ExtraBold, 26.f), L = Measure(Card.Line, EWeight::SemiBold, 20.f), N = Measure(Card.Note, EWeight::Regular, 17.f);
 	const float W = FMath::Max3(T.X, L.X, N.X) + P(40.f);
 	const float H = T.Y + L.Y + N.Y + P(30.f);
-	RoundRect(Right - W, Bottom - H, W, H, P(12.f), A(Glass(), Card.Alpha));
+	const float Bottom = bFromTop ? Edge + H : Edge;
+	// X is the card's left edge when bLeft, else its right edge; the text follows that side.
+	const float Left = bLeft ? X : X - W;
+	const float TextX = bLeft ? Left + P(20.f) : Left + W - P(20.f);
+	const int32 Align = bLeft ? 0 : 2;
+	RoundRect(Left, Bottom - H, W, H, P(12.f), A(Glass(), Card.Alpha));
 	float Y = Bottom - H + P(12.f);
-	TextAt(Card.Title, EWeight::ExtraBold, 26.f, Right - P(20.f), Y, A(White(), Card.Alpha), 2);
+	TextAt(Card.Title, EWeight::ExtraBold, 26.f, TextX, Y, A(White(), Card.Alpha), Align);
 	Y += T.Y + P(2.f);
-	TextAt(Card.Line, EWeight::SemiBold, 20.f, Right - P(20.f), Y, A(Amber(), Card.Alpha), 2);
+	TextAt(Card.Line, EWeight::SemiBold, 20.f, TextX, Y, A(Amber(), Card.Alpha), Align);
 	Y += L.Y + P(2.f);
-	TextAt(Card.Note, EWeight::Regular, 17.f, Right - P(20.f), Y, A(Mist(), Card.Alpha), 2);
+	TextAt(Card.Note, EWeight::Regular, 17.f, TextX, Y, A(Mist(), Card.Alpha), Align);
 }
