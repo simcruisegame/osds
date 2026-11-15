@@ -814,6 +814,73 @@ FSimCruisePassingResult SimCruiseRunPassing(const FSimCruiseCarDefinition& Car, 
 	return Driver->Result;
 }
 
+namespace
+{
+	struct FShiftDriveDriver
+	{
+		double Dt = 1.0 / 360.0;
+		double T = 0.0;
+		int32 LastGear = -1, LastDirection = 0;
+		double LastShiftT = -100.0;
+		std::atomic<bool> bDone{ false };
+		FSimCruiseShiftDriveResult Result;
+
+		void Step(FSimCruiseVehicleDriverContext& C)
+		{
+			C.Controls = FSimCruiseVehicleControls();
+			if (bDone) return;
+			T += Dt;
+			C.Controls.bDirectRack = true;
+			C.Controls.RackAngleRad = 0.0;
+			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
+			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
+			// A road driver's feet: full pedal 6 s; a pedal moving 0.2-1.0 every 0.4 s for 8 s; a lift
+			// with the brakes down to 4 m/s; full pedal again 4 s.
+			if (T < 6.0) C.Controls.Throttle = 1.0;
+			else if (T < 14.0) C.Controls.Throttle = FMath::Fmod(T, 0.8) < 0.4 ? 0.2 : 1.0;
+			else if (T < 22.0 && Speed > 4.0) { C.Controls.Brake = 0.35; }
+			else if (T < 26.0) C.Controls.Throttle = 1.0;
+			else { bDone = true; return; }
+			const FSimCruiseVehicleSim& Sim = C.Sim;
+			const int32 Gear = Sim.State.Gear + 1;
+			if (LastGear >= 0 && Gear != LastGear)
+			{
+				const int32 Direction = Gear > LastGear ? 1 : -1;
+				++Result.Shifts;
+				if (Direction == -LastDirection && T - LastShiftT < 2.0) ++Result.QuickReversals;
+				LastDirection = Direction;
+				LastShiftT = T;
+			}
+			LastGear = Gear;
+			// In gear, clutch home (no shift running) and rolling: the engine turns with the road.
+			const FSimCruiseCarDefinition& Car = Sim.GetCar();
+			if (Sim.State.ShiftTimeS <= 0.0 && T - LastShiftT > 0.6 && Speed > 6.0 && Car.ForwardGearRatios.IsValidIndex(Sim.State.Gear))
+			{
+				const double RoadRpm = Speed / Sim.GetTireRadiusM() * Car.ForwardGearRatios[Sim.State.Gear] * Car.FinalDriveRatio * 60.0 / Tau;
+				Result.LowestRoadRpm = FMath::Min(Result.LowestRoadRpm, RoadRpm);
+				// Below the launch speed the clutch may slip by design (pulling away); judge above it.
+				if (RoadRpm < Car.LaunchSpeedRpm + Car.LaunchSpeedRpmPerThrottleFraction + 200.0) return;
+				Result.WorstRpmGap = FMath::Max(Result.WorstRpmGap, FMath::Abs(Sim.State.EngineRpm - RoadRpm) / FMath::Max(RoadRpm, 1.0));
+			}
+			Result.bCompleted = true;
+		}
+	};
+}
+
+FSimCruiseShiftDriveResult SimCruiseRunShiftDrive(const FSimCruiseCarDefinition& Car, double FixedStepS)
+{
+	TSharedRef<FShiftDriveDriver> Driver = MakeShared<FShiftDriveDriver>();
+	Driver->Dt = FixedStepS;
+	const FVector3d Ground(0.0, 0.0, 0.15);
+	FSimCruiseVehicleBenchWorld World(FixedStepS, 20000.0);
+	if (!World.IsValid() || World.SpawnVehicle(Car, Ground, [Driver](FSimCruiseVehicleDriverContext& C) { Driver->Step(C); }) == nullptr)
+	{
+		return Driver->Result;
+	}
+	World.RunUntil([&Driver]() { return Driver->bDone.load(); }, 40.0);
+	return Driver->Result;
+}
+
 FSimCruiseCarTrackResult SimCruiseRunCarTrack(const FSimCruiseCarDefinition& Car, double FixedStepS,
 	double MaxWheelSubstepS, bool bAccelerationOnly)
 {

@@ -141,6 +141,10 @@ struct FSimCruiseVehicleSimState
 	double TcSlipFiltered = 0.0;
 	bool bClutchSaturated = false;
 	double ShiftTimeS = 0.0;
+	/** The automatic's last change (+1 up, -1 down) and the time since it: no change back the
+	 *  other way within 2 s (no hunting). */
+	int32 LastShiftDirection = 0;
+	double SinceShiftS = 100.0;
 	/** Steering input fraction (-1..1, + right) and the rack angle it gives. */
 	double SteeringInput = 0.0;
 	double SteeringRad = 0.0;

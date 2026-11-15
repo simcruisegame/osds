@@ -123,6 +123,20 @@ struct FSimCruisePassingResult
 
 FSimCruisePassingResult SimCruiseRunPassing(const FSimCruiseCarDefinition& Car, double FixedStepS, double FromMps, double ToMps);
 
+/** The automatic on a road: full pedal, a moving pedal, braking down, full pedal again. */
+struct FSimCruiseShiftDriveResult
+{
+	bool bCompleted = false;
+	int32 Shifts = 0;
+	/** Changes back the other way within 2 s of the last change (hunting). */
+	int32 QuickReversals = 0;
+	/** In gear with the clutch home: the largest gap of the engine from the road's speed (fraction). */
+	double WorstRpmGap = 0.0;
+	double LowestRoadRpm = 1.0e9;
+};
+
+FSimCruiseShiftDriveResult SimCruiseRunShiftDrive(const FSimCruiseCarDefinition& Car, double FixedStepS);
+
 /** Static load balance after settling on the pad. */
 struct FSimCruiseStaticLoadResult
 {

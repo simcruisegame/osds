@@ -348,6 +348,29 @@ namespace
 	}
 
 	/**
+	 * The automatic on a road (the Dragon review's faults): no change back within 2 s of the last
+	 * one (hunting), and in gear with the clutch home the engine turns with the road (no 19 mph in
+	 * first at 851 rpm).
+	 */
+	bool RunShiftDriveTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, CarId, Car))
+		{
+			return false;
+		}
+		const FSimCruiseShiftDriveResult R = SimCruiseRunShiftDrive(Car, SimCruiseShippingFixedStepS);
+		const FString Line = FString::Printf(TEXT("SHIFTDRIVE %-11s %d changes, %d back within 2 s, engine off the road by up to %.0f %% in gear, lowest road speed in gear %.0f rpm"),
+			CarId, R.Shifts, R.QuickReversals, 100.0 * R.WorstRpmGap, R.LowestRoadRpm);
+		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+		Test.AddInfo(Line);
+		Test.TestTrue(TEXT("drive completed"), R.bCompleted);
+		Test.TestEqual(TEXT("no hunting (no change back within 2 s)"), R.QuickReversals, 0);
+		Test.TestTrue(TEXT("in gear, the engine turns with the road (within 8 %)"), R.WorstRpmGap < 0.08);
+		return true;
+	}
+
+	/**
 	 * Passing at full pedal from a steady cruise, kickdown allowed. Reference only where sourced:
 	 * the Corvette Stingray Z51, Car and Driver (Z51 long-term test, the 2020-21 LT2 and eight-speed
 	 * DCT): 30-50 mph 1.8 s, 50-70 mph 2.5 s. The others are logged from their sourced inputs.
@@ -420,6 +443,9 @@ SIMCRUISE_VEHICLE_BENCH(LiftOff, crv25)
 SIMCRUISE_VEHICLE_BENCH(TopSpeed, nb2001_aaron)
 SIMCRUISE_VEHICLE_BENCH(TopSpeed, mustang65)
 SIMCRUISE_VEHICLE_BENCH(TopSpeed, meridian_z)
+SIMCRUISE_VEHICLE_BENCH(ShiftDrive, nb2001_aaron)
+SIMCRUISE_VEHICLE_BENCH(ShiftDrive, mustang65)
+SIMCRUISE_VEHICLE_BENCH(ShiftDrive, meridian_z)
 SIMCRUISE_VEHICLE_BENCH(Passing, nb2001_aaron)
 SIMCRUISE_VEHICLE_BENCH(Passing, mustang65)
 SIMCRUISE_VEHICLE_BENCH(Passing, meridian_z)

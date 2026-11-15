@@ -620,17 +620,29 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 	double ForwardRatio = (State.bInReverse ? Car.ReverseGearRatio : Car.ForwardGearRatios[State.Gear]) * Car.FinalDriveRatio;
 	const double SignDirection = State.bInReverse ? -1.0 : 1.0;
 	State.ShiftTimeS = FMath::Max(0.0, State.ShiftTimeS - Dt);
+	State.SinceShiftS += Dt;
 	if (!State.bManual && State.ShiftTimeS <= 0.0 && !State.bInReverse)
 	{
 		// The shift map follows the pedal (Throttle is the driver's pedal here,
-		// before traction control trims it).
-		const int32 Next = SimCruiseDynamics::SelectAutomaticGear(Car, State.Gear, State.EngineRpm,
+		// before traction control trims it). It reads the road speed, as a gearbox's
+		// controller reads its output shaft, not the engine's speed: through a shift and
+		// with the clutch slipping the engine runs apart from the road (it dropped to idle
+		// and called down shift after shift: 19 mph in first at 851 rpm on the Dragon).
+		const double RoadRpm = FMath::Abs(Speed) * ForwardRatio / R * 60.0 / Tau;
+		const int32 Next = SimCruiseDynamics::SelectAutomaticGear(Car, State.Gear, RoadRpm,
 			FMath::Abs(Speed) * ForwardRatio / R, Throttle, State.bServiceBrake || BrakeAmount > 0.01,
 			Speed * Omega.Z / SimCruiseDynamics::GravityMps2);
-		if (Next != State.Gear)
+		const int32 Direction = Next > State.Gear ? 1 : Next < State.Gear ? -1 : 0;
+		// No change back the other way within 2 s of the last one (the Dragon's D5-D4-D2-D4 and
+		// 1-2-1-2 hunting as the pedal moved), unless the engine is at its limiter.
+		const bool bReversal = Direction != 0 && Direction == -State.LastShiftDirection && State.SinceShiftS < 2.0;
+		const bool bAtLimit = Direction > 0 && State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98;
+		if (Direction != 0 && (!bReversal || bAtLimit))
 		{
 			State.Gear = Next;
 			State.ShiftTimeS = Car.GearShiftDurationS;
+			State.LastShiftDirection = Direction;
+			State.SinceShiftS = 0.0;
 			ForwardRatio = Car.ForwardGearRatios[State.Gear] * Car.FinalDriveRatio;
 		}
 	}
