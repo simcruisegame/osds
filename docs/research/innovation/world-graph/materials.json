@@ -1,0 +1,106 @@
+{
+  "version": "world-graph-v0.1",
+  "about": "Wall materials for houses and small buildings. learn_walls.py writes the learned shares; this file holds the material definitions (library key, albedo and pattern parameters, compatibility), the published seed shares used until the script runs, and the expert table for eras before 1999 (the Census survey microdata starts in 1999). Expert rows have confidence 'low' and must be replaced by measured values (OSM and Overture building:material in rich places, the calibrated eye, the street-photo audit). The NSI public bldgtype field can rescale masonry vs frame per county; NSI p_extwall is restricted and never used.",
+  "masonry_materials": ["brick", "stone", "block"],
+  "soc_wal_codes": {"1": "wood", "2": "brick", "3": "aluminum", "4": "stucco", "5": "vinyl", "6": "block", "7": "stone", "8": "fiber_cement", "9": "other"},
+  "materials": [
+    {"id": "mat:vinyl_siding", "key": "vinyl", "library_key": "wall/vinyl_lap", "albedo_linear": [0.25, 0.75],
+     "parameters": {"profile": ["double_4in", "double_5in", "dutch_lap", "board_and_batten", "shake"], "exposure_m": [0.1, 0.13], "colour": "regional and era palette; 2000+ subdivisions use 4-8 HOA colours"},
+     "wear": ["green algae on north walls in humid climates", "chalky fade on south walls", "wavy panels from heat (rare)", "dirt splash in the lowest 0.3 m"],
+     "compatible": {"max_floors": 4, "uses": ["house", "townhouse", "small_apartment", "small_commercial"], "from_year": 1960}},
+    {"id": "mat:brick_common", "key": "brick", "library_key": "wall/brick_running", "albedo_linear": [0.08, 0.35],
+     "parameters": {"unit_mm": [194, 57, 92], "unit_note": "US modular brick 7-5/8 x 2-1/4 x 3-5/8 in; joint 10 mm", "bond": {"running": 0.85, "common_american": 0.08, "flemish": 0.04, "other": 0.03}, "bond_note": "common (header every 5-7 rows) and Flemish mostly before 1940 (solid masonry); veneer after about 1940 is almost always running bond", "mortar_colour": ["grey", "buff", "white", "dark"], "colour": "red to brown, by region (Southern red, Midwest buff, Texas cream to red)", "painted_share": [0.03, 0.15]},
+     "wear": ["efflorescence (white salt) low on walls", "darker mortar under sills", "repointing patches on old walls"],
+     "compatible": {"max_floors": 30, "uses": "all", "from_year": 1600}},
+    {"id": "mat:wood_clapboard", "key": "wood", "library_key": "wall/wood_lap", "albedo_linear": [0.2, 0.8],
+     "parameters": {"profile": ["clapboard", "drop_siding", "shingle", "board_and_batten", "t1_11_plywood", "log"], "exposure_m": [0.1, 0.18], "paint": "white most common on pre-1940; earth tones 1965-1985"},
+     "wear": ["peeling paint on south and west walls of old houses", "grey weathering on unpainted shingles near coasts", "rot at the base"],
+     "compatible": {"max_floors": 4, "uses": ["house", "barn", "small_commercial", "church"], "from_year": 1600}},
+    {"id": "mat:stucco", "key": "stucco", "library_key": "wall/stucco", "albedo_linear": [0.3, 0.75],
+     "parameters": {"texture": ["sand_float", "lace_skip_trowel", "smooth", "dash"], "colour": "light earth tones; integral colour in the Southwest", "control_joints": "sometimes, 3-5 m"},
+     "wear": ["hairline cracks from window corners", "dark streaks under sills", "patches of different colour where repaired"],
+     "compatible": {"max_floors": 12, "uses": "all", "from_year": 1900}},
+    {"id": "mat:fiber_cement", "key": "fiber_cement", "library_key": "wall/fiber_cement_lap", "albedo_linear": [0.15, 0.75],
+     "parameters": {"profile": ["lap_smooth", "lap_woodgrain", "panel", "shingle", "board_and_batten"], "exposure_m": [0.13, 0.18]},
+     "wear": ["slight fade", "caulk lines at butt joints"],
+     "compatible": {"max_floors": 6, "uses": ["house", "townhouse", "apartment", "small_commercial"], "from_year": 1990}},
+    {"id": "mat:aluminum_siding", "key": "aluminum", "library_key": "wall/vinyl_lap", "albedo_linear": [0.3, 0.7],
+     "parameters": {"profile": ["double_4in", "double_5in"], "note": "uses the vinyl mesh with dents and chalky paint"},
+     "wear": ["small dents at bumper height near driveways", "chalky oxidised paint"],
+     "compatible": {"max_floors": 3, "uses": ["house"], "from_year": 1945}},
+    {"id": "mat:stone_veneer", "key": "stone", "library_key": "wall/stone", "albedo_linear": [0.1, 0.45],
+     "parameters": {"pattern": ["ashlar", "rubble", "ledgestone", "fieldstone"], "partial_share": 0.7, "partial_note": "most often a water table (lower 1 m) or the front only; see walls_secondary"},
+     "compatible": {"max_floors": 30, "uses": "all", "from_year": 1600}},
+    {"id": "mat:concrete_block", "key": "block", "library_key": "wall/block", "albedo_linear": [0.25, 0.5],
+     "parameters": {"unit_mm": [397, 194, 194], "painted_share": 0.6, "note": "Florida 'CBS' houses are block under stucco and count as stucco when the render is seen"},
+     "compatible": {"max_floors": 6, "uses": "all", "from_year": 1920}},
+    {"id": "mat:asbestos_cement_shingle", "key": "asbestos_shingle", "library_key": "wall/cement_shingle", "albedo_linear": [0.35, 0.7],
+     "parameters": {"unit_m": [0.6, 0.3], "edge": ["wavy", "straight"], "texture": "fine vertical striation", "colour": "white, grey, pale green"},
+     "note": "very common re-siding on houses built about 1920-1965; still seen on many older houses; looks very different from wood or vinyl, so it is a real detail",
+     "compatible": {"max_floors": 3, "uses": ["house"], "from_year": 1920, "to_year": 1975}},
+    {"id": "mat:metal_panel", "key": "metal", "library_key": "wall/metal_panel", "albedo_linear": [0.2, 0.7],
+     "parameters": {"profile": ["corrugated", "r_panel", "standing_seam"]},
+     "compatible": {"max_floors": 4, "uses": ["barn", "shed", "industrial", "house_alaska", "house_rural"], "from_year": 1900}},
+    {"id": "mat:plain_render", "key": "plain", "library_key": "wall/plain", "note": "fail-to-plain material (gotcha 8.1): used when the posterior is not sure enough"}
+  ],
+  "published_seed_shares": {
+    "about": "Published shares of the principal wall material of new single-family houses started in the year. Used only until learn_walls.py has run. Source: NAHB Eye on Housing articles from Census SOC data (see sources). Missing cells are not published.",
+    "national": {
+      "2013": {"vinyl": 0.31, "brick": 0.24, "stucco": 0.22, "fiber_cement": 0.17, "wood": 0.05, "stone": 0.02},
+      "2019": {"stucco": 0.27, "vinyl": 0.25, "fiber_cement": 0.21, "brick": 0.20, "wood": 0.05, "stone": 0.01},
+      "2024": {"vinyl": 0.26, "stucco": 0.25, "fiber_cement": 0.23, "brick": 0.16, "wood": 0.06, "stone": 0.01, "other": 0.01, "block": 0.002}
+    },
+    "division_leaders": {
+      "2013": {"2": {"vinyl": 0.80}, "1": {"vinyl": 0.71}, "5": {"vinyl": 0.39}, "8": {"stucco": 0.58}, "9": {"stucco": 0.49, "fiber_cement": 0.43}},
+      "2019": {"1": {"vinyl": 0.68}, "2": {"vinyl": 0.75}, "5": {"stucco": 0.38}, "6": {"brick": 0.44}, "7": {"brick": 0.62}, "8": {"stucco": 0.52}, "9": {"stucco": 0.57}},
+      "2024": {"1": {"vinyl": 0.73}, "3": {"vinyl": 0.69}, "2": {"vinyl": 0.68}, "4": {"vinyl": 0.49}, "9": {"stucco": 0.64}, "8": {"stucco": 0.48}, "5": {"stucco": 0.33}, "6": {"brick": 0.39}, "7": {"brick": 0.48, "wood": 0.27}}
+    },
+    "trends": "vinyl peaked near 40 % in 2001 and has been about 26 % since 2015; stucco rose from 17 % (2010) to 28 % (2021); fiber cement up more than 15 points in 20 years; brick down from about 25 % (2012) to 16 % (2024)"
+  },
+  "pre1999_visible_wall_expert": {
+    "about": "Share of the wall material that a driver SEES today on houses built in each era (not the original material: many older frame houses were re-sided, first with asbestos-cement shingle or aluminum, later with vinyl). Expert starting values, confidence low. learn_walls.py rescales masonry vs frame with the NSI public bldgtype share where a county has it.",
+    "division_to_region": {"1": "northeast", "2": "northeast", "3": "midwest", "4": "midwest", "5": "south", "6": "south", "7": "south", "8": "west", "9": "west"},
+    "eras": [{"era": "pre1920", "from": 1600, "to": 1919}, {"era": "1920-1945", "from": 1920, "to": 1945}, {"era": "1946-1964", "from": 1946, "to": 1964}, {"era": "1965-1979", "from": 1965, "to": 1979}, {"era": "1980-1998", "from": 1980, "to": 1998}],
+    "table": {
+      "northeast": {
+        "pre1920": {"brick": 0.20, "wood": 0.45, "vinyl": 0.25, "aluminum": 0.05, "asbestos_shingle": 0.03, "stone": 0.02},
+        "1920-1945": {"brick": 0.20, "wood": 0.30, "vinyl": 0.30, "aluminum": 0.07, "asbestos_shingle": 0.08, "stucco": 0.03, "stone": 0.02},
+        "1946-1964": {"brick": 0.15, "wood": 0.20, "vinyl": 0.38, "aluminum": 0.12, "asbestos_shingle": 0.10, "stucco": 0.02, "stone": 0.03},
+        "1965-1979": {"brick": 0.12, "wood": 0.30, "vinyl": 0.40, "aluminum": 0.12, "stucco": 0.03, "stone": 0.03},
+        "1980-1998": {"brick": 0.07, "wood": 0.18, "vinyl": 0.68, "stucco": 0.03, "stone": 0.02, "fiber_cement": 0.02}
+      },
+      "midwest": {
+        "pre1920": {"brick": 0.30, "wood": 0.35, "vinyl": 0.28, "aluminum": 0.04, "stone": 0.03},
+        "1920-1945": {"brick": 0.30, "wood": 0.22, "vinyl": 0.35, "aluminum": 0.06, "asbestos_shingle": 0.04, "stucco": 0.03},
+        "1946-1964": {"brick": 0.22, "wood": 0.15, "vinyl": 0.40, "aluminum": 0.13, "asbestos_shingle": 0.06, "stone": 0.04},
+        "1965-1979": {"brick": 0.20, "wood": 0.25, "vinyl": 0.40, "aluminum": 0.10, "stone": 0.05},
+        "1980-1998": {"brick": 0.12, "wood": 0.15, "vinyl": 0.67, "stone": 0.04, "stucco": 0.02}
+      },
+      "south": {
+        "pre1920": {"brick": 0.30, "wood": 0.45, "vinyl": 0.20, "stucco": 0.03, "stone": 0.02},
+        "1920-1945": {"brick": 0.35, "wood": 0.30, "vinyl": 0.25, "asbestos_shingle": 0.04, "stucco": 0.04, "stone": 0.02},
+        "1946-1964": {"brick": 0.45, "wood": 0.15, "vinyl": 0.20, "asbestos_shingle": 0.05, "aluminum": 0.05, "block": 0.05, "stucco": 0.05},
+        "1965-1979": {"brick": 0.45, "wood": 0.20, "vinyl": 0.15, "stucco": 0.10, "block": 0.05, "aluminum": 0.05},
+        "1980-1998": {"brick": 0.38, "wood": 0.17, "vinyl": 0.25, "stucco": 0.17, "stone": 0.02, "fiber_cement": 0.01}
+      },
+      "west": {
+        "pre1920": {"wood": 0.60, "stucco": 0.15, "brick": 0.15, "vinyl": 0.08, "stone": 0.02},
+        "1920-1945": {"stucco": 0.45, "wood": 0.35, "brick": 0.08, "vinyl": 0.08, "asbestos_shingle": 0.02, "stone": 0.02},
+        "1946-1964": {"stucco": 0.50, "wood": 0.30, "brick": 0.08, "vinyl": 0.07, "stone": 0.05},
+        "1965-1979": {"stucco": 0.45, "wood": 0.40, "brick": 0.06, "vinyl": 0.05, "stone": 0.04},
+        "1980-1998": {"stucco": 0.55, "wood": 0.25, "vinyl": 0.10, "brick": 0.04, "fiber_cement": 0.04, "stone": 0.02}
+      }
+    },
+    "state_overrides": {
+      "about": "The SOC has no state field, and some states differ from their division. These overrides replace the division row for every era (confidence low).",
+      "FL": {"stucco": 0.70, "brick": 0.05, "wood": 0.08, "vinyl": 0.07, "block": 0.08, "fiber_cement": 0.02, "why": "concrete block and stucco (CBS) houses since about 1945, hurricane codes"},
+      "OR": {"wood": 0.55, "vinyl": 0.20, "fiber_cement": 0.12, "stucco": 0.08, "brick": 0.05, "why": "Pacific Northwest: wood lap, T1-11 and fiber cement; the Pacific division is dominated by California stucco"},
+      "WA": {"wood": 0.55, "vinyl": 0.20, "fiber_cement": 0.12, "stucco": 0.08, "brick": 0.05, "why": "as OR"},
+      "AK": {"wood": 0.60, "vinyl": 0.18, "metal": 0.12, "fiber_cement": 0.05, "other": 0.05, "why": "wood frame with T1-11, lap or log; metal on rural and arctic houses; no stucco (freeze-thaw)"},
+      "HI": {"wood": 0.50, "block": 0.25, "stucco": 0.15, "fiber_cement": 0.05, "other": 0.05, "why": "single-wall wood plantation houses on posts, termite-resistant block and stucco since the 1960s"},
+      "NM": {"stucco": 0.80, "wood": 0.08, "brick": 0.05, "other": 0.07, "why": "adobe and frame under stucco (Pueblo and Territorial revival)"},
+      "AZ": {"stucco": 0.85, "block": 0.07, "brick": 0.03, "wood": 0.05, "why": "desert stucco and painted block"}
+    }
+  },
+  "neighbour_rule": "materials are sampled through the block mix (design 5.3); the Dirichlet concentration per era is in buildings-variety.json"
+}

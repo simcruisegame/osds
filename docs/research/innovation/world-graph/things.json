@@ -1,0 +1,264 @@
+{
+  "version": "world-graph-v0.1",
+  "about": "V0 roadside things for the world knowledge graph. Hand-written, reviewed. Learned numbers go to priors CSV files made by learn_roadside.py; this file holds the thing definitions, the OSM match rules, the completeness gates, and the written-standard rules. Every value has a 'why' or a source id from sources.json. Values marked confidence 'low' are expert starting values that a learned or audited value must replace.",
+  "contexts": {
+    "about": "Context fields for V0. The first four are made by learn_roadside.py from the OSM download alone. The others are hooks that the scan engine fills at run time; the learning script adds them when the PC has the rasters.",
+    "fields": [
+      {"id": "road", "values": ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service"], "from": "OSM highway tag (links join their parent class; living_street joins residential)"},
+      {"id": "dens", "values": ["dens:1", "dens:2", "dens:3", "dens:4"], "from": "road km per km2 in the 1 km cell, drivable roads without driveways and parking aisles", "bins_km_per_km2": [0, 3, 8, 15], "why": "road density is complete in US OSM (TIGER base) and tracks building density; housing-unit density from the Census replaces it when the PC has the ACS block groups"},
+      {"id": "div", "values": ["div:1", "div:2", "div:3", "div:4", "div:5", "div:6", "div:7", "div:8", "div:9"], "from": "Census division of the county"},
+      {"id": "side", "values": ["side:left", "side:right"], "from": "side of the way in OSM drawing direction; used only for offsets and fences"},
+      {"id": "land", "hook": true, "from": "NLCD class of the roadside cell (scan engine CLAS)"},
+      {"id": "climate", "hook": true, "from": "Koppen class of the tile"},
+      {"id": "era", "hook": true, "from": "Census tract median year built (NSI med_yr_blt or ACS B25035)"},
+      {"id": "slope", "hook": true, "from": "3DEP terrain slope at the road edge"}
+    ]
+  },
+  "things": [
+    {
+      "id": "obj:fire_hydrant",
+      "name": "Fire hydrant",
+      "learn": "osm",
+      "osm": {"geom": "node", "match": [{"emergency": "fire_hydrant"}], "exclude": {"fire_hydrant:type": ["underground", "pond", "suction_point", "pipe"]}},
+      "anchor": "anchor:road_edge",
+      "max_offset_m": 15,
+      "completeness": {"expected_in": ["dens:3", "dens:4"], "min_score": 0.8, "why": "towns with water mains have hydrants on almost every block; a well-mapped county has them in nearly every dense cell"},
+      "shrink_k_km": 5,
+      "size_m": {"height": [0.6, 0.95], "barrel_diameter": [0.2, 0.3]},
+      "attach": {"offset_behind_kerb_m": [0.45, 2.5], "why": "behind the kerb or at the back of the verge; learned offset distribution replaces this"},
+      "excludes": [{"what": "anchor:driveway", "within_m": 1.5, "why": "hydrants are not set in a driveway mouth"}, {"what": "drivable_area", "within_m": 0.3}],
+      "co_occurs": [{"what": "anchor:junction", "lift_hint": "higher near corners", "confidence": "low", "learn": "spacing from junction in learn_roadside.py"}],
+      "variants": ["var:hydrant_dry_barrel", "var:hydrant_wet_barrel"],
+      "variant_rule": "wet barrel in frost-free climates (Koppen A, BWh, Csa coastal), dry barrel elsewhere; confidence low",
+      "colour_rule": "body colour is chosen per water utility (one colour per city block group, often yellow, red, silver or chrome yellow); bonnet and caps by flow class: light blue >= 1500 gpm, green 1000-1499, orange 500-999, red < 500",
+      "material_slots": ["body_paint", "cap_paint", "bolt_metal"],
+      "real_3d": "mesh, near LOD 0 to 60 m",
+      "collision": "breakaway_heavy",
+      "collision_note": "traffic-model hydrants break at a flange; the car team sets mass and break force",
+      "night": "none",
+      "sources": ["src:osm", "src:nfpa291"]
+    },
+    {
+      "id": "obj:utility_pole",
+      "name": "Utility pole (power or telecom)",
+      "learn": "osm",
+      "osm": {"geom": "node", "match": [{"power": "pole"}, {"man_made": "utility_pole"}]},
+      "anchor": "anchor:road_edge",
+      "max_offset_m": 25,
+      "completeness": {"expected_in": ["dens:1", "dens:2", "dens:3"], "min_score": 0.6, "why": "overhead lines run along most rural and suburban roads but not all; a lower gate because true gaps exist (buried lines)"},
+      "shrink_k_km": 10,
+      "size_m": {"height_above_ground": [8.5, 14.0], "butt_diameter": [0.25, 0.4], "why": "common US distribution poles are 35-45 ft long with about 10 % plus 2 ft set in the ground"},
+      "attach": {"offset_from_edge_m": [1.0, 10.0], "why": "learned offset replaces this; often at the right-of-way line"},
+      "spacing_check": {"typical_m": [30, 90], "why": "distribution spans; the learned gap distribution is the value used"},
+      "co_occurs": [{"what": "obj:street_light", "learn": "share of street lights within 2 m of a pole, per county"}, {"what": "part:transformer_can", "rule": "one per 2-6 poles near houses", "confidence": "low"}],
+      "excludes": [{"what": "drivable_area", "within_m": 0.5}],
+      "lidar_veto": true,
+      "variants": ["var:pole_wood_distribution", "var:pole_wood_telecom_only", "var:pole_concrete", "var:pole_steel"],
+      "variant_rule": "wood in most places; concrete or steel more common in hurricane coasts and new urban lines; learn from OSM material tag where present",
+      "material_slots": ["wood_treated", "crossarm", "insulators", "wires"],
+      "real_3d": "mesh; wires are real 3D catenary splines between poles (sag 1-3 % of span)",
+      "collision": "rigid",
+      "night": "none",
+      "sources": ["src:osm", "src:3dep"]
+    },
+    {
+      "id": "obj:street_light",
+      "name": "Street light",
+      "learn": "osm",
+      "osm": {"geom": "node", "match": [{"highway": "street_lamp"}]},
+      "anchor": "anchor:road_edge",
+      "max_offset_m": 25,
+      "completeness": {"expected_in": ["dens:3", "dens:4"], "min_score": 0.7},
+      "shrink_k_km": 5,
+      "size_m": {"mounting_height": [7.5, 12.0], "arm_length": [1.5, 4.5]},
+      "variants": ["var:light_cobra_on_pole", "var:light_cobra_own_pole", "var:light_post_top_acorn", "var:light_highmast"],
+      "variant_rule": "acorn post-top only in mapped historic districts and town centres; high mast only at motorway interchanges; others learned (share on utility poles)",
+      "lidar_veto": true,
+      "night": "lit; lamp type by era and region (LED 3000-4000 K after about 2015 conversions, high-pressure sodium before); the picture thread owns light units",
+      "collision": "breakaway_on_arterials",
+      "sources": ["src:osm"]
+    },
+    {
+      "id": "obj:mailbox_residential",
+      "name": "Residential curbside mailbox",
+      "learn": "rule",
+      "why_rule": "residential mailboxes are almost never in OSM; their count follows houses and the USPS delivery mode",
+      "anchor": "anchor:driveway",
+      "rule": {
+        "count": "one per house served by a curbside delivery; two to six on one shared post where houses share a driveway or a rural route turn-out",
+        "delivery_mode_prior": [
+          {"if": ["dens:1"], "then": {"curbside": 0.95, "cluster_box": 0.03, "door": 0.02}},
+          {"if": ["dens:2"], "then": {"curbside": 0.85, "cluster_box": 0.10, "door": 0.05}},
+          {"if": ["dens:3", "era:pre1950"], "then": {"curbside": 0.25, "cluster_box": 0.05, "door": 0.70}},
+          {"if": ["dens:3", "era:1950-2011"], "then": {"curbside": 0.75, "cluster_box": 0.15, "door": 0.10}},
+          {"if": ["era:2012+"], "then": {"curbside": 0.15, "cluster_box": 0.80, "door": 0.05}, "why": "USPS requires centralized delivery for most new delivery points since about 2012"}
+        ],
+        "confidence": "low; replace with a Mapillary or street-photo audit (v2.0.4)",
+        "placement": {"bottom_height_m": [1.04, 1.14], "set_back_from_road_edge_m": [0.15, 0.2], "why": "USPS curbside mailbox guidance: box bottom 41-45 in above the road, front 6-8 in back from the kerb or road edge"},
+        "side_rule": "on the driveway side next to the road; on busy rural routes the boxes can be grouped on the carrier's right side (confidence low)"
+      },
+      "variants": ["var:mailbox_post_single", "var:mailbox_post_double", "var:mailbox_brick_column", "var:mailbox_cluster_box", "var:mailbox_novelty"],
+      "variant_rule": "brick or stone column more common in the South and in 1990+ suburbs; novelty boxes rare (about 1 %); block lumpiness high (neighbours copy)",
+      "parameters": {"lean_deg": [0, 4], "post": ["wood_4x4", "metal_pipe", "decorative"], "flag_raised_share": 0.05},
+      "collision": "breakaway_light",
+      "sources": ["src:usps"]
+    },
+    {
+      "id": "obj:delineator_post",
+      "name": "Delineator post (reflector post)",
+      "learn": "rule",
+      "why_rule": "delineators are almost never in OSM; MUTCD gives the spacing",
+      "anchor": "anchor:road_edge",
+      "rule": {
+        "where": "rural motorway and trunk always; rural primary and secondary where the state uses them (learned share per state later); at curves, bridge ends, and lane drops",
+        "tangent_spacing_m": [61, 161],
+        "curve_spacing": "S = 3 * sqrt(R - 50), S and R in feet, S between 20 and 300 ft; the spacing ahead of and after the curve is 2S, then 3S, then 6S",
+        "height_m": 1.2,
+        "lateral_m": [0.6, 2.4],
+        "lateral_why": "2 to 8 ft outside the outer edge of the shoulder",
+        "colour": "white on the right, yellow on the left of one-way roadways and median",
+        "confidence": "medium (values from the MUTCD 2009 Chapter 3F; confirm in the 11th edition, 2023)"
+      },
+      "variants": ["var:delineator_flex_post", "var:delineator_steel_u_channel", "var:delineator_on_guardrail"],
+      "night": "retroreflective in headlights (picture thread)",
+      "collision": "breakaway_light",
+      "sources": ["src:mutcd"]
+    },
+    {
+      "id": "obj:fence",
+      "name": "Fence along the road",
+      "learn": "osm",
+      "osm": {"geom": "way", "match": [{"barrier": "fence"}, {"barrier": "hedge"}, {"barrier": "wall"}, {"barrier": "guard_rail"}], "type_key": "fence_type"},
+      "anchor": "anchor:road_edge",
+      "measure": "share of road length (each side) with a fence or hedge within 3-40 m that runs within 30 degrees of the road direction",
+      "max_offset_m": 40,
+      "completeness": {"expected_in": ["dens:1", "dens:2"], "min_score": 0.5, "why": "rural fences are mapped much less than city things; a county passes when fences appear along most rural road cells; the rest is from rules and the audit"},
+      "variants": ["var:fence_barbed_wire", "var:fence_woven_wire", "var:fence_wood_privacy", "var:fence_chain_link", "var:fence_split_rail", "var:fence_board", "var:hedge", "var:wall_stone", "var:guard_rail_w_beam"],
+      "variant_prior": [
+        {"if": ["land:nlcd_81"], "then": {"var:fence_barbed_wire": 0.6, "var:fence_woven_wire": 0.25, "var:fence_board": 0.1, "var:fence_split_rail": 0.05}, "why": "pasture", "confidence": "low"},
+        {"if": ["land:nlcd_82"], "then": {"none": 0.7, "var:fence_barbed_wire": 0.25, "var:fence_woven_wire": 0.05}, "why": "crop fields are often not fenced", "confidence": "low"},
+        {"if": ["dens:3"], "then": {"var:fence_wood_privacy": 0.5, "var:fence_chain_link": 0.3, "var:hedge": 0.15, "var:fence_split_rail": 0.05}, "why": "residential side and rear lots", "confidence": "low"}
+      ],
+      "parameters": {"post_spacing_m": [2.4, 4.6], "height_m": {"barbed_wire": [1.1, 1.4], "wood_privacy": [1.8, 1.9], "chain_link": [1.2, 1.8], "split_rail": [1.0, 1.2]}, "lean_deg": [0, 6], "missing_board_share": [0, 0.03]},
+      "block_lumpiness": "very high: one owner fences a whole parcel edge with one type",
+      "real_3d": "posts and rails real 3D; wire and mesh as alpha cards near, a line far",
+      "collision": "light_fence_breaks",
+      "sources": ["src:osm", "src:nlcd"]
+    },
+    {
+      "id": "obj:guard_rail",
+      "name": "Guard rail (W-beam)",
+      "learn": "osm",
+      "osm": {"geom": "way", "match": [{"barrier": "guard_rail"}]},
+      "anchor": "anchor:road_edge",
+      "measure": "share of road length per class with a guard rail within 6 m",
+      "rule_fallback": "at bridge ends (with a flared or buried end terminal), on fills higher than about 3 m with steep side slopes, and on the outside of sharp curves on mountain roads; confidence medium; geometry from the CORR cross-section and lidar",
+      "completeness": {"expected_in": ["dens:1", "dens:2"], "min_score": 0.5},
+      "real_3d": "real 3D; the car can hit it (collision rigid with energy absorption, car team)",
+      "collision": "rigid_barrier",
+      "sources": ["src:osm", "src:aashto_rdg"]
+    },
+    {
+      "id": "obj:culvert_end",
+      "name": "Culvert end (pipe under the road or a driveway)",
+      "learn": "osm+rule",
+      "osm": {"geom": "crossing", "waterway_match": [{"waterway": "*"}], "culvert_tag": {"tunnel": "culvert"}, "bridge_tag": {"bridge": "*"}},
+      "measure": "share of mapped stream crossings that are culverts, by road class; culvert ends are placed where the stream meets the fill toe on both sides",
+      "rule": {
+        "driveway_culvert": "a rural driveway that crosses a roadside ditch gets a pipe: p 0.85 in humid climates (Koppen C, D), 0.4 in dry climates (B) where dips are common; pipe 0.3-0.45 m corrugated metal, sometimes concrete, with or without a mitred end",
+        "confidence": "low; check with the street-photo audit"
+      },
+      "variants": ["var:culvert_cmp_projecting", "var:culvert_cmp_mitred", "var:culvert_rcp_headwall", "var:culvert_box_concrete"],
+      "variant_rule": "pipe size and end by road class and stream order (NHD); box culverts for bigger streams under primary roads",
+      "real_3d": "real 3D end and opening (the driver sees the dark hole); the pipe is short",
+      "sources": ["src:osm", "src:nhd"]
+    },
+    {
+      "id": "obj:stop_sign",
+      "name": "Stop sign (R1-1)",
+      "learn": "osm",
+      "osm": {"geom": "node", "match": [{"highway": "stop"}]},
+      "anchor": "anchor:junction_approach",
+      "measure": "P(stop | approach class, crossing class) per junction; all-way stop share at equal classes",
+      "rule": {
+        "imagine_only_if": "the learned P >= 0.9 for the minor approach of a mapped junction with a higher class road; the traffic code reads the same record (gotcha 8.16)",
+        "size_m": {"conventional": 0.75, "multilane": 0.9},
+        "mount_bottom_m": {"rural": 1.5, "urban": 2.1},
+        "lateral_m": {"rural_from_shoulder_edge": [1.8, 3.7], "urban_from_kerb_min": 0.6},
+        "source_why": "MUTCD 2009 Sections 2A.18-2A.19 and 2B.01; confirm in the 11th edition"
+      },
+      "night": "retroreflective",
+      "collision": "breakaway_light",
+      "sources": ["src:osm", "src:mutcd"]
+    },
+    {
+      "id": "obj:speed_limit_sign",
+      "name": "Speed limit sign (R2-1)",
+      "learn": "rule",
+      "why_rule": "speed signs are rarely mapped as nodes; the maxspeed tag on ways is common",
+      "anchor": "anchor:road_edge",
+      "rule": {
+        "place_at": ["each maxspeed change, facing the new limit, both directions", "30-150 m after a junction with a road of class tertiary or higher", "rural repeat every 3-8 km (confidence low; state practice differs)"],
+        "size_m": {"conventional": [0.6, 0.75], "expressway": [0.9, 1.2]},
+        "mount_bottom_m": {"rural": 1.5, "urban": 2.1},
+        "confidence": "medium for change points, low for repeats; learn from Mapillary traffic-sign map features in v2.0.4"
+      },
+      "night": "retroreflective",
+      "sources": ["src:osm", "src:mutcd"]
+    },
+    {
+      "id": "obj:curve_warning_sign",
+      "name": "Curve warning sign (W1 series) and chevrons",
+      "learn": "rule",
+      "anchor": "anchor:curve",
+      "rule": {
+        "advisory_speed": "from the curve radius and superelevation in the CORR cross-section: V^2 = 15 R (e + f), V mph, R ft, f side friction by speed (AASHTO), rounded down to 5 mph; or the ball-bank method (16 deg below 20 mph, 14 deg at 25-30 mph, 12 deg at 35 mph and up)",
+        "when": "speed difference = posted (maxspeed) minus advisory: 5 mph recommend the sign; 10 mph require the sign and the advisory speed plaque, recommend chevrons; 15 mph or more require chevrons (MUTCD 2009 Table 2C-5, for arterials and collectors with AADT >= 1000; on other roads use as an option with p 0.6)",
+        "sign_type": "W1-1 curve if advisory >= 35 mph, W1-2 turn if below 30 mph; W1-5 or W1-4 for reverse curves closer than 600 ft; W1-8 chevrons on the outside of the curve, spaced so 2-3 are seen at once",
+        "place": "before the curve, distance from MUTCD Table 2C-4 by speed (about 30-200 m)",
+        "confidence": "medium; this also gives the driver real advisory speeds on the Dragon"
+      },
+      "night": "retroreflective",
+      "sources": ["src:mutcd", "src:aashto_green_book"]
+    },
+    {
+      "id": "obj:bench",
+      "name": "Bench",
+      "learn": "osm",
+      "osm": {"geom": "node", "match": [{"amenity": "bench"}]},
+      "anchor": "anchor:road_edge",
+      "max_offset_m": 20,
+      "co_occurs": [{"what": "anchor:bus_stop", "learn": "P(bench within 15 m | bus stop) from bench=yes tags and bench nodes"}],
+      "completeness": {"expected_in": ["dens:4"], "min_score": 0.6},
+      "shrink_k_km": 10,
+      "collision": "rigid_light",
+      "sources": ["src:osm"]
+    },
+    {
+      "id": "obj:trash_bin",
+      "name": "Public trash bin",
+      "learn": "osm",
+      "osm": {"geom": "node", "match": [{"amenity": "waste_basket"}]},
+      "anchor": "anchor:road_edge",
+      "max_offset_m": 20,
+      "completeness": {"expected_in": ["dens:4"], "min_score": 0.6},
+      "shrink_k_km": 10,
+      "dyn_note": "residential carts at the kerb on collection day are a later DYN thing (gotcha 8.13)",
+      "collision": "light",
+      "sources": ["src:osm"]
+    },
+    {
+      "id": "obj:collection_mailbox",
+      "name": "USPS blue collection box",
+      "learn": "osm",
+      "osm": {"geom": "node", "match": [{"amenity": "post_box"}]},
+      "anchor": "anchor:road_edge",
+      "max_offset_m": 25,
+      "completeness": {"expected_in": ["dens:4"], "min_score": 0.5},
+      "shrink_k_km": 20,
+      "collision": "rigid_heavy",
+      "sources": ["src:osm"]
+    }
+  ],
+  "rule_count_note": "14 entries: the 12 V0 things plus guard rail (split from fence) and the blue collection box (it is the OSM post_box, often confused with home mailboxes). 9 are learned from OSM, 5 come from written standards (mailbox, delineator, speed sign, curve sign, driveway culvert)."
+}

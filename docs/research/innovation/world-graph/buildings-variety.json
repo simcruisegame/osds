@@ -1,0 +1,95 @@
+{
+  "version": "world-graph-v0.1",
+  "about": "Building variety between neighbours. the owner says buildings look most fake. From the road, the eye notices (1) neighbours that are copies, (2) neighbours that are random in a way no real street is, and (3) missing parts: porch, steps, garage door, foundation, gutters, roof edge. Real streets are 'similar but not the same': one era, one builder or a few, a small set of plans, mirrored and re-coloured, then changed by owners over decades. This file gives the causes in data and the rules. learn_walls.py gives the measured shares (walls, secondary wall, storeys, foundation, lot size, garage, porch) for houses built 1999-2025; older eras use NSI public fields and the expert rows in materials.json.",
+  "what_changes_first_for_buildings": [
+    {"rank": 1, "change": "Builder plans with anti-monotony. Inside a block group of one era (spread group, design 5.3), houses take one of 3-6 base plans x 2-3 front elevations x mirror (garage left or right) x a colour from a 6-10 colour palette. No two adjacent houses, and not the house directly across the street, have the same plan + elevation + colour.", "why": "many US towns and builders use 'anti-monotony' rules of this kind for subdivisions; it is what real tract streets look like", "fixes": "copies side by side, and random mixes"},
+    {"rank": 2, "change": "Era from data per house: NSI med_yr_blt (tract median) + footprint shape (long thin ranch = 1945-1975, complex footprint with many corners = 1990+) + street pattern (grid = pre-1945, curving with cul-de-sacs = 1960+) + tree size in the aerial. Then era spread inside the block: older streets have infill houses of later eras (10-30 %), new subdivisions have almost none.", "fixes": "a 1920s street that looks like a 2010 subdivision"},
+    {"rank": 3, "change": "Wall material from learned shares by division x era with a secondary material: the brick or stone front with vinyl or fiber cement sides is common in the South and Midwest (walls_secondary.csv). Plus re-siding of old frame houses (vinyl, aluminum, asbestos-cement shingle).", "fixes": "every house one material all round"},
+    {"rank": 4, "change": "Roof form and pitch from style x climate x lidar: lidar roof planes give the real pitch and form where 3DEP exists; else the style prior (below). Snow climates have steeper roofs; hurricane coasts have more hip roofs; the desert Southwest has flat roofs with parapets.", "fixes": "one roof shape for all"},
+    {"rank": 5, "change": "Ground contact and parts: foundation height from NSI found_ht (raised houses in flood zones, crawl space vents, basement windows, steps up to the door), porch share by era and division (SOC PRCH), garage size (SOC GAR), driveway to the garage side, gutters and downspouts, house numbers, mailbox (things.json).", "fixes": "houses that float or sit flat on the lawn with no steps"},
+    {"rank": 6, "change": "Manufactured homes where the Census says they are: ACS B25024 gives the share of mobile homes per tract; on many rural roads in the South and West it is 15-40 %. Single-wide (about 4.3 x 20 m) and double-wide, skirting, metal or shingle roof, often an added porch or carport.", "fixes": "rural roads with suburban houses only"}
+  ],
+  "sources_used": ["src:census_soc", "src:census_acs", "src:nsi", "src:3dep", "src:osm", "src:house_style_reference"],
+  "block_mix": {
+    "about": "Dirichlet concentration alpha of the block mix around the posterior (design 5.3). High alpha = neighbours alike; low alpha = neighbours vary. Values are starting values; the street-photo audit measures them.",
+    "alpha_by_era": {"pre1920": 2.0, "1920-1945": 3.0, "1946-1964": 8.0, "1965-1979": 8.0, "1980-1998": 10.0, "1999-2025": 14.0},
+    "why": "before about 1945 houses were built lot by lot by many builders; post-war tract building made whole streets at once; HOA palettes since about 1990 narrow colours further",
+    "owner_change_rate_per_decade": 0.12,
+    "owner_change_note": "share of houses changed by owners per decade since built (new siding, paint colour, porch closed in, extra garage); this slowly breaks the builder pattern on old tract streets; confidence low"
+  },
+  "plans": {
+    "base_plans_per_subdivision": [3, 6],
+    "elevations_per_plan": [2, 3],
+    "mirror_share": 0.5,
+    "palette_colours": [6, 10],
+    "anti_monotony": {"no_same_plan_elevation_colour": ["left neighbour", "right neighbour", "directly across"], "no_same_colour_adjacent": true, "applies_eras": ["1946-1964", "1965-1979", "1980-1998", "1999-2025"]},
+    "lot_and_setback": {"from": "lot_house.csv (SOC AREA) for 1999+; footprints and lot lines for older; front setback learned from footprints to road edge per block", "rule": "setbacks on one block side vary by less than 1.5 m on tract streets and up to 10 m on old rural roads"}
+  },
+  "styles": {
+    "about": "Style by region x era. General knowledge of US house types (no text copied from any guide). Each style sets roof form, pitch, storeys, porch, windows, and wall material weights. Shares are starting values, confidence low.",
+    "northeast": {
+      "pre1920": {"colonial_or_federal_2storey": 0.25, "victorian_queen_anne": 0.2, "folk_victorian": 0.2, "row_house_brick": 0.2, "farmhouse_i_house": 0.15},
+      "1920-1945": {"four_square": 0.2, "craftsman_bungalow": 0.15, "colonial_revival": 0.25, "cape_cod": 0.2, "tudor_revival": 0.1, "row_house_brick": 0.1},
+      "1946-1964": {"cape_cod": 0.35, "ranch": 0.35, "colonial_revival": 0.2, "split_level": 0.1},
+      "1965-1979": {"split_level": 0.3, "raised_ranch": 0.25, "colonial_revival": 0.3, "contemporary": 0.15},
+      "1980-1998": {"neo_colonial": 0.5, "neo_eclectic": 0.3, "contemporary": 0.1, "townhouse": 0.1}
+    },
+    "midwest": {
+      "pre1920": {"folk_victorian": 0.25, "farmhouse_i_house": 0.25, "gable_front": 0.2, "four_square": 0.15, "victorian_queen_anne": 0.15},
+      "1920-1945": {"craftsman_bungalow": 0.35, "four_square": 0.2, "tudor_revival": 0.15, "colonial_revival": 0.15, "cape_cod": 0.15},
+      "1946-1964": {"ranch": 0.5, "cape_cod": 0.25, "split_level": 0.15, "minimal_traditional": 0.1},
+      "1965-1979": {"ranch": 0.4, "split_level": 0.3, "raised_ranch": 0.2, "contemporary": 0.1},
+      "1980-1998": {"neo_eclectic": 0.4, "neo_colonial": 0.3, "ranch": 0.3}
+    },
+    "south": {
+      "pre1920": {"folk_victorian": 0.25, "farmhouse_i_house": 0.2, "shotgun": 0.1, "dogtrot_or_hall_parlor": 0.1, "antebellum_greek_revival": 0.05, "victorian_queen_anne": 0.15, "row_house_brick": 0.15},
+      "1920-1945": {"craftsman_bungalow": 0.4, "colonial_revival": 0.2, "tudor_revival": 0.15, "minimal_traditional": 0.15, "spanish_revival_florida": 0.1},
+      "1946-1964": {"brick_ranch": 0.55, "minimal_traditional": 0.2, "cbs_ranch_florida": 0.15, "split_level": 0.1},
+      "1965-1979": {"brick_ranch": 0.5, "split_level": 0.2, "contemporary": 0.1, "colonial_revival": 0.2},
+      "1980-1998": {"neo_eclectic": 0.4, "neo_colonial": 0.25, "brick_ranch": 0.2, "mediterranean_florida": 0.15}
+    },
+    "west": {
+      "pre1920": {"folk_victorian": 0.3, "craftsman_bungalow": 0.2, "victorian_queen_anne": 0.2, "adobe_or_territorial": 0.15, "farmhouse": 0.15},
+      "1920-1945": {"spanish_revival": 0.35, "craftsman_bungalow": 0.35, "minimal_traditional": 0.15, "pueblo_revival": 0.15},
+      "1946-1964": {"ranch": 0.65, "minimal_traditional": 0.15, "mid_century_modern": 0.1, "split_level": 0.1},
+      "1965-1979": {"ranch": 0.5, "contemporary": 0.2, "split_level": 0.15, "mansard_or_shed_roof": 0.15},
+      "1980-1998": {"mediterranean_stucco": 0.45, "neo_eclectic": 0.3, "ranch": 0.15, "pueblo_revival": 0.1}
+    },
+    "1999-2025_all_regions": {"neo_eclectic": 0.35, "craftsman_revival": 0.2, "mediterranean_stucco": 0.15, "modern_farmhouse_2015+": 0.15, "neo_colonial": 0.15, "note": "weights by division follow the learned wall shares (stucco West, brick South Central, vinyl North)"},
+    "alaska": {"all": {"ranch_or_split_wood": 0.5, "two_storey_wood": 0.25, "log": 0.1, "manufactured": 0.15}, "parts": "arctic entry (small closed porch) at the door, steep metal roofs, raised on posts or piles in permafrost areas, fuel tank beside the house"},
+    "hawaii": {"all": {"plantation_single_wall": 0.35, "post_and_pier_wood": 0.25, "block_stucco_ranch": 0.3, "condo_tower": 0.1}, "parts": "lanai (covered porch), jalousie windows on older houses, hip or double-pitch roofs, corrugated metal roofs, houses on posts above ground"}
+  },
+  "roof": {
+    "form_by_style": {"ranch": {"hip": 0.45, "gable": 0.5, "other": 0.05}, "cape_cod": {"gable": 1.0}, "colonial_revival": {"gable": 0.8, "hip": 0.15, "gambrel": 0.05}, "four_square": {"hip": 0.9, "gable": 0.1}, "craftsman_bungalow": {"gable_low": 0.8, "hip": 0.2}, "spanish_revival": {"flat_parapet": 0.4, "gable_tile": 0.6}, "pueblo_revival": {"flat_parapet": 1.0}, "mediterranean_stucco": {"hip_tile": 0.8, "gable_tile": 0.2}, "neo_eclectic": {"complex_gable_hip": 1.0}, "modern_farmhouse_2015+": {"gable_steep": 0.9, "metal_accent": 0.6}, "shotgun": {"gable_front": 0.8, "hip": 0.2}, "manufactured": {"low_gable": 1.0}},
+    "pitch_deg": {"default": [18, 35], "snow_climate_Dfa_Dfb_Dfc": [26, 45], "hurricane_coast": [18, 30], "desert_BWh": [0, 20], "why": "starting values; lidar roof planes replace them where 3DEP exists"},
+    "hip_bonus_hurricane": "on hurricane coasts (Florida and the Gulf after about 1992 code changes) add 0.2 to hip roof share for houses built after 1995; confidence low",
+    "material": {"asphalt_shingle": "default, most of the US", "metal": "rural South, Alaska, Hawaii, modern farmhouse accents, barns", "clay_or_concrete_tile": "Florida, California, Arizona Spanish and Mediterranean styles", "slate": "pre-1940 in the Northeast and Pennsylvania", "membrane_flat": "flat roofs, commercial", "wood_shake": "Pacific Northwest and California older houses"},
+    "colour": "from the restored aerial photo (ALBD) where the roof is seen; else palette by era"
+  },
+  "ground_contact": {
+    "foundation_height_m": {"from": "NSI found_ht (public field) x 0.3048", "fallback": {"slab": [0.1, 0.25], "crawl": [0.45, 0.9], "basement": [0.3, 0.9], "pier_or_post": [0.6, 2.5], "flood_zone_raised": [1.5, 3.0]}},
+    "foundation_type_share": "storeys_base.csv (SOC BASE) for 1999+; NSI found_type for older (weak evidence: often modelled)",
+    "visible_parts": {"crawl": "vents every 2-3 m, block or brick skirt", "basement": "small basement windows, window wells", "slab": "no step or one step", "pier": "posts and lattice skirt", "steps": "rise 17-19 cm per step up to the door"}
+  },
+  "small_parts": {
+    "porch_share": "lot_house.csv (SOC PRCH) by division x era for 1999+; older: craftsman and folk Victorian porches very common, post-war ranch small stoops",
+    "garage": "lot_house.csv (SOC GAR); older eras: detached rear garage at the end of a side driveway before about 1945, attached front garage after about 1960; garage door panels by era",
+    "always": ["gutters and downspouts (not in the desert Southwest flat roofs)", "house number", "door light", "AC condenser on the side (south and west; window units in older northeast houses)", "electric meter", "hose bib"],
+    "wear": "from age: dirt at the base, faded paint on the south side, moss on north roofs in wet climates, rust under metal parts; process fields from the PROC chunk"
+  },
+  "manufactured_homes": {
+    "from": "ACS B25024 share of 'mobile home' units per tract (Census API, public domain, API notice in sources.json)",
+    "sizes_m": {"single_wide": [[4.3, 4.9], [16, 24]], "double_wide": [[8.5, 9.8], [15, 22]]},
+    "parts": "skirting (vinyl or block), hitch tongue hidden or visible, added wood deck and steps, carport, metal or shingle low roof",
+    "placement": "on rural lots; in parks: rows 5-8 m apart with a park road"
+  },
+  "commercial_and_town": {
+    "note": "Main streets (district:main_street in the place graph): two-storey brick commercial blocks before 1940 with shopfronts, cornices and signs; strip centres after 1960; this is the facade thread's area (FACD), the graph gives era and material weights only"
+  },
+  "construction_sites": {
+    "problem": "aerial photos can be older than the map and show bare graded ground where houses are now, or the reverse (gotcha 8.10)",
+    "detect": "(a) Annual NLCD change to developed in the last 3 years; (b) Overture or Microsoft footprints with no trees and bare soil in the aerial; (c) OSM landuse=construction; (d) new roads in OSM with no footprints yet",
+    "action": "set site:construction for the block: the eye weight goes down, the prior leads; and the game can show a real building site instead of a fault: silt fence along the low edge, orange safety fence, a dumpster, a portable toilet, a gravel construction entrance, house frames or slabs at the lots without footprints, stacks of lumber",
+    "confidence": "design; needs one test place with a known recent subdivision"
+  }
+}

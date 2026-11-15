@@ -1,0 +1,67 @@
+{
+  "version": "world-graph-v0.1",
+  "about": "Anchors are the places where things attach. Each anchor has a stable id rule (no rules version in it), so the stable dice give the same objects after an update (gotcha 8.12), and one owner tile (hash of the stable id), so objects on a tile border are made once (gotcha 8.3).",
+  "anchors": [
+    {
+      "id": "anchor:road_edge",
+      "found_by": "OSM way centreline + CORR cross-section (edge of travelled way, shoulder, kerb, verge, ditch)",
+      "fallback": "class width table when the cross-section is missing",
+      "stable_id": "hash(osm way id, side, 10 m station index from the way start)",
+      "stable_id_note": "if the way is split or merged in a newer OSM, stations move; use the way's first node id + the along distance from that node as a second key; T8 measures churn",
+      "offset_reference": "the outer edge of the travelled way (paint line or pavement edge); kerb face where a kerb exists"
+    },
+    {
+      "id": "anchor:driveway",
+      "found_by": "OSM service=driveway ways; else derived: one per house footprint (Microsoft or Overture) that faces a road within 60 m, at the lot frontage, on the garage side when the footprint shows an attached garage",
+      "fallback": "derived position with p_exist 0.9 for houses on dens:1-3 roads",
+      "stable_id": "hash(osm way id) or hash(footprint id, road way id)"
+    },
+    {
+      "id": "anchor:junction",
+      "found_by": "OSM node shared by two or more drivable ways (driveways and parking aisles do not count)",
+      "stable_id": "hash(osm node id)"
+    },
+    {
+      "id": "anchor:junction_approach",
+      "found_by": "each way that enters a junction; the sign point is 3-15 m before the junction on the right side",
+      "stable_id": "hash(junction node id, entering way id)"
+    },
+    {
+      "id": "anchor:curve",
+      "found_by": "geometry: a run of the way where the fitted radius is below 600 m (2000 ft), with its start (PC), end (PT), radius, and direction; the CORR cross-section gives superelevation",
+      "stable_id": "hash(osm way id, index of the curve along the way)"
+    },
+    {
+      "id": "anchor:maxspeed_change",
+      "found_by": "OSM maxspeed tag differs between two joined ways, or a node with maxspeed change",
+      "stable_id": "hash(node id)"
+    },
+    {
+      "id": "anchor:stream_crossing",
+      "found_by": "OSM waterway or NHD flowline crosses a road way; type culvert, bridge or ford from the tags (tunnel=culvert, bridge=*) and NBI for bridges",
+      "stable_id": "hash(waterway way id, road way id)"
+    },
+    {
+      "id": "anchor:ditch_driveway_crossing",
+      "found_by": "anchor:driveway where the CORR cross-section has a ditch on that side",
+      "stable_id": "hash(driveway stable id)"
+    },
+    {
+      "id": "anchor:bus_stop",
+      "found_by": "OSM highway=bus_stop or public_transport=platform nodes",
+      "stable_id": "hash(osm node id)"
+    },
+    {
+      "id": "anchor:building_front",
+      "found_by": "the footprint edge that faces the nearest road (Microsoft, Overture or OSM footprint)",
+      "stable_id": "hash(footprint id, edge index)",
+      "used_by": ["foundation shrubs (vegetation.json)", "porch and entry (buildings-variety.json)", "door-mounted mailbox"]
+    },
+    {
+      "id": "anchor:parcel_edge",
+      "found_by": "later: county parcel lines where the licence allows; now: the line half way between two neighbouring footprints, from the road back to the rear of the footprints",
+      "stable_id": "hash(the two footprint ids, sorted)",
+      "used_by": ["side and rear fences", "hedges", "tree rows between lots"]
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "version": "world-graph-v0.1",
+  "about": "Tree and bush layer of the world knowledge graph. the owner says trees look most fake. The cause is mostly structure, not leaf texture: real stands have many thin trunks of mixed size, an undergrowth layer, a closed 'wall' of branches at the forest edge, and mowed strips at the road. This file says, per place, what grows, how big, how dense, in which layers, and why (each value has a source in the data). Run time: the scan engine reads TreeMap, LANDFIRE, NLCD and lidar per tile and fills the TREE chunk (48 B per tree) and a layer mask for undergrowth and edge; the trees team makes the meshes.",
+  "what_changes_first_for_trees": [
+    {"rank": 1, "change": "Real stand from a real plot. Each 30 m TreeMap pixel points to one FIA plot, and that plot has a tree list: species, trunk diameter, height, crown ratio, live or dead, and trees per acre. We plant that list (trees per acre x 0.09 ha per pixel), with positions from lidar crowns where they exist and else from a spaced point process. Result: mixed sizes, mixed species, some dead snags, the right number of thin trunks.", "fixes": "every tree the same size; too few trunks; one species"},
+    {"rank": 2, "change": "Forest edge layer. Along a road through forest, the first 3-8 m of trees keep branches to the ground (they get side light) and a band of shrubs and young trees fills the gap; in the interior, trunks are bare up to the canopy base height (LANDFIRE CBH). Between the road and the edge, a mowed strip whose width comes from the road class (state mowing practice, roughly the clear zone).", "fixes": "you can see straight into the forest between bare trunks, which looks fake from the road"},
+    {"rank": 3, "change": "Undergrowth by forest group x region x slope aspect x moisture (table below), from LANDFIRE EVT where it names a shrub layer: rhododendron and mountain laurel thickets on north slopes and along streams in the Appalachians (US 129 Dragon), sword fern and salal in Pacific Northwest forests, saw palmetto under Florida pines, wiregrass under longleaf, bare needle litter under dense loblolly, open grass under ponderosa.", "fixes": "bare ground under trees"},
+    {"rank": 4, "change": "Street and yard trees sized by the age of the neighbourhood: tree height grows with years since the houses were built (NSI/ACS median year built), so a 2015 subdivision has 3-5 m trees and a 1925 street has 20-30 m trees over the road. Foundation shrubs along house fronts after about 1945; hedges and tree rows on lot lines.", "fixes": "new suburbs with old trees, old streets with no canopy"},
+    {"rank": 5, "change": "Season and colour from the date and place: leaf-out and leaf-fall by latitude and elevation, autumn colour by species group (maple red-orange, oak brown-red, aspen and birch yellow, conifers stay green), winter leaf-off opens the view through deciduous forest.", "fixes": "one green everywhere, all year"}
+  ],
+  "sources_used": ["src:treemap", "src:fia", "src:landfire", "src:nlcd", "src:3dep", "src:osm", "src:usa_npn"],
+  "layers": [
+    {"id": "layer:canopy", "from": "TreeMap plot tree list (TreeMap 2016/2020/2022) + 3DEP lidar crowns (segmentation, proposal 4) + NLCD tree canopy cover as a density check", "per_tree": ["species group", "trunk diameter", "height", "crown base height", "crown radius", "live/dead", "lean"]},
+    {"id": "layer:subcanopy", "from": "the smaller trees of the same plot list (diameter < 12.7 cm saplings are in FIA microplots) + LANDFIRE EVH height class"},
+    {"id": "layer:shrub", "from": "LANDFIRE EVT shrub types and the understory table below; cover from LANDFIRE EVC where EVT is a shrubland"},
+    {"id": "layer:ground", "from": "litter type by forest group (needles, broad leaves, moss, grass), from this table; feeds the ground material and scatter"},
+    {"id": "layer:edge", "from": "derived: the band within 3-8 m of where canopy meets a road, field or lawn"}
+  ],
+  "forest_type_groups": {
+    "about": "FIA forest-type groups (FORTYPCD // 10 * 10). Crown form drives the mesh family; heights come from the plot tree list, not from this table. Undergrowth entries are typical, confidence medium unless marked.",
+    "100": {"name": "White / red / jack pine", "leaf": "evergreen needle", "crown": "conical young, irregular flat-topped old (white pine)", "undergrowth": "low blueberry, bracken fern, needle litter", "regions": ["northeast", "lake states"]},
+    "120": {"name": "Spruce / fir", "leaf": "evergreen needle", "crown": "narrow conical, branches to the ground at edges", "undergrowth": "moss, ferns, dense young fir", "regions": ["northeast", "lake states", "high Appalachians"]},
+    "140": {"name": "Longleaf / slash pine", "leaf": "evergreen needle", "crown": "tall clear trunk, small round crown on top", "undergrowth": "open: wiregrass and saw palmetto (fire kept); slash pine in Florida with palmetto", "regions": ["south coastal plain"]},
+    "160": {"name": "Loblolly / shortleaf pine", "leaf": "evergreen needle", "crown": "oval crown on a long clear trunk; plantations in straight rows", "undergrowth": "needle litter, sweetgum and red maple saplings, greenbrier, Japanese honeysuckle at edges", "plantation_rule": "rows 2.5-3.7 m apart where the stand origin is planted (FIA STDORGCD) or the aerial shows rows", "regions": ["south"]},
+    "180": {"name": "Pinyon / juniper", "leaf": "evergreen", "crown": "low rounded, 3-10 m", "undergrowth": "bare soil and gravel between trees, sagebrush, bunch grass, biological soil crust", "spacing": "open, 30-60 % bare", "regions": ["west interior"]},
+    "200": {"name": "Douglas-fir", "leaf": "evergreen needle", "crown": "tall conical, drooping branches", "undergrowth": "west side: sword fern, salal, Oregon grape, moss on trunks; east side: drier, grass and ninebark", "regions": ["pacific northwest", "rockies"]},
+    "220": {"name": "Ponderosa pine", "leaf": "evergreen needle", "crown": "open, orange plated bark on big trees", "undergrowth": "open park-like grass and needle litter, scattered shrubs", "spacing": "wide, sunny floor", "regions": ["west interior", "Coconino"]},
+    "260": {"name": "Fir / spruce / mountain hemlock", "leaf": "evergreen needle", "crown": "narrow spires", "undergrowth": "huckleberry, snow-bent saplings", "regions": ["high west"]},
+    "280": {"name": "Lodgepole pine", "leaf": "evergreen needle", "crown": "thin straight trunks, dense 'dog-hair' stands", "undergrowth": "sparse, many dead standing trunks after beetle kill", "regions": ["rockies"]},
+    "300": {"name": "Hemlock / Sitka spruce", "leaf": "evergreen needle", "crown": "tall, drooping tops", "undergrowth": "moss everywhere, ferns, devil's club, nurse logs", "regions": ["pacific coast", "southeast Alaska"]},
+    "340": {"name": "Redwood", "leaf": "evergreen", "crown": "very tall, crowns high up", "undergrowth": "redwood sorrel, sword fern, tanoak; deep shade", "regions": ["coast California, Big Sur canyons"]},
+    "370": {"name": "California mixed conifer", "leaf": "evergreen", "crown": "mixed", "undergrowth": "manzanita and ceanothus on dry sides", "regions": ["Sierra, California mountains"]},
+    "400": {"name": "Oak / pine", "leaf": "mixed", "crown": "mixed", "undergrowth": "mixed shrubs, leaf and needle litter", "regions": ["south", "east"]},
+    "500": {"name": "Oak / hickory", "leaf": "deciduous broadleaf", "crown": "broad rounded", "undergrowth": "Appalachian: rhododendron and mountain laurel on north slopes and near streams, dogwood and redbud in the subcanopy; Ozarks and Midwest: open, spicebush, poison ivy, leaf litter", "regions": ["east", "Appalachians", "Ozarks"]},
+    "600": {"name": "Oak / gum / cypress", "leaf": "deciduous", "crown": "broad; bald cypress with knees in water", "undergrowth": "wet: Spanish moss on oaks and cypress, palmetto, standing water", "regions": ["south bottomlands"]},
+    "700": {"name": "Elm / ash / cottonwood", "leaf": "deciduous broadleaf", "crown": "large spreading cottonwoods", "undergrowth": "river bottoms: willow thickets, grass", "rule": "on the Great Plains this group follows rivers and creeks only (Nebraska); shelterbelt rows around farmsteads (eastern redcedar, cottonwood, green ash) are a separate planted layer", "regions": ["plains rivers", "midwest"]},
+    "800": {"name": "Maple / beech / birch", "leaf": "deciduous broadleaf", "crown": "broad, dense shade", "undergrowth": "sparse under beech; hobblebush, ferns; stone walls in New England woods (old farm fields)", "regions": ["northeast", "lake states"]},
+    "900": {"name": "Aspen / birch", "leaf": "deciduous", "crown": "slender white trunks, small crowns", "undergrowth": "grass and forbs, dense young aspen", "regions": ["lake states", "rockies", "Alaska"]},
+    "920": {"name": "Western oak", "leaf": "evergreen or deciduous oak", "crown": "spreading, often wider than tall", "undergrowth": "golden dry grass in summer (California), poison oak", "regions": ["California", "southwest"]},
+    "970": {"name": "Woodland hardwoods", "leaf": "mixed", "crown": "short, open", "undergrowth": "dry shrubs", "regions": ["west interior"]},
+    "980": {"name": "Tropical hardwoods", "leaf": "evergreen broadleaf", "crown": "varied", "undergrowth": "dense", "regions": ["Hawaii", "south Florida"]},
+    "999": {"name": "Nonstocked", "leaf": "none", "undergrowth": "LANDFIRE EVT decides (shrubland, grass, recent burn or cut)"}
+  },
+  "non_forest": {
+    "about": "Where TreeMap has no forest, LANDFIRE EVT and NLCD decide the cover.",
+    "shrubland_west": "sagebrush (grey-green, 0.5-1.5 m) on the Great Basin and Wyoming; creosote bush (spaced 2-5 m apart, bare ground between) in the hot deserts; chaparral (dense, 1-3 m) on California slopes; coastal sage scrub on CA-1",
+    "grassland_plains": "mixed and tall grass; Sandhills grass on dunes (Cherry County); fence lines and windmills; trees only along water and around farmsteads",
+    "pasture_hay": "short grass, fences, single shade trees in fields (often oaks or cottonwoods), round bales in season",
+    "crops": "row direction from the aerial; field edge strip of grass and weeds 1-3 m",
+    "wetland": "cattail and reed along ditches and pond edges; standing water by season"
+  },
+  "roadside_profile": {
+    "about": "Cross-section from the pavement edge outwards. Widths come from the CORR cross-section where it exists; these are fallbacks.",
+    "mowed_strip_m": {"motorway": [9, 15], "trunk": [6, 12], "primary": [4, 9], "secondary": [3, 6], "tertiary": [2, 4], "unclassified": [1, 3], "residential": "lawn to the kerb or edge", "why": "state DOTs mow about the clear zone near higher-speed roads; low roads get one mower width or none (confidence medium)"},
+    "unmowed_band_m": [0.5, 3],
+    "edge_wall": {"depth_m": [3, 8], "shrub_cover": [0.5, 0.9], "branches_to_ground_share": 0.7},
+    "power_line_corridor": "where a pole line runs inside the forest, trees are cut back about 3-6 m each side of the wires (utility vegetation management) - a visible gap in the canopy along the road",
+    "mountain_road": "on cut slopes (lidar slope > 35 deg) show rock or thin soil with small trees and roots; on fill slopes, trees start lower and lean out"
+  },
+  "residential": {
+    "street_trees": {"where": "planting strip between kerb and sidewalk where the cross-section has one; else in the front lawn 3-6 m from the edge", "spacing_m": [9, 15], "spacing_why": "common city street-tree spacing guidance (30-50 ft)", "age_rule": "height = species max height x (1 - exp(-years since built / 25)) with years from the tract median year built; confidence low", "species": "by region and hardiness zone (see below); one species per block is common on older planned streets (lumpiness high)"},
+    "foundation_shrubs": {"where": "along the building front, 0.5-1.5 m out", "share_by_era": {"pre1945": 0.4, "1946-1979": 0.85, "1980+": 0.9}, "height_m": [0.5, 1.5], "why": "post-war ranch and later houses are almost always planted along the front; confidence low"},
+    "hedges_and_lot_rows": {"where": "anchor:parcel_edge", "share": [0.1, 0.4], "note": "privet, arborvitae (north), wax myrtle and ligustrum (south)"},
+    "regional_trees": {
+      "northeast": ["sugar and red maple", "oaks", "white pine", "Norway spruce", "callery pear (suburbs)"],
+      "midwest": ["maples", "oaks", "honeylocust", "lindens", "ash (many dead or removed after emerald ash borer)"],
+      "south": ["live oak (coastal)", "southern magnolia", "crape myrtle (very common, small)", "loblolly pine", "callery pear"],
+      "florida": ["cabbage palm", "royal and queen palms (south)", "live oak with Spanish moss", "slash pine"],
+      "southwest_desert": ["palo verde", "mesquite", "fan palms", "gravel yards with cactus and agave (xeriscape)"],
+      "california": ["coast live oak", "eucalyptus", "Mexican fan palm", "Canary Island pine", "jacaranda (south)"],
+      "pacific_northwest": ["Douglas-fir", "western red cedar", "bigleaf maple", "flowering cherry (city)"],
+      "plains": ["cottonwood", "green ash", "eastern redcedar shelterbelts", "Siberian elm"],
+      "alaska": ["white and black spruce", "paper birch", "aspen", "willow and alder thickets"],
+      "hawaii": ["coconut palm (coast)", "monkeypod", "banyan", "ohia lehua (native forest)", "kiawe on dry leeward coasts", "invasive strawberry guava and albizia in wet areas"]
+    }
+  },
+  "season": {
+    "leaf_out_rule": "Hopkins' bioclimatic rule as fallback: spring events about 4 days later per degree of latitude north, per 5 degrees of longitude east, and per 400 ft (about 120 m) higher; replace with USA-NPN or satellite phenology when its terms are read",
+    "autumn_colour": {"maple": "red to orange", "oak": "brown to dark red, late", "hickory": "golden", "aspen_birch": "yellow", "sweetgum": "purple to red", "conifer": "stays green; larch and bald cypress turn orange and drop"},
+    "winter": "deciduous crowns become bare branches (the trees team needs a leaf-off mesh state); evergreen shrubs (rhododendron) stay; snow on branches in snowy climates by the weather"
+  },
+  "alaska_hawaii": {
+    "alaska": "TreeMap covers the lower 48 only, so Alaska uses LANDFIRE (which covers Alaska) and NLCD Alaska: boreal black spruce on cold wet ground (thin 'pencil' spruce, often leaning on permafrost), white spruce and birch on warm slopes and rivers, willow and alder thickets at the road edge, tundra above tree line and on the North Slope (Koppen ET); southeast Alaska is temperate rainforest (group 300). Held-out test places: Anchorage, Fairbanks North Star, Juneau.",
+    "hawaii": "TreeMap does not cover Hawaii; LANDFIRE covers Hawaii. Wet windward sides: dense green forest, many invasive trees (albizia, strawberry guava), tree ferns at higher elevation; dry leeward sides: kiawe and grass; lava flows: bare black rock (young) to ohia and fern (older); much of the lowland is former sugar and pineapple land, now grass and brush. Held-out test places: Honolulu, Hawaii County, Maui."
+  }
+}
