@@ -1405,7 +1405,7 @@ namespace SimCruiseStartTest
 					{
 						if (Sg.Key == r) continue;
 						const FSimCruiseRibbon& O = Roads.Ribbons[Sg.Key];
-						if (O.St[Sg.Value].bBridge && O.St[Sg.Value + 1].bBridge) continue;
+						if (O.St[Sg.Value].bBridge && O.St[Sg.Value + 1].bBridge && O.St[Sg.Value].Layer >= St.Layer) continue;
 						const FSimCruiseRoadHit Hit = Roads.Project(Sg.Key, Sg.Value, St.C);
 						if (FMath::Abs(Hit.Along) > 0.01 || FMath::Abs(Hit.Lateral) > Hit.HalfW) continue;
 						if (FMath::Abs(FVector2d::DotProduct(St.T, O.St[Sg.Value].T)) > 0.94) continue;

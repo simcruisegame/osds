@@ -1227,7 +1227,9 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 							const FSimCruiseRibbon& O = Ribbons[o];
 							for (int32 i = 0; i + 1 < O.St.Num(); ++i)
 							{
-								if (O.St[i].bBridge && O.St[i + 1].bBridge) continue; // a deck by a deck
+								// A deck by a deck at its own OSM layer (a merge, a gore) is a junction; a deck over a
+								// deck on a lower layer (a stack interchange's levels) needs the same clearance as over a road.
+								if (O.St[i].bBridge && O.St[i + 1].bBridge && O.St[i].Layer >= St.Layer) continue;
 								const FSimCruiseRoadHit Hit = Project(o, i, P);
 								if (FMath::Abs(Hit.Along) > 0.01 || FMath::Abs(Hit.Lateral) > Hit.HalfW) continue;
 								if (FMath::Abs(FVector2d::DotProduct(St.T, O.St[i].T)) > 0.94) continue; // the road going on
