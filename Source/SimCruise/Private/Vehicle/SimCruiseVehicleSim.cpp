@@ -628,18 +628,30 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		// controller reads its output shaft, not the engine's speed: through a shift and
 		// with the clutch slipping the engine runs apart from the road (it dropped to idle
 		// and called down shift after shift: 19 mph in first at 851 rpm on the Dragon).
-		const double RoadRpm = FMath::Abs(Speed) * ForwardRatio / R * 60.0 / Tau;
+		// The output shaft: the driven wheels' speed through the gear (a few percent of tyre slip
+		// over the road at full load, as a real controller sees it). The upshift guard below still
+		// reads the car's own speed, so a spinning launch does not change up.
+		const double RoadRpm = FMath::Abs(DrivenOmega()) * ForwardRatio * 60.0 / Tau;
 		const int32 Next = SimCruiseDynamics::SelectAutomaticGear(Car, State.Gear, RoadRpm,
 			FMath::Abs(Speed) * ForwardRatio / R, Throttle, State.bServiceBrake || BrakeAmount > 0.01,
 			Speed * Omega.Z / SimCruiseDynamics::GravityMps2);
-		const int32 Direction = Next > State.Gear ? 1 : Next < State.Gear ? -1 : 0;
+		int32 NextGear = Next;
+		// At the limiter, change up: a driven tyre's slip at speed (a few percent) keeps the road's
+		// speed under the upshift point while the engine sits on its fuel cut (the C8 held 5th at
+		// 6619 rpm and 153 mph, its road speed reading 6350).
+		if (NextGear == State.Gear && State.Gear < Car.ForwardGearRatios.Num() - 1 && !(State.bServiceBrake || BrakeAmount > 0.01) &&
+			State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98 && FMath::Abs(Speed) * ForwardRatio / R * 60.0 / Tau > Car.AutomaticUpshiftSpeedRpm * 0.85)
+		{
+			NextGear = State.Gear + 1;
+		}
+		const int32 Direction = NextGear > State.Gear ? 1 : NextGear < State.Gear ? -1 : 0;
 		// No change back the other way within 2 s of the last one (the Dragon's D5-D4-D2-D4 and
 		// 1-2-1-2 hunting as the pedal moved), unless the engine is at its limiter.
 		const bool bReversal = Direction != 0 && Direction == -State.LastShiftDirection && State.SinceShiftS < 2.0;
 		const bool bAtLimit = Direction > 0 && State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98;
 		if (Direction != 0 && (!bReversal || bAtLimit))
 		{
-			State.Gear = Next;
+			State.Gear = NextGear;
 			State.ShiftTimeS = Car.GearShiftDurationS;
 			State.LastShiftDirection = Direction;
 			State.SinceShiftS = 0.0;

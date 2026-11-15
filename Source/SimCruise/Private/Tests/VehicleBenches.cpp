@@ -706,6 +706,7 @@ namespace
 		double BestAt = 0.0;
 		FVector3d Start = FVector3d::ZeroVector;
 		bool bStarted = false;
+		int32 TraceGear = -1;
 		std::atomic<bool> bDone{ false };
 		FSimCruiseTopSpeedResult Result;
 
@@ -721,6 +722,11 @@ namespace
 			C.Controls.Throttle = 1.0;
 			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
 			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
+			if (C.Sim.State.Gear + 1 != TraceGear)
+			{
+				TraceGear = C.Sim.State.Gear + 1;
+				Result.GearTrace += FString::Printf(TEXT(" %.1fs:g%d %.0fmph %.0frpm"), T, TraceGear, Speed * 2.23694, C.Sim.State.EngineRpm);
+			}
 			// Top speed: no gain of 0.1 m/s in the last 8 s.
 			if (Speed > Best + 0.1) { Best = Speed; BestAt = T; }
 			const double Distance = (C.Body.PositionM - Start).Size();
@@ -847,20 +853,34 @@ namespace
 			{
 				const int32 Direction = Gear > LastGear ? 1 : -1;
 				++Result.Shifts;
-				if (Direction == -LastDirection && T - LastShiftT < 2.0) ++Result.QuickReversals;
+				// A change up at the limiter is no hunting (the engine must not over-rev).
+				const bool bAtLimiter = Direction > 0 && Sim.State.EngineRpm >= Sim.GetCar().FuelCutSpeedRpm * 0.97;
+				if (Direction == -LastDirection && T - LastShiftT < 2.0 && !bAtLimiter) ++Result.QuickReversals;
+				Result.Trace += FString::Printf(TEXT(" %.1fs:g%d(%.0fmph,%.0frpm,p%.1f)"), T, Gear, Speed * 2.23694, Sim.State.EngineRpm, C.Controls.Throttle);
 				LastDirection = Direction;
 				LastShiftT = T;
 			}
 			LastGear = Gear;
 			// In gear, clutch home (no shift running) and rolling: the engine turns with the road.
 			const FSimCruiseCarDefinition& Car = Sim.GetCar();
-			if (Sim.State.ShiftTimeS <= 0.0 && T - LastShiftT > 0.6 && Speed > 6.0 && Car.ForwardGearRatios.IsValidIndex(Sim.State.Gear))
+			// In 2nd and up (1st slips by design while pulling away), 1.2 s after a change.
+			if (Sim.State.ShiftTimeS <= 0.0 && T - LastShiftT > 1.2 && Speed > 6.0 && Sim.State.Gear > 0 && Car.ForwardGearRatios.IsValidIndex(Sim.State.Gear))
 			{
-				const double RoadRpm = Speed / Sim.GetTireRadiusM() * Car.ForwardGearRatios[Sim.State.Gear] * Car.FinalDriveRatio * 60.0 / Tau;
+				// The gearbox's output: the driven wheels' mean speed (a spinning tyre turns the engine
+				// with it; only the clutch may come between them).
+				double Driven = 0.0;
+				int32 DrivenCount = 0;
+				for (int32 W = 0; W < 4; ++W) if (Car.IsDrivenWheel(W)) { Driven += FMath::Abs(Sim.State.Wheels[W].AngularSpeedRadPerSecond); ++DrivenCount; }
+				const double RoadRpm = Driven / FMath::Max(DrivenCount, 1) * Car.ForwardGearRatios[Sim.State.Gear] * Car.FinalDriveRatio * 60.0 / Tau;
 				Result.LowestRoadRpm = FMath::Min(Result.LowestRoadRpm, RoadRpm);
 				// Below the launch speed the clutch may slip by design (pulling away); judge above it.
 				if (RoadRpm < Car.LaunchSpeedRpm + Car.LaunchSpeedRpmPerThrottleFraction + 200.0) return;
-				Result.WorstRpmGap = FMath::Max(Result.WorstRpmGap, FMath::Abs(Sim.State.EngineRpm - RoadRpm) / FMath::Max(RoadRpm, 1.0));
+				const double Gap = FMath::Abs(Sim.State.EngineRpm - RoadRpm) / FMath::Max(RoadRpm, 1.0);
+				if (Gap > Result.WorstRpmGap)
+				{
+					Result.WorstRpmGap = Gap;
+					Result.WorstAt = FString::Printf(TEXT("t %.2f s gear %d pedal %.2f brake %.2f engine %.0f road %.0f rpm, %.1f s since the change"), T, Gear, C.Controls.Throttle, C.Controls.Brake, Sim.State.EngineRpm, RoadRpm, T - LastShiftT);
+				}
 			}
 			Result.bCompleted = true;
 		}

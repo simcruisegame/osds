@@ -107,6 +107,8 @@ struct FSimCruiseTopSpeedResult
 	double Rpm = 0.0;
 	double SimSeconds = 0.0;
 	double DistanceM = 0.0;
+	/** Each gear change: time, gear, speed, engine and road rpm. */
+	FString GearTrace;
 };
 
 FSimCruiseTopSpeedResult SimCruiseRunTopSpeed(const FSimCruiseCarDefinition& Car, double FixedStepS);
@@ -133,6 +135,9 @@ struct FSimCruiseShiftDriveResult
 	/** In gear with the clutch home: the largest gap of the engine from the road's speed (fraction). */
 	double WorstRpmGap = 0.0;
 	double LowestRoadRpm = 1.0e9;
+	/** Where the worst gap was: time, gear, pedal, brake, engine and road rpm. */
+	FString WorstAt;
+	FString Trace;
 };
 
 FSimCruiseShiftDriveResult SimCruiseRunShiftDrive(const FSimCruiseCarDefinition& Car, double FixedStepS);
