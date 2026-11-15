@@ -1,0 +1,478 @@
+{
+ "seed": 20261114,
+ "made_utc": "2026-11-15T00:24:11Z",
+ "source": "OpenStreetMap via the Overpass API (overpass-api.de), low rate",
+ "licence": "ODbL 1.0, (c) OpenStreetMap contributors",
+ "drive": "from approach_a and from approach_b (both directions), bridge and deck rules, frame beside the aerial",
+ "places": [
+  {
+   "kind": "bridge",
+   "source": "random",
+   "area": "Anchorage AK",
+   "osm": "way/553646309",
+   "name": "Creekside Center Drive",
+   "lat": 61.207169,
+   "lon": -149.739809,
+   "heading_deg": 128.9,
+   "heading_back_deg": 308.9,
+   "approach_a": [
+    61.208751,
+    -149.74388
+   ],
+   "approach_b": [
+    61.20576,
+    -149.736179
+   ],
+   "length_m": 30
+  },
+  {
+   "kind": "bridge",
+   "source": "world-lane",
+   "area": "Detroit, Woodward over I-75",
+   "lat": 42.3342,
+   "lon": -83.0457,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "long-water-bridge",
+   "source": "random",
+   "area": "New Orleans",
+   "osm": "way/161590918",
+   "name": "",
+   "lat": 29.985787,
+   "lon": -90.05278,
+   "heading_deg": 13.3,
+   "heading_back_deg": 193.3,
+   "approach_a": [
+    29.979128,
+    -90.059226
+   ],
+   "approach_b": [
+    29.997676,
+    -90.044101
+   ],
+   "length_m": 2076
+  },
+  {
+   "kind": "road-under-bridge",
+   "source": "random",
+   "area": "Philadelphia",
+   "osm": "way/49960916",
+   "name": "Delaware Expressway",
+   "lat": 39.945342,
+   "lon": -75.142639,
+   "heading_deg": 189.2,
+   "heading_back_deg": 9.2,
+   "approach_a": [
+    39.948733,
+    -75.141921
+   ],
+   "approach_b": [
+    39.943125,
+    -75.143109
+   ],
+   "length_m": 132
+  },
+  {
+   "kind": "road-under-bridge",
+   "source": "world-lane",
+   "area": "Hilo",
+   "lat": 19.7357,
+   "lon": -155.094,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "elevated-road",
+   "source": "random",
+   "area": "Kansas City",
+   "osm": "way/439010638",
+   "name": "Main Street",
+   "lat": 39.101067,
+   "lon": -94.583132,
+   "heading_deg": 182.6,
+   "heading_back_deg": 2.6,
+   "approach_a": [
+    39.103399,
+    -94.583005
+   ],
+   "approach_b": [
+    39.098595,
+    -94.583263
+   ],
+   "length_m": 35
+  },
+  {
+   "kind": "elevated-road",
+   "source": "world-lane",
+   "area": "Hilo",
+   "lat": 19.715,
+   "lon": -155.072,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "ramp",
+   "source": "random",
+   "area": "Hartford",
+   "osm": "way/17170339",
+   "name": "",
+   "lat": 41.765183,
+   "lon": -72.656119,
+   "heading_deg": 148.2,
+   "heading_back_deg": 328.2,
+   "approach_a": [
+    41.768255,
+    -72.658809
+   ],
+   "approach_b": [
+    41.762952,
+    -72.65444
+   ],
+   "length_m": 193
+  },
+  {
+   "kind": "ramp",
+   "source": "world-lane",
+   "area": "Hilo",
+   "lat": 19.7357,
+   "lon": -155.094,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "stack-interchange",
+   "source": "random",
+   "area": "Milwaukee",
+   "osm": "way/19851188",
+   "name": "",
+   "lat": 43.035839,
+   "lon": -87.92124,
+   "heading_deg": 267.0,
+   "heading_back_deg": 87.0,
+   "approach_a": [
+    43.036077,
+    -87.916311
+   ],
+   "approach_b": [
+    43.035695,
+    -87.924625
+   ],
+   "length_m": 178
+  },
+  {
+   "kind": "road-tunnel",
+   "source": "random",
+   "area": "Buffalo",
+   "osm": "way/174171266",
+   "name": "Main Street",
+   "lat": 42.879511,
+   "lon": -78.87648,
+   "heading_deg": 193.6,
+   "heading_back_deg": 13.6,
+   "approach_a": [
+    42.882364,
+    -78.875539
+   ],
+   "approach_b": [
+    42.877328,
+    -78.8772
+   ],
+   "length_m": 77
+  },
+  {
+   "kind": "road-tunnel",
+   "source": "world-lane",
+   "area": "Seattle",
+   "lat": 47.6284,
+   "lon": -122.3547,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "roundabout",
+   "source": "random",
+   "area": "Maui HI",
+   "osm": "way/832132951",
+   "name": "",
+   "lat": 20.866078,
+   "lon": -156.484096,
+   "heading_deg": 259.8,
+   "heading_back_deg": 79.8,
+   "approach_a": [
+    20.864482,
+    -156.485884
+   ],
+   "approach_b": [
+    20.86666,
+    -156.481741
+   ],
+   "length_m": 84
+  },
+  {
+   "kind": "roundabout",
+   "source": "world-lane",
+   "area": "Carmel, IN",
+   "lat": 39.9784,
+   "lon": -86.118,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "footbridge",
+   "source": "random",
+   "area": "San Francisco Bay",
+   "osm": "way/911286506",
+   "name": "",
+   "lat": 37.58043,
+   "lon": -122.052318,
+   "heading_deg": 302.7,
+   "heading_back_deg": 122.7,
+   "approach_a": [
+    37.579112,
+    -122.049725
+   ],
+   "approach_b": [
+    37.582043,
+    -122.05564
+   ],
+   "length_m": 115
+  },
+  {
+   "kind": "footbridge",
+   "source": "world-lane",
+   "area": "Hilo",
+   "lat": 19.7357,
+   "lon": -155.094,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "skyway",
+   "source": "random",
+   "area": "Buffalo",
+   "osm": "way/274444382",
+   "name": "",
+   "lat": 42.875487,
+   "lon": -78.875991,
+   "heading_deg": 283.6,
+   "heading_back_deg": 103.6,
+   "approach_a": [
+    42.876044,
+    -78.87894
+   ],
+   "approach_b": [
+    42.874978,
+    -78.872986
+   ],
+   "length_m": 119
+  },
+  {
+   "kind": "skyway",
+   "source": "world-lane",
+   "area": "Seattle",
+   "lat": 47.658,
+   "lon": -122.3547,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "rail-level-crossing",
+   "source": "random",
+   "area": "Indianapolis",
+   "osm": "node/180394392",
+   "name": "",
+   "lat": 39.764995,
+   "lon": -86.130612,
+   "heading_deg": null,
+   "approach_a": [
+    39.7649945,
+    -86.130612
+   ],
+   "approach_b": [
+    39.7649945,
+    -86.130612
+   ],
+   "length_m": 0
+  },
+  {
+   "kind": "rail-bridge",
+   "source": "random",
+   "area": "New York",
+   "osm": "way/46735710",
+   "name": "Main Line",
+   "lat": 40.74127,
+   "lon": -73.898121,
+   "heading_deg": 140.4,
+   "heading_back_deg": 320.4,
+   "approach_a": [
+    40.743234,
+    -73.900265
+   ],
+   "approach_b": [
+    40.739539,
+    -73.896232
+   ],
+   "length_m": 34
+  },
+  {
+   "kind": "rail-bridge",
+   "source": "world-lane",
+   "area": "Gilbert",
+   "lat": 33.3489,
+   "lon": -111.7859,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "multi-storey-parking",
+   "source": "random",
+   "area": null,
+   "osm": null,
+   "note": "not found in 12 seeded areas"
+  },
+  {
+   "kind": "multi-storey-parking",
+   "source": "world-lane",
+   "area": "Detroit",
+   "lat": 42.3667,
+   "lon": -83.0457,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "retaining-wall",
+   "source": "random",
+   "area": "Miami",
+   "osm": "way/1571489902",
+   "name": "",
+   "lat": 25.78791,
+   "lon": -80.202355,
+   "heading_deg": 268.1,
+   "heading_back_deg": 88.1,
+   "approach_a": [
+    25.787995,
+    -80.199486
+   ],
+   "approach_b": [
+    25.787837,
+    -80.204848
+   ],
+   "length_m": 38
+  },
+  {
+   "kind": "cutting",
+   "source": "random",
+   "area": "San Antonio",
+   "osm": "way/104538925",
+   "name": "Montana Street",
+   "lat": 29.418533,
+   "lon": -98.477965,
+   "heading_deg": 95.1,
+   "heading_back_deg": 275.1,
+   "approach_a": [
+    29.418628,
+    -98.48081
+   ],
+   "approach_b": [
+    29.418494,
+    -98.474433
+   ],
+   "length_m": 119
+  },
+  {
+   "kind": "embankment",
+   "source": "random",
+   "area": "New York",
+   "osm": "way/46819902",
+   "name": "Brooklyn-Queens Expressway",
+   "lat": 40.701629,
+   "lon": -73.990769,
+   "heading_deg": 97.5,
+   "heading_back_deg": 277.5,
+   "approach_a": [
+    40.701941,
+    -73.993983
+   ],
+   "approach_b": [
+    40.701268,
+    -73.987519
+   ],
+   "length_m": 51
+  },
+  {
+   "kind": "toll-booth",
+   "source": "random",
+   "area": "San Francisco Bay",
+   "osm": "node/317122365",
+   "name": "",
+   "lat": 37.628848,
+   "lon": -122.03008,
+   "heading_deg": null,
+   "approach_a": [
+    37.6288479,
+    -122.0300797
+   ],
+   "approach_b": [
+    37.6288479,
+    -122.0300797
+   ],
+   "length_m": 0
+  },
+  {
+   "kind": "toll-booth",
+   "source": "world-lane",
+   "area": "Anchorage (booth POI)",
+   "lat": 61.2227,
+   "lon": -149.8865,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "ferry",
+   "source": "random",
+   "area": null,
+   "osm": null,
+   "note": "not found in 12 seeded areas"
+  },
+  {
+   "kind": "ferry",
+   "source": "world-lane",
+   "area": "Miami",
+   "lat": 25.79,
+   "lon": -80.1672,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  },
+  {
+   "kind": "dam-road",
+   "source": "random",
+   "area": "Hartford",
+   "osm": "way/646636102",
+   "name": "Main Street",
+   "lat": 41.762842,
+   "lon": -72.646351,
+   "heading_deg": 160.3,
+   "heading_back_deg": 340.3,
+   "approach_a": [
+    41.76563,
+    -72.647052
+   ],
+   "approach_b": [
+    41.759525,
+    -72.644207
+   ],
+   "length_m": 226
+  },
+  {
+   "kind": "dam-road",
+   "source": "world-lane",
+   "area": "Hoover Dam",
+   "lat": 36.016,
+   "lon": -114.7377,
+   "osm": null,
+   "note": "tile centre or known place from the world lane inventory; approaches from the start pick"
+  }
+ ]
+}

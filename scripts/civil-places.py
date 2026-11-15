@@ -10,7 +10,7 @@ seeded area (up to 12). The chosen way's middle, its bearing there, and two appr
 each end of the structure are written (drive from each approach: both directions). Data (c)
 OpenStreetMap contributors, ODbL 1.0.
 """
-import json, math, random, sys, time, urllib.parse, urllib.request
+import json, math, os, random, sys, time, urllib.parse, urllib.request
 
 ENDPOINT = 'https://overpass-api.de/api/interpreter'
 UA = 'road-structure-test-picker/1.0 (game test data; low rate)'
@@ -50,7 +50,7 @@ KINDS = {
     'skyway': 'way[building=bridge]({b});',
     'rail-level-crossing': 'node[railway=level_crossing]({b});',
     'rail-bridge': 'way[railway=rail][bridge=yes]({b});',
-    'multi-storey-parking': 'way[amenity=parking][parking=multi-storey]({b});',
+    'multi-storey-parking': 'way[amenity=parking][parking="multi-storey"]({b});',
     'retaining-wall': 'way[barrier=retaining_wall]({b});',
     'cutting': f'way[{ROAD}][cutting=yes]({{b}});',
     'embankment': f'way[{ROAD}][embankment=yes]({{b}});',
@@ -99,10 +99,13 @@ def describe(el):
             'approach_a': walk(line, 0, 250, 1), 'approach_b': walk(line, len(line) - 1, 250, -1), 'length_m': round(length)}
 
 def main():
-    seed = int(sys.argv[1]); out = sys.argv[2] if len(sys.argv) > 2 else 'data/civil-places.json'
+    args = [a for a in sys.argv[1:] if not a.startswith('--kinds=')]
+    only = next((a.split('=', 1)[1].split(',') for a in sys.argv[1:] if a.startswith('--kinds=')), None)
+    seed = int(args[0]); out = args[1] if len(args) > 1 else 'data/civil-places.json'
     rng = random.Random(seed)
     places = []
     for kind, q in KINDS.items():
+        if only and kind not in only: continue
         areas = AREAS[:]; rng.shuffle(areas)
         found = None
         for name, s, n, w, e in areas[:12]:
@@ -120,7 +123,7 @@ def main():
                 el = rng.choice(els)
                 d = describe(el)
                 if d:
-                    found = dict(kind=kind, source='random', area=name, osm=f"{el['type']}/{el['id']}", name=el.get('tags', {}).get('name', ''), **d)
+                    found = dict(kind=kind, source='random', seed=seed, area=name, osm=f"{el['type']}/{el['id']}", name=el.get('tags', {}).get('name', ''), **d)
                     break
         if found:
             places.append(found); print(f"{kind}: {found['area']} {found['osm']} {found['lat']},{found['lon']} {found['name']}")
@@ -132,6 +135,14 @@ def main():
     doc = {'seed': seed, 'made_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
            'source': 'OpenStreetMap via the Overpass API (overpass-api.de), low rate', 'licence': 'ODbL 1.0, (c) OpenStreetMap contributors',
            'drive': 'from approach_a and from approach_b (both directions), bridge and deck rules, frame beside the aerial', 'places': places}
+    if only and os.path.exists(out):
+        # Merge: the re-picked kinds replace their random entries in the existing file; the other entries stay.
+        old = json.load(open(out, encoding='utf-8'))
+        keep = [p for p in old['places'] if not (p['kind'] in only and p['source'] == 'random')]
+        new = [p for p in places if p['source'] == 'random']
+        old['places'] = keep + new
+        old.setdefault('reruns', []).append({'seed': seed, 'kinds': only, 'made_utc': doc['made_utc']})
+        doc = old
     json.dump(doc, open(out, 'w', encoding='utf-8'), indent=1)
     print(f'{len(places)} entries -> {out}')
 
