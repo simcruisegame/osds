@@ -1,0 +1,42 @@
+SimCruise: read this before you install
+=======================================
+
+1. INTERNET
+   Ocean Drive, Miami Beach is in this installer. You can drive there
+   with no internet connection.
+   All other places need an internet connection. The game downloads the
+   map, the terrain and the photos of a place when you go there.
+
+2. MICROSOFT PARTS
+   The game needs two free parts from Microsoft:
+   - the Visual C++ 2015-2022 runtime (x64). Without it, the game
+     cannot start.
+   - GameInput. Without it, racing wheels do not work.
+   If your PC does not have them, this installer installs them at the
+   end. They are for the whole PC, so Windows asks for your permission.
+   Click "Yes". If you click "No", the game asks again when it starts.
+
+3. THE PC THAT YOU NEED
+   - Windows 10 or Windows 11, 64-bit.
+   - A graphics card for DirectX 12, with 6 GB of video memory or more.
+   - 16 GB of memory (RAM).
+   - 3 GB of free disk space for the game, and up to 2 GB more for
+     the map cache and the downloaded photos.
+   - Keyboard, Xbox controller, or a USB racing wheel.
+
+   IMPORTANT: We tested the game on one PC only: Windows 11, an NVIDIA
+   GeForce RTX 2070 Super with Max-Q Design (8 GB), an 8-core Intel
+   Core i9-10885H and 32 GB of memory. We did not test AMD or Intel
+   graphics cards, other NVIDIA cards, or Windows 10. The values above
+   are our estimate. If the game does not work on your PC, tell us:
+   https://github.com/simcruisegame/simcruise/issues
+
+4. WHEN THE GAME STARTS
+   The game examines your PC. If it finds a problem (an old graphics
+   card or driver, too little memory, no internet), it tells you on the
+   screen.
+
+5. UNINSTALL
+   The uninstaller deletes the game, the map cache, the downloaded
+   photos and the logs. It asks you before it deletes your settings and
+   screenshots.
