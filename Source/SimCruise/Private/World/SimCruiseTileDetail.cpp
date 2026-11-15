@@ -1082,7 +1082,7 @@ namespace SimCruiseTileDetail
 				static const TCHAR* DoorPaints[] = { TEXT("f2f0ea"), TEXT("1f2326"), TEXT("7b2d26"), TEXT("2c3e57"), TEXT("2f4f3a"), TEXT("6b4a2f"), TEXT("5a5f63"), TEXT("f2f0ea") };
 				const FLinearColor Leaf = bOutbuilding ? Srgb(TEXT("e9e7e1")) : Srgb(DoorPaints[Hash(H, 53) % 8]);
 				// The wall under the door (to the floor) and the recess: leaf, jambs, head and threshold.
-				W.Panel(D0, D1, Bottom, Zf, N2, Wall, Kind::Wall, Along0 + DoorS, Ground);
+				W.Panel(D0, D1, Bottom, Zf, N2, Wall, Kind::Trim, Along0 + DoorS, Ground); // plain wall: no window row ends in it
 				W.Panel(D0 + In, D1 + In, Zf, Zf + DoorH, N2, bHome || bOutbuilding ? Leaf : Srgb(TEXT("3a3f44")), bHome || bOutbuilding ? Kind::Trim : Kind::Railing, 0.0, Ground);
 				W.Panel(D0, D0 + In, Zf, Zf + DoorH, T, Reveal, Kind::Trim, 0.0, Ground);
 				W.Panel(D1 + In, D1, Zf, Zf + DoorH, -T, Reveal, Kind::Trim, 0.0, Ground);
