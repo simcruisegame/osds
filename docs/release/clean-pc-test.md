@@ -20,7 +20,7 @@ Test-Path C:\Windows\System32\vcruntime140_1.dll; Test-Path C:\Windows\System32\
 
 ## Steps
 
-1. Download `SimCruise-<version>-windows-x64-setup.exe` and `SimCruise-<version>-SHA256SUMS.txt` from the release page with a web browser (not with a copy from the release PC).
+1. Download `OSDS-<version>-windows-x64-setup.exe` and `OSDS-<version>-SHA256SUMS.txt` from the release page with a web browser (not with a copy from the release PC).
 2. Run `Get-FileHash .\SimCruise-<version>-windows-x64-setup.exe` in the download folder. The value must be the same as in the SHA256SUMS file.
 3. Start the installer. If SmartScreen says "Windows protected your PC", click **More info**, then **Run anyway**.
 4. Select **Install for me only**.
