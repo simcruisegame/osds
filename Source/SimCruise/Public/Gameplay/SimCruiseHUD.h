@@ -71,6 +71,7 @@ public:
 	ESimCruiseHudLevel GetLevel() const { return Level; }
 	/** Closer (-1) or wider (+1) minimap, five steps (MapHUD.gd). */
 	void ZoomMinimap(int32 Step) { MinimapZoom = FMath::Clamp(MinimapZoom + Step, 0, 4); }
+	int32 GetMinimapZoom() const { return MinimapZoom; }
 	void ShowMessage(const FString& Text, float Seconds = 3.f);
 	const FString& GetMessage() const { return Message; }
 	/** What the speed and rpm readouts show this frame (tests and captures compare it with the car). */

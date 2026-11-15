@@ -25,7 +25,9 @@ param(
     [string]$Branch = '',
     [string]$TestTree = 'D:\sc\lane-rc',
     [string]$PackageTree = 'D:\sc\lane-rc2',
-    [string[]]$TestCommits = @('16b7572', '8323a86', 'fd9f51f', 'daffdf7'),
+    # The test-only commits: our review branch since main (cherry-picked in order onto the candidate).
+    [string]$TestRange = 'origin/main..review/how-we-look',
+    [string[]]$TestCommits = @(),
     [string]$Out = '',
     [switch]$SkipEditorTest,
     [switch]$SkipCooked
@@ -53,15 +55,65 @@ function Build([string]$Tree) {
 }
 
 if (-not $SkipEditorTest) {
+    if (-not $TestCommits.Count) { $TestCommits = @(git -C $TestTree rev-list --reverse --no-merges $TestRange) }
+    Write-Host "  test-only commits: $($TestCommits.Count) ($TestRange)"
     Prepare $TestTree $TestCommits
     Build $TestTree
     & powershell -ExecutionPolicy Bypass -File (Join-Path $TestTree 'scripts\check.ps1') -NoBuild -NoViewCheck -Filter 'SimCruise.Gameplay.Preflight' | Select-Object -Last 2
     if ($LASTEXITCODE -ne 0) { throw 'the pre-flight unit tests failed' }
-    # The full visible Ultra test (it waits for the GPU and holds GPU-BUSY itself).
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $TestTree 'scripts\release-test.ps1') -ShowWindow | Select-Object -Last 5
-    $Run = Get-ChildItem (Join-Path $TestTree 'Saved\ReleaseTest') -Directory | Where-Object { $_.Name -like "*$($Hash.Substring(0, 7))*" -or $_.LastWriteTime -gt (Get-Date).AddHours(-6) } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    $Dirs = @(Get-ChildItem $Run.FullName -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'video.mp4') } | ForEach-Object FullName)
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $TestTree 'scripts\detail-review.ps1') -PostOnly -OutRoot (Join-Path $Run.FullName 'review') -RunDirs ($Dirs -join ',') | Select-Object -Last 2
+    $S = Join-Path $TestTree 'scripts'
+    New-Item -ItemType Directory -Force $Out | Out-Null
+    $Log = Join-Path $Out 'final-test-steps.log'
+    function Step([string]$What) { $L = "$((Get-Date).ToUniversalTime().ToString('HH:mm'))Z $What"; Write-Host $L; Add-Content -Encoding utf8 $Log $L }
+    # 2. The full visible Ultra test: four hero roads x three cars, 30 random places (3 AK, 3 HI), the cases.
+    Step 'part 2: release-test -ShowWindow -AllCars'
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'release-test.ps1') -ShowWindow -AllCars | Select-Object -Last 5
+    $Run = Get-ChildItem (Join-Path $TestTree 'Saved\ReleaseTest') -Directory | Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-8) -and (Test-Path (Join-Path $_.FullName 'summary.md')) } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    Step "part 2 done: $($Run.FullName)"
+    # 3. Bridges: Bixby, Detroit Woodward over I-75, Doraville Northcrest Road over I-285, both ways.
+    Step 'part 3: bridge-check'
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'bridge-check.ps1') -OutRoot (Join-Path $Out 'bridges') -ShowWindow | Select-Object -Last 1
+    # 3b. Civil structures: each example of data\civil-places.json from its approaches (the random one both ways).
+    $Civil = Join-Path $TestTree 'data\civil-places.json'
+    if (Test-Path $Civil) {
+        Step 'part 3b: civil structures'
+        $C = Get-Content $Civil -Raw | ConvertFrom-Json
+        $N = 0
+        foreach ($P in $C.places) {
+            if ($null -eq $P.lat) { continue }
+            $Starts = if ($P.approach_a) { @(@('a', "$($P.approach_a[0]),$($P.approach_a[1])"), @('b', "$($P.approach_b[0]),$($P.approach_b[1])")) } else { @(@('x', "$($P.lat),$($P.lon)")) }
+            foreach ($St in $Starts) {
+                $N++
+                & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'launch-review.ps1') -Name ("civil-{0:D2}-{1}-{2}-{3}" -f $N, $P.kind, $P.source, $St[0]) -OutRoot (Join-Path $Out 'civil') -Start $St[1] -Car 'meridian_z' -Seconds 45 -NoCockpit -ShowWindow | Out-Null
+            }
+        }
+    } else { Step 'part 3b: no data\civil-places.json (set aside)' }
+    # 4. Drive real: the cockpit review per car, a keen Dragon run per car (the vehicle benches ran in part 1).
+    Step 'part 4: cockpit review and keen Dragon runs'
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'cockpit-review.ps1') -ShowWindow | Select-Object -Last 2
+    foreach ($Car in @((Get-ChildItem (Join-Path $TestTree 'data\cars') -Filter 'nb2001_*.json' | Select-Object -First 1).BaseName, 'mustang65', 'meridian_z')) {
+        & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'launch-review.ps1') -Name "keen-dragon-$Car" -OutRoot (Join-Path $Out 'drive-real') -Road dragon -Car $Car -Seconds 90 -NoCockpit -ShowWindow '-ExtraArgs:-SimCruisePreflightKeen' | Out-Null
+    }
+    # 5. The slow look beside the buildings (Detroit, 10 km/h).
+    Step 'part 5: slow look'
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'detail-review.ps1') -OutRoot (Join-Path $Out 'slow-look') -ShowWindow -OnlyCases detroit-slow | Select-Object -Last 1
+    # 6. Controller: every menu (pad-review) and every driving control (the shell self-test, own launch).
+    Step 'part 6: pad review and the driving pad pass'
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'pad-review.ps1') -OutDir (Join-Path $Out 'pad-review') -NoBuild -ShowWindow | Select-Object -Last 3
+    . (Join-Path $S 'EditorLock.ps1')
+    $PadLog = Join-Path $Out 'pad-drive.log'
+    if (Enter-EditorLock -GpuTest -TimeoutMinutes 60 -Why 'final test: driving pad pass') {
+        try {
+            $P = Start-Process -FilePath (Join-Path $Ue 'Engine\Binaries\Win64\UnrealEditor.exe') -ArgumentList "`"$TestTree\SimCruise.uproject`" -game -SimCruiseWorld -SimCruiseBundledStart -SimCruiseNoLive -SimCruiseShellSelfTest -windowed -ResX=1280 -ResY=720 -NoLiveCoding -nosplash -unattended -log `"-abslog=$PadLog`"" -PassThru
+            if (-not $P.WaitForExit(15 * 60 * 1000)) { Stop-ProcessTree -ProcessId $P.Id }
+        } finally { Exit-EditorLock }
+    }
+    Step "part 6 driving pad pass: $(if (Test-Path $PadLog) { (Select-String $PadLog -Pattern 'SIMCRUISE SHELL SELF-TEST (PASSED|FAILED).*' | Select-Object -Last 1).Matches.Value } else { 'no log' })"
+    # 7. Post-processing of every run with a video: photo sheets, clips, strips, video scan, blind folders.
+    Step 'part 7: post-processing'
+    $Dirs = @(@($Run.FullName, (Join-Path $Out 'bridges'), (Join-Path $Out 'civil'), (Join-Path $Out 'drive-real'), (Join-Path $Out 'slow-look')) | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { Get-ChildItem $_ -Directory } | Where-Object { Test-Path (Join-Path $_.FullName 'video.mp4') } | ForEach-Object FullName)
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'detail-review.ps1') -PostOnly -OutRoot (Join-Path $Out 'review') -RunDirs ($Dirs -join ',') | Select-Object -Last 2
+    Step "editor part done: $($Dirs.Count) runs; review in $(Join-Path $Out 'review') (parts 8 and 12 are people's work)"
 }
 
 if (-not $SkipCooked) {

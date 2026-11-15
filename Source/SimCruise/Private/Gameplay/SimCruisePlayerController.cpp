@@ -856,6 +856,7 @@ bool ASimCruisePlayerController::SurpriseMe()
 
 void ASimCruisePlayerController::OnRecover()
 {
+	++RecoverCount;
 	if (ASimCruiseGameMode* Mode = GetWorld() ? GetWorld()->GetAuthGameMode<ASimCruiseGameMode>() : nullptr)
 	{
 		Mode->RecoverVehicle(this);
@@ -1068,6 +1069,167 @@ void ASimCruisePlayerController::TickSelfTest(float DeltaTime)
 		{
 			if (Camera) { Camera->SetView(ESimCruiseView::Driver); }
 			if (Hud) { Hud->SetLevel(ESimCruiseHudLevel::Glance); }
+			// The driving pad pass: every other pad control, each by an injected press and its effect.
+			bSelfTestManualBefore = Telemetry.bManualTransmission;
+			InjectKey(EKeys::Gamepad_RightThumbstick, true);
+			Next();
+		}
+		break;
+	case 13: // R3 switches the gearbox (automatic / manual)
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_RightThumbstick, false);
+		if (SelfTestClock > 0.4f)
+		{
+			if (Telemetry.bManualTransmission == bSelfTestManualBefore) { Fail(TEXT("R3 did not switch the gearbox")); break; }
+			if (Telemetry.bManualTransmission) { SelfTestStage = 15; SelfTestClock = 0.f; }
+			else { InjectKey(EKeys::Gamepad_RightThumbstick, true); Next(); }
+		}
+		break;
+	case 14: // R3 again, to manual for the shift test
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_RightThumbstick, false);
+		if (SelfTestClock > 0.4f)
+		{
+			if (!Telemetry.bManualTransmission) { Fail(TEXT("R3 did not switch to manual")); break; }
+			Next();
+		}
+		break;
+	case 15: // A holds the clutch
+		if (SelfTestClock <= DeltaTime) InjectKey(EKeys::Gamepad_FaceButton_Bottom, true);
+		if (SelfTestClock > 0.4f)
+		{
+			if (LastCommand.Clutch < 0.5f) { Fail(FString::Printf(TEXT("A (clutch) %.2f"), LastCommand.Clutch)); break; }
+			SelfTestIntBefore = Telemetry.Gear;
+			InjectKey(EKeys::Gamepad_RightShoulder, true);
+			Next();
+		}
+		break;
+	case 16: // RB shifts up
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_RightShoulder, false);
+		if (SelfTestClock > 0.5f)
+		{
+			if (Telemetry.Gear == SelfTestIntBefore) { Fail(FString::Printf(TEXT("RB did not shift up (gear %d)"), Telemetry.Gear)); break; }
+			SelfTestIntBefore = Telemetry.Gear;
+			InjectKey(EKeys::Gamepad_LeftShoulder, true);
+			Next();
+		}
+		break;
+	case 17: // LB shifts down; then the clutch goes and the gearbox goes back as it was
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_LeftShoulder, false);
+		if (SelfTestClock > 0.5f)
+		{
+			if (Telemetry.Gear == SelfTestIntBefore) { Fail(FString::Printf(TEXT("LB did not shift down (gear %d)"), Telemetry.Gear)); break; }
+			InjectKey(EKeys::Gamepad_FaceButton_Bottom, false);
+			if (Telemetry.bManualTransmission != bSelfTestManualBefore) InjectKey(EKeys::Gamepad_RightThumbstick, true);
+			Next();
+		}
+		break;
+	case 18:
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_RightThumbstick, false);
+		if (SelfTestClock > 0.4f)
+		{
+			if (Telemetry.bManualTransmission != bSelfTestManualBefore) { Fail(TEXT("R3 did not put the gearbox back")); break; }
+			InjectKey(EKeys::Gamepad_FaceButton_Right, true);
+			Next();
+		}
+		break;
+	case 19: // B holds the parking brake
+		if (SelfTestClock > 0.3f)
+		{
+			if (LastCommand.ParkingBrake < 0.5f) { Fail(FString::Printf(TEXT("B (parking brake) %.2f"), LastCommand.ParkingBrake)); break; }
+			InjectKey(EKeys::Gamepad_FaceButton_Right, false);
+			Next();
+		}
+		break;
+	case 20: // the right stick turns the head (free look)
+		InjectAxis(EKeys::Gamepad_RightX, 1.f);
+		if (SelfTestClock > 0.8f)
+		{
+			const double Yaw = Camera ? Camera->GetLookDeg().X : 0.0;
+			InjectAxis(EKeys::Gamepad_RightX, 0.f);
+			if (FMath::Abs(Yaw) < 20.0) { Fail(FString::Printf(TEXT("right stick look: %.1f deg"), Yaw)); break; }
+			Next();
+		}
+		break;
+	case 21: // the look comes back; then D-pad up zooms the minimap in
+		InjectAxis(EKeys::Gamepad_RightX, 0.f);
+		if (SelfTestClock > 1.0f)
+		{
+			SelfTestIntBefore = Hud ? Hud->GetMinimapZoom() : -1;
+			InjectKey(EKeys::Gamepad_DPad_Up, true);
+			Next();
+		}
+		break;
+	case 22:
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_DPad_Up, false);
+		if (SelfTestClock > 0.3f)
+		{
+			const int32 Zoom = Hud ? Hud->GetMinimapZoom() : -1;
+			if (Zoom == SelfTestIntBefore && SelfTestIntBefore > 0) { Fail(TEXT("D-pad up did not zoom the minimap")); break; }
+			SelfTestIntBefore = Zoom;
+			InjectKey(EKeys::Gamepad_DPad_Down, true);
+			Next();
+		}
+		break;
+	case 23: // D-pad down zooms it out
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_DPad_Down, false);
+		if (SelfTestClock > 0.3f)
+		{
+			const int32 Zoom = Hud ? Hud->GetMinimapZoom() : -1;
+			if (Zoom == SelfTestIntBefore && SelfTestIntBefore < 4) { Fail(TEXT("D-pad down did not zoom the minimap")); break; }
+			SelfTestIntBefore = RecoverCount;
+			InjectKey(EKeys::Gamepad_Special_Left, true);
+			Next();
+		}
+		break;
+	case 24: // View: recover the car
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_Special_Left, false);
+		if (SelfTestClock > 0.5f)
+		{
+			if (RecoverCount == SelfTestIntBefore) { Fail(TEXT("View did not recover the car")); break; }
+			InjectKey(EKeys::Gamepad_DPad_Left, true);
+			Next();
+		}
+		break;
+	case 25: // D-pad left: start the engine (no visible change while it runs; it must not stall it)
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_DPad_Left, false);
+		if (SelfTestClock > 0.5f)
+		{
+			if (Telemetry.bEngineStalled) { Fail(TEXT("D-pad left left the engine stalled")); break; }
+			InjectKey(EKeys::Gamepad_Special_Right, true);
+			Next();
+		}
+		break;
+	case 26: // Menu opens the pause menu
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_Special_Right, false);
+		if (SelfTestClock > 0.5f)
+		{
+			if (!IsOverlayOpen()) { Fail(TEXT("Menu did not open the pause menu")); break; }
+			InjectKey(EKeys::Gamepad_Special_Right, true);
+			Next();
+		}
+		break;
+	case 27: // Menu again closes it
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_Special_Right, false);
+		if (SelfTestClock > 0.5f)
+		{
+			if (IsOverlayOpen()) { Fail(TEXT("Menu did not close the pause menu")); break; }
+			InjectKey(EKeys::Gamepad_DPad_Right, true);
+			Next();
+		}
+		break;
+	case 28: // D-pad right opens the tuning page
+		if (SelfTestClock > 0.05f && SelfTestClock - DeltaTime <= 0.05f) InjectKey(EKeys::Gamepad_DPad_Right, false);
+		if (SelfTestClock > 0.5f)
+		{
+			if (!IsOverlayOpen()) { Fail(TEXT("D-pad right did not open tuning")); break; }
+			CloseOverlays();
+			Next();
+		}
+		break;
+	case 29:
+		if (SelfTestClock > 0.3f)
+		{
+			// Driving actions with no pad binding (SimCruiseInputConfig.cpp): information for the UI lane.
+			UE_LOG(LogSimCruiseShell, Display, TEXT("PAD MISSING (info): lens F6, lights L, sound M, stats F3, find place / have no pad binding"));
 			SelfTestStage = 100;
 		}
 		break;
@@ -1079,7 +1241,7 @@ void ASimCruisePlayerController::TickSelfTest(float DeltaTime)
 	{
 		const bool bPassed = SelfTestFailure.IsEmpty();
 		UE_LOG(LogSimCruiseShell, Display, TEXT("SIMCRUISE SHELL SELF-TEST %s %s"), bPassed ? TEXT("PASSED") : TEXT("FAILED"),
-			bPassed ? TEXT("stick both ways, exact centre, key full lock, Y/X/C/F2, RT linear, W ramp, LT dead zone") : *SelfTestFailure);
+			bPassed ? TEXT("stick both ways, exact centre, key full lock, Y/X/C/F2, RT linear, W ramp, LT dead zone, R3 gearbox, A clutch, RB/LB shift, B parking brake, right stick look, D-pad minimap zoom, View recover, D-pad left engine, Menu open/close, D-pad right tuning") : *SelfTestFailure);
 		SelfTestStage = -1;
 		if (bSelfTestQuit)
 		{
