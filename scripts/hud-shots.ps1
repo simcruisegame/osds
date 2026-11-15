@@ -25,7 +25,9 @@ param(
     [string]$Graphics = 'ultra',
     [string]$EngineDir = $(if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:\Program Files\Epic Games\UE_5.8' }),
     [int]$TimeoutMinutes = 8,
-    [int]$LockTimeoutMinutes = 120
+    [int]$LockTimeoutMinutes = 120,
+    # Where the pictures go (default Saved\Review\<stamp>-<commit>); another drive when D: is short of space.
+    [string]$OutRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,7 +40,7 @@ $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
 $Cars = @($Cars | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $env:UE_SKIP_UBT_SDK_SETUP = '1'
-$OutRoot = Get-ReviewRoot $Root
+$OutRoot = if ($OutRoot) { Join-Path $OutRoot ((Get-Date -Format 'yyyyMMdd-HHmm') + '-' + (git -C $Root rev-parse --short HEAD)) } else { Get-ReviewRoot $Root }
 $Failed = @()
 
 function Save-SpeedCrop([string]$Png) {
