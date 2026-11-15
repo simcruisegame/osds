@@ -701,8 +701,7 @@ namespace SimCruiseTileBuilder
 			// its own height. A hillside stood over a carriageway at Bixby Creek's south end, 2026-11-15.
 			double RoadCap = TNumericLimits<double>::Max();
 			// ... and out to a ground cell's diagonal past the edge (at the edge's height), so that no
-			// ground triangle touching a lane rises over it; not where the vertex lies on another road's
-			// own paved footprint (a ramp beside a motorway keeps the ground under it).
+			// ground triangle touching a lane rises over it.
 			double EdgeCap = TNumericLimits<double>::Max();
 			double BestWeight = 0.0, BestTarget = H;
 
@@ -804,7 +803,10 @@ namespace SimCruiseTileBuilder
 			else if (SectionDist < TNumericLimits<double>::Max()) H = SectionTarget;
 			else if (BestWeight > 0.0) H = FMath::Lerp(H, BestTarget, BestWeight);
 			H = FMath::Min(H, RoadCap);
-			if (!bInside) H = FMath::Min(H, EdgeCap);
+			// The lower lane wins where two carriageways' footprints overlap within a cell (a motorway's
+			// two directions at different heights, a ramp, a driveway): ground over a lane stops a car,
+			// ground a little under the higher road's shoulder is hidden by that road's own surface.
+			H = FMath::Min(H, EdgeCap);
 			if (RoadCap == TNumericLimits<double>::Max() && !bInside)
 			{
 				// No ribbon here: the mapped line's own carriageway, at the ground of its centre line.
