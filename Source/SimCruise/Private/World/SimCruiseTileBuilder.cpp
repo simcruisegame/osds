@@ -595,6 +595,11 @@ namespace SimCruiseTileBuilder
 
 			double InsideTarget = TNumericLimits<double>::Max();
 			bool bInside = false;
+			// Under a deck the ground keeps its own height, but never stands into the deck: at most the
+			// deck's slab (1.2 m) and 0.3 m more under it, across the deck and 1 m beyond each edge (a
+			// steep abutment or a hillside under the end of a span stood over the carriageway, Bixby
+			// Creek's south end, 2026-11-15).
+			double DeckCap = TNumericLimits<double>::Max();
 			double BestWeight = 0.0, BestTarget = H;
 
 			const double Natural = H;
@@ -644,7 +649,15 @@ namespace SimCruiseTileBuilder
 				{
 					const FSimCruiseRibbon& Ribbon = Roads.Ribbons[Seg.Key];
 					// Under a bridge the ground stays where it is: the river, the road or the valley below.
-					if (Ribbon.St[Seg.Value].bBridge && Ribbon.St[Seg.Value + 1].bBridge) continue;
+					if (Ribbon.St[Seg.Value].bBridge && Ribbon.St[Seg.Value + 1].bBridge)
+					{
+						const FSimCruiseRoadHit Under = Roads.Project(Seg.Key, Seg.Value, P);
+						if (FMath::Abs(Under.Along) <= 0.01 && FMath::Abs(Under.Lateral) <= Under.HalfW + 1.0)
+						{
+							DeckCap = FMath::Min(DeckCap, Under.Height - 1.5);
+						}
+						continue;
+					}
 					const FSimCruiseRoadHit Hit = Roads.Project(Seg.Key, Seg.Value, P);
 					const bool bFirst = Seg.Value == 0 && Hit.T <= 0.0;
 					const bool bLast = Seg.Value + 2 == Ribbon.St.Num() && Hit.T >= 1.0;
@@ -678,6 +691,7 @@ namespace SimCruiseTileBuilder
 			}
 
 			if (bInside) H = InsideTarget;
+			H = FMath::Min(H, DeckCap);
 			else if (SectionDist < TNumericLimits<double>::Max()) H = SectionTarget;
 			else if (BestWeight > 0.0) H = FMath::Lerp(H, BestTarget, BestWeight);
 			if (FMath::Abs(H - B.NaturalHeights[K]) > 0.001) ++B.ConditionedVertices;
