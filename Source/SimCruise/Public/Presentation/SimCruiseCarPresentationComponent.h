@@ -254,6 +254,8 @@ private:
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> MirrorMaterials;
 	UPROPERTY(Transient)
 	TObjectPtr<USceneCaptureComponent2D> MirrorCapture;
+	/** 0: no capture yet; 1: the first one is queued; 2: it has rendered and the glass shows it. */
+	uint32 MirrorCaptures = 0u;
 	/** Sky fill in the cabin (driver's view only): see SetMirrorsLive. */
 	UPROPERTY(Transient)
 	TObjectPtr<class UPointLightComponent> CabinFill;
