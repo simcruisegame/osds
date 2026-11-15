@@ -1,0 +1,365 @@
+fips,name,role,thing,score,used,n_items,note
+06075,San Francisco,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+41051,Multnomah,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+53033,King,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+08031,Denver,train,obj:fire_hydrant,0.815,yes,2333,
+08031,Denver,train,obj:utility_pole,0.364,no,152,
+08031,Denver,train,obj:street_light,0.942,yes,13859,
+08031,Denver,train,obj:stop_sign,,no,5798,
+08031,Denver,train,obj:bench,0.971,yes,531,
+08031,Denver,train,obj:trash_bin,0.895,yes,233,
+08031,Denver,train,obj:collection_mailbox,0.71,yes,84,
+08031,Denver,train,obj:fence,0.94,yes,6920,
+08013,Boulder,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+49035,Salt Lake,train,obj:fire_hydrant,0.709,no,4227,
+49035,Salt Lake,train,obj:utility_pole,0.746,yes,3088,
+49035,Salt Lake,train,obj:street_light,0.858,yes,3847,
+49035,Salt Lake,train,obj:stop_sign,,no,5520,
+49035,Salt Lake,train,obj:bench,0.974,yes,762,
+49035,Salt Lake,train,obj:trash_bin,0.67,yes,359,
+49035,Salt Lake,train,obj:collection_mailbox,0.617,yes,71,
+49035,Salt Lake,train,obj:fence,0.879,yes,4431,
+04013,Maricopa,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+48453,Travis,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+48113,Dallas,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+27053,Hennepin,train,obj:fire_hydrant,0.612,no,1081,
+27053,Hennepin,train,obj:utility_pole,0.427,no,2400,
+27053,Hennepin,train,obj:street_light,0.89,yes,13889,
+27053,Hennepin,train,obj:stop_sign,,no,3623,
+27053,Hennepin,train,obj:bench,0.969,yes,1197,
+27053,Hennepin,train,obj:trash_bin,0.903,yes,899,
+27053,Hennepin,train,obj:collection_mailbox,0.832,yes,193,
+27053,Hennepin,train,obj:fence,0.819,yes,3467,
+31109,Lancaster,train,obj:fire_hydrant,0.635,no,267,
+31109,Lancaster,train,obj:utility_pole,0.415,no,3303,
+31109,Lancaster,train,obj:street_light,0.906,yes,3977,
+31109,Lancaster,train,obj:stop_sign,,no,1943,
+31109,Lancaster,train,obj:bench,1.0,yes,148,
+31109,Lancaster,train,obj:trash_bin,1.0,yes,33,
+31109,Lancaster,train,obj:collection_mailbox,0.541,yes,17,
+31109,Lancaster,train,obj:fence,0.512,yes,2404,
+19103,Johnson,train,obj:fire_hydrant,0.293,no,3,
+19103,Johnson,train,obj:utility_pole,0.495,no,1156,
+19103,Johnson,train,obj:street_light,0.738,yes,390,
+19103,Johnson,train,obj:stop_sign,,no,137,
+19103,Johnson,train,obj:bench,0.576,no,28,
+19103,Johnson,train,obj:trash_bin,0.576,no,22,
+19103,Johnson,train,obj:collection_mailbox,1.0,yes,30,
+19103,Johnson,train,obj:fence,0.405,no,580,
+55025,Dane,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+26161,Washtenaw,train,obj:fire_hydrant,0.8,yes,632,
+26161,Washtenaw,train,obj:utility_pole,0.784,yes,6819,
+26161,Washtenaw,train,obj:street_light,0.688,no,1263,
+26161,Washtenaw,train,obj:stop_sign,,no,2153,
+26161,Washtenaw,train,obj:bench,,no,182,
+26161,Washtenaw,train,obj:trash_bin,,no,71,
+26161,Washtenaw,train,obj:collection_mailbox,,no,61,
+26161,Washtenaw,train,obj:fence,0.748,yes,1541,
+39049,Franklin,train,obj:fire_hydrant,0.344,no,932,
+39049,Franklin,train,obj:utility_pole,0.754,yes,3968,
+39049,Franklin,train,obj:street_light,0.715,yes,3249,
+39049,Franklin,train,obj:stop_sign,,no,1828,
+39049,Franklin,train,obj:bench,0.81,yes,487,
+39049,Franklin,train,obj:trash_bin,0.835,yes,546,
+39049,Franklin,train,obj:collection_mailbox,0.66,yes,116,
+39049,Franklin,train,obj:fence,0.943,yes,3747,
+17019,Champaign,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+42003,Allegheny,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+36109,Tompkins,train,obj:fire_hydrant,0.751,no,15,
+36109,Tompkins,train,obj:utility_pole,0.158,no,114,
+36109,Tompkins,train,obj:street_light,0.091,no,6,
+36109,Tompkins,train,obj:stop_sign,,no,599,
+36109,Tompkins,train,obj:bench,1.0,yes,36,
+36109,Tompkins,train,obj:trash_bin,1.0,yes,1,
+36109,Tompkins,train,obj:collection_mailbox,1.0,yes,9,
+36109,Tompkins,train,obj:fence,0.33,no,97,
+25017,Middlesex,train,obj:fire_hydrant,0.863,yes,5452,
+25017,Middlesex,train,obj:utility_pole,0.536,no,6584,
+25017,Middlesex,train,obj:street_light,0.785,yes,3843,
+25017,Middlesex,train,obj:stop_sign,,no,4854,
+25017,Middlesex,train,obj:bench,0.985,yes,2210,
+25017,Middlesex,train,obj:trash_bin,0.957,yes,844,
+25017,Middlesex,train,obj:collection_mailbox,0.879,yes,486,
+25017,Middlesex,train,obj:fence,0.918,yes,6524,
+50007,Chittenden,train,obj:fire_hydrant,0.967,yes,93,
+50007,Chittenden,train,obj:utility_pole,0.237,no,566,
+50007,Chittenden,train,obj:street_light,0.522,no,36,
+50007,Chittenden,train,obj:stop_sign,,no,1170,
+50007,Chittenden,train,obj:bench,,no,57,
+50007,Chittenden,train,obj:trash_bin,,no,15,
+50007,Chittenden,train,obj:collection_mailbox,,no,7,
+50007,Chittenden,train,obj:fence,0.614,yes,886,
+11001,District of Columbia,train,*,,no,,"no OSM boundary found for 11001 District of Columbia, DC"
+51013,Arlington,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+37183,Wake,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+37063,Durham,train,obj:fire_hydrant,0.611,no,296,
+37063,Durham,train,obj:utility_pole,0.834,yes,3701,
+37063,Durham,train,obj:street_light,0.782,yes,767,
+37063,Durham,train,obj:stop_sign,,no,903,
+37063,Durham,train,obj:bench,1.0,yes,46,
+37063,Durham,train,obj:trash_bin,1.0,yes,36,
+37063,Durham,train,obj:collection_mailbox,1.0,yes,28,
+37063,Durham,train,obj:fence,0.906,yes,1142,
+13121,Fulton,train,obj:fire_hydrant,0.392,no,189,
+13121,Fulton,train,obj:utility_pole,0.222,no,625,
+13121,Fulton,train,obj:street_light,0.474,no,282,
+13121,Fulton,train,obj:stop_sign,,no,1035,
+13121,Fulton,train,obj:bench,0.869,yes,129,
+13121,Fulton,train,obj:trash_bin,0.782,yes,82,
+13121,Fulton,train,obj:collection_mailbox,0.703,yes,24,
+13121,Fulton,train,obj:fence,0.802,yes,1450,
+12095,Orange,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+47037,Davidson,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+47093,Knox,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+21111,Jefferson,train,obj:fire_hydrant,0.25,no,160,
+21111,Jefferson,train,obj:utility_pole,0.54,no,1156,
+21111,Jefferson,train,obj:street_light,0.388,no,195,
+21111,Jefferson,train,obj:stop_sign,,no,1620,
+21111,Jefferson,train,obj:bench,0.949,yes,396,
+21111,Jefferson,train,obj:trash_bin,0.949,yes,380,
+21111,Jefferson,train,obj:collection_mailbox,0.377,no,16,
+21111,Jefferson,train,obj:fence,0.843,yes,1100,
+42071,Lancaster,train,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+12086,Miami-Dade,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+06053,Monterey,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+47009,Blount,heldout,obj:fire_hydrant,0.198,test,2,
+47009,Blount,heldout,obj:utility_pole,0.375,test,286,
+47009,Blount,heldout,obj:street_light,0.099,test,5,
+47009,Blount,heldout,obj:stop_sign,,test,45,
+47009,Blount,heldout,obj:bench,,test,0,
+47009,Blount,heldout,obj:trash_bin,,test,1,
+47009,Blount,heldout,obj:collection_mailbox,,test,3,
+37075,Graham,heldout,obj:fire_hydrant,,test,9,
+37075,Graham,heldout,obj:utility_pole,0.074,test,11,
+37075,Graham,heldout,obj:street_light,,test,2,
+37075,Graham,heldout,obj:stop_sign,,test,3,
+37075,Graham,heldout,obj:bench,,test,1,
+37075,Graham,heldout,obj:trash_bin,,test,1,
+37075,Graham,heldout,obj:collection_mailbox,,test,0,
+37173,Swain,heldout,obj:fire_hydrant,0.794,test,13,
+37173,Swain,heldout,obj:utility_pole,0.113,test,13,
+37173,Swain,heldout,obj:street_light,0.0,test,0,
+37173,Swain,heldout,obj:stop_sign,,test,33,
+37173,Swain,heldout,obj:bench,,test,32,
+37173,Swain,heldout,obj:trash_bin,,test,5,
+37173,Swain,heldout,obj:collection_mailbox,,test,0,
+31041,Custer,heldout,obj:fire_hydrant,0.0,test,0,
+31041,Custer,heldout,obj:utility_pole,0.104,test,808,
+31041,Custer,heldout,obj:street_light,0.0,test,0,
+31041,Custer,heldout,obj:stop_sign,,test,3,
+31041,Custer,heldout,obj:bench,0.0,test,0,
+31041,Custer,heldout,obj:trash_bin,0.0,test,0,
+31041,Custer,heldout,obj:collection_mailbox,0.0,test,0,
+31031,Cherry,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+13089,DeKalb,heldout,obj:fire_hydrant,0.258,test,76,
+13089,DeKalb,heldout,obj:utility_pole,0.301,test,285,
+13089,DeKalb,heldout,obj:street_light,0.252,test,105,
+13089,DeKalb,heldout,obj:stop_sign,,test,580,
+13089,DeKalb,heldout,obj:bench,0.525,test,86,
+13089,DeKalb,heldout,obj:trash_bin,0.536,test,58,
+13089,DeKalb,heldout,obj:collection_mailbox,0.21,test,14,
+04005,Coconino,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+32007,Elko,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+23003,Aroostook,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+02020,Anchorage,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+02090,Fairbanks North Star,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+02110,Juneau,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+15003,Honolulu,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+15001,Hawaii,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
+15009,Maui,heldout,*,,no,,"Overpass HTTP 502: # 502 Gateway Timeout
+
+This Overpass API server is currently at capacity. All query workers are busy
+and the request queue is full.
+
+## What to do
+
+Retry your request using exponent"
