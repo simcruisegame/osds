@@ -20,6 +20,21 @@ Every fault the owner reported, then the test escapes and the blind reviews, eac
 | 12 | 11-14 21:06Z | "yall need to optoize your testing" | - | review | in progress: "How we look", the new review method | this test |
 | 13 | 11-14 23:32Z | the installer must work on any PC | dep-check: the VC++ runtime is not shipped or installed | release | open: the installer thread | dep-check 0, installer gate |
 
+## The release-10 review (dfed34c, 2026-11-15), blind review and fresh eyes
+
+Frames under `C:\sc\final\release10-review\`. Each gets an after frame at the same spot in the final test (the same place, start and car; the frame at the same drive second or path metre).
+
+| # | Fault | Where it showed (release-10) | Found by | Lane | State | After the fix (frame) |
+|---|---|---|---|---|---|---|
+| R1 | Miata automatic: 19 mph in D1 at 851 rpm (below idle in gear); first held to 6789 rpm at 31 mph; gear hunting D5-D4-D2-D4 at 35 mph | dragon-oldcrowns\review\006-006.3s-timed.png (sidecar rpm 851, gear 1); dragon\review\030-031.3s-timed.png; dragon\motion\strip-01.png | blind review, checked against the sidecars; the strip | driving | open | Dragon, same seconds |
+| R2 | The road visible through the Miata door, under the side mirror | dragon-oldcrowns\review\006-006.3s-timed.png (bottom left) | blind review, checked by eye | cockpit | open | Dragon, same second |
+| R3 | Jagged black stair-step shadows over the Miata binnacle and column; the cabin flips between clay-grey and near-black within 0.5 s | dragon\review\026-027.2s-timed.png; dragon\motion\strip-01.png | blind review, fresh eyes, the strip | picture | open | Dragon strip |
+| R4 | The Corvette's digital cluster digits garbled | jasper-ar\review\ (frames 4-6 of the blind set) | blind review | cockpit | open | Jasper, same seconds |
+| R5 | Palm fronds dithered, comb-like | ocean-drive\review\ (all) | blind review | picture | open | Ocean Drive start |
+| R6 | Parked cars standing into the driving lane on Ocean Drive, very close at 28 mph | ocean-drive\review\ (blind frames 3, 6-10) | blind review | world | open | Ocean Drive, same seconds |
+| R7 | Blocky, soft rear-view and side mirrors; the rear-view mirror blank or dark in some frames (d50a90e lowers the mirror to 768x320 to save GPU) | dragon\review\, ocean-drive\review\ | blind review | picture | open | every place |
+| R8 | The Corvette minimap over the centre screen (the screen shows through it); the HUD speed digits fade to grey | jasper-ar\review\014-014.5s-timed.png; detroit-slow\review\009-009.3s-timed.png | blind review, fresh eyes | ui | maybe fixed in the candidate (3b49f7e: the map at the top left, no speed fade): before and after frames at the same spot in the final test | Jasper 14.5 s, Detroit slow 9.3 s |
+
 ## Test escapes and blind-review findings
 
 See [test-escapes.md](test-escapes.md): building tops, freeway traffic at grade, the pad menus' top row, wheel and gauges, and the 15 findings of the blind review of c1a6b76 (terrain shards beside the motorway, binnacle streaks, the cabin clay-grey on the motorway, a floating street light, road markings on sidewalks, white windows by day, untextured towers, the minimap over the clock, fading HUD digits, blocky mirrors, the wheel badge, first gear held at full throttle). Each gets a row here with its state when the final test has checked it.
