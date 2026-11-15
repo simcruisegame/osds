@@ -29,6 +29,8 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogSimCruiseAerialEye, Log, All);
 
+static TAutoConsoleVariable<int32> CVarSimCruiseEyePhoto16(TEXT("simcruise.Eye.Photo16"), 0,
+	TEXT("1: the eye fetches each tile's zoom-16 photograph through the helper and writes the clean photo albedo (PHTX). Off until the renderer reads it (no fetches nobody sees)."));
 static TAutoConsoleVariable<int32> CVarSimCruiseEyeDump(TEXT("simcruise.Eye.Dump"), 0,
 	TEXT("1: the aerial eye also writes photo | classes PNGs of each tile it reads to Saved/Scan/eyes/dump."));
 
@@ -393,7 +395,7 @@ namespace SimCruiseAerialEyeLocal
 	int32 Luma(const FColor& C) { return (C.R * 77 + C.G * 150 + C.B * 29) >> 8; }
 
 	/** The natural classes the clean albedo works on (model output order). */
-	bool IsNatural(int32 K) { return K == 4 || K == 5 || K == 6 || K == 7 || K == 8; } // tree, grass, crop, shrub, bare
+	bool IsNatural(int32 K) { return K == 5 || K == 6 || K == 7 || K == 8; } // grass, crop, shrub, bare (tree canopy keeps its own shading)
 }
 
 void FSimCruiseAerialEye::SetAtlas(const FSimCruiseAtlasConfig& Config)
@@ -535,6 +537,23 @@ void FSimCruiseAerialEye::CleanPhoto(const TArray<FColor>& Mosaic, const FIntPoi
 		const int32 Y = Luma(Mosaic[Index]);
 		return Y < Median[K] - 2 * Spread[K] - 6 || Y > Median[K] + 3 * Spread[K] + 10;
 	};
+	// The pixels to replace: outliers of their class, grown by one pixel so a shadow's soft edge goes too.
+	TArray<uint8> Bad;
+	Bad.Init(0, S * S);
+	for (int32 Index = 0; Index < S * S; ++Index)
+	{
+		const int32 K = Class[Index];
+		if (K != 255 && Median[K] >= 0 && IsOutlier(Index, K)) Bad[Index] = 2;
+	}
+	for (int32 J = 1; J < S - 1; ++J)
+	{
+		for (int32 I = 1; I < S - 1; ++I)
+		{
+			const int32 Index = J * S + I;
+			if (Bad[Index] || Class[Index] == 255) continue;
+			if (Bad[Index - 1] == 2 || Bad[Index + 1] == 2 || Bad[Index - S] == 2 || Bad[Index + S] == 2) Bad[Index] = 1;
+		}
+	}
 	TArray<FColor> Out = Mosaic;
 	int32 Cleaned = 0;
 	const int64 OX = int64(Tile16.X) * PhotoCells - G, OY = int64(Tile16.Y) * PhotoCells - G;
@@ -544,21 +563,25 @@ void FSimCruiseAerialEye::CleanPhoto(const TArray<FColor>& Mosaic, const FIntPoi
 		{
 			const int32 Index = J * S + I;
 			const int32 K = Class[Index];
-			if (K == 255 || Median[K] < 0 || !IsOutlier(Index, K)) continue;
-			// Nearby pixels of the same class, in an order fixed by the GLOBAL position: two tiles that see
-			// the same pixels near their shared edge pick the same replacement.
+			if (!Bad[Index] || K == 255 || Median[K] < 0) continue;
+			// Nearby clean pixels of the same class, in an order fixed by the GLOBAL position (two tiles that
+			// see the same pixels near their shared edge pick the same one); of the first four found, the one
+			// closest to the class's typical brightness, so no bright or dark specks are copied in.
 			const uint64 Seed = Mix((uint64(OX + I) << 32) ^ uint64(OY + J));
-			bool bFilled = false;
-			for (int32 T = 0; T < 24 && !bFilled; ++T)
+			int32 Best = -1, BestError = MAX_int32, Found = 0;
+			for (int32 T = 0; T < 32 && Found < 4; ++T)
 			{
 				const uint64 H = Mix(Seed + T);
 				const int32 DX = int32(H % 33) - 16, DY = int32((H >> 16) % 33) - 16;
 				const int32 X = I + DX, Y = J + DY;
 				if (X < 0 || Y < 0 || X >= S || Y >= S) continue;
 				const int32 C = Y * S + X;
-				if (Class[C] == K && !IsOutlier(C, K)) { Out[Index] = Mosaic[C]; bFilled = true; }
+				if (Class[C] != K || Bad[C]) continue;
+				++Found;
+				const int32 Error = FMath::Abs(Luma(Mosaic[C]) - Median[K]);
+				if (Error < BestError) { BestError = Error; Best = C; }
 			}
-			if (!bFilled) Out[Index] = Mean[K];
+			Out[Index] = Best >= 0 ? Mosaic[Best] : Mean[K];
 			++Cleaned;
 		}
 	}
@@ -663,7 +686,7 @@ void FSimCruiseAerialEye::RunWorker()
 			// The tile's own zoom-16 photograph (4 x the detail) when the helper has it: the eye reads it
 			// (the kind of photo it learned on) and the clean photo albedo is made from it.
 			TArray<FColor> Mosaic;
-			const bool bMosaic = (!bStudent || IsLower48(FIntVector(16, Tile.X, Tile.Y)))
+			const bool bMosaic = CVarSimCruiseEyePhoto16.GetValueOnAnyThread() > 0 && (!bStudent || IsLower48(FIntVector(16, Tile.X, Tile.Y)))
 				&& BuildMosaic(Tile, [this](const FIntPoint& T, TArray<FColor>& P) { return Photo16(T, true, P); }, Mosaic);
 			if (bMosaic || !M.PhotoPath.IsEmpty())
 			{
