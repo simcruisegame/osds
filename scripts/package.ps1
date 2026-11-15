@@ -81,12 +81,23 @@ $Profiles = Get-Content -Raw (Join-Path $Root 'Content\Vehicles\CarPresentation.
 $Used = @($Profiles.cars.PSObject.Properties | ForEach-Object { ($_.Value.model -split '/')[3] } | Where-Object { $_ })
 $Skip = @(Join-Path $Root 'data\observed') + @(Get-ChildItem -Directory (Join-Path $Root 'data\art\traffic') |
     Where-Object { $Used -notcontains $_.Name } | ForEach-Object { $_.FullName })
-# The AI models' weights were trained on data released for research or non-commercial use
-# only (Cityscapes; DIV2K, Flickr2K, OST), so they are development tools and never shipped
-# (docs/data-sources.md); the game runs without them. Every data/ai/*.onnx is left out, so a
-# new model is not shipped by accident; scripts\release.ps1 refuses a zip with any .onnx.
+# AI models: only the ones cleared for shipping (scripts\ShippedModels.ps1, CREDITS.md). The
+# copy leaves every .onnx out, so a new model is not shipped by accident, then puts in exactly
+# the listed ones; scripts\release.ps1 fails on any other .onnx in the zip.
+. (Join-Path $PSScriptRoot 'ShippedModels.ps1')
 robocopy (Join-Path $Root 'data') (Join-Path $Game 'data') /MIR /XD @Skip /XF *.onnx /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "Copying data failed ($LASTEXITCODE)" }
+# An earlier copy's other models go (robocopy /MIR leaves excluded files in place).
+Get-ChildItem (Join-Path $Game 'data') -Recurse -Filter *.onnx -ErrorAction SilentlyContinue | Where-Object {
+    $script:ShippedModels -notcontains ('data/' + $_.FullName.Substring((Join-Path $Game 'data').Length + 1).Replace('\', '/'))
+} | Remove-Item -Force
+foreach ($Model in $script:ShippedModels) {
+    $From = Join-Path $Root $Model
+    if (-not (Test-Path $From)) { throw "A shipped model is missing: $Model" }
+    $To = Join-Path $Game $Model
+    New-Item -ItemType Directory -Force (Split-Path $To) | Out-Null
+    Copy-Item $From $To -Force
+}
 foreach ($Dir in $Skip) {
     # robocopy /MIR leaves excluded folders in place; an earlier copy's go now.
     $Copied = Join-Path $Game ('data' + $Dir.Substring((Join-Path $Root 'data').Length))

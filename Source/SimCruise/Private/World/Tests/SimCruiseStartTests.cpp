@@ -1338,8 +1338,6 @@ bool FSimCruiseMarkingsAndPolesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseTerrainNeverOverRoadTest, "SimCruise.World.TerrainNeverOverRoad", SimCruiseStartTest::Flags)
 bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 {
@@ -1437,3 +1435,5 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("recorded places checked"), Places >= 1);
 	return true;
 }
+
+#endif

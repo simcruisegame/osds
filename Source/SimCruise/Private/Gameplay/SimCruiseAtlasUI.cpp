@@ -21,6 +21,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Styling/CoreStyle.h"
 #include "TextureResource.h"
+#include "Types/ISlateMetaData.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Layout/SBorder.h"
@@ -82,6 +83,36 @@ namespace
 			];
 	}
 
+	/**
+	 * What a button of ours does when pressed, kept on the button itself: the pad presses it by
+	 * calling this. SButton::SimulateClick is not in Shipping builds (UE 5.8 declares it under
+	 * !UE_BUILD_SHIPPING), and the shipped game needs the pad to press buttons too.
+	 */
+	class FSimCruisePress : public ISlateMetaData
+	{
+	public:
+		SLATE_METADATA_TYPE(FSimCruisePress, ISlateMetaData)
+		explicit FSimCruisePress(TFunction<void()> InFn) : Fn(MoveTemp(InFn)) {}
+		TFunction<void()> Fn;
+	};
+
+	/** The button's click and the pad's press: one function for both. */
+	TSharedRef<SButton> Pressable(const TSharedRef<SButton>& B, TFunction<void()> Fn)
+	{
+		B->SetOnClicked(FOnClicked::CreateLambda([Fn]() { Fn(); return FReply::Handled(); }));
+		B->AddMetadata(MakeShared<FSimCruisePress>(MoveTemp(Fn)));
+		return B;
+	}
+
+	/** Press a button made with Pressable, as a click would; false for any other widget. */
+	bool PressButton(const TSharedPtr<SWidget>& Widget)
+	{
+		const TSharedPtr<FSimCruisePress> Press = Widget.IsValid() ? Widget->GetMetaData<FSimCruisePress>() : nullptr;
+		if (!Press.IsValid() || !Press->Fn) return false;
+		Press->Fn();
+		return true;
+	}
+
 	/** A on a button of ours: press it (when the button did not take the A itself, it comes up to the screen). */
 	bool PressFocused(std::initializer_list<const TArray<TSharedPtr<SWidget>>*> Lists)
 	{
@@ -91,8 +122,7 @@ namespace
 		{
 			if (List->Contains(Focused))
 			{
-				StaticCastSharedPtr<SButton>(Focused)->SimulateClick();
-				return true;
+				return PressButton(Focused);
 			}
 		}
 		return false;
@@ -108,14 +138,13 @@ namespace
 	/** A text button; OutButton gets the button itself (it takes the focus, the ring is round it). */
 	TSharedRef<SWidget> Button(const FString& Text, TFunction<void()> OnClick, int32 Size = 14, TArray<TSharedPtr<SWidget>>* Collect = nullptr)
 	{
-		TSharedRef<SButton> B = SNew(SButton)
+		TSharedRef<SButton> B = Pressable(SNew(SButton)
 			.Tag(FName(*FString::Printf(TEXT("Button.%s"), *Text)))
 			.ForegroundColor(SimCruiseUiStyle::Paper())
 			.ContentPadding(FMargin(12.f, 6.f))
-			.OnClicked_Lambda([OnClick]() { OnClick(); return FReply::Handled(); })
 			[
 				SNew(STextBlock).Text(FText::FromString(Text)).Font(Font(Size)).ColorAndOpacity(SimCruiseUiStyle::Paper())
-			];
+			], OnClick);
 		if (Collect) Collect->Add(B);
 		return Ring(B);
 	}
@@ -442,14 +471,13 @@ void SSimCruisePlaceSearch::ShowResults(const TArray<FSimCruisePlace>& Places, c
 	ChoiceButtons.Reset();
 	for (const FSimCruisePlace& Place : Places)
 	{
-		TSharedRef<SButton> B = SNew(SButton)
+		TSharedRef<SButton> B = Pressable(SNew(SButton)
 			.Tag(FName(*FString::Printf(TEXT("Place.%s"), *Place.Title)))
 			.ContentPadding(FMargin(10.f, 7.f))
-			.OnClicked_Lambda([this, Place]() { Choose(Place); return FReply::Handled(); })
 			[
 				SNew(STextBlock).Text(FText::FromString(Place.Title)).Font(Font(14)).ColorAndOpacity(SimCruiseUiStyle::Paper())
 				.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
-			];
+			], [this, Place]() { Choose(Place); });
 		Choices->AddSlot().AutoHeight().Padding(0, 0, 0, 2)[Ring(B, FLinearColor(FColor(0x22, 0x33, 0x2e)))];
 		ChoiceButtons.Add(B);
 	}
@@ -553,17 +581,16 @@ TSharedRef<SWidget> SSimCruisePlaceSearch::BuildPadKeys()
 	KeyRows.Reset();
 	auto Key = [this](const FString& Name, float Width) -> TSharedRef<SWidget>
 	{
-		TSharedRef<SButton> B = SNew(SButton)
+		TSharedRef<SButton> B = Pressable(SNew(SButton)
 			.Tag(FName(*FString::Printf(TEXT("Key.%s"), *Name)))
 			.HAlign(HAlign_Center)
 			.ContentPadding(FMargin(4.f, 6.f))
-			.OnClicked_Lambda([this, Name]() { TypeKey(Name); return FReply::Handled(); })
 			[
 				SNew(SBox).WidthOverride(Width).HAlign(HAlign_Center)
 				[
 					SNew(STextBlock).Text(FText::FromString(Name)).Font(Font(16, true)).ColorAndOpacity(SimCruiseUiStyle::Paper())
 				]
-			];
+			], [this, Name]() { TypeKey(Name); });
 		KeyRows.Last().Add(B);
 		return Ring(B);
 	};
@@ -797,13 +824,12 @@ void SSimCruiseRoadAtlas::Construct(const FArguments& InArgs)
 	for (int32 Index = 0; Index < 14; ++Index)
 	{
 		TSharedPtr<STextBlock> Text;
-		TSharedRef<SButton> B = SNew(SButton)
+		TSharedRef<SButton> B = Pressable(SNew(SButton)
 			.Tag(FName(*FString::Printf(TEXT("Setting.%d"), Index)))
 			.ContentPadding(FMargin(12.f, 6.f))
-			.OnClicked_Lambda([this, Index]() { OnSetting.ExecuteIfBound(Index); return FReply::Handled(); })
 			[
 				SAssignNew(Text, STextBlock).Font(Font(14)).ColorAndOpacity(SimCruiseUiStyle::Paper())
-			];
+			], [this, Index]() { OnSetting.ExecuteIfBound(Index); });
 		SettingLabels.Add(Text);
 		// 13 is Traffic: not on the panel while traffic is off for the release (SimCruiseFeatures).
 		if (Index == 13 && !SimCruiseFeatures::IsTrafficEnabled()) continue;
@@ -850,21 +876,19 @@ void SSimCruiseRoadAtlas::Construct(const FArguments& InArgs)
 					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 5, 0)[Button(TEXT("Surprise me"), [this]() { if (OnSurprise.IsBound()) OnSurprise.Execute(); }, 14, &PadRows[1])]
 					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 5, 0)
 					[
-						Ring(PadButton(PadRows[1], SNew(SButton).Tag(TEXT("Button.Car"))
+						Ring(PadButton(PadRows[1], Pressable(SNew(SButton).Tag(TEXT("Button.Car"))
 						.ContentPadding(FMargin(12.f, 6.f))
-						.OnClicked_Lambda([this]() { OnCycleCar.ExecuteIfBound(); return FReply::Handled(); })
 						[
 							SAssignNew(CarLabel, STextBlock).Font(Font(14)).ColorAndOpacity(SimCruiseUiStyle::Paper())
-						]))
+						], [this]() { OnCycleCar.ExecuteIfBound(); })))
 					]
 					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 5, 0)
 					[
-						Ring(PadButton(PadRows[1], SNew(SButton).Tag(TEXT("Button.Gearbox"))
+						Ring(PadButton(PadRows[1], Pressable(SNew(SButton).Tag(TEXT("Button.Gearbox"))
 						.ContentPadding(FMargin(12.f, 6.f))
-						.OnClicked_Lambda([this]() { OnToggleTransmission.ExecuteIfBound(); return FReply::Handled(); })
 						[
 							SAssignNew(GearLabel, STextBlock).Font(Font(14)).ColorAndOpacity(SimCruiseUiStyle::Paper())
-						]))
+						], [this]() { OnToggleTransmission.ExecuteIfBound(); })))
 					]
 					+ SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right).VAlign(VAlign_Center)
 					[
@@ -1259,7 +1283,7 @@ FReply SSimCruiseRoadAtlas::OnKeyDown(const FGeometry& MyGeometry, const FKeyEve
 			TArray<const TArray<TSharedPtr<SWidget>>*> Lists;
 			for (const TArray<TSharedPtr<SWidget>>& Row : PadRows) Lists.Add(&Row);
 			const TSharedPtr<SWidget> Focused = FSlateApplication::Get().GetUserFocusedWidget(0);
-			for (const TArray<TSharedPtr<SWidget>>* List : Lists) if (List->Contains(Focused)) { StaticCastSharedPtr<SButton>(Focused)->SimulateClick(); break; }
+			for (const TArray<TSharedPtr<SWidget>>* List : Lists) if (List->Contains(Focused)) { PressButton(Focused); break; }
 			return FReply::Handled();
 		}
 		if (Key == EKeys::Gamepad_DPad_Left) { MovePad(-1, 0); return FReply::Handled(); }
