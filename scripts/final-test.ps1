@@ -28,6 +28,8 @@ param(
     # The test-only commits: our review branch since main (cherry-picked in order onto the candidate).
     [string]$TestRange = 'origin/main..review/how-we-look',
     [string[]]$TestCommits = @(),
+    # Commits picked onto the candidate in the package tree (the installer lane's; no game code), e.g. fbe0cfa.
+    [string[]]$PackagePicks = @(),
     [string]$Out = '',
     [switch]$SkipEditorTest,
     [switch]$SkipCooked
@@ -119,16 +121,47 @@ if (-not $SkipEditorTest) {
 }
 
 if (-not $SkipCooked) {
-    Prepare $PackageTree @()
+    New-Item -ItemType Directory -Force $Out | Out-Null
+    $Log = Join-Path $Out 'final-test-steps.log'
+    function Step([string]$What) { $L = "$((Get-Date).ToUniversalTime().ToString('HH:mm'))Z $What"; Write-Host $L; Add-Content -Encoding utf8 $Log $L }
+    # The package is the candidate plus only the picks named here (the installer lane's scripts, .iss and config):
+    # no pick may touch game code (Source, Content).
+    foreach ($C in $PackagePicks) {
+        $Code = @(git -C $PackageTree show --name-only --format= $C | Where-Object { $_ -match '^(Source|Content)/' })
+        if ($Code.Count) { throw "package pick $C touches game code: $($Code -join ', ')" }
+    }
+    Prepare $PackageTree $PackagePicks
+    Step "cooked part: $PackageTree at $(git -C $PackageTree log --oneline -1) (picks: $($PackagePicks -join ', '))"
     & powershell -ExecutionPolicy Bypass -File (Join-Path $PackageTree 'scripts\gpu-wait.ps1') -TimeoutMinutes 120
+    $Iss = Join-Path $PackageTree 'packaging\windows\simcruise.iss'
+    # 9. The Development package (it writes a log) for the cooked gate and the timed run.
+    Step 'part 9: package Development'
     & powershell -ExecutionPolicy Bypass -File (Join-Path $PackageTree 'scripts\package.ps1') -Configuration Development | Select-Object -Last 3
     if ($LASTEXITCODE -ne 0) { throw 'package failed' }
     Push-Location $PackageTree; try { if (git status --porcelain) { throw 'the package tree changed during the package build' } } finally { Pop-Location }
-    # The static dependency check: every DLL the shipped binaries need, shipped or part of Windows.
-    & python (Join-Path $PSScriptRoot 'dep-check.py') (Join-Path $PackageTree 'Saved\Package\Windows') (Join-Path $PackageTree 'Saved\Package\dependencies.md')
-    # The cooked gate: Dragon and Ocean Drive in the cooked game, the shader and name checks.
+    # The static dependency check: every DLL the shipped binaries need is shipped, part of Windows, or installed
+    # by the installer (the VC++ runtime only with vc_redist.x64.exe in the package and the .iss running it).
+    & python (Join-Path $PSScriptRoot 'dep-check.py') (Join-Path $PackageTree 'Saved\Package\Windows') (Join-Path $Out 'dependencies-development.md') "--iss=$Iss" | ForEach-Object { Step "dep-check: $_" }
+    # 10. The cooked gate: Dragon and Ocean Drive in the cooked game, the shader and name checks.
+    Step 'part 10: cooked gate'
     & powershell -ExecutionPolicy Bypass -File (Join-Path $PackageTree 'scripts\release-test.ps1') -Cooked -ShowWindow -Cases 'cooked-drive' | Select-Object -Last 5
-    # One timed quiet run: the cooked Dragon drive again, its report must say quiet (no other load).
+    # 11. One timed quiet run: the cooked Dragon drive again, its report must say quiet (no other load).
+    Step 'part 11: timed quiet run'
     & powershell -ExecutionPolicy Bypass -File (Join-Path $PackageTree 'scripts\release-test.ps1') -Cooked -ShowWindow -Places 'dragon' -NoWarm | Select-Object -Last 5
+    # 13. The installer gate, as far as this PC allows: the Shipping package with the Microsoft redistributables,
+    # dep-check, the installer and its SHA256. Installing, uninstalling and the clean-PC steps of
+    # docs/release/clean-pc-test.md need a clean PC or Windows Sandbox (admin); on this PC the uninstaller would also
+    # delete the shared map cache in %LOCALAPPDATA%\SimCruise, so they are not run here.
+    Step 'part 13: Shipping package and installer'
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $PackageTree 'scripts\package.ps1') -Configuration Shipping -Zip | Select-Object -Last 3
+    & python (Join-Path $PSScriptRoot 'dep-check.py') (Join-Path $PackageTree 'Saved\Package\Windows') (Join-Path $Out 'dependencies-shipping.md') "--iss=$Iss" | ForEach-Object { Step "dep-check (Shipping): $_" }
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $PackageTree 'scripts\installer.ps1') | Select-Object -Last 4 | ForEach-Object { Step "installer: $_" }
+    $Setup = Get-ChildItem (Join-Path $PackageTree 'Saved\Package') -Filter '*-windows-x64-setup.exe' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $Sums = Get-ChildItem (Join-Path $PackageTree 'Saved\Package') -Filter '*-SHA256SUMS.txt' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($Setup -and $Sums) {
+        $H = (Get-FileHash $Setup.FullName -Algorithm SHA256).Hash.ToLower()
+        Step "installer $($Setup.Name) $([Math]::Round($Setup.Length / 1MB)) MB; SHA256 $(if ((Get-Content $Sums.FullName) -match $H) { 'matches' } else { 'DOES NOT MATCH' }) $($Sums.Name)"
+    } else { Step 'installer: no setup exe or SHA256SUMS written' }
+    Step 'part 13 not run on this PC (needs a clean PC or Windows Sandbox, admin): install, the Microsoft runtime prompts, first start, offline start, uninstall and what it leaves'
 }
 Write-Host "FINAL TEST of $Hash done $((Get-Date).ToUniversalTime().ToString('HH:mm'))Z"

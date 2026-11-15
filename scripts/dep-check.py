@@ -69,9 +69,28 @@ def classify(dll, shipped):
     if os.path.exists(os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', dll)): return 'windows'
     return 'NOT FOUND'
 
+def vc_runtime_installed(root, iss):
+    """The VC++ runtime counts as covered only when the package carries Microsoft's vc_redist.x64.exe
+    (Engine\\Extras\\Redist\\en-us, from package.ps1 -prereqs) AND the installer script runs it silently at
+    install (vc_redist.x64.exe with /install and /quiet, in [Run] or in its code). Returns (ok, why)."""
+    redist = os.path.join(root, 'Engine', 'Extras', 'Redist', 'en-us', 'vc_redist.x64.exe')
+    if not os.path.exists(redist):
+        return False, f'no {os.path.relpath(redist, root)} in the package'
+    if not iss or not os.path.exists(iss):
+        return False, 'no installer script given (--iss=<simcruise.iss>)'
+    text = open(iss, encoding='utf-8', errors='replace').read()
+    for line in text.splitlines():
+        l = line.lower()
+        if 'vc_redist.x64.exe' in l and '/install' in l and '/quiet' in l and not l.lstrip().startswith((';', '//')):
+            return True, f'{os.path.relpath(redist, root)} shipped; the installer runs it: {line.strip()[:120]}'
+    return False, 'the installer script does not run vc_redist.x64.exe /install /quiet'
+
 def main():
-    root = sys.argv[1]
-    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, 'dependencies.md')
+    args = [a for a in sys.argv[1:] if not a.startswith('--iss=')]
+    iss = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--iss=')), '')
+    root = args[0]
+    out = args[1] if len(args) > 1 else os.path.join(root, 'dependencies.md')
+    vc_ok, vc_why = vc_runtime_installed(root, iss)
     bins, shipped = [], set()
     for d, _, files in os.walk(root):
         for f in files:
@@ -85,13 +104,17 @@ def main():
         except Exception as e:
             print(f'{p}: not read ({e})')
     rows = sorted(((classify(dll, shipped), dll, how, users) for dll, users, how in need.values()), key=lambda r: (r[0] != 'NOT FOUND', r[0] != 'VC++ runtime', r[0] != 'DirectX extra', r[0], r[1].lower()))
+    if vc_ok:
+        rows = [('installed by the installer' if r[0] == 'VC++ runtime' else r[0], r[1], r[2], r[3]) for r in rows]
     bad = [r for r in rows if r[0] in ('VC++ runtime', 'DirectX extra', 'NOT FOUND')]
     md = [f'# Dependencies of {root}', '', f'{len(bins)} executables and DLLs read; {len(rows)} DLLs needed. A clean Windows has the "windows" ones; the installer must bring every other one that is not "shipped".', '',
+          f'VC++ runtime: {"COVERED" if vc_ok else "NOT COVERED"} ({vc_why}).', '',
           f'**Not on a clean Windows and not shipped: {len(bad)}** ' + (', '.join(sorted({r[1] for r in bad})) if bad else '(none)'), '',
           '| Kind | DLL | Load | Needed by |', '|---|---|---|---|']
     md += [f'| {k} | {dll} | {how} | {", ".join(sorted(u)[:4])}{" ..." if len(u) > 4 else ""} |' for k, dll, how, u in rows if k != 'windows']
     md += ['', f'Windows system DLLs ({sum(1 for r in rows if r[0] == "windows")}): ' + ', '.join(sorted(r[1] for r in rows if r[0] == 'windows'))]
     open(out, 'w', encoding='utf-8').write('\n'.join(md) + '\n')
+    print(f'VC++ runtime: {"COVERED" if vc_ok else "NOT COVERED"} ({vc_why})')
     print(f'{len(bins)} binaries, {len(rows)} DLLs, {len(bad)} not shipped and not part of Windows -> {out}')
     for k, dll, how, u in bad: print(f'  {k}: {dll} ({how}) needed by {sorted(u)[0]}{" and more" if len(u) > 1 else ""}')
 
