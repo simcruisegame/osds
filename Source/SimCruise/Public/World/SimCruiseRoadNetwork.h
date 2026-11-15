@@ -59,7 +59,8 @@ struct FSimCruiseRibbonStation
 	int8 Travel = 0;                       // +1 one-way along S, -1 against, 0 two-way
 	bool bBridge = false;                  // on a mapped bridge: the profile spans the gap, the ground is not raised
 	int8 Layer = 0;                        // OSM layer (a road under a bridge: -1)
-	bool bLeftAsItWas = false;             // a deck span the clearance rule could not fix (logged; the join treats it as before)
+	bool bLeftAsItWas = false;
+	bool bDeckKept = false;                 // ... kept whole and drivable, the road under it hidden under the slab             // a deck span the clearance rule could not fix (logged; the join treats it as before)
 
 	/** Height across the carriageway at signed lateral L (five-point piecewise linear). */
 	double Height(double L) const

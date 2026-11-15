@@ -990,8 +990,11 @@ namespace SimCruiseStartTest
 					const double Dz = FMath::Abs(FMath::Lerp(A.HC, C.HC, Tu) - FMath::Lerp(D.HC, E.HC, Tv));
 					if (Dz > 0.3 && Dz < 4.5) Out.Add(FString::Printf(TEXT("%s x %s cross %.2f m apart in height at %s"), *Name(r), *Name(Sg.Key), Dz, *Place(X)));
 				}
+				// A deck kept whole over a road hidden under it (the clearance rule's last resort, logged
+				// and counted as left by World.BridgeDecks): its slab and parapets are not faults here.
+				const bool bKept = A.bDeckKept || C.bDeckKept;
 				// A deck's slab (1.2 m deep) over a road in a car's way, where SimCruiseBridges builds it.
-				if ((A.bBridge || C.bBridge) && Roads.DeckUndersideAt(r, i))
+				if (!bKept && (A.bBridge || C.bBridge) && Roads.DeckUndersideAt(r, i))
 				{
 					double Hs = 0.0;
 					int32 Os = INDEX_NONE;
@@ -1014,7 +1017,7 @@ namespace SimCruiseStartTest
 					}
 					// The parapets SimCruiseBridges builds (one station past each span end too).
 					const bool bSpan = A.bBridge || C.bBridge || (i > 0 && R.St[i - 1].bBridge);
-					if (bSpan && Roads.ParapetAt(r, i, Edge))
+					if (!bKept && bSpan && Roads.ParapetAt(r, i, Edge))
 					{
 						const FVector2d Q = A.C + A.R * (Edge * (A.HalfW + 0.2));
 						double Hq = 0.0;

@@ -1245,7 +1245,9 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 						}
 					}
 				}
-				bool bAllFit = true;
+				bool bAllFit = true, bHidden = false;
+				double SpanHalfW = 0.0;
+				for (int32 j = k; j <= e; ++j) SpanHalfW = FMath::Max(SpanHalfW, Ribbon.St[j].HalfW);
 				for (const TPair<int32, FCross>& Pair : Cross)
 				{
 					const FCross& X = Pair.Value;
@@ -1269,8 +1271,54 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 					}
 					else
 					{
-						bAllFit = false;
-						What = FString::Printf(TEXT("needs %.2f m over %s; neither a cut (%.0f m ramps) nor a lift (%.0f m) fits, left as it was"), X.Need, *O.Class, RCut, RLift);
+						// Both at once: the road under it down by a share and the deck up by the rest, each
+						// over a ramp for its own share (Northcrest Road over I-285: 7.1 m either way did not
+						// fit, about half each does). The share that leaves the most room on both.
+						double BestF = -1.0, BestRoom = -1e9;
+						for (int32 s = 1; s <= 9; ++s)
+						{
+							const double F = s / 10.0;
+							const double Rc = FMath::Max(40.0, 1.5 * X.Need * F / CutRoom), Rl = FMath::Max(20.0, 1.5 * X.Need * (1.0 - F) / LiftRoom);
+							if (!Fits(Pair.Key, X.US0 - 3.0, X.US1 + 3.0, Rc) || !Fits(r, X.DS0 - 3.0, X.DS1 + 3.0, Rl)) continue;
+							const double Room = -FMath::Max(Rc, Rl);
+							if (Room > BestRoom) { BestRoom = Room; BestF = F; }
+						}
+						if (BestF > 0.0)
+						{
+							const double Rc = FMath::Max(40.0, 1.5 * X.Need * BestF / CutRoom), Rl = FMath::Max(20.0, 1.5 * X.Need * (1.0 - BestF) / LiftRoom);
+							Changes.Add({ Pair.Key, X.US0 - 3.0, X.US1 + 3.0, -X.Need * BestF, Rc });
+							Changes.Add({ r, X.DS0 - 3.0, X.DS1 + 3.0, X.Need * (1.0 - BestF), Rl });
+							What = FString::Printf(TEXT("cut and lifted: %s %s down %.2f m (ramps %.0f m), the deck up %.2f m (ramps %.0f m)"), *O.Class,
+								O.Name.IsEmpty() ? TEXT("(unnamed)") : *O.Name, X.Need * BestF, Rc, X.Need * (1.0 - BestF), Rl);
+						}
+						else
+						{
+							// Nothing fits: the deck stays whole and drivable where it is, and the road under it
+							// dips out of sight under the slab for the crossing's length (steep, short ramps
+							// inside the deck's shadow). A hidden piece of the road below, never a hole in the lane
+							// the car drives on. Logged; the span counts as left as it was.
+							const double Under = X.Need - DeckClearM + 0.3; // from its height now to 0.3 m under the slab
+							const double RHide = FMath::Max(8.0, Under / 0.25);
+							if (Under <= 0.0)
+							{
+								// Already under the slab, only low: the deck stays as it is, whole.
+								bHidden = true;
+								What = FString::Printf(TEXT("needs %.2f m over %s; neither a cut (%.0f m ramps) nor a lift (%.0f m) fits: %.2f m under the slab, the deck kept whole, left as it was"),
+									X.Need, *O.Class, RCut, RLift, DeckClearM - X.Need);
+							}
+							else if (Fits(Pair.Key, X.US0 - SpanHalfW - 1.0, X.US1 + SpanHalfW + 1.0, RHide))
+							{
+								Changes.Add({ Pair.Key, X.US0 - SpanHalfW - 1.0, X.US1 + SpanHalfW + 1.0, -Under, RHide });
+								bHidden = true;
+								What = FString::Printf(TEXT("needs %.2f m over %s; neither a cut (%.0f m ramps) nor a lift (%.0f m) fits: the deck kept whole, %s %s hidden under it (down %.2f m, ramps %.0f m), left as it was"),
+									X.Need, *O.Class, RCut, RLift, *O.Class, O.Name.IsEmpty() ? TEXT("(unnamed)") : *O.Name, Under, RHide);
+							}
+							else
+							{
+								bAllFit = false;
+								What = FString::Printf(TEXT("needs %.2f m over %s; neither a cut (%.0f m ramps) nor a lift (%.0f m) fits, left as it was"), X.Need, *O.Class, RCut, RLift);
+							}
+						}
 					}
 					double Lon = 0.0, Lat = 0.0;
 					SimCruiseGeo::TileToLonLat(FVector2d(Tile.Id.X, Tile.Id.Y) + X.At / FMath::Max(Side, 1.0), Lon, Lat);
@@ -1279,7 +1327,11 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 					UE_LOG(LogTemp, Display, TEXT("%s"), *Span);
 				}
 				if (bAllFit) for (int32 j = k; j <= e; ++j) DeckFinal[r][j] = 1;
-				else { DecksLeftAsTheyWere.Add(FVector2d(r, Ribbon.St[k].S)); for (int32 j = k; j <= e; ++j) Ribbons[r].St[j].bLeftAsItWas = true; }
+				if (!bAllFit || bHidden)
+				{
+					DecksLeftAsTheyWere.Add(FVector2d(r, Ribbon.St[k].S));
+					for (int32 j = k; j <= e; ++j) { Ribbons[r].St[j].bLeftAsItWas = true; Ribbons[r].St[j].bDeckKept = bAllFit; }
+				}
 				k = e;
 			}
 		}
@@ -1631,6 +1683,8 @@ bool FSimCruiseRoadNetwork::DeckFaceClear(int32 RibbonIndex, int32 I, double Fra
 	const FSimCruiseRibbon& Rb = Ribbons[RibbonIndex];
 	const FSimCruiseRibbonStation& A = Rb.St[I];
 	const FSimCruiseRibbonStation& B = Rb.St[I + 1];
+	// A deck kept whole over a road hidden under it keeps its parapets and slab.
+	if (A.bDeckKept || B.bDeckKept) return true;
 	for (const double T : { 0.0, 0.5, 1.0 })
 	{
 		const FVector2d C = FMath::Lerp(A.C, B.C, T);
