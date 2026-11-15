@@ -29,7 +29,11 @@ param(
     [string]$Car = 'meridian_z',
     [string]$OutDir = '',
     [string]$Me = '',
-    [double]$LimitMs = 0.3
+    [double]$LimitMs = 0.3,
+    # Console commands for each side (comma separated), merged into the run's one -ExecCmds (the game
+    # reads only the first -ExecCmds, so a second one in -OnArgs/-OffArgs would be ignored).
+    [string]$OnExec = '',
+    [string]$OffExec = ''
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
@@ -51,12 +55,13 @@ try {
     for ($I = 0; $I -lt 2 * $Runs; $I++) {
         $Side = if ($I % 2 -eq 0) { 'on' } else { 'off' }
         $Extra = if ($Side -eq 'on') { $OnArgs } else { $OffArgs }
+        $Exec = (@('simcruise.Traffic.Cars 0') + @(if ($Side -eq 'on') { $OnExec } else { $OffExec }) | Where-Object { $_ }) -join ','
         $RunDir = Join-Path $OutDir ("{0:D2}-{1}" -f ($I + 1), $Side)
         New-Item -ItemType Directory -Force $RunDir | Out-Null
         $Before = if (Test-Path $Csv) { @(Get-Content $Csv).Count } else { 0 }
         $Quiet = (Busy) -eq 0
         $Args = "`"$Root\SimCruise.uproject`" -game -SimCruiseWorld -SimCruiseNoLive -SimCruiseNoNeural -SimCruiseGraphics=ultra -SimCruiseDrivePerf=ultra -SimCruiseCar=$Car $PlaceArgs $Extra " +
-            "-NoLiveCoding -nosplash -unattended -log `"-abslog=$RunDir\game.log`" `"-ExecCmds=simcruise.Traffic.Cars 0`" " + ((Get-TestWindowArgs $true) -join ' ') + ' ' + ((Get-NativeResolution) -join ' ')
+            "-NoLiveCoding -nosplash -unattended -log `"-abslog=$RunDir\game.log`" `"-ExecCmds=$Exec`" " + ((Get-TestWindowArgs $true) -join ' ') + ' ' + ((Get-NativeResolution) -join ' ')
         if (-not (Enter-EditorLock -GpuTest -TimeoutMinutes 60 -Why "A/B $Name $Side")) { throw 'no GPU lock' }
         try {
             $P = Start-Process -FilePath $Editor -ArgumentList $Args -PassThru
