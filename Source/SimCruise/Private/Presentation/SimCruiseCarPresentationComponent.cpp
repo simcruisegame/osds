@@ -861,7 +861,7 @@ void USimCruiseCarPresentationComponent::SetMirrorsLive(bool bLive, USceneCompon
 	// convex); 1152 x 480 puts about 11.5 texels in each degree (768 x 320 read as a blocky,
 	// blurred picture in the rear-view glass at 1080p: release review 2026-11-14).
 	constexpr float FovDeg = 100.f;
-	constexpr int32 SizeX = 576, SizeY = 240; // half of 1152 x 480 each way, mip-mapped: the capture cost 6.4-7.3 ms a frame it ran (world lane profile 2026-11-15)
+	constexpr int32 SizeX = 768, SizeY = 320; // mip-mapped; 576 x 240 read blurred in the glass. The capture cost 6.4-7.3 ms before its shadows, range and LODs were cut (2026-11-15)
 	if (!MirrorTarget)
 	{
 		MirrorTarget = NewObject<UTextureRenderTarget2D>(this);
