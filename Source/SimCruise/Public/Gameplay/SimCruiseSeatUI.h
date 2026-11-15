@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Gameplay/SimCruisePlayerCameraManager.h"
+#include "Gameplay/SimCruiseUiTheme.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SCompoundWidget.h"
 
@@ -37,6 +38,9 @@ public:
 	void Close(bool bSave);
 	bool WasSaved() const { return bSaved; }
 	const FSimCruiseSeat& GetWorking() const { return Working; }
+	int32 GetSelected() const { return Selected; }
+	/** The pad hints at the bottom (the help line is made from them). */
+	static TArray<SimCruiseTheme::FHint> GetPadHints();
 
 private:
 	FText RowText(int32 Index) const;
@@ -49,6 +53,7 @@ private:
 	FSimCruiseSeat Original;
 	FSimCruiseSeat Working;
 	int32 Selected = 0;
-	double StickHeldUntil = 0.0;
+	/** The left stick as the D-pad: one push one step, held it repeats (SimCruiseTheme::StickNav). */
+	SimCruiseTheme::FStickRepeat Stick;
 	bool bSaved = false;
 };

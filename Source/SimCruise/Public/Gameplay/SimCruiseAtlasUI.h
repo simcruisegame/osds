@@ -92,6 +92,11 @@ public:
 	TSharedPtr<SWidget> GetField() const;
 	const TArray<TSharedPtr<SWidget>>& GetChoiceButtons() const { return ChoiceButtons; }
 	const TArray<TSharedPtr<SWidget>>& GetToolButtons() const { return ToolButtons; }
+	/** The pad hints now: the screen's, or the pad keyboard's while it is open. */
+	TArray<SimCruiseTheme::FHint> GetPadHints() const;
+	/** Where the pad keyboard types (characters from the start); LB and RB move it. */
+	int32 GetTextCursor() const { return Cursor; }
+	void MoveCursor(int32 Dir);
 
 private:
 	void MoveKey(int32 DX, int32 DY);
@@ -114,6 +119,7 @@ private:
 	TSharedPtr<SWidget> KeysPanel;
 	TArray<TArray<TSharedPtr<SWidget>>> KeyRows;
 	bool bKeys = false;
+	int32 Cursor = 0;
 	bool bPadUsed = false;
 	SimCruiseTheme::FStickRepeat Stick;
 
@@ -158,6 +164,11 @@ public:
 	int32 NumMapImages() const;
 	/** The top panel's buttons, row by row (tests). */
 	const TArray<TArray<TSharedPtr<SWidget>>>& GetPadRows() const { return PadRows; }
+	/** The map's centre, world metres, and the zoom step (Scales()) (tests). */
+	FVector2D GetCenterM() const { return CenterM; }
+	int32 GetLevel() const { return Level; }
+	/** The pad hints now: the map's, or the buttons' while the pad is on the top panel. */
+	TArray<SimCruiseTheme::FHint> GetPadHints() const;
 
 	virtual FReply OnPreviewKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;

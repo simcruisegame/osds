@@ -41,24 +41,32 @@ enum class ESimCruiseRumbleBackend : uint8
  * falls past its peak: a front tyre sliding at 25 deg uses less of its circle
  * than one at the peak, so a use-based cue would fade as understeer grows.
  * Motors: high (weak) = front tyres, broken road, loose surface, engine load;
- * low (strong) = rear tyres and driven-wheel longitudinal slip, the 8 Hz ABS
- * pulse, kerbs and potholes. New for Unreal: the impulse triggers carry the
+ * low (strong) = rear tyres and driven-wheel longitudinal slip, the 17 Hz ABS
+ * pulse, a kerb under a left wheel, coarse surfaces (a kerb under a right wheel is a sharp pulse on the high motor). New for Unreal: the impulse triggers carry the
  * pedals' own story, right = driven-wheel spin under throttle, left = a
- * locking wheel under braking or the ABS pulse. Coasting straight on a smooth
- * road every term is zero.
+ * locking wheel under braking or the ABS pulse. Coasting straight on smooth
+ * asphalt only a light road hum remains; in the air nothing.
  */
 namespace SimCruiseHaptics
 {
 	constexpr double Plateau = 0.98;
-	constexpr double SlipOnset = 0.75;
+	/** Slip is felt from 80 % of the peak (the tyre is still gripping, the edge is near). */
+	constexpr double SlipOnset = 0.8;
 	constexpr double SlipLimit = 1.15;
 	constexpr double SlipSlide = 2.5;
 	constexpr double LimitShare = 0.65;
-	constexpr double AbsHz = 8.0;
+	/** The ABS pump and valves: a 17 Hz pulse on the main motors (15-20 Hz feels like the pedal's). */
+	constexpr double AbsHz = 17.0;
 	constexpr double AbsOn = 0.6;
 	constexpr double AbsSlipShare = 0.3;
-	constexpr double KerbGain = 0.8;
+	/** A kerb strike: a sharp pulse this strong and this long on the motor of the wheel's side. */
+	constexpr double KerbGain = 0.85;
+	constexpr double KerbPulseS = 0.06;
+	/** Without a per-wheel kerb flag: a kerb is road this rough under a wheel whose suspension moves this fast. */
 	constexpr double KerbFrom = 0.45;
+	constexpr double KerbTravelMps = 0.4;
+	/** Concrete slabs: a joint every 4.5 m, ticked on the fine (high) motor. */
+	constexpr double ConcreteJointM = 4.5;
 	constexpr double TextureGain = 0.2;
 	constexpr double TextureFrom = 0.15;
 	constexpr double TextureTo = 0.7;
@@ -81,7 +89,7 @@ namespace SimCruiseHaptics
 	/** 0 below the onset, LimitShare at the plateau, 1 deep in a slide; never falls as slip grows. */
 	SIMCRUISE_API double SlipFeel(double S);
 
-	/** 8 Hz square pulse while ABS acts: pump and valves, felt through the pedal. */
+	/** AbsHz square pulse while ABS acts: pump and valves, felt through the pedal. */
 	SIMCRUISE_API double AbsPulse(bool bActive, double TimeS);
 
 	/** The two body motors from the summarised state (Haptics.gd motors()). */
@@ -90,6 +98,43 @@ namespace SimCruiseHaptics
 
 	/** Write a rumble into Unreal's channels for the given backend. */
 	SIMCRUISE_API FForceFeedbackValues ToChannels(const FSimCruiseRumble& Rumble, ESimCruiseRumbleBackend Backend);
+
+	/**
+	 * What a tyre stands on, as ESimCruiseSurfaceKind (Vehicle/SimCruiseSurfaceKind.h, the driving
+	 * lane's): 0 in the air, 1 asphalt, 2 concrete, 3 gravel, 4 grass, 5 dirt.
+	 */
+	enum ESurface : uint8 { Air = 0, Asphalt = 1, Concrete = 2, Gravel = 3, Grass = 4, Dirt = 5 };
+
+	/**
+	 * One wheel's surface texture this frame, added to the low (coarse) and high (fine) motors:
+	 * asphalt a light hum with speed; concrete a fine joint tick every ConcreteJointM; gravel and
+	 * dirt a coarse random low rumble; grass a soft low wobble; nothing in the air. Each is 0 at
+	 * a standstill. TimeS is a running clock (the pattern moves with it).
+	 */
+	SIMCRUISE_API void SurfaceTexture(uint8 Surface, double SpeedMps, double TimeS, double& InOutLow, double& InOutHigh);
+
+	/** The kerb pulse SinceS seconds after the strike: KerbGain for KerbPulseS, then nothing. */
+	SIMCRUISE_API double KerbPulse(double SinceS);
+
+	/**
+	 * The surface and the kerb flag of a wheel. The per-wheel fields (SurfaceKind, bKerb) come
+	 * with the driving lane's robot-curves branch; until they are in this build the surface
+	 * comes from the grip (about 1.0 paved: asphalt; lower: loose, felt as gravel) and the kerb
+	 * from the fallback. When the fields exist these read them, with no change here.
+	 */
+	template <typename TWheel>
+	uint8 SurfaceOf(const TWheel& Wheel)
+	{
+		if (!Wheel.bContact) return Air;
+		if constexpr (requires { Wheel.SurfaceKind; }) return static_cast<uint8>(Wheel.SurfaceKind);
+		else return Wheel.SurfaceGrip >= 0.92 ? Asphalt : Gravel;
+	}
+	template <typename TWheel>
+	bool KerbOf(const TWheel& Wheel, bool bFallback)
+	{
+		if constexpr (requires { Wheel.bKerb; }) return Wheel.bKerb;
+		else return bFallback;
+	}
 }
 
 /** Per-frame sampler: holds the ABS pulse clock. */
@@ -109,4 +154,10 @@ private:
 	double Slip[4] = {0.0, 0.0, 0.0, 0.0};
 	double PulseTime = 0.0;
 	bool bAbsActive = false;
+	/** The surface textures' clock, each wheel's last suspension travel and kerb state, and the time since each side's last kerb strike. */
+	double SurfaceTime = 0.0;
+	double LastTravel[4] = {0.0, 0.0, 0.0, 0.0};
+	bool bOnKerb[4] = {false, false, false, false};
+	bool bHasLastTravel = false;
+	double SinceKerb[2] = {1e9, 1e9};
 };

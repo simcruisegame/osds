@@ -90,6 +90,7 @@ const TArray<FRowInfo>& SSimCruisePauseMenu::Rows(int32 InPage)
 		Row(ESimCruiseMenuRow::FamousRoads, EKind::Action, EIcon::Star, TEXT("Famous roads"), TEXT("Great drives with the route ready"), TEXT("Go to the start of a famous road. The route to its end starts when you arrive.")),
 		Row(ESimCruiseMenuRow::Traffic, EKind::Value, EIcon::Traffic, TEXT("Traffic"), TEXT("Other cars on the road"), TEXT("How many other cars drive near you.")),
 		Row(ESimCruiseMenuRow::Atlas, EKind::Action, EIcon::Map, TEXT("Road atlas"), TEXT("Jump to any place on the map"), TEXT("The full map. Pin a place and drive there now.")),
+		Row(ESimCruiseMenuRow::Quit, EKind::Action, EIcon::Back, TEXT("Quit the game"), TEXT("Back to the desktop"), TEXT("You are asked first. Your settings are already saved.")),
 	};
 	// Traffic off for this release (SimCruiseFeatures): the same page without its row.
 	static const TArray<FRowInfo> Drive = DriveWithTraffic.FilterByPredicate([](const FRowInfo& R) { return R.Row != ESimCruiseMenuRow::Traffic; });
@@ -384,25 +385,57 @@ TSharedRef<SWidget> SSimCruisePauseMenu::BuildHelpCard()
 		]);
 }
 
+namespace
+{
+	/** The pause menu's hint sets: 0 an action row, 1 an action row on Drive with a route, 2 a value, slider or choice row, 3 the tab row. */
+	const TArray<FHint>& PauseHintSet(int32 Index)
+	{
+		static const TArray<FHint> Sets[4] = {
+			{ { TEXT("A"), TEXT("Choose"), TEXT("Enter") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } },
+			{ { TEXT("A"), TEXT("Choose"), TEXT("Enter") }, { TEXT("X"), TEXT("End the route"), TEXT("X") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } },
+			{ { TEXT("D-pad Left Right"), TEXT("Change"), TEXT("Left Right") }, { TEXT("A"), TEXT("Next value"), TEXT("Enter") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } },
+			{ { TEXT("D-pad Left Right"), TEXT("Choose a page"), TEXT("Left Right") }, { TEXT("A"), TEXT("Open"), TEXT("Enter") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } },
+		};
+		return Sets[FMath::Clamp(Index, 0, 3)];
+	}
+	/** A slider row adds Y, back to stock. */
+	const TArray<FHint>& PauseSliderHints()
+	{
+		static const TArray<FHint> Set = { { TEXT("D-pad Left Right"), TEXT("Change"), TEXT("Left Right") }, { TEXT("A"), TEXT("Next value"), TEXT("Enter") }, { TEXT("Y"), TEXT("Back to stock"), TEXT("Y") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } };
+		return Set;
+	}
+}
+
+TArray<FHint> SSimCruisePauseMenu::GetPadHints() const
+{
+	if (bTabs) return PauseHintSet(3);
+	const FRowInfo& Info = Rows(Page)[FMath::Clamp(Selected[Page], 0, Rows(Page).Num() - 1)];
+	if (Info.Kind == EKind::Slider) return PauseSliderHints();
+	if (Info.Kind != EKind::Action) return PauseHintSet(2);
+	return Page == 0 && State.bRoute ? PauseHintSet(1) : PauseHintSet(0);
+}
+
 TSharedRef<SWidget> SSimCruisePauseMenu::BuildHints()
 {
 	const TAttribute<bool> bPad = TAttribute<bool>::CreateLambda([this]() { return State.bPad; });
 	TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
-	// Rows that change with left and right show it; X ends a route on the Drive page.
+	// The hints of the row the pad is on (GetPadHints): sliders show Y, X ends a route on the Drive page.
 	Box->AddSlot().AutoHeight()
 	[
 		SNew(SWidgetSwitcher).WidgetIndex_Lambda([this]()
 		{
-			const EKind Kind = Rows(Page)[FMath::Clamp(Selected[Page], 0, Rows(Page).Num() - 1)].Kind;
 			if (bTabs) return 3;
-			if (Page == 0) return State.bRoute ? 1 : 0;
-			return Kind == EKind::Action ? 0 : 2;
+			const EKind Kind = Rows(Page)[FMath::Clamp(Selected[Page], 0, Rows(Page).Num() - 1)].Kind;
+			if (Kind == EKind::Slider) return 4;
+			if (Kind != EKind::Action) return 2;
+			return Page == 0 && State.bRoute ? 1 : 0;
 		})
-		+ SWidgetSwitcher::Slot()[Hints({ { TEXT("A"), TEXT("Choose"), TEXT("Enter") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } }, bPad)]
-		+ SWidgetSwitcher::Slot()[Hints({ { TEXT("A"), TEXT("Choose"), TEXT("Enter") }, { TEXT("X"), TEXT("End the route"), TEXT("X") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } }, bPad)]
-		+ SWidgetSwitcher::Slot()[Hints({ { TEXT("D-pad"), TEXT("Change"), TEXT("Left Right") }, { TEXT("Y"), TEXT("Back to stock"), TEXT("Y") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } }, bPad)]
+		+ SWidgetSwitcher::Slot()[Hints(PauseHintSet(0), bPad)]
+		+ SWidgetSwitcher::Slot()[Hints(PauseHintSet(1), bPad)]
+		+ SWidgetSwitcher::Slot()[Hints(PauseHintSet(2), bPad)]
 		// On the tab row.
-		+ SWidgetSwitcher::Slot()[Hints({ { TEXT("D-pad"), TEXT("Choose a page"), TEXT("Left Right") }, { TEXT("A"), TEXT("Open"), TEXT("Enter") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } }, bPad)]
+		+ SWidgetSwitcher::Slot()[Hints(PauseHintSet(3), bPad)]
+		+ SWidgetSwitcher::Slot()[Hints(PauseSliderHints(), bPad)]
 	];
 	return Box;
 }
@@ -585,9 +618,14 @@ void SSimCruiseListMenu::Construct(const FArguments& InArgs)
 		]
 		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(96.f, 0.f, 0.f, 52.f)
 		[
-			Hints({ { TEXT("A"), TEXT("Choose"), TEXT("Enter") }, { TEXT("B"), TEXT("Back"), TEXT("Esc") } }, Pad)
+			Hints(GetPadHints(), Pad)
 		]
 	];
+}
+
+TArray<FHint> SSimCruiseListMenu::GetPadHints()
+{
+	return { { TEXT("D-pad Up Down"), TEXT("Move"), TEXT("Up Down") }, { TEXT("A"), TEXT("Choose"), TEXT("Enter") }, { TEXT("B"), TEXT("Back"), TEXT("Esc") } };
 }
 
 void SSimCruiseListMenu::Navigate(ENav Nav)

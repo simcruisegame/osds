@@ -37,6 +37,16 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogSimCruiseAtlasUI, Log, All);
 
+namespace
+{
+	/** Where to?'s pad hints (the pad keyboard has its own). */
+	TArray<SimCruiseTheme::FHint> PlaceSearchHints()
+	{
+		return { { TEXT("D-pad"), TEXT("Move"), TEXT("") }, { TEXT("A"), TEXT("Choose (on the box: the pad keyboard)"), TEXT("") }, { TEXT("Y"), TEXT("Surprise me"), TEXT("") }, { TEXT("B"), TEXT("Back"), TEXT("") } };
+	}
+}
+
+
 namespace SimCruiseUiStyle
 {
 	FLinearColor Ink() { return FLinearColor(FColor(0x15, 0x22, 0x1f)); }
@@ -377,7 +387,7 @@ void SSimCruisePlaceSearch::Construct(const FArguments& InArgs)
 						+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 						[
 							SNew(STextBlock).Font(Font(12)).ColorAndOpacity(SimCruiseUiStyle::Dim())
-							.Text(SimCruiseTheme::PadOrKeys(TEXT("A: go  ·  A on the search box: the pad keyboard  ·  Y: Surprise me  ·  B: back"),
+							.Text(SimCruiseTheme::PadOrKeys(SimCruiseTheme::HintLine(PlaceSearchHints(), true),
 								TEXT("Enter: go  ·  type a place in the box  ·  Esc: back")))
 						]
 						+ SHorizontalBox::Slot().AutoWidth()
@@ -571,7 +581,7 @@ TSharedRef<SWidget> SSimCruisePlaceSearch::BuildPadKeys()
 	Box->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(0, 4, 0, 0)
 	[
 		SNew(STextBlock).Font(Font(12)).ColorAndOpacity(SimCruiseUiStyle::Dim())
-		.Text(SimCruiseTheme::PadOrKeys(TEXT("D-pad: move  ·  A: type  ·  X: delete  ·  Y: space  ·  B: done"), TEXT("Click a key, or type  ·  Esc: back")))
+		.Text_Lambda([this]() { return FText::FromString(SimCruiseTheme::IsPadInUse() ? SimCruiseTheme::HintLine(GetPadHints(), true) : FString(TEXT("Click a key, or type  ·  Esc: back"))); })
 	];
 	return Box;
 }
@@ -590,23 +600,45 @@ void SSimCruisePlaceSearch::TypeKey(const FString& Key)
 {
 	if (!Field.IsValid()) return;
 	FString Text = Field->GetText().ToString();
-	if (Key == TEXT("Space")) Text += TEXT(" ");
-	else if (Key == TEXT("Delete")) Text.LeftChopInline(1);
-	else if (Key == TEXT("Clear")) Text.Reset();
+	// The pad keyboard types at its cursor (LB and RB move it), not only at the end.
+	Cursor = FMath::Clamp(Cursor, 0, Text.Len());
+	if (Key == TEXT("Space")) { Text.InsertAt(Cursor, TEXT(' ')); ++Cursor; }
+	else if (Key == TEXT("Delete")) { if (Cursor > 0) { Text.RemoveAt(Cursor - 1); --Cursor; } }
+	else if (Key == TEXT("Clear")) { Text.Reset(); Cursor = 0; }
 	else if (Key == TEXT("Search"))
 	{
 		ClosePadKeyboard();
 		Submit(Text);
 		return;
 	}
-	else Text += Key;
+	else { Text.InsertAt(Cursor, Key); Cursor += Key.Len(); }
 	Field->SetText(FText::FromString(Text));
+	Field->GoTo(FTextLocation(0, Cursor));
+}
+
+void SSimCruisePlaceSearch::MoveCursor(int32 Dir)
+{
+	if (!Field.IsValid()) return;
+	Cursor = FMath::Clamp(Cursor + Dir, 0, Field->GetText().ToString().Len());
+	Field->GoTo(FTextLocation(0, Cursor));
+}
+
+TArray<SimCruiseTheme::FHint> SSimCruisePlaceSearch::GetPadHints() const
+{
+	if (bKeys)
+	{
+		return { { TEXT("D-pad"), TEXT("Move"), TEXT("") }, { TEXT("A"), TEXT("Type"), TEXT("") }, { TEXT("B"), TEXT("Delete (closes when empty)"), TEXT("") },
+			{ TEXT("X"), TEXT("Space"), TEXT("") }, { TEXT("Y / Menu"), TEXT("Search"), TEXT("") }, { TEXT("LB RB"), TEXT("Move the cursor"), TEXT("") } };
+	}
+	return PlaceSearchHints();
 }
 
 void SSimCruisePlaceSearch::OpenPadKeyboard()
 {
 	if (!KeysPanel.IsValid() || KeyRows.Num() < 2) return;
 	bKeys = true;
+	// The cursor starts at the end of what is typed.
+	Cursor = Field.IsValid() ? Field->GetText().ToString().Len() : 0;
 	KeysPanel->SetVisibility(EVisibility::Visible);
 	SimCruiseTheme::FocusPad(KeyRows[1][0]);
 }
@@ -652,14 +684,23 @@ FReply SSimCruisePlaceSearch::OnPreviewKeyDown(const FGeometry& MyGeometry, cons
 	else if (!Key.IsMouseButton()) bPadUsed = false;
 	if (bKeys)
 	{
-		// The pad keyboard has the D-pad, X, Y and B; A presses the key it is on.
+		// The pad keyboard (GetPadHints): the D-pad moves over the keys and A presses the key it is
+		// on; B deletes (and closes the keyboard when the box is empty), X types a space, Y or Menu
+		// searches, LB and RB move the cursor.
 		if (Key == EKeys::Gamepad_DPad_Left) { MoveKey(-1, 0); return FReply::Handled(); }
 		if (Key == EKeys::Gamepad_DPad_Right) { MoveKey(1, 0); return FReply::Handled(); }
 		if (Key == EKeys::Gamepad_DPad_Up) { MoveKey(0, -1); return FReply::Handled(); }
 		if (Key == EKeys::Gamepad_DPad_Down) { MoveKey(0, 1); return FReply::Handled(); }
-		if (Key == EKeys::Gamepad_FaceButton_Left) { TypeKey(TEXT("Delete")); return FReply::Handled(); }
-		if (Key == EKeys::Gamepad_FaceButton_Top) { TypeKey(TEXT("Space")); return FReply::Handled(); }
-		if (Key == EKeys::Gamepad_FaceButton_Right) { ClosePadKeyboard(); return FReply::Handled(); }
+		if (Key == EKeys::Gamepad_FaceButton_Right)
+		{
+			if (GetQuery().IsEmpty()) ClosePadKeyboard();
+			else TypeKey(TEXT("Delete"));
+			return FReply::Handled();
+		}
+		if (Key == EKeys::Gamepad_FaceButton_Left) { TypeKey(TEXT("Space")); return FReply::Handled(); }
+		if (Key == EKeys::Gamepad_FaceButton_Top || Key == EKeys::Gamepad_Special_Right) { TypeKey(TEXT("Search")); return FReply::Handled(); }
+		if (Key == EKeys::Gamepad_LeftShoulder) { MoveCursor(-1); return FReply::Handled(); }
+		if (Key == EKeys::Gamepad_RightShoulder) { MoveCursor(1); return FReply::Handled(); }
 		return FReply::Unhandled();
 	}
 	// The D-pad walks the screen's controls (the box, its buttons, the places, Back) in order. It is
@@ -828,9 +869,7 @@ void SSimCruiseRoadAtlas::Construct(const FArguments& InArgs)
 					+ SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right).VAlign(VAlign_Center)
 					[
 						SNew(STextBlock).Font(Font(12)).ColorAndOpacity(SimCruiseUiStyle::Dim())
-						.Text(SimCruiseTheme::PadOrKeys(
-							TEXT("D-pad ◀ ▶: onto the buttons (D-pad moves, A presses, B back to the map)  ·  Stick: move  ·  D-pad ▲ ▼: zoom  ·  A: drive here  ·  X: find  ·  Y: recenter  ·  RB: car  ·  LB: gearbox  ·  B: back"),
-							TEXT("Arrows or drag: move  ·  wheel or +/−: zoom  ·  click: pin  ·  Enter: drive here  ·  F or /: find  ·  Home: recenter  ·  Esc or Tab: back")))
+						.Text_Lambda([this]() { return FText::FromString(SimCruiseTheme::IsPadInUse() ? SimCruiseTheme::HintLine(GetPadHints(), true) : FString(TEXT("Arrows or drag: move  ·  wheel or +/−: zoom  ·  click: pin  ·  Enter: drive here  ·  F or /: find  ·  Home: recenter  ·  Esc or Tab: back"))); })
 					]
 				]
 				+ SVerticalBox::Slot().AutoHeight().Padding(0, 8, 0, 0)
@@ -1259,6 +1298,20 @@ FReply SSimCruiseRoadAtlas::OnKeyDown(const FGeometry& MyGeometry, const FKeyEve
 		return FReply::Handled();
 	}
 	return FReply::Unhandled();
+}
+
+TArray<SimCruiseTheme::FHint> SSimCruiseRoadAtlas::GetPadHints() const
+{
+	// "Stick" is no key: the hint test presses only buttons.
+	if (IsOnButtons())
+	{
+		// The map's shortcuts work from the buttons too.
+		return { { TEXT("D-pad"), TEXT("Move"), TEXT("") }, { TEXT("A"), TEXT("Press"), TEXT("") }, { TEXT("B"), TEXT("Back to the map"), TEXT("") },
+			{ TEXT("X"), TEXT("Find a place"), TEXT("") }, { TEXT("Y"), TEXT("Recenter"), TEXT("") }, { TEXT("RB"), TEXT("Car"), TEXT("") }, { TEXT("LB"), TEXT("Gearbox"), TEXT("") } };
+	}
+	return { { TEXT("Stick"), TEXT("Move the map"), TEXT("") }, { TEXT("D-pad Left Right"), TEXT("Onto the buttons"), TEXT("") }, { TEXT("D-pad Up Down"), TEXT("Zoom"), TEXT("") },
+		{ TEXT("A"), TEXT("Drive here"), TEXT("") }, { TEXT("X"), TEXT("Find a place"), TEXT("") }, { TEXT("Y"), TEXT("Recenter"), TEXT("") },
+		{ TEXT("RB"), TEXT("Car"), TEXT("") }, { TEXT("LB"), TEXT("Gearbox"), TEXT("") }, { TEXT("B"), TEXT("Back"), TEXT("") } };
 }
 
 bool SSimCruiseRoadAtlas::IsOnButtons() const

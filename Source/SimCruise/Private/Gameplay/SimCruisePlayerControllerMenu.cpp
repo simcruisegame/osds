@@ -21,6 +21,7 @@
 #include "Gameplay/SimCruiseRoutePlanner.h"
 #include "Gameplay/SimCruiseRouteSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Live/SimCruiseLiveWorldSubsystem.h"
 #include "Vehicle/SimCruiseVehicle.h"
 
@@ -280,6 +281,7 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 	case ESimCruiseMenuRow::PlanRoute: OpenRoutePlanner(); break;
 	case ESimCruiseMenuRow::FamousRoads: OpenFamousRoads(); break;
 	case ESimCruiseMenuRow::Atlas: OpenRoadAtlas(); break;
+	case ESimCruiseMenuRow::Quit: OpenQuitConfirm(); break;
 	case ESimCruiseMenuRow::EndRoute:
 		if (Gps) Gps->ClearRoute();
 		ShowMessage(TEXT("Route ended"), 2.f);
@@ -413,6 +415,40 @@ void ASimCruisePlayerController::OpenFamousRoads()
 		.OnBack_Lambda([this]() { LeaveSubScreen(); });
 	ListPanel = List;
 	ShowOverlay(List, List);
+}
+
+void ASimCruisePlayerController::OpenQuitConfirm()
+{
+	CloseOverlays();
+	TArray<SSimCruiseListMenu::FItem> Items;
+	SSimCruiseListMenu::FItem Stay;
+	Stay.Icon = SimCruiseTheme::EIcon::Drive;
+	Stay.Title = TEXT("Keep driving");
+	Stay.Note = TEXT("Back to the menu");
+	Items.Add(Stay);
+	SSimCruiseListMenu::FItem Quit;
+	Quit.Icon = SimCruiseTheme::EIcon::Back;
+	Quit.Title = TEXT("Quit to the desktop");
+	Quit.Note = TEXT("Close the game");
+	Items.Add(Quit);
+	TSharedRef<SSimCruiseListMenu> Confirm = SNew(SSimCruiseListMenu)
+		.Title(TEXT("Quit the game?"))
+		.Help(TEXT("Your settings and car setups are already saved."))
+		.Items(Items)
+		.bPad(bUsingGamepad)
+		.OnChoose_Lambda([this](int32 Index)
+		{
+			if (Index == 1)
+			{
+				UE_LOG(LogTemp, Display, TEXT("Quit to the desktop from the pause menu"));
+				UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+				return;
+			}
+			LeaveSubScreen();
+		})
+		.OnBack_Lambda([this]() { LeaveSubScreen(); });
+	ListPanel = Confirm;
+	ShowOverlay(Confirm, Confirm);
 }
 
 void ASimCruisePlayerController::OpenWhereTo()

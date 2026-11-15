@@ -48,6 +48,10 @@ public:
 	void MoveCross(const FVector2D& WorldM) { CenterM = WorldM; bCentered = true; }
 	int32 NumStops() const;
 	void Zoom(int32 Step);
+	/** The pad hints at the bottom. */
+	static TArray<SimCruiseTheme::FHint> GetPadHints();
+	FVector2D GetCrossM() const { return CenterM; }
+	int32 GetLevel() const { return Level; }
 
 private:
 	double PxPerM() const;
