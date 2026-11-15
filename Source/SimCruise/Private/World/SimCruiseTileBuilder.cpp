@@ -569,6 +569,36 @@ namespace SimCruiseTileBuilder
 			for (int32 k = 0; k < Stride * Stride; ++k) if (Fill.Bits[k]) VertexBody[k] = Body;
 		}
 
+		// The OSM road lines themselves (the tile data's rows), binned by 10 m: where no road ribbon
+		// covers a point of a mapped carriageway (a ribbon trimmed short at a junction or a deck end, a
+		// gap the network left), the ground there is still kept under the line's own centre height.
+		struct FRowSeg { FVector2d A, B; double HalfW; };
+		TArray<FRowSeg> RowSegs;
+		TMultiMap<FIntPoint, int32> RowBins;
+		for (const FSimCruiseRoadRow& MappedRow : Data.Roads)
+		{
+			if (MappedRow.bBridge) continue; // a deck's line is not the ground's
+			for (int32 rk = 0; rk + 1 < MappedRow.Points.Num(); ++rk)
+			{
+				const FVector2d RA = MappedRow.Points[rk] * Side, RB = MappedRow.Points[rk + 1] * Side;
+				const int32 RIdx = RowSegs.Add({ RA, RB, 0.5 * MappedRow.WidthM });
+				const double RPad = 0.5 * MappedRow.WidthM + 1.0;
+				for (int32 bx = FMath::FloorToInt((FMath::Min(RA.X, RB.X) - RPad) / 10.0); bx <= FMath::FloorToInt((FMath::Max(RA.X, RB.X) + RPad) / 10.0); ++bx)
+				for (int32 by = FMath::FloorToInt((FMath::Min(RA.Y, RB.Y) - RPad) / 10.0); by <= FMath::FloorToInt((FMath::Max(RA.Y, RB.Y) + RPad) / 10.0); ++by)
+				{
+					RowBins.Add(FIntPoint(bx, by), RIdx);
+				}
+			}
+		}
+		auto NaturalAt = [&](const FVector2d& Q)
+		{
+			const double QX = FMath::Clamp(Q.X / Cell, 0.0, N - 1e-6), QY = FMath::Clamp(Q.Y / Cell, 0.0, N - 1e-6);
+			const int32 I0 = FMath::FloorToInt(QX), J0 = FMath::FloorToInt(QY);
+			const double Fx = QX - I0, Fy = QY - J0;
+			auto G = [&](int32 Gi, int32 Gj) { return static_cast<double>(B.NaturalHeights[Gj * Stride + Gi]); };
+			return FMath::Lerp(FMath::Lerp(G(I0, J0), G(I0 + 1, J0), Fx), FMath::Lerp(G(I0, J0 + 1), G(I0 + 1, J0 + 1), Fx), Fy);
+		};
+
 		// Road conditioning: ground under every paved footprint sits just below it.
 		TArray<TPair<int32, int32>> Segments;
 		for (int32 j = 0; j <= N; ++j)
@@ -695,6 +725,24 @@ namespace SimCruiseTileBuilder
 			else if (SectionDist < TNumericLimits<double>::Max()) H = SectionTarget;
 			else if (BestWeight > 0.0) H = FMath::Lerp(H, BestTarget, BestWeight);
 			H = FMath::Min(H, RoadCap);
+			if (RoadCap == TNumericLimits<double>::Max())
+			{
+				// No ribbon here: the mapped line's own carriageway, at the ground of its centre line.
+				TArray<int32> RowNear;
+				RowBins.MultiFind(FIntPoint(FMath::FloorToInt(P.X / 10.0), FMath::FloorToInt(P.Y / 10.0)), RowNear);
+				for (const int32 RowIdx : RowNear)
+				{
+					const FRowSeg& Sg = RowSegs[RowIdx];
+					const FVector2d RD = Sg.B - Sg.A;
+					const double RL2 = RD.SizeSquared();
+					if (RL2 < 1e-6) continue;
+					const double RT = FVector2d::DotProduct(P - Sg.A, RD) / RL2;
+					if (RT < 0.0 || RT > 1.0) continue;
+					const FVector2d RQ = Sg.A + RD * RT;
+					if (FVector2d::Distance(P, RQ) > Sg.HalfW) continue;
+					H = FMath::Min(H, NaturalAt(RQ) - UnderDepthM);
+				}
+			}
 			if (FMath::Abs(H - B.NaturalHeights[K]) > 0.001) ++B.ConditionedVertices;
 			B.TerrainHeights[K] = static_cast<float>(H);
 		}

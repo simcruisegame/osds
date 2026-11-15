@@ -1339,3 +1339,82 @@ bool FSimCruiseMarkingsAndPolesTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseTerrainNeverOverRoadTest, "SimCruise.World.TerrainNeverOverRoad", SimCruiseStartTest::Flags)
+bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
+{
+	// The ground never stands over a carriageway (CA-1 at Bixby Creek's south end, review of
+	// b7889ee: a hill face over the lane, the car stuck 31.6 s). Every recorded place (Saved/StartPlaces
+	// and SIMCRUISE_PROBE_DIR), every road ribbon, decks too: at each station and between stations, five
+	// points across the carriageway; the built terrain there may not be more than 0.1 m above the road.
+	TArray<FString> Roots = { FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces")) };
+	const FString Probe = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_PROBE_DIR"));
+	if (!Probe.IsEmpty()) Roots.Add(Probe);
+	int32 Places = 0, Faults = 0, Listed = 0;
+	for (const FString& Root : Roots)
+	{
+		TArray<FString> Dirs;
+		IFileManager::Get().FindFiles(Dirs, *FPaths::Combine(Root, TEXT("*")), false, true);
+		for (const FString& Place : Dirs)
+		{
+			FSimCruiseWorldFrame Frame;
+			TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
+			FVector StartCm;
+			if (!SimCruiseStartTest::BuildPlace(FPaths::Combine(Root, Place), Frame, Built, StartCm)) continue;
+			++Places;
+			int32 PlaceFaults = 0;
+			double Worst = 0.0;
+			for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built)
+			{
+				const FSimCruiseTileBuild& B = *Pair.Value;
+				if (B.TerrainN <= 0) continue;
+				const double Side = B.TileSizeM;
+				for (int32 r = 0; r < B.Roads.Ribbons.Num(); ++r)
+				{
+					const FSimCruiseRibbon& R = B.Roads.Ribbons[r];
+					for (int32 i = 0; i + 1 < R.St.Num(); ++i)
+					{
+						const FSimCruiseRibbonStation& A = R.St[i];
+						const FSimCruiseRibbonStation& C = R.St[i + 1];
+						for (const double T : { 0.0, 0.5 })
+						{
+							const FVector2d Mid = FMath::Lerp(A.C, C.C, T);
+							const FVector2d Rr = FMath::Lerp(A.R, C.R, T).GetSafeNormal();
+							const double HalfW = FMath::Lerp(A.HalfW, C.HalfW, T);
+							for (const double U : { -0.9, -0.5, 0.0, 0.5, 0.9 })
+							{
+								const double L = U * HalfW;
+								const FVector2d P = Mid + Rr * L;
+								if (P.X < 1.0 || P.Y < 1.0 || P.X > Side - 1.0 || P.Y > Side - 1.0) continue;
+								const double Road = FMath::Lerp(A.Height(L), C.Height(L), T);
+								const double Ground = B.TerrainHeightAt(P);
+								const double Over = Ground - Road;
+								if (Over <= 0.1) continue;
+								// A road under a deck lies under that deck's own surface, not the ground: skip
+								// points where another ribbon's carriageway is above this one (a crossing).
+								FSimCruiseRoadHit Top;
+								if (B.Roads.FindCarriageway(P, Top, r) && Top.Height > Road + 0.5) continue;
+								++PlaceFaults;
+								Worst = FMath::Max(Worst, Over);
+								if (Listed < 25)
+								{
+									double Lon = 0.0, Lat = 0.0;
+									SimCruiseGeo::TileToLonLat(FVector2d(B.Tile.X, B.Tile.Y) + P / FMath::Max(Side, 1.0), Lon, Lat);
+									AddError(FString::Printf(TEXT("%s tile %d_%d ribbon %d (%s %s%s) station %d: the ground stands %.2f m over the road at %.6f, %.6f"),
+										*Place, B.Tile.X, B.Tile.Y, r, *R.Class, *R.Name, A.bBridge ? TEXT(", deck") : TEXT(""), i, Over, Lat, Lon));
+									++Listed;
+								}
+							}
+						}
+					}
+				}
+			}
+			Faults += PlaceFaults;
+			AddInfo(FString::Printf(TEXT("TERRAIN-OVER-ROAD %s: %d tiles, %d points over the road by more than 0.1 m, worst %.2f m"), *Place, Built.Num(), PlaceFaults, Worst));
+		}
+	}
+	AddInfo(FString::Printf(TEXT("TERRAIN-OVER-ROAD all: %d places, %d points"), Places, Faults));
+	if (Faults > 0 && Listed >= 25) AddError(FString::Printf(TEXT("... %d points in all"), Faults));
+	TestTrue(TEXT("recorded places checked"), Places >= 1);
+	return true;
+}
