@@ -861,6 +861,7 @@ namespace
 				LastShiftT = T;
 			}
 			LastGear = Gear;
+			if (C.Controls.Throttle > 0.9 && Sim.State.EngineRpm >= Sim.GetCar().FuelCutSpeedRpm * 0.99) Result.LimiterSeconds += Dt;
 			// In gear, clutch home (no shift running) and rolling: the engine turns with the road.
 			const FSimCruiseCarDefinition& Car = Sim.GetCar();
 			// In 2nd and up (1st slips by design while pulling away), 1.2 s after a change.

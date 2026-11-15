@@ -632,15 +632,20 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		// over the road at full load, as a real controller sees it). The upshift guard below still
 		// reads the car's own speed, so a spinning launch does not change up.
 		const double RoadRpm = FMath::Abs(DrivenOmega()) * ForwardRatio * 60.0 / Tau;
-		const int32 Next = SimCruiseDynamics::SelectAutomaticGear(Car, State.Gear, RoadRpm,
-			FMath::Abs(Speed) * ForwardRatio / R, Throttle, State.bServiceBrake || BrakeAmount > 0.01,
+		// Both the shift point and its guard read the output shaft. The guard once read the car's own
+		// speed so a slipping clutch could not change up, but the output shaft already ignores the
+		// clutch; with the tyres spinning it kept the car in 1st on its fuel cut (the Mustang at 5000
+		// rpm from 16 to 24 mph on the Dragon, with 4800 to change up). A gearbox changes up on its
+		// output speed, spinning tyres or not.
+		const int32 Next = SimCruiseDynamics::SelectAutomaticGear(Car, State.Gear, RoadRpm,
+			FMath::Abs(DrivenOmega()) * ForwardRatio, Throttle, State.bServiceBrake || BrakeAmount > 0.01,
 			Speed * Omega.Z / SimCruiseDynamics::GravityMps2);
 		int32 NextGear = Next;
 		// At the limiter, change up: a driven tyre's slip at speed (a few percent) keeps the road's
 		// speed under the upshift point while the engine sits on its fuel cut (the C8 held 5th at
 		// 6619 rpm and 153 mph, its road speed reading 6350).
 		if (NextGear == State.Gear && State.Gear < Car.ForwardGearRatios.Num() - 1 && !(State.bServiceBrake || BrakeAmount > 0.01) &&
-			State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98 && FMath::Abs(Speed) * ForwardRatio / R * 60.0 / Tau > Car.AutomaticUpshiftSpeedRpm * 0.85)
+			State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98 && RoadRpm > Car.AutomaticUpshiftSpeedRpm * 0.85)
 		{
 			NextGear = State.Gear + 1;
 		}

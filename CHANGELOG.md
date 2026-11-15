@@ -4,6 +4,7 @@ Notable changes to SimCruise, newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+- Fix: the automatic changes up with its tyres spinning, as a gearbox does: it reads its output shaft for the shift point and for its guard. The guard read the car's own speed, so with spinning rear tyres the Mustang sat on its 5000 rpm fuel cut in 1st from 16 to 24 mph (the Dragon's final test). The ShiftDrive bench now also fails more than 0.5 s on the fuel cut at full pedal.
 - **Trees, each its own colour** — every crown takes its colour from the aerial photograph at the crown (against the tile's crowns, so the photo's own exposure cancels), with a small per-tree hue and brightness change; crowns are lit as one rounded mass, darker deep inside; bark is darker at the foot. `-SimCruiseOldTreeLook` turns it off.
 - **Walls built of something** — brick coursing, lap siding, concrete block, ashlar stone, concrete panels and ribbed metal, drawn in the building shader: the building's mapped material first (OpenStreetMap, Wikidata), else the region's and the building type's usual material (siding on northern houses, brick in the South, stucco in the South-west and Florida, block and metal for warehouses). Each material has its own colours.
 - **Windows by the wall's role** — street fronts keep every bay; side and back walls fewer, houses' windows in pairs, garages and metal sheds almost none.
