@@ -46,6 +46,28 @@ namespace SimCruiseSurfaceKind
 	inline constexpr float DecoUpper = 13.f;  // an Art Deco street facade above a porch, washed in coloured light at night
 }
 
+/**
+ * What a building's walls are built of: the integer part of UV1.y on the building mesh (the
+ * fraction is the building's seed). The building shader draws its coursing on the wall kinds.
+ */
+namespace SimCruiseWallMaterial
+{
+	inline constexpr int32 Render = 0;    // painted render or stucco: the plain wall
+	inline constexpr int32 Brick = 1;     // US modular brick, running bond
+	inline constexpr int32 Siding = 2;    // lap siding (wood, vinyl, fibre cement)
+	inline constexpr int32 Block = 3;     // concrete block (CMU), painted or bare
+	inline constexpr int32 Stone = 4;     // ashlar stone
+	inline constexpr int32 Concrete = 5;  // cast or precast concrete panels
+	inline constexpr int32 Metal = 6;     // ribbed metal panels
+
+	/** The UV1.y a building writes: its material plus its 0-1 seed, put mid-bin of the shader's 4096 seed bins. */
+	inline float Pack(int32 Material, float Seed01)
+	{
+		const float Bin = FMath::Clamp(FMath::FloorToFloat(Seed01 * 4096.f), 0.f, 4095.f);
+		return static_cast<float>(Material) + (Bin + 0.5f) / 4096.f;
+	}
+}
+
 /** Plain mesh buffers in tile-local centimetres (x east, y south, z up). */
 struct SIMCRUISE_API FSimCruiseMeshData
 {

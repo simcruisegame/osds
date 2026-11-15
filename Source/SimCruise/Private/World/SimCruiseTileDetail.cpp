@@ -206,11 +206,158 @@ namespace
 
 	template <typename T>
 	const T& Pick(const TArray<T>& Items, uint32 H) { return Items[H % static_cast<uint32>(Items.Num())]; }
+
+	/**
+	 * Each wall material's own colours (sRGB, as built and a few years weathered), for a building whose
+	 * colour no data gives. Brick: common US face brick (red, brown, buff, a dark iron-spot); siding:
+	 * white, cream, grey, sage, blue-grey, tan vinyl and painted wood; block: bare and painted CMU;
+	 * stone: limestone, sandstone, granite; concrete: cast and precast; metal: factory finishes.
+	 */
+	const TArray<FLinearColor>& MaterialWalls(int32 Material)
+	{
+		static const TArray<TArray<FLinearColor>> All = []()
+		{
+			auto Of = [](std::initializer_list<const TCHAR*> Hex) { TArray<FLinearColor> Out; for (const TCHAR* H : Hex) Out.Add(Srgb(H)); return Out; };
+			TArray<TArray<FLinearColor>> Out;
+			Out.Add(GenericWalls());
+			Out.Add(Of({ TEXT("8b4838"), TEXT("76503f"), TEXT("9f5a42"), TEXT("a0533c"), TEXT("7a3f33"), TEXT("6e4a3c"), TEXT("b07a58"), TEXT("c4a27c"), TEXT("5c463d"), TEXT("94604a") }));
+			Out.Add(Of({ TEXT("ece9e1"), TEXT("e2d9c4"), TEXT("c9cbc7"), TEXT("a8b29a"), TEXT("a8bbc7"), TEXT("b8b1a2"), TEXT("6f8293"), TEXT("e4d397"), TEXT("d9d4c7"), TEXT("8d8a7d") }));
+			Out.Add(Of({ TEXT("b4b0a6"), TEXT("c9c4b6"), TEXT("d9d3c3"), TEXT("a9a59c"), TEXT("e2dccb"), TEXT("c6b28d") }));
+			Out.Add(Of({ TEXT("d8cfb8"), TEXT("c2b49a"), TEXT("a89f8f"), TEXT("b9ab8d"), TEXT("8f877a") }));
+			Out.Add(Of({ TEXT("c4c1b8"), TEXT("b0ada5"), TEXT("9e9b93"), TEXT("d2cdc0") }));
+			Out.Add(Of({ TEXT("e6e6e0"), TEXT("b9bdbd"), TEXT("c7b9a0"), TEXT("7d8a94"), TEXT("6f7f6a"), TEXT("a8442f") }));
+			return Out;
+		}();
+		return All[FMath::Clamp(Material, 0, All.Num() - 1)];
+	}
 }
 
 namespace SimCruiseTileDetail
 {
 	bool bFitFacadeGrid = true;
+	bool bWallMaterials = true;
+
+	int32 WallMaterialFor(const FWallMaterialInput& In, bool* bOutFromData)
+	{
+		using namespace SimCruiseWallMaterial;
+		if (bOutFromData) *bOutFromData = false;
+		// The Art Deco and resort towers, and glass curtain walls, keep their own looks.
+		if (In.bDeco || In.bTower || In.bCurtain) return Render;
+		// Data first: the building's own mapped material (OSM building:material, Wikidata P186).
+		if (!In.MaterialFact.IsNone())
+		{
+			FString M = In.MaterialFact.ToString();
+			M.RemoveFromStart(TEXT("material:"));
+			int32 Found = INDEX_NONE;
+			if (M.Contains(TEXT("brick"))) Found = Brick;
+			else if (M.Contains(TEXT("siding")) || M == TEXT("wood") || M == TEXT("timber") || M == TEXT("weatherboard") || M == TEXT("clapboard") || M == TEXT("timber_framing")) Found = Siding;
+			else if (M.Contains(TEXT("block")) || M == TEXT("cinder_block") || M == TEXT("cement_block")) Found = Block;
+			else if (M.Contains(TEXT("stone")) || M == TEXT("granite") || M == TEXT("marble") || M == TEXT("limestone") || M == TEXT("sandstone")) Found = Stone;
+			else if (M.Contains(TEXT("concrete"))) Found = Concrete;
+			else if (M.Contains(TEXT("metal")) || M == TEXT("steel") || M == TEXT("aluminium") || M == TEXT("aluminum") || M == TEXT("copper")) Found = Metal;
+			else if (M == TEXT("stucco") || M == TEXT("plaster") || M == TEXT("render") || M == TEXT("adobe")) Found = Render;
+			if (Found != INDEX_NONE)
+			{
+				if (bOutFromData) *bOutFromData = true;
+				return Found;
+			}
+		}
+		// The rules: how US buildings of this kind are built in this part of the country (US Census
+		// Survey of Construction principal exterior wall material by region, 2010s: vinyl siding the
+		// North's and Pacific Northwest's houses, brick the South's, stucco the Southwest's, Florida's
+		// and California's; commercial low-rise in block and render, industrial in metal and block).
+		enum EBand { North, South, Dry, Tropic, Wet };
+		EBand Band = North;
+		const FString R = In.Region.ToString(), C = In.Climate.ToString();
+		if (C == TEXT("climate:arid") || C == TEXT("climate:mediterranean") || R == TEXT("region:southwest") || R == TEXT("region:california")) Band = Dry;
+		else if (C == TEXT("climate:tropical") || R == TEXT("region:florida") || R == TEXT("region:hawaii")) Band = Tropic;
+		else if (R == TEXT("region:pacific_northwest") || C == TEXT("climate:oceanic")) Band = Wet;
+		else if (R == TEXT("region:south") || C == TEXT("climate:humid_subtropical")) Band = South;
+		else if (R == TEXT("region:northeast") || R == TEXT("region:midwest") || C == TEXT("climate:humid_continental")) Band = North;
+		else if ((In.LonDeg < -114.0 && In.LatDeg < 38.0) || (In.LonDeg < -103.0 && In.LonDeg > -122.0 && In.LatDeg < 40.0)) Band = Dry;
+		else if (In.LonDeg < -116.0 && In.LatDeg >= 42.0) Band = Wet;
+		else if ((In.LatDeg < 28.5 && In.LonDeg > -83.0) || In.LonDeg < -150.0) Band = Tropic;
+		else if (In.LatDeg < 36.5 && In.LonDeg > -100.0) Band = South;
+		const FString Use = In.Use.ToLower();
+		const bool bIndustrial = Use.Contains(TEXT("industrial")) || Use.Contains(TEXT("warehouse")) || Use.Contains(TEXT("manufactur")) || Use.Contains(TEXT("storage"))
+			|| Use.Contains(TEXT("agricultur")) || Use.Contains(TEXT("barn")) || Use.Contains(TEXT("farm")) || Use.Contains(TEXT("hangar"));
+		const bool bShed = Use.Contains(TEXT("garage")) || Use.Contains(TEXT("shed")) || Use.Contains(TEXT("carport")) || (In.AreaM2 < 45.0 && In.HeightM < 5.0);
+		const bool bHouse = In.bHouse || Use == TEXT("house") || Use == TEXT("detached") || Use == TEXT("semidetached_house") || Use == TEXT("bungalow") || Use == TEXT("cabin")
+			|| Use == TEXT("terrace") || Use == TEXT("farmhouse") || Use == TEXT("single_family");
+		const bool bFlats = !bHouse && (Use.Contains(TEXT("apartment")) || Use == TEXT("residential") || Use == TEXT("dormitory") || Use == TEXT("multi_family"));
+		const bool bBigBox = !bHouse && !bFlats && In.AreaM2 > 1500.0 && In.HeightM < 14.0;
+		//                       Render Brick Siding Block Stone Concrete Metal
+		using FRow = TArray<float, TFixedAllocator<7>>;
+		FRow P;
+		auto Set = [&P](std::initializer_list<float> V) { P.Reset(); for (float F : V) P.Add(F); };
+		if (bIndustrial)
+		{
+			if (In.bBefore1945) Set({ 0.05f, 0.60f, 0.f, 0.15f, 0.f, 0.20f, 0.f });
+			else Set({ 0.f, 0.05f, 0.f, 0.40f, 0.f, 0.10f, 0.45f });
+		}
+		else if (bShed && !bHouse)
+		{
+			if (Band == Dry || Band == Tropic) Set({ 0.50f, 0.f, 0.f, 0.30f, 0.f, 0.f, 0.20f });
+			else Set({ 0.10f, 0.f, 0.50f, 0.20f, 0.f, 0.f, 0.20f });
+		}
+		else if (bHouse)
+		{
+			switch (Band)
+			{
+			case North: Set({ 0.08f, 0.30f, 0.58f, 0.f, 0.04f, 0.f, 0.f }); break;
+			case South: Set({ 0.10f, 0.50f, 0.38f, 0.f, 0.02f, 0.f, 0.f }); break;
+			case Dry: Set({ 0.80f, 0.06f, 0.12f, 0.02f, 0.f, 0.f, 0.f }); break;
+			case Tropic: Set({ 0.78f, 0.06f, 0.12f, 0.04f, 0.f, 0.f, 0.f }); break;
+			default: Set({ 0.10f, 0.10f, 0.78f, 0.f, 0.02f, 0.f, 0.f }); break;
+			}
+		}
+		else if (In.bMainStreet)
+		{
+			if (Band == Dry) Set({ 0.50f, 0.40f, 0.f, 0.f, 0.10f, 0.f, 0.f });
+			else Set({ 0.22f, 0.70f, 0.f, 0.f, 0.08f, 0.f, 0.f });
+		}
+		else if (In.bDowntown)
+		{
+			if (In.bBefore1945) Set({ 0.10f, 0.45f, 0.f, 0.f, 0.35f, 0.10f, 0.f });
+			else if (In.bAfter1975) Set({ 0.20f, 0.10f, 0.f, 0.f, 0.10f, 0.60f, 0.f });
+			else Set({ 0.10f, 0.30f, 0.f, 0.f, 0.20f, 0.40f, 0.f });
+		}
+		else if (bFlats)
+		{
+			switch (Band)
+			{
+			case North: Set({ 0.10f, 0.55f, 0.30f, 0.f, 0.f, 0.05f, 0.f }); break;
+			case South: Set({ 0.20f, 0.45f, 0.30f, 0.f, 0.f, 0.05f, 0.f }); break;
+			case Dry: Set({ 0.75f, 0.10f, 0.10f, 0.f, 0.f, 0.05f, 0.f }); break;
+			case Tropic: Set({ 0.80f, 0.05f, 0.05f, 0.05f, 0.f, 0.05f, 0.f }); break;
+			default: Set({ 0.25f, 0.15f, 0.55f, 0.f, 0.f, 0.05f, 0.f }); break;
+			}
+		}
+		else if (bBigBox)
+		{
+			Set({ 0.30f, 0.10f, 0.f, 0.45f, 0.f, 0.05f, 0.10f });
+		}
+		else
+		{
+			switch (Band)
+			{
+			case North: Set({ 0.20f, 0.40f, 0.05f, 0.25f, 0.f, 0.10f, 0.f }); break;
+			case South: Set({ 0.25f, 0.40f, 0.f, 0.25f, 0.f, 0.10f, 0.f }); break;
+			case Dry: Set({ 0.60f, 0.10f, 0.f, 0.25f, 0.f, 0.05f, 0.f }); break;
+			case Tropic: Set({ 0.70f, 0.f, 0.f, 0.20f, 0.f, 0.10f, 0.f }); break;
+			default: Set({ 0.30f, 0.20f, 0.25f, 0.15f, 0.f, 0.10f, 0.f }); break;
+			}
+		}
+		float Sum = 0.f;
+		for (float F : P) Sum += F;
+		float Draw = static_cast<float>(Unit(In.Hash)) * Sum;
+		for (int32 m = 0; m < P.Num(); ++m)
+		{
+			if (Draw < P[m]) return m;
+			Draw -= P[m];
+		}
+		return Render;
+	}
 
 	double FacadeGridTop(double GroundZ, double WallTop, double Storey, bool bShopFront, double BandMinM)
 	{
@@ -572,8 +719,29 @@ namespace SimCruiseTileDetail
 			// measured white sits under the cap with room for wear, not on it.
 			if (BP && BP->bColourFromData) Wall = BP->Wall * 0.78f;
 			else if (BP && BP->bHasColour && !bDeco && !bTower) Wall = BP->Wall;
+			// What the walls are built of: the mapped material, else the region's and the building
+			// type's rules. A building whose colour no data gives takes its material's colours.
+			int32 WallMat = SimCruiseWallMaterial::Render;
+			if (bWallMaterials)
+			{
+				FWallMaterialInput In;
+				In.LatDeg = X.LatDeg; In.LonDeg = X.LonDeg; In.HeightM = Height; In.AreaM2 = FMath::Abs(Area); In.Use = Row.Use;
+				if (BP)
+				{
+					In.MaterialFact = BP->Facts.Strongest(TEXT("material"));
+					In.Region = BP->Facts.Strongest(TEXT("region"));
+					In.Climate = BP->Facts.Strongest(TEXT("climate"));
+					In.bBefore1945 = BP->Facts.Has(TEXT("era:before_1945"));
+					In.bAfter1975 = BP->Facts.Has(TEXT("era:after_1975"));
+				}
+				In.bHouse = bHouse; In.bMainStreet = bMainStreet; In.bDowntown = bDowntown; In.bCurtain = bCurtain; In.bDeco = bDeco; In.bTower = bTower || bFloating;
+				In.Hash = Hash(H, 41);
+				WallMat = WallMaterialFor(In);
+				if (WallMat != SimCruiseWallMaterial::Render && !(BP && BP->bHasColour)) Wall = Pick(MaterialWalls(WallMat), Hash(H, 42));
+			}
 			// Main Street's two- and three-storey blocks are mostly brick (the generic palette's last four).
-			if (bMainStreet && !(BP && BP->bHasColour) && Unit(Hash(H, 24)) < 0.6) Wall = GenericWalls()[12 + Hash(H, 28) % 4];
+			else if (bMainStreet && !(BP && BP->bHasColour) && Unit(Hash(H, 24)) < 0.6) Wall = GenericWalls()[12 + Hash(H, 28) % 4];
+			W.Seed = SimCruiseWallMaterial::Pack(WallMat, W.Seed);
 			if (BP) Wall = BP->Weathered(Wall);
 			Wall = WeatheredPaint(Wall, bTower || bDowntown ? MaxTowerAlbedo : MaxWallAlbedo);
 			// The shader reads a storey height other than 3.1 m from the wall colour's alpha.

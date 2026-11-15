@@ -557,7 +557,10 @@ float kind = round(UV1.x);
 // The seed is constant on a building, but interpolation leaves it a few 1e-7 off across a
 // triangle, and the hashes below multiply it by about 1e7: quantised, every pixel of a
 // window draws the same random number (unquantised, lit windows speckled at night).
-float seed = floor(UV1.y * 4096.0 + 0.5) / 4096.0;
+// The integer part of UV1.y is the wall's material (SimCruiseWallMaterial; 0 painted render), the
+// fraction the building's seed, written mid-bin (SimCruiseWallMaterial::Pack) so neither edge is near.
+float seed = floor(frac(UV1.y) * 4096.0) / 4096.0;
+float wallMat = floor(UV1.y);
 float along = UV0.x;
 float h = UV0.y;
 float meanL = max(dot(GrainMean.rgb, W), 0.001);
@@ -571,6 +574,67 @@ float stain = dot(Texture2DSample(Grain, GrainSampler, float2(along * 0.11, h * 
 // Stains only darken (never lift a wall above its weathered-paint albedo).
 float3 stucco = VC.rgb * lerp(1.0, grain, 0.09) * lerp(1.0, min(stain, 1.0), 0.25);
 stucco *= lerp(0.78, 1.0, smoothstep(0.0, 1.2, h));
+// What a wall is built of, drawn over its colour: brick coursing (US modular brick, 3 courses to
+// 8 in: 67.7 mm, 203 mm long with 9.5 mm joints, running bond), lap siding (127 mm exposure, the
+// shadow under each butt), concrete block (406 x 203 mm), ashlar stone, cast concrete panels with
+// their reveals, ribbed metal panels (305 mm). Joints and laps are filtered over the pixel's
+// footprint and fade to their mean share with distance, so a far wall keeps its average colour and
+// never shimmers. Walls only: trim, roofs and furniture stay as they are.
+float3 rib = float3(0.0, 0.0, 0.0); // x: a rough wall (block, concrete), y: painted metal
+if (wallMat > 0.5 && (kind < 0.5 || (kind > 10.5 && kind < 13.5)))
+{
+	float fpx = max(fwidth(along), 1e-4), fpy = max(fwidth(h), 1e-4);
+	#define SC_JOINT(t, P, jw, fp) lerp(saturate((0.5 * (jw) - abs(frac((t) / (P) + 0.5) - 0.5) * (P)) / (fp) + 0.5), (jw) / (P), saturate((fp) / (jw) - 1.0))
+	float3 built = stucco;
+	float3 mortar = lerp(stucco, float3(0.36, 0.35, 0.33), 0.65);
+	if (wallMat < 1.5 || (wallMat > 2.5 && wallMat < 4.5))
+	{
+		// Unit masonry: brick 1, block 3, stone 4.
+		float ch = wallMat < 1.5 ? 0.0677 : (wallMat < 3.5 ? 0.2032 : 0.305);
+		float cl = wallMat < 1.5 ? 0.2032 : (wallMat < 3.5 ? 0.4064 : 0.61);
+		float jw = wallMat < 3.5 ? 0.0095 : 0.012;
+		float course = floor(h / ch);
+		float shift = wallMat < 3.5 ? 0.5 * fmod(abs(course), 2.0) : frac(sin(course * 7.31 + seed * 91.0) * 43758.5453);
+		float u = along / cl + shift;
+		float rb = frac(sin(dot(float2(floor(u), course) + seed * 31.0, float2(12.9898, 78.233))) * 43758.5453);
+		float spread = wallMat < 1.5 ? 0.16 : (wallMat < 3.5 ? 0.06 : 0.12);
+		float varies = saturate(1.0 - max(fpx, fpy) / (0.5 * ch)); // one unit's colour, until a unit is under a pixel
+		float3 unit = stucco * (1.0 + spread * (rb * 2.0 - 1.0) * varies) * 1.04;
+		float jy = SC_JOINT(h, ch, jw, fpy);
+		float jx = SC_JOINT(u * cl, cl, jw, fpx);
+		built = lerp(unit, mortar, saturate(jx + jy - jx * jy));
+		rib.x = wallMat > 2.5 ? 1.0 : 0.0;
+	}
+	else if (wallMat < 2.5)
+	{
+		// Lap siding: each board's face a little darker up under the board above, a shadow line
+		// under each butt edge.
+		float t = frac(h / 0.127);
+		float d = (1.0 - t) * 0.127;
+		float band = saturate((0.014 - d) / fpy + 0.5);
+		float far = saturate(fpy / 0.03 - 1.0);
+		built = stucco * lerp((1.0 - 0.07 * (1.0 - t)) * (1.0 - 0.32 * band), 0.93, far);
+	}
+	else if (wallMat < 5.5)
+	{
+		// Cast concrete panels: 3 m wide, a storey tall, with 20 mm reveals.
+		float panel = SC_JOINT(along, 3.0, 0.02, fpx);
+		float level = SC_JOINT(h, 3.6, 0.02, fpy);
+		built = stucco * (1.0 - 0.4 * saturate(panel + level - panel * level));
+		rib.x = 1.0;
+	}
+	else
+	{
+		// Ribbed metal panels: a raised rib every 305 mm, its two edges in light and shade.
+		float s = frac(along / 0.305) * 0.305;
+		float lo = saturate((0.012 - abs(s - 0.02)) / fpx + 0.5), hi = saturate((0.012 - abs(s - 0.07)) / fpx + 0.5);
+		float far = saturate(fpx / 0.03 - 1.0);
+		built = stucco * lerp(1.0 + 0.12 * lo - 0.22 * hi, 0.97, far);
+		rib.y = 1.0;
+	}
+	#undef SC_JOINT
+	stucco = built;
+}
 float3 col = stucco;
 float rough = 0.88;
 float metal = 0.0;
@@ -677,6 +741,8 @@ else if (kind < 7.5)
 }
 else if (kind < 8.5) { col = float3(0.8, 0.78, 0.72); rough = 0.2; emis = Lights * float3(1.0, 0.8, 0.58) * 9000.0; }
 else if (kind < 9.5) { col = float3(0.03, 0.045, 0.05); rough = 0.05; }
+// Painted metal panels are smoother than render, block and concrete rougher (not the glass).
+rough = lerp(rough, lerp(0.95, 0.5, rib.y), saturate(rib.x + rib.y) * (1.0 - rPane));
 )HLSL") TEXT(R"HLSL(
 // Behind any window (set above), a room traced in the shader (interior mapping): the cell
 // is the bay across, the storey up and 4-6 m deep (a shop 7-9 m).

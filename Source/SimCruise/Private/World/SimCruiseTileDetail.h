@@ -69,6 +69,23 @@ namespace SimCruiseTileDetail
 	/** Off: the old facades (the grid to the wall top), for the tests' before/after counts. */
 	SIMCRUISE_API extern bool bFitFacadeGrid;
 
+	/** What a building's walls are built of (SimCruiseWallMaterial), from its data, else the rules. */
+	struct FWallMaterialInput
+	{
+		double LatDeg = 0.0, LonDeg = 0.0;
+		double HeightM = 0.0, AreaM2 = 0.0;
+		FString Use;              // the footprint's class (Overture/OSM: house, commercial, industrial ...)
+		FName MaterialFact;       // the strongest material:* fact (OSM building:material, Wikidata P186), or none
+		FName Region, Climate;    // region:* and climate:* facts, or none
+		bool bBefore1945 = false, bAfter1975 = false;
+		bool bHouse = false, bMainStreet = false, bDowntown = false, bCurtain = false, bDeco = false, bTower = false;
+		uint32 Hash = 0;
+	};
+	SIMCRUISE_API int32 WallMaterialFor(const FWallMaterialInput& In, bool* bOutFromData = nullptr);
+
+	/** Off: every wall plain render (the look before wall materials), for an A/B and the tests. */
+	SIMCRUISE_API extern bool bWallMaterials;
+
 	/** Footprints extruded by the place's recipe into the Building layer. */
 	SIMCRUISE_API void BuildBuildings(const FContext& Context);
 
