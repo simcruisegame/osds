@@ -692,9 +692,9 @@ namespace SimCruiseTileBuilder
 			}
 
 			if (bInside) H = InsideTarget;
-			H = FMath::Min(H, RoadCap);
 			else if (SectionDist < TNumericLimits<double>::Max()) H = SectionTarget;
 			else if (BestWeight > 0.0) H = FMath::Lerp(H, BestTarget, BestWeight);
+			H = FMath::Min(H, RoadCap);
 			if (FMath::Abs(H - B.NaturalHeights[K]) > 0.001) ++B.ConditionedVertices;
 			B.TerrainHeights[K] = static_cast<float>(H);
 		}
