@@ -112,6 +112,15 @@ namespace SimCruiseTheme
 		FString Key;
 	};
 	SIMCRUISE_API TSharedRef<SWidget> Hints(const TArray<FHint>& Hints, const TAttribute<bool>& bPad);
+	/**
+	 * The pad keys a hint's glyph names: A, B, X, Y, LB, RB, LT, RT, Menu, View, LS, RS, and
+	 * D-pad (its four ways; "D-pad Up Down" or "D-pad Left Right" for two), separated by spaces
+	 * or "/". Every screen's help comes from its hint list (GetPadHints), and the test
+	 * SimCruise.UI.PadHintsMatch presses these keys to check each hint does what it says.
+	 */
+	SIMCRUISE_API TArray<FKey> PadKeysOf(const FString& Glyph);
+	/** A help line made from hints: "A: type  ·  B: delete" for the pad, the keyboard's keys otherwise. */
+	SIMCRUISE_API FString HintLine(const TArray<FHint>& Hints, bool bPad);
 	/** A pad glyph: a coloured circle (A, B, X, Y) or a white rounded box (LB, RB, LT, RT, ...). */
 	SIMCRUISE_API TSharedRef<SWidget> Glyph(const FString& Name, float Px = 34.f);
 	SIMCRUISE_API TSharedRef<SWidget> TextOf(const TAttribute<FText>& Text, EWeight Weight, float Px, const FLinearColor& Color);

@@ -100,9 +100,8 @@ void SSimCruiseTuningMenu::Construct(const FArguments& InArgs)
 					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 20))
 					.ColorAndOpacity(Paper())
 					.AutoWrapText(true)
-					.Text(SimCruiseTheme::PadOrKeys(
-						TEXT("D-pad Up/Down choose   Left/Right change   X reset this row   Y reset all (press twice)\nA save for this car   B or Menu cancel"),
-						TEXT("Up/Down choose   Left/Right change   Backspace reset this row   Delete reset all (press twice)\nEnter save for this car   Esc cancel")))
+					// From the hint list (GetPadHints), so the help says what the keys do (SimCruise.UI.PadHintsMatch).
+					.Text_Lambda([]() { SimCruiseTheme::EnsurePadWatcher(); return FText::FromString(SimCruiseTheme::HintLine(GetPadHints(), SimCruiseTheme::IsPadInUse())); })
 				]
 			]
 		]
@@ -240,26 +239,28 @@ FReply SSimCruiseTuningMenu::OnKeyDown(const FGeometry& MyGeometry, const FKeyEv
 }
 FReply SSimCruiseTuningMenu::OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& InAnalogInputEvent)
 {
-	// The left stick moves through the rows and values like the D-pad, a step at a time.
-	const double Now = FPlatformTime::Seconds();
-	const float Value = InAnalogInputEvent.GetAnalogValue();
-	if (FMath::Abs(Value) < 0.6f || Now < StickHeldUntil)
-	{
-		return FReply::Unhandled();
-	}
-	StickHeldUntil = Now + 0.22;
+	// The left stick is the D-pad here (the menus' rule, SimCruiseTheme::StickNav): one push one
+	// step, held it repeats. All of the stick is the menu's, so Slate's own stick navigation never
+	// moves the focus off it.
+	using namespace SimCruiseTheme;
 	const FKey Key = InAnalogInputEvent.GetKey();
-	if (Key == EKeys::Gamepad_LeftY)
+	if (!IsLeftStick(Key)) return FReply::Unhandled();
+	switch (StickNav(Key, InAnalogInputEvent.GetAnalogValue(), Stick, FPlatformTime::Seconds()))
 	{
-		Selected = (Selected + (Value > 0.f ? Rows.Num() - 1 : 1)) % Rows.Num();
-		return FReply::Handled();
+	case ENav::Up: Selected = (Selected + Rows.Num() - 1) % Rows.Num(); break;
+	case ENav::Down: Selected = (Selected + 1) % Rows.Num(); break;
+	case ENav::Left: Nudge(-1); break;
+	case ENav::Right: Nudge(1); break;
+	default: break;
 	}
-	if (Key == EKeys::Gamepad_LeftX)
-	{
-		Nudge(Value > 0.f ? 1 : -1);
-		return FReply::Handled();
-	}
-	return FReply::Unhandled();
+	return FReply::Handled();
+}
+
+TArray<SimCruiseTheme::FHint> SSimCruiseTuningMenu::GetPadHints()
+{
+	return { { TEXT("D-pad Up Down"), TEXT("Choose"), TEXT("Up Down") }, { TEXT("D-pad Left Right"), TEXT("Change"), TEXT("Left Right") },
+		{ TEXT("X"), TEXT("Reset this row"), TEXT("Backspace") }, { TEXT("Y"), TEXT("Reset all (press twice)"), TEXT("Delete") },
+		{ TEXT("A"), TEXT("Save for this car"), TEXT("Enter") }, { TEXT("B / Menu"), TEXT("Cancel"), TEXT("Esc") } };
 }
 
 #undef LOCTEXT_NAMESPACE

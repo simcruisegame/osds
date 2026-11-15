@@ -93,6 +93,15 @@ function Write-CheckTime([string]$Result) {
 
 $Timing.Tier = $Tier
 
+# Every script under scripts\ must parse: a broken parameter list stops a review lane that runs it.
+$ParseErrors = 0
+foreach ($Script in Get-ChildItem (Join-Path $Root 'scripts') -Recurse -Filter *.ps1) {
+    $Tokens = $null; $Errors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile($Script.FullName, [ref]$Tokens, [ref]$Errors) | Out-Null
+    foreach ($E in $Errors) { $ParseErrors++; Write-Host "SCRIPT PARSE ERROR $($Script.Name):$($E.Extent.StartLineNumber): $($E.Message)" }
+}
+if ($ParseErrors -gt 0) { Write-Host 'SCRIPTS DO NOT PARSE'; Write-CheckTime 'script-parse'; exit 1 }
+
 # The build is skipped when nothing it compiles changed since the last good build here: the
 # stamp is a hash of every file's path, size and time under Source\ (and Plugins\), the
 # .uproject and the engine's build version, written after Build.bat succeeds.

@@ -47,8 +47,8 @@ New-Item -ItemType Directory -Force $OutRoot | Out-Null
 # Each case: name, start, start road, car, UTC, start seed (0: the game's own), stop-at-junction seconds.
 $Cases = @(
     # (1) Woodward over the Fisher Freeway (I-75): no freeway car may cross Woodward at grade. Seeds of the c1a6b76 runs.
-    @{ Name = 'detroit-woodward-north'; Start = '42.3445,-83.0560'; Road = 'Woodward Avenue'; Car = 'nb2001_aaron'; Utc = '2026-11-12T17:32:14Z'; Seed = 18129; Stop = 0 },
-    @{ Name = 'detroit-woodward-south'; Start = '42.3390,-83.0532'; Road = 'Woodward Avenue'; Car = 'nb2001_aaron'; Utc = '2026-11-12T17:32:14Z'; Seed = 29587; Stop = 0 },
+    @{ Name = 'detroit-woodward-north'; Start = '42.3445,-83.0560'; Road = 'Woodward Avenue'; Car = 'nb2001_lowered'; Utc = '2026-11-12T17:32:14Z'; Seed = 18129; Stop = 0 },
+    @{ Name = 'detroit-woodward-south'; Start = '42.3390,-83.0532'; Road = 'Woodward Avenue'; Car = 'nb2001_lowered'; Utc = '2026-11-12T17:32:14Z'; Seed = 29587; Stop = 0 },
     # (2) Turn-round and tile edges: Doraville, the motorway with tile borders where a red car cut in within
     # a car length at 37.0-37.2 s on c1a6b76 (same seed).
     @{ Name = 'doraville-corvette'; Start = '33.8920,-84.2560'; Road = ''; Car = 'meridian_z'; Utc = '2026-11-12T17:37:01Z'; Seed = 10291; Stop = 0 },
@@ -58,7 +58,7 @@ $Cases = @(
     # 90 m before Woodward (110 m before John R); the start pick chooses the direction. Source: the game's own
     # cached OpenMapTiles vector tile z14 4411/6060 (%LOCALAPPDATA%\SimCruise\map-cache\v-4411-6060,
     # layer transportation_name), read 2026-11-14.
-    @{ Name = 'detroit-canfield-junction'; Start = '42.35311,-83.06051'; Road = 'East Canfield Street'; Car = 'nb2001_aaron'; Utc = '2026-11-12T17:32:14Z'; Seed = 0; Stop = 10 }
+    @{ Name = 'detroit-canfield-junction'; Start = '42.35311,-83.06051'; Road = 'East Canfield Street'; Car = 'nb2001_lowered'; Utc = '2026-11-12T17:32:14Z'; Seed = 0; Stop = 10 }
 )
 if ($WithBixby) { $Cases += @{ Name = 'bixby-south'; Start = '36.3690,-121.9012'; Road = 'Cabrillo Highway'; Car = 'meridian_z'; Utc = '2026-11-12T20:08:00Z'; Seed = 15627; Stop = 0 } }
 if ($OnlyCases) { $Only = $OnlyCases -split ','; $Cases = @($Cases | Where-Object { $Only -contains $_.Name }) }

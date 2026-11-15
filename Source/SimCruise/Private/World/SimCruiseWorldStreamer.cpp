@@ -65,7 +65,8 @@ void ASimCruiseWorldStreamer::BeginPlay()
 	Atlas = MakeShared<FSimCruiseAtlasClient, ESPMode::ThreadSafe>(Config);
 	Inbox = MakeShared<FInbox, ESPMode::ThreadSafe>();
 	// Moving traffic: scenery and obstacles, so drawn runs only (headless checks keep the roads empty).
-	if (FApp::CanEverRender() && GetWorld())
+	// Out of the game for now: no traffic actor, no traffic cars, no cost per frame.
+	if (ASimCruiseTraffic::IsEnabled() && FApp::CanEverRender() && GetWorld())
 	{
 		FActorSpawnParameters Params;
 		Params.ObjectFlags |= RF_Transient;
@@ -388,6 +389,8 @@ void ASimCruiseWorldStreamer::Launch(const FSimCruiseTileJobTicket& Ticket)
 		{
 			FString EyePath = SimCruiseTileData::BundledAerialPath(Data.AerialKey);
 			if (EyePath.IsEmpty() && Client.IsValid()) EyePath = FPaths::Combine(Client->GetConfig().CacheDir, Data.AerialKey);
+			// With the helper the eye also fetches each tile's zoom-16 photograph (clean photo albedo).
+			if (Client.IsValid() && Client->GetConfig().IsConfigured()) FSimCruiseAerialEye::SetAtlas(Client->GetConfig());
 			if (IFileManager::Get().FileExists(*EyePath)) FSimCruiseAerialEye::Get().Request(Data.Id, EyePath);
 		}
 		Result->FinishedAt = FPlatformTime::Seconds();

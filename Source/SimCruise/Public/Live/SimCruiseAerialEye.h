@@ -1,4 +1,4 @@
-// Copyright SimCruise contributors. All Rights Reserved.
+﻿// Copyright SimCruise contributors. All Rights Reserved.
 
 #pragma once
 
@@ -18,7 +18,8 @@
  *   our head, Saved/AI/scan-eye-satlas.onnx (development teacher, 352 MB, not in git;
  *   lab/scan/satlas_eye.py export).
  *
- * Off by default: -SimCruiseScanEye=aerial_student (or satlas_landcover) turns it on. Then the world
+ * On by default with aerial_student (lower 48 states; rules elsewhere); -SimCruiseScanEye=none or
+ * -SimCruiseNoEye turns it off, =satlas_landcover picks the development teacher. The world
  * streamer queues every tile with its photograph, and one thread at below-normal priority runs the
  * model with NNERuntimeORTCpu (the project's global ORT pool), never the game thread, never the GPU.
  * Results go to a disk cache, Saved/Scan/eyes/<eye>-v<version>/16/<x>/<y>.eye, so a tile costs its
@@ -79,6 +80,42 @@ public:
 
 	FString Describe() const;
 
+	// ---- Photo-true ground albedo (PHTX, scan contract I/L; agreed with the world lane 2026-11-14) ----
+	//
+	// The helper's `aerial16` command gives each zoom-16 tile its own 1024 px photograph (about 0.5 m a
+	// pixel, USGS public domain). With it the eye (1) reads land cover from the same kind of photo it
+	// learned on, and (2) writes a CLEAN photo albedo: inside natural classes (grass, crop, shrub, bare,
+	// tree canopy) the pixels that do not belong to the class (shadows, cars, bright or dark objects) are
+	// replaced by nearby pixels of the same class, chosen by a hash of the GLOBAL pixel position, so two
+	// neighbouring tiles give the same answer along their shared edge. Roads, roofs, water and unsure
+	// cells keep the photo. Channels albedo_photo_r/g/b (sRGB) and albedo_photo_mask (255 where cleaned
+	// or natural), PhotoStored x PhotoStored = 1024 + 2 x 16 guard (2 cells per scan cell), north-up; the
+	// guard comes from the neighbouring tiles' photographs (mirrored where a neighbour has none).
+
+	/** The helper used to fetch the zoom-16 photographs (any thread; set by the world streamer). */
+	static void SetAtlas(const struct FSimCruiseAtlasConfig& Config);
+
+	static constexpr int32 PhotoCells = 1024;
+	static constexpr int32 PhotoGuard = 16;
+	static constexpr int32 PhotoStored = PhotoCells + 2 * PhotoGuard;
+
+	/**
+	 * The tile's photo mosaic, PhotoStored square: its own zoom-16 photograph in the middle and the
+	 * neighbours' edges in the guard. PhotoOf returns a tile's 1024 px photograph or an empty array.
+	 * False when the tile's own photograph is missing.
+	 */
+	static bool BuildMosaic(const FIntPoint& Tile16, TFunctionRef<bool(const FIntPoint&, TArray<FColor>&)> PhotoOf, TArray<FColor>& OutMosaic);
+
+	/**
+	 * The clean photo albedo of a mosaic (PhotoStored square) from the land-cover channels (528 square,
+	 * the same area). Deterministic in global pixel positions. OutCleaned counts replaced pixels.
+	 */
+	static void CleanPhoto(const TArray<FColor>& Mosaic, const FIntPoint& Tile16, const TArray<FSimCruiseScanChannel>& LandCover,
+		TArray<FSimCruiseScanChannel>& OutAlbedo, int32* OutCleaned = nullptr);
+
+	/** The tile (z, x, y in X, Y, Z) is in the lower 48 states, where the student learned. */
+	static bool IsLower48(const FIntVector& TileZXY);
+
 	/** Game thread, once a frame: the last frame's time, for the worker's back-off. */
 	static void NoteFrameSeconds(float Seconds);
 	/** Any thread: the last frame took more than 1.1 x the 60 fps budget. */
@@ -90,9 +127,9 @@ public:
 	static constexpr int32 InputSize = 512;
 	static constexpr int32 Cells = 512;
 	static constexpr int32 GuardCells = 8;
-	static constexpr int32 EyeVersion = 1;
+	static constexpr int32 EyeVersion = 2;
 	/** Cache file format (bump on any layout change). */
-	static constexpr int32 FileVersion = 2;
+	static constexpr int32 FileVersion = 3;
 
 	/** Encode / decode the cache file (tested). */
 	static void Encode(const TArray<FSimCruiseScanChannel>& Channels, const TArray<FSimCruiseClassTint>& Tints, TArray<uint8>& OutBytes);
@@ -102,6 +139,8 @@ private:
 	FSimCruiseAerialEye() = default;
 	FString CachePath(const FIntPoint& Tile16) const;
 	void RunWorker();
+	/** A tile's zoom-16 photograph through the helper (worker only; cached by the helper). */
+	bool Photo16(const FIntPoint& Tile16, bool bFetch, TArray<FColor>& Out);
 	void DumpPicture(const FSimCruiseScanInputs& Inputs, const FIntPoint& Tile16, const TArray<FSimCruiseScanChannel>& Channels) const;
 
 	bool bTried = false;

@@ -84,6 +84,8 @@ private:
 	TSet<FIntPoint> Failed;
 	int32 Fetched = 0;
 	int32 OverpassAttempt = 0;
+	/** Fetch failures in a row (the pause grows with them). */
+	int32 FetchFailures = 0;
 	FString LastError;
 	double NextCardCheck = 0.0;
 	FSimCruisePlaceCard Card;

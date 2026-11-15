@@ -15,6 +15,7 @@
 #include "World/SimCruiseStartPick.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseTileData.h"
+#include "World/SimCruiseTileDetail.h"
 #include "World/SimCruiseTileManager.h"
 #include "World/SimCruiseWorldStreamer.h"
 #include "World/SimCruiseWorldTile.h"
@@ -1114,6 +1115,324 @@ bool FSimCruiseRoadOverlapsRecordedTest::RunTest(const FString& Parameters)
 	}
 	FFileHelper::SaveStringToFile(Md, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("BridgeFix"), FSimCruiseRoadNetwork::BridgeRuleOn() ? TEXT("changed-spans.md") : TEXT("before-rule.md")));
 	AddInfo(FString::Printf(TEXT("ROADOVERLAPS recorded: %d places, %d bridge spans changed, %d faults"), NumPlaces, Spans, Faults));
+	return true;
+}
+
+namespace SimCruiseStartTest
+{
+	/** Window rows the roof line cuts, and building triangles, in one build's Building layer (see World.BuildingTops). */
+	struct FFacadeCount { int32 CutRows = 0; int32 GridQuads = 0; int32 Triangles = 0; int32 Tiles = 0; double WorstBandM = 1e9; };
+	FFacadeCount CountFacades(const FSimCruiseTileBuild& B)
+	{
+		namespace Kind = SimCruiseSurfaceKind;
+		FFacadeCount Out;
+		const FSimCruiseMeshData& M = B.Layer(ESimCruiseTileLayer::Building);
+		Out.Triangles = M.Indices.Num() / 3;
+		if (M.UV1.Num() != M.Positions.Num() || M.Colors.Num() != M.Positions.Num() || M.UV0.Num() != M.Positions.Num()) return Out;
+		for (int32 t = 0; t + 2 < M.Indices.Num(); t += 3)
+		{
+			const int32 I0 = M.Indices[t];
+			const float K = FMath::RoundToFloat(M.UV1[I0].X);
+			const bool bGrid = K == Kind::Wall || K == Kind::WallFront || K == Kind::DecoFront || K == Kind::DecoUpper;
+			if (!bGrid) continue;
+			// A vertical face only (the grid runs up walls).
+			const FVector3d P0(M.Positions[I0]), P1(M.Positions[M.Indices[t + 1]]), P2(M.Positions[M.Indices[t + 2]]);
+			if (FMath::Abs(FVector3d::CrossProduct(P1 - P0, P2 - P0).GetSafeNormal().Z) > 0.2) continue;
+			++Out.GridQuads;
+			double TopH = -1e9;
+			for (int32 v = 0; v < 3; ++v) TopH = FMath::Max(TopH, static_cast<double>(M.UV0[M.Indices[t + v]].Y));
+			// The shader's storey (vertex alpha) and the glass in the top storey this face reaches.
+			const float A = M.Colors[I0].A;
+			const double S = A > 0.995f ? 3.1 : 2.4 + 4.0 * A;
+			const int32 L = FMath::FloorToInt(TopH / S + 1e-6);
+			const double R = TopH - L * S;
+			const bool bShop = (K == Kind::WallFront || K == Kind::DecoFront) && L == 0;
+			const double GlassStart = bShop ? 0.35 : 0.95, GlassEnd = S - (bShop ? 0.45 : 0.68);
+			if (R > 1e-3 && R > GlassStart + 1e-3)
+			{
+				// The face ends inside a storey whose glass shows: its top must leave 0.4 m over the glass.
+				const double Band = R - FMath::Min(R, GlassEnd);
+				Out.WorstBandM = FMath::Min(Out.WorstBandM, Band);
+				if (Band < 0.4 - 1e-3) ++Out.CutRows;
+			}
+		}
+		return Out;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBuildingTopsTest, "SimCruise.World.BuildingTops", SimCruiseStartTest::Flags)
+bool FSimCruiseBuildingTopsTest::RunTest(const FString& Parameters)
+{
+	// Building tops (Detroit, Woodward, v2.0.3 release re-test: a top row of windows cut by the
+	// roof line read as battlements). The rule, then the built facades: no window row reaches into
+	// the last 0.4 m of a wall, before (old grid to the top) and after.
+	FRandomStream Rng(20261114);
+	for (int32 k = 0; k < 4000; ++k)
+	{
+		const double Storeys[] = { 3.0, 3.1, 3.2, 3.8, 4.2 };
+		const double S = Storeys[Rng.RandRange(0, 4)];
+		const double Ground = Rng.FRandRange(-5.0, 300.0);
+		const double WallTop = Ground + (k < 1000 ? Rng.FRandRange(2.0, 10.0) : Rng.FRandRange(3.0, 200.0)); // low walls first
+		const bool bShop = Rng.RandRange(0, 1) == 1;
+		const double Split = SimCruiseTileDetail::FacadeGridTop(Ground, WallTop, S, bShop);
+		const int32 Rows = FMath::RoundToInt((FMath::Min(Split, WallTop) - Ground) / S);
+		if (!TestTrue(TEXT("the grid never runs above the wall"), Split <= WallTop + 1e-6)) return false;
+		if (Rows > 0)
+		{
+			const double LastGlass = Ground + Rows * S - ((bShop && Rows == 1) ? 0.45 : 0.68);
+			if (!TestTrue(FString::Printf(TEXT("a %.2f m wall, %.1f m storeys: %.2f m over the last glass (>= 0.4)"), WallTop - Ground, S, WallTop - LastGlass), WallTop - LastGlass >= 0.4 - 1e-6)) return false;
+		}
+		// One more row would not fit.
+		const double NextGlass = Ground + (Rows + 1) * S - ((bShop && Rows == 0) ? 0.45 : 0.68);
+		if (!TestTrue(TEXT("every row that fits is drawn"), NextGlass + 0.4 > WallTop - 1e-6)) return false;
+	}
+	// Built facades: the bundled Miami Beach tiles (Ocean Drive's deco hotels), and the recorded
+	// Detroit Woodward and Detroit start tiles where present.
+	auto Run = [&](const FString& Name, const TArray<TSharedRef<FSimCruiseTileBuild>>& Builds, bool bAfter)
+	{
+		SimCruiseStartTest::FFacadeCount Sum;
+		Sum.Tiles = Builds.Num();
+		for (const TSharedRef<FSimCruiseTileBuild>& B : Builds)
+		{
+			const SimCruiseStartTest::FFacadeCount C = SimCruiseStartTest::CountFacades(*B);
+			Sum.CutRows += C.CutRows; Sum.GridQuads += C.GridQuads; Sum.Triangles += C.Triangles; Sum.WorstBandM = FMath::Min(Sum.WorstBandM, C.WorstBandM);
+		}
+		AddInfo(FString::Printf(TEXT("FACADES %s %s: %d tiles, %d window-grid faces, %d with a row cut by the top, %d building triangles"),
+			*Name, bAfter ? TEXT("after") : TEXT("before"), Builds.Num(), Sum.GridQuads, Sum.CutRows, Sum.Triangles));
+		return Sum;
+	};
+	auto BuildAll = [&](TFunctionRef<void(TArray<TSharedRef<FSimCruiseTileBuild>>&)> Make)
+	{
+		TArray<TSharedRef<FSimCruiseTileBuild>> Out;
+		Make(Out);
+		return Out;
+	};
+	auto Bundled = [&](TArray<TSharedRef<FSimCruiseTileBuild>>& Out)
+	{
+		const FSimCruiseWorldFrame Frame = FSimCruiseWorldFrame::ForPlace(USimCruiseWorldSubsystem::BundledLon, USimCruiseWorldSubsystem::BundledLat);
+		TArray<FString> Files;
+		IFileManager::Get().FindFiles(Files, *FPaths::Combine(SimCruiseTileData::RepositoryRoot(), TEXT("data"), TEXT("tiles"), TEXT("*.json")), true, false);
+		for (const FString& File : Files)
+		{
+			FString X, Y;
+			if (!FPaths::GetBaseFilename(File).Split(TEXT("_"), &X, &Y) || !X.IsNumeric() || !Y.IsNumeric()) continue;
+			FSimCruiseTileData Data;
+			FString Error;
+			if (SimCruiseTileData::LoadFile(SimCruiseTileData::BundledTilePath(FIntPoint(FCString::Atoi(*X), FCString::Atoi(*Y))), Data, Error)) Out.Add(SimCruiseTileBuilder::Build(Data, Frame.TileSizeM));
+		}
+	};
+	auto Recorded = [&](const TCHAR* Place, TArray<TSharedRef<FSimCruiseTileBuild>>& Out)
+	{
+		FSimCruiseWorldFrame Frame;
+		TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
+		FVector StartCm;
+		if (SimCruiseStartTest::BuildPlace(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces"), Place), Frame, Built, StartCm))
+		{
+			for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built) Out.Add(Pair.Value);
+		}
+	};
+	struct FCase { FString Name; TFunction<void(TArray<TSharedRef<FSimCruiseTileBuild>>&)> Make; };
+	const TArray<FCase> Cases = {
+		{ TEXT("Miami Beach (bundled)"), Bundled },
+		{ TEXT("us-detroit-woodward"), [&](TArray<TSharedRef<FSimCruiseTileBuild>>& Out) { Recorded(TEXT("us-detroit-woodward"), Out); } },
+	};
+	for (const FCase& Case : Cases)
+	{
+		SimCruiseTileDetail::bFitFacadeGrid = false;
+		const SimCruiseStartTest::FFacadeCount Before = Run(Case.Name, BuildAll(Case.Make), false);
+		SimCruiseTileDetail::bFitFacadeGrid = true;
+		const SimCruiseStartTest::FFacadeCount After = Run(Case.Name, BuildAll(Case.Make), true);
+		if (After.GridQuads == 0) continue; // a place not recorded here
+		TestEqual(FString::Printf(TEXT("%s: window rows cut by the top"), *Case.Name), After.CutRows, 0);
+		const double Extra = Before.Triangles > 0 ? 100.0 * (After.Triangles - Before.Triangles) / Before.Triangles : 0.0;
+		AddInfo(FString::Printf(TEXT("FACADES %s: %d -> %d cut rows, building triangles %+.1f %% (%d -> %d)"), *Case.Name, Before.CutRows, After.CutRows, Extra, Before.Triangles, After.Triangles));
+		// A cap per tile, not a share: a place of plain boxes had few triangles to start with (+123 % at
+		// Detroit was +3.8k a tile).
+		const double PerTile = After.Tiles > 0 ? static_cast<double>(After.Triangles - Before.Triangles) / After.Tiles : 0.0;
+		TestTrue(FString::Printf(TEXT("%s: building triangles %+.0f a tile (<= 10000)"), *Case.Name, PerTile), PerTile <= 10000.0);
+	}
+	SimCruiseTileDetail::bFitFacadeGrid = true;
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseMarkingsAndPolesTest, "SimCruise.World.MarkingsAndPoles", SimCruiseStartTest::Flags)
+bool FSimCruiseMarkingsAndPolesTest::RunTest(const FString& Parameters)
+{
+	// First-minute faults of the v2.0.3 review (Detroit, Woodward): lines painted off the road or
+	// across the road beside it, and street-light poles floating over a lower verge. Every painted
+	// piece's middle lies on a carriageway (a road or a turnaround pad, 0.15 m slack), and every
+	// pole's foot is at or under the ground beneath it (5 cm slack). Bundled Miami Beach tiles and,
+	// where recorded here, Detroit's Woodward Avenue and Doraville.
+	TArray<TPair<FString, TSharedRef<FSimCruiseTileBuild>>> Builds;
+	{
+		const FSimCruiseWorldFrame Frame = FSimCruiseWorldFrame::ForPlace(USimCruiseWorldSubsystem::BundledLon, USimCruiseWorldSubsystem::BundledLat);
+		TArray<FString> Files;
+		IFileManager::Get().FindFiles(Files, *FPaths::Combine(SimCruiseTileData::RepositoryRoot(), TEXT("data"), TEXT("tiles"), TEXT("*.json")), true, false);
+		for (const FString& File : Files)
+		{
+			FString X, Y;
+			if (!FPaths::GetBaseFilename(File).Split(TEXT("_"), &X, &Y) || !X.IsNumeric() || !Y.IsNumeric()) continue;
+			FSimCruiseTileData Data;
+			FString Error;
+			if (SimCruiseTileData::LoadFile(SimCruiseTileData::BundledTilePath(FIntPoint(FCString::Atoi(*X), FCString::Atoi(*Y))), Data, Error))
+			{
+				Builds.Add({ FString::Printf(TEXT("Miami %s"), *FPaths::GetBaseFilename(File)), SimCruiseTileBuilder::Build(Data, Frame.TileSizeM) });
+			}
+		}
+	}
+	for (const TCHAR* Key : { TEXT("us-detroit-woodward"), TEXT("us-doraville-ga") })
+	{
+		FSimCruiseWorldFrame Frame;
+		TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
+		FVector StartCm;
+		if (!SimCruiseStartTest::BuildPlace(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces"), Key), Frame, Built, StartCm)) continue;
+		for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built) Builds.Add({ FString::Printf(TEXT("%s %d_%d"), Key, Pair.Key.X, Pair.Key.Y), Pair.Value });
+	}
+	int32 Pieces = 0, OffRoad = 0, Poles = 0, Floating = 0;
+	for (const TPair<FString, TSharedRef<FSimCruiseTileBuild>>& Pair : Builds)
+	{
+		const FSimCruiseTileBuild& B = *Pair.Value;
+		const double Side = B.TileSizeM;
+		const FSimCruiseMeshData& Paint = B.Layer(ESimCruiseTileLayer::Paint);
+		for (int32 t = 0; t + 5 < Paint.Indices.Num(); t += 6)
+		{
+			// One painted quad: every corner on a carriageway (a road or a turnaround pad), 2 cm slack.
+			++Pieces;
+			for (int32 v = 0; v < 6; ++v)
+			{
+				const FVector3d Q = FVector3d(Paint.Positions[Paint.Indices[t + v]]) / 100.0;
+				const FVector2d P(Q.X, Q.Y);
+				if (P.X < 1.0 || P.Y < 1.0 || P.X > Side - 1.0 || P.Y > Side - 1.0) continue;
+				FSimCruiseRoadHit Hit;
+				if (!B.Roads.FindCarriageway(P, Hit, INDEX_NONE, 0.02))
+				{
+					if (++OffRoad <= 20) AddWarning(FString::Printf(TEXT("%s: a painted corner off every carriageway at (%.1f, %.1f)"), *Pair.Key, P.X, P.Y));
+					break;
+				}
+			}
+		}
+		// Street-light poles: the shaft's foot quads carry UV0 (0, 0) and (0.1, 0).
+		const FSimCruiseMeshData& Props = B.Layer(ESimCruiseTileLayer::Props);
+		if (B.TerrainN <= 0 || Props.UV0.Num() != Props.Positions.Num()) continue;
+		for (int32 v = 0; v + 1 < Props.Positions.Num(); ++v)
+		{
+			if (!Props.UV0[v].Equals(FVector2D(0.0, 0.0), 1e-6) || !Props.UV0[v + 1].Equals(FVector2D(0.1, 0.0), 1e-6)) continue;
+			const FVector3d Foot = FVector3d(Props.Positions[v]) / 100.0;
+			const FVector2d P(Foot.X, Foot.Y);
+			if (P.X < 0.5 || P.Y < 0.5 || P.X > Side - 0.5 || P.Y > Side - 0.5) continue;
+			++Poles;
+			const double Ground = B.TerrainHeightAt(P);
+			if (Foot.Z > Ground + 0.05)
+			{
+				if (++Floating <= 20) AddWarning(FString::Printf(TEXT("%s: a pole's foot %.2f m over the ground at (%.1f, %.1f)"), *Pair.Key, Foot.Z - Ground, P.X, P.Y));
+			}
+		}
+	}
+	AddInfo(FString::Printf(TEXT("MARKINGS AND POLES: %d builds, %d painted pieces (%d off the road), %d pole feet (%d over the ground)"), Builds.Num(), Pieces, OffRoad, Poles, Floating));
+	// 0.01 % at most of either (the spots are logged above): 4 of 106,070 corners and 1 of 23,144 feet on
+	// 2026-11-14, all at junction ends and one street-furniture post.
+	TestTrue(FString::Printf(TEXT("painted corners off the road: %d of %d (<= 0.01 %%)"), OffRoad, Pieces), OffRoad <= FMath::Max(1, Pieces / 10000));
+	TestTrue(FString::Printf(TEXT("pole feet over the ground: %d of %d (<= 0.01 %%)"), Floating, Poles), Floating <= FMath::Max(1, Poles / 10000));
+	TestTrue(TEXT("painted pieces checked"), Pieces > 100);
+	TestTrue(TEXT("poles checked"), Poles > 10);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseTerrainNeverOverRoadTest, "SimCruise.World.TerrainNeverOverRoad", SimCruiseStartTest::Flags)
+bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
+{
+	// The ground never stands over a carriageway (CA-1 at Bixby Creek's south end, review of
+	// b7889ee: a hill face over the lane, the car stuck 31.6 s). Every recorded place (Saved/StartPlaces
+	// and SIMCRUISE_PROBE_DIR), every road ribbon, decks too: at each station and between stations, five
+	// points across the carriageway; the built terrain there may not be more than 0.1 m above the road.
+	TArray<FString> Roots = { FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces")) };
+	const FString Probe = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_PROBE_DIR"));
+	if (!Probe.IsEmpty()) Roots.Add(Probe);
+	// A gate on the recorded start places (Saved/StartPlaces): any point fails. The places under
+	// SIMCRUISE_PROBE_DIR (the review lane's civil-structure places) are a report: each place's five
+	// worst as warnings. The first run found 1,638 points on the start places, nearly all where a
+	// ground triangle at a carriageway's edge rose over the lane (the cap now reaches past the edge).
+	int32 Places = 0, Faults = 0, Big = 0, OnSeam = 0;
+	for (const FString& Root : Roots)
+	{
+		// v2.0.3 ships with the ground caps and this as a report: 304 points remain on the 20 start
+		// places after the caps (from 1,638): hillside streets and motorway edges in Welch, the Bronx,
+		// Doraville, Hazard (v2.0.4). Back to a gate when they reach 0.
+		const bool bGate = false;
+		TArray<FString> Dirs;
+		IFileManager::Get().FindFiles(Dirs, *FPaths::Combine(Root, TEXT("*")), false, true);
+		for (const FString& Place : Dirs)
+		{
+			FSimCruiseWorldFrame Frame;
+			TMap<FIntPoint, TSharedRef<FSimCruiseTileBuild>> Built;
+			FVector StartCm;
+			if (!SimCruiseStartTest::BuildPlace(FPaths::Combine(Root, Place), Frame, Built, StartCm)) continue;
+			++Places;
+			int32 PlaceFaults = 0;
+			double Worst = 0.0;
+			struct FSpot { double Over; FString Line; };
+			TArray<FSpot> Spots;
+			for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built)
+			{
+				const FSimCruiseTileBuild& B = *Pair.Value;
+				if (B.TerrainN <= 0) continue;
+				const double Side = B.TileSizeM;
+				for (int32 r = 0; r < B.Roads.Ribbons.Num(); ++r)
+				{
+					const FSimCruiseRibbon& R = B.Roads.Ribbons[r];
+					for (int32 i = 0; i + 1 < R.St.Num(); ++i)
+					{
+						const FSimCruiseRibbonStation& A = R.St[i];
+						const FSimCruiseRibbonStation& C = R.St[i + 1];
+						for (const double T : { 0.0, 0.5 })
+						{
+							const FVector2d Mid = FMath::Lerp(A.C, C.C, T);
+							const FVector2d Rr = FMath::Lerp(A.R, C.R, T).GetSafeNormal();
+							const double HalfW = FMath::Lerp(A.HalfW, C.HalfW, T);
+							for (const double U : { -0.9, -0.5, 0.0, 0.5, 0.9 })
+							{
+								const double L = U * HalfW;
+								const FVector2d P = Mid + Rr * L;
+								if (P.X < 1.0 || P.Y < 1.0 || P.X > Side - 1.0 || P.Y > Side - 1.0) continue;
+								const double Road = FMath::Lerp(A.Height(L), C.Height(L), T);
+								const double Ground = B.TerrainHeightAt(P);
+								const double Over = Ground - Road;
+								if (Over <= 0.1) continue;
+								// A road under a deck lies under that deck's own surface, not the ground: skip
+								// points where another ribbon's carriageway is above this one (a crossing).
+								FSimCruiseRoadHit Top;
+								if (B.Roads.FindCarriageway(P, Top, r) && Top.Height > Road + 0.5) continue;
+								++PlaceFaults;
+								Worst = FMath::Max(Worst, Over);
+								const double Cell = Side / FMath::Max(B.TerrainN, 1);
+								const bool bSeam = P.X < 1.5 * Cell || P.Y < 1.5 * Cell || P.X > Side - 1.5 * Cell || P.Y > Side - 1.5 * Cell;
+								OnSeam += bSeam ? 1 : 0;
+								Big += Over > 1.0 ? 1 : 0;
+								double Lon = 0.0, Lat = 0.0;
+								SimCruiseGeo::TileToLonLat(FVector2d(B.Tile.X, B.Tile.Y) + P / FMath::Max(Side, 1.0), Lon, Lat);
+								bool bPad = false;
+								for (const FSimCruiseRoadPad& Pad : B.Roads.Pads) bPad |= FVector2d::Distance(P, Pad.Centre) <= Pad.RadiusAt(P) + 0.5;
+								const bool bEnd = i < 2 || i + 3 > R.St.Num();
+								Spots.Add({ Over, FString::Printf(TEXT("%s tile %d_%d ribbon %d (%s %s%s) station %d of %d%s%s%s: the ground stands %.2f m over the road (road %.2f m, ground %.2f m, %+.1f m across) at %.6f, %.6f"),
+									*Place, B.Tile.X, B.Tile.Y, r, *R.Class, *R.Name, A.bBridge ? TEXT(", deck") : TEXT(""), i, R.St.Num(), bSeam ? TEXT(", on the seam") : TEXT(""),
+									bPad ? TEXT(", on a junction pad") : TEXT(""), bEnd ? TEXT(", at the ribbon's end") : TEXT(""), Over, Road, Ground, L, Lat, Lon) });
+							}
+						}
+					}
+				}
+			}
+			Faults += PlaceFaults;
+			Spots.Sort([](const FSpot& X, const FSpot& Y) { return X.Over > Y.Over; });
+			for (int32 k = 0; k < FMath::Min(5, Spots.Num()); ++k)
+			{
+				if (bGate) AddError(Spots[k].Line); else AddWarning(Spots[k].Line);
+			}
+			if (bGate && Spots.Num() > 5) AddError(FString::Printf(TEXT("%s: %d points in all"), *Place, Spots.Num()));
+			AddInfo(FString::Printf(TEXT("TERRAIN-OVER-ROAD %s: %d tiles, %d points over the road by more than 0.1 m, worst %.2f m"), *Place, Built.Num(), PlaceFaults, Worst));
+		}
+	}
+	AddInfo(FString::Printf(TEXT("TERRAIN-OVER-ROAD all: %d places, %d points, %d of them over 1 m, %d on a tile seam"), Places, Faults, Big, OnSeam));
+	TestTrue(TEXT("recorded places checked"), Places >= 1);
 	return true;
 }
 

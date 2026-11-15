@@ -206,10 +206,179 @@ namespace
 
 	template <typename T>
 	const T& Pick(const TArray<T>& Items, uint32 H) { return Items[H % static_cast<uint32>(Items.Num())]; }
+
+	/**
+	 * Each wall material's own colours (sRGB, as built and a few years weathered), for a building whose
+	 * colour no data gives. Brick: common US face brick (red, brown, buff, a dark iron-spot); siding:
+	 * white, cream, grey, sage, blue-grey, tan vinyl and painted wood; block: bare and painted CMU;
+	 * stone: limestone, sandstone, granite; concrete: cast and precast; metal: factory finishes.
+	 */
+	const TArray<FLinearColor>& MaterialWalls(int32 Material)
+	{
+		static const TArray<TArray<FLinearColor>> All = []()
+		{
+			auto Of = [](std::initializer_list<const TCHAR*> Hex) { TArray<FLinearColor> Out; for (const TCHAR* H : Hex) Out.Add(Srgb(H)); return Out; };
+			TArray<TArray<FLinearColor>> Out;
+			Out.Add(GenericWalls());
+			Out.Add(Of({ TEXT("8b4838"), TEXT("76503f"), TEXT("9f5a42"), TEXT("a0533c"), TEXT("7a3f33"), TEXT("6e4a3c"), TEXT("b07a58"), TEXT("c4a27c"), TEXT("5c463d"), TEXT("94604a") }));
+			Out.Add(Of({ TEXT("ece9e1"), TEXT("e2d9c4"), TEXT("c9cbc7"), TEXT("a8b29a"), TEXT("a8bbc7"), TEXT("b8b1a2"), TEXT("6f8293"), TEXT("e4d397"), TEXT("d9d4c7"), TEXT("8d8a7d") }));
+			Out.Add(Of({ TEXT("b4b0a6"), TEXT("c9c4b6"), TEXT("d9d3c3"), TEXT("a9a59c"), TEXT("e2dccb"), TEXT("c6b28d") }));
+			Out.Add(Of({ TEXT("d8cfb8"), TEXT("c2b49a"), TEXT("a89f8f"), TEXT("b9ab8d"), TEXT("8f877a") }));
+			Out.Add(Of({ TEXT("c4c1b8"), TEXT("b0ada5"), TEXT("9e9b93"), TEXT("d2cdc0") }));
+			Out.Add(Of({ TEXT("e6e6e0"), TEXT("b9bdbd"), TEXT("c7b9a0"), TEXT("7d8a94"), TEXT("6f7f6a"), TEXT("a8442f") }));
+			return Out;
+		}();
+		return All[FMath::Clamp(Material, 0, All.Num() - 1)];
+	}
 }
 
 namespace SimCruiseTileDetail
 {
+	bool bFitFacadeGrid = true;
+	bool bWallMaterials = true;
+
+	int32 BuildingBand(const FWallMaterialInput& In)
+	{
+		const FString R = In.Region.ToString(), C = In.Climate.ToString();
+		if (C == TEXT("climate:arid") || C == TEXT("climate:mediterranean") || R == TEXT("region:southwest") || R == TEXT("region:california")) return Dry;
+		if (C == TEXT("climate:tropical") || R == TEXT("region:florida") || R == TEXT("region:hawaii")) return Tropic;
+		if (R == TEXT("region:pacific_northwest") || C == TEXT("climate:oceanic")) return Wet;
+		if (R == TEXT("region:south") || C == TEXT("climate:humid_subtropical")) return South;
+		if (R == TEXT("region:northeast") || R == TEXT("region:midwest") || C == TEXT("climate:humid_continental")) return North;
+		if ((In.LonDeg < -114.0 && In.LatDeg < 38.0) || (In.LonDeg < -103.0 && In.LonDeg > -122.0 && In.LatDeg < 40.0)) return Dry;
+		if (In.LonDeg < -116.0 && In.LatDeg >= 42.0) return Wet;
+		if ((In.LatDeg < 28.5 && In.LonDeg > -83.0) || In.LonDeg < -150.0) return Tropic;
+		if (In.LatDeg < 36.5 && In.LonDeg > -100.0) return South;
+		return North;
+	}
+
+	int32 WallMaterialFor(const FWallMaterialInput& In, bool* bOutFromData)
+	{
+		using namespace SimCruiseWallMaterial;
+		if (bOutFromData) *bOutFromData = false;
+		// The Art Deco and resort towers, and glass curtain walls, keep their own looks.
+		if (In.bDeco || In.bTower || In.bCurtain) return Render;
+		// Data first: the building's own mapped material (OSM building:material, Wikidata P186).
+		if (!In.MaterialFact.IsNone())
+		{
+			FString M = In.MaterialFact.ToString();
+			M.RemoveFromStart(TEXT("material:"));
+			int32 Found = INDEX_NONE;
+			if (M.Contains(TEXT("brick"))) Found = Brick;
+			else if (M.Contains(TEXT("siding")) || M == TEXT("wood") || M == TEXT("timber") || M == TEXT("weatherboard") || M == TEXT("clapboard") || M == TEXT("timber_framing")) Found = Siding;
+			else if (M.Contains(TEXT("block")) || M == TEXT("cinder_block") || M == TEXT("cement_block")) Found = Block;
+			else if (M.Contains(TEXT("stone")) || M == TEXT("granite") || M == TEXT("marble") || M == TEXT("limestone") || M == TEXT("sandstone")) Found = Stone;
+			else if (M.Contains(TEXT("concrete"))) Found = Concrete;
+			else if (M.Contains(TEXT("metal")) || M == TEXT("steel") || M == TEXT("aluminium") || M == TEXT("aluminum") || M == TEXT("copper")) Found = Metal;
+			else if (M == TEXT("stucco") || M == TEXT("plaster") || M == TEXT("render") || M == TEXT("adobe")) Found = Render;
+			if (Found != INDEX_NONE)
+			{
+				if (bOutFromData) *bOutFromData = true;
+				return Found;
+			}
+		}
+		// The rules: how US buildings of this kind are built in this part of the country (US Census
+		// Survey of Construction principal exterior wall material by region, 2010s: vinyl siding the
+		// North's and Pacific Northwest's houses, brick the South's, stucco the Southwest's, Florida's
+		// and California's; commercial low-rise in block and render, industrial in metal and block).
+		const int32 Band = BuildingBand(In);
+		const FString Use = In.Use.ToLower();
+		const bool bIndustrial = Use.Contains(TEXT("industrial")) || Use.Contains(TEXT("warehouse")) || Use.Contains(TEXT("manufactur")) || Use.Contains(TEXT("storage"))
+			|| Use.Contains(TEXT("agricultur")) || Use.Contains(TEXT("barn")) || Use.Contains(TEXT("farm")) || Use.Contains(TEXT("hangar"));
+		const bool bShed = Use.Contains(TEXT("garage")) || Use.Contains(TEXT("shed")) || Use.Contains(TEXT("carport")) || (In.AreaM2 < 45.0 && In.HeightM < 5.0);
+		const bool bHouse = In.bHouse || Use == TEXT("house") || Use == TEXT("detached") || Use == TEXT("semidetached_house") || Use == TEXT("bungalow") || Use == TEXT("cabin")
+			|| Use == TEXT("terrace") || Use == TEXT("farmhouse") || Use == TEXT("single_family");
+		const bool bFlats = !bHouse && (Use.Contains(TEXT("apartment")) || Use == TEXT("residential") || Use == TEXT("dormitory") || Use == TEXT("multi_family"));
+		const bool bBigBox = !bHouse && !bFlats && In.AreaM2 > 1500.0 && In.HeightM < 14.0;
+		//                       Render Brick Siding Block Stone Concrete Metal
+		using FRow = TArray<float, TFixedAllocator<7>>;
+		FRow P;
+		auto Set = [&P](std::initializer_list<float> V) { P.Reset(); for (float F : V) P.Add(F); };
+		if (bIndustrial)
+		{
+			if (In.bBefore1945) Set({ 0.05f, 0.60f, 0.f, 0.15f, 0.f, 0.20f, 0.f });
+			else Set({ 0.f, 0.05f, 0.f, 0.40f, 0.f, 0.10f, 0.45f });
+		}
+		else if (bShed && !bHouse)
+		{
+			if (Band == Dry || Band == Tropic) Set({ 0.50f, 0.f, 0.f, 0.30f, 0.f, 0.f, 0.20f });
+			else Set({ 0.10f, 0.f, 0.50f, 0.20f, 0.f, 0.f, 0.20f });
+		}
+		else if (bHouse)
+		{
+			switch (Band)
+			{
+			case North: Set({ 0.08f, 0.30f, 0.58f, 0.f, 0.04f, 0.f, 0.f }); break;
+			case South: Set({ 0.10f, 0.50f, 0.38f, 0.f, 0.02f, 0.f, 0.f }); break;
+			case Dry: Set({ 0.80f, 0.06f, 0.12f, 0.02f, 0.f, 0.f, 0.f }); break;
+			case Tropic: Set({ 0.78f, 0.06f, 0.12f, 0.04f, 0.f, 0.f, 0.f }); break;
+			default: Set({ 0.10f, 0.10f, 0.78f, 0.f, 0.02f, 0.f, 0.f }); break;
+			}
+		}
+		else if (In.bMainStreet)
+		{
+			if (Band == Dry) Set({ 0.50f, 0.40f, 0.f, 0.f, 0.10f, 0.f, 0.f });
+			else Set({ 0.22f, 0.70f, 0.f, 0.f, 0.08f, 0.f, 0.f });
+		}
+		else if (In.bDowntown)
+		{
+			if (In.bBefore1945) Set({ 0.10f, 0.45f, 0.f, 0.f, 0.35f, 0.10f, 0.f });
+			else if (In.bAfter1975) Set({ 0.20f, 0.10f, 0.f, 0.f, 0.10f, 0.60f, 0.f });
+			else Set({ 0.10f, 0.30f, 0.f, 0.f, 0.20f, 0.40f, 0.f });
+		}
+		else if (bFlats)
+		{
+			switch (Band)
+			{
+			case North: Set({ 0.10f, 0.55f, 0.30f, 0.f, 0.f, 0.05f, 0.f }); break;
+			case South: Set({ 0.20f, 0.45f, 0.30f, 0.f, 0.f, 0.05f, 0.f }); break;
+			case Dry: Set({ 0.75f, 0.10f, 0.10f, 0.f, 0.f, 0.05f, 0.f }); break;
+			case Tropic: Set({ 0.80f, 0.05f, 0.05f, 0.05f, 0.f, 0.05f, 0.f }); break;
+			default: Set({ 0.25f, 0.15f, 0.55f, 0.f, 0.f, 0.05f, 0.f }); break;
+			}
+		}
+		else if (bBigBox)
+		{
+			Set({ 0.30f, 0.10f, 0.f, 0.45f, 0.f, 0.05f, 0.10f });
+		}
+		else
+		{
+			switch (Band)
+			{
+			case North: Set({ 0.20f, 0.40f, 0.05f, 0.25f, 0.f, 0.10f, 0.f }); break;
+			case South: Set({ 0.25f, 0.40f, 0.f, 0.25f, 0.f, 0.10f, 0.f }); break;
+			case Dry: Set({ 0.60f, 0.10f, 0.f, 0.25f, 0.f, 0.05f, 0.f }); break;
+			case Tropic: Set({ 0.70f, 0.f, 0.f, 0.20f, 0.f, 0.10f, 0.f }); break;
+			default: Set({ 0.30f, 0.20f, 0.25f, 0.15f, 0.f, 0.10f, 0.f }); break;
+			}
+		}
+		float Sum = 0.f;
+		for (float F : P) Sum += F;
+		float Draw = static_cast<float>(Unit(In.Hash)) * Sum;
+		for (int32 m = 0; m < P.Num(); ++m)
+		{
+			if (Draw < P[m]) return m;
+			Draw -= P[m];
+		}
+		return Render;
+	}
+
+	double FacadeGridTop(double GroundZ, double WallTop, double Storey, bool bShopFront, double BandMinM)
+	{
+		if (!bFitFacadeGrid) return WallTop;
+		Storey = FMath::Max(Storey, 1.0);
+		int32 Rows = 0;
+		while (Rows < 400)
+		{
+			// The glass of storey number Rows (the shader's window: up to 0.68 m under the storey's
+			// top, 0.45 m in a shop's ground storey).
+			const double GlassTop = GroundZ + (Rows + 1) * Storey - ((bShopFront && Rows == 0) ? 0.45 : 0.68);
+			if (GlassTop + BandMinM > WallTop + 1e-6) break;
+			++Rows;
+		}
+		return FMath::Min(GroundZ + Rows * Storey, WallTop);
+	}
+
 	FLinearColor WeatheredPaint(const FLinearColor& C, float Max)
 	{
 		const float L = C.GetLuminance();
@@ -554,8 +723,29 @@ namespace SimCruiseTileDetail
 			// measured white sits under the cap with room for wear, not on it.
 			if (BP && BP->bColourFromData) Wall = BP->Wall * 0.78f;
 			else if (BP && BP->bHasColour && !bDeco && !bTower) Wall = BP->Wall;
+			// What the walls are built of: the mapped material, else the region's and the building
+			// type's rules. A building whose colour no data gives takes its material's colours.
+			int32 WallMat = SimCruiseWallMaterial::Render;
+			if (bWallMaterials)
+			{
+				FWallMaterialInput In;
+				In.LatDeg = X.LatDeg; In.LonDeg = X.LonDeg; In.HeightM = Height; In.AreaM2 = FMath::Abs(Area); In.Use = Row.Use;
+				if (BP)
+				{
+					In.MaterialFact = BP->Facts.Strongest(TEXT("material"));
+					In.Region = BP->Facts.Strongest(TEXT("region"));
+					In.Climate = BP->Facts.Strongest(TEXT("climate"));
+					In.bBefore1945 = BP->Facts.Has(TEXT("era:before_1945"));
+					In.bAfter1975 = BP->Facts.Has(TEXT("era:after_1975"));
+				}
+				In.bHouse = bHouse; In.bMainStreet = bMainStreet; In.bDowntown = bDowntown; In.bCurtain = bCurtain; In.bDeco = bDeco; In.bTower = bTower || bFloating;
+				In.Hash = Hash(H, 41);
+				WallMat = WallMaterialFor(In);
+				if (WallMat != SimCruiseWallMaterial::Render && !(BP && BP->bHasColour)) Wall = Pick(MaterialWalls(WallMat), Hash(H, 42));
+			}
 			// Main Street's two- and three-storey blocks are mostly brick (the generic palette's last four).
-			if (bMainStreet && !(BP && BP->bHasColour) && Unit(Hash(H, 24)) < 0.6) Wall = GenericWalls()[12 + Hash(H, 28) % 4];
+			else if (bMainStreet && !(BP && BP->bHasColour) && Unit(Hash(H, 24)) < 0.6) Wall = GenericWalls()[12 + Hash(H, 28) % 4];
+			W.Seed = SimCruiseWallMaterial::Pack(WallMat, W.Seed);
 			if (BP) Wall = BP->Weathered(Wall);
 			Wall = WeatheredPaint(Wall, bTower || bDowntown ? MaxTowerAlbedo : MaxWallAlbedo);
 			// The shader reads a storey height other than 3.1 m from the wall colour's alpha.
@@ -800,6 +990,134 @@ namespace SimCruiseTileDetail
 				if (bHotel) bHotelSign = true;
 			}
 
+			// Windows by the wall's role (Buildings step 2): the street fronts keep every bay; a side
+			// wall has a window in a third of its bays (a house half, in pairs), the back a quarter (a
+			// house 60 %), a garage, shed or metal-clad wall almost none (a warehouse's front a few).
+			// Street: an edge a street faces (the shopfront edges, Front, are among them; on ordinary
+			// buildings only Street is asked, not the shop glass). Front direction: the longest street
+			// edge's normal (none: every wall a side).
+			const bool bDetailed = bWallMaterials && !bFloating && !bDeco && !bTower;
+			TArray<bool> Street;
+			Street.Init(false, N);
+			FVector2d FrontDir = FVector2d::ZeroVector;
+			{
+				double LongestStreet = 0.0;
+				for (int32 i = 0; i < N; ++i)
+				{
+					const FVector2d Ai = Ring[i], Ci = Ring[(i + 1) % N];
+					const double L = FVector2d::Distance(Ai, Ci);
+					if (Arc[i] || L < 2.0) continue;
+					Street[i] = Front[i] || (bDetailed && StreetRankFaced(Roads, (Ai + Ci) * 0.5, EdgeNormal(i)) >= 0);
+					if (Street[i] && L > LongestStreet) { LongestStreet = L; FrontDir = EdgeNormal(i); }
+				}
+			}
+			const FString UseLower = Row.Use.ToLower();
+			const bool bOutbuilding = UseLower.Contains(TEXT("garage")) || UseLower.Contains(TEXT("shed")) || UseLower.Contains(TEXT("carport")) || (FMath::Abs(Area) < 45.0 && Height < 5.0);
+			const bool bWorks = WallMat == SimCruiseWallMaterial::Metal || UseLower.Contains(TEXT("industrial")) || UseLower.Contains(TEXT("warehouse")) || UseLower.Contains(TEXT("storage"));
+			const bool bHome = bHouse || UseLower == TEXT("house") || UseLower == TEXT("detached") || UseLower == TEXT("residential") || UseLower == TEXT("semidetached_house")
+				|| UseLower == TEXT("bungalow") || UseLower == TEXT("cabin") || UseLower == TEXT("terrace") || UseLower == TEXT("farmhouse");
+			auto RoleOf = [&](int32 i) -> float
+			{
+				if (!bDetailed || bCurtain) return 0.f;
+				if (bOutbuilding) return SimCruiseWindowRole::Encode(Street[i] ? 0.2 : 0.0, false);
+				if (Front[i]) return bWorks ? SimCruiseWindowRole::Encode(0.3, false) : 0.f;
+				if (bWorks) return SimCruiseWindowRole::Encode(Street[i] ? 0.3 : 0.1, false);
+				if (Street[i]) return bHome ? SimCruiseWindowRole::Encode(0.8, true) : 0.f;
+				const bool bBack = !FrontDir.IsZero() && FVector2d::DotProduct(EdgeNormal(i), FrontDir) < -0.7;
+				return bHome ? SimCruiseWindowRole::Encode(bBack ? 0.6 : 0.5, true) : SimCruiseWindowRole::Encode(bBack ? 0.25 : 0.35, false);
+			};
+
+			// Buildings step 3, the door: one on the building's main street edge (not a shop front:
+			// its glass is the way in), set in a gap between windows, recessed, with steps up to the
+			// floor. A house: a 0.91 x 2.03 m door (IRC R311.2) in a painted casing, 0.12 m deep, a stoop
+			// and steps up to its floor (crawl space and basement floors in the North, slabs in the
+			// South-west and Florida); a commercial or civic building: a glass door, 0.2 m deep, one step;
+			// a garage: a 2.44 x 2.13 m (8 x 7 ft) panel door at grade.
+			int32 DoorEdge = INDEX_NONE;
+			double DoorS = 0.0, DoorW = 0.91, DoorH = 2.03, DoorDepth = 0.12, FloorUp = 0.0;
+			if (bDetailed && !bCurtain && !bMainStreet)
+			{
+				double LongestDoor = 0.0;
+				for (int32 i = 0; i < N; ++i)
+				{
+					const double L = FVector2d::Distance(Ring[i], Ring[(i + 1) % N]);
+					if (Street[i] && !Front[i] && !PorchEdge[i] && L > LongestDoor) { LongestDoor = L; DoorEdge = i; }
+				}
+				if (DoorEdge != INDEX_NONE)
+				{
+					const double Len = LongestDoor;
+					if (bOutbuilding) { DoorW = 2.44; DoorH = 2.13; DoorDepth = 0.08; }
+					else if (!bHome) { DoorW = 0.91; DoorH = 2.13; DoorDepth = 0.2; }
+					// Floor height: a house's foundation by region (FEMA/NSI defaults: slab 0.75 ft,
+					// crawl 2-3 ft, basement 2 ft and more), a step for other buildings, none for a garage.
+					FWallMaterialInput Where;
+					Where.LatDeg = X.LatDeg; Where.LonDeg = X.LonDeg;
+					if (BP) { Where.Region = BP->Facts.Strongest(TEXT("region")); Where.Climate = BP->Facts.Strongest(TEXT("climate")); }
+					const int32 Band = BuildingBand(Where);
+					const double Jitter = 0.1 * (Unit(Hash(H, 51)) * 2.0 - 1.0);
+					FloorUp = bOutbuilding ? 0.0 : !bHome ? 0.15
+						: (Band == North || Band == Wet) ? 0.6 + Jitter : Band == South ? 0.45 + Jitter : 0.2 + 0.5 * Jitter;
+					FloorUp = FMath::Max(FloorUp, 0.0);
+					// In a gap between windows: on a bay line of the shader's grid (its bay width from
+					// the building's seed, as the shader works it out); a house's between two pairs.
+					const double Seed = FMath::FloorToDouble(FMath::Frac(W.Seed) * 4096.0) / 4096.0;
+					const double BayW = 2.5 + 0.8 * FMath::Frac(Seed * 7.13);
+					const double Want = Len * (bHome ? 0.3 + 0.4 * Unit(Hash(H, 52)) : 0.5);
+					int32 K = FMath::RoundToInt((Want - 0.5 * Len) / BayW - 0.5);
+					if (bHome && (K % 2 == 0)) K += (Want - 0.5 * Len) / BayW - 0.5 > K ? 1 : -1;
+					DoorS = (K + 0.5) * BayW + 0.5 * Len - 0.5 * DoorW;
+					if (bOutbuilding) DoorS = 0.5 * (Len - DoorW);
+					DoorS = FMath::Clamp(DoorS, 0.35, Len - 0.35 - DoorW);
+					if (Len < DoorW + 0.7) DoorEdge = INDEX_NONE;
+				}
+			}
+			auto Door = [&](const FVector2d& A, const FVector2d& T, const FVector2d& N2, double Along0)
+			{
+				const FVector2d D0 = A + T * DoorS, D1 = A + T * (DoorS + DoorW), Mid = (D0 + D1) * 0.5;
+				const double Outside = Data.HeightAtUnit((Mid + N2 * 1.2) / X.Side);
+				const double Grade = FMath::Max(Ground, Outside);
+				const double Zf = Grade + FloorUp;
+				const FVector2d In = -N2 * DoorDepth;
+				const FLinearColor Reveal = Wall * 0.85f;
+				static const TCHAR* DoorPaints[] = { TEXT("f2f0ea"), TEXT("1f2326"), TEXT("7b2d26"), TEXT("2c3e57"), TEXT("2f4f3a"), TEXT("6b4a2f"), TEXT("5a5f63"), TEXT("f2f0ea") };
+				const FLinearColor Leaf = bOutbuilding ? Srgb(TEXT("e9e7e1")) : Srgb(DoorPaints[Hash(H, 53) % 8]);
+				// The wall under the door (to the floor) and the recess: leaf, jambs, head and threshold.
+				W.Panel(D0, D1, Bottom, Zf, N2, Wall, Kind::Trim, Along0 + DoorS, Ground); // plain wall: no window row ends in it
+				W.Panel(D0 + In, D1 + In, Zf, Zf + DoorH, N2, bHome || bOutbuilding ? Leaf : Srgb(TEXT("3a3f44")), bHome || bOutbuilding ? Kind::Trim : Kind::Railing, 0.0, Ground);
+				W.Panel(D0, D0 + In, Zf, Zf + DoorH, T, Reveal, Kind::Trim, 0.0, Ground);
+				W.Panel(D1 + In, D1, Zf, Zf + DoorH, -T, Reveal, Kind::Trim, 0.0, Ground);
+				{
+					const FVector2d Q[4] = { D0, D1, D1 + In, D0 + In };
+					W.Flat(Q, Zf + DoorH, false, Reveal, Kind::Trim);
+					W.Flat(Q, Zf, true, Srgb(TEXT("b8b4aa")), Kind::Terrazzo);
+				}
+				// The casing: 90 mm, 30 mm proud, white on a house, dark bronze on a shop or office.
+				const FLinearColor Casing = bHome ? WeatheredPaint(Srgb(TEXT("f4f2ec")), MaxTrimAlbedo) : Srgb(TEXT("3a3f44"));
+				if (!bOutbuilding)
+				{
+					W.Slab(D0 - T * 0.09, D0, N2, 0.0, 0.03, Zf, Zf + DoorH + 0.09, Casing, Kind::Trim, 0.0, Ground, false, false);
+					W.Slab(D1, D1 + T * 0.09, N2, 0.0, 0.03, Zf, Zf + DoorH + 0.09, Casing, Kind::Trim, 0.0, Ground, false, false);
+					W.Slab(D0 - T * 0.09, D1 + T * 0.09, N2, 0.0, 0.03, Zf + DoorH, Zf + DoorH + 0.09, Casing, Kind::Trim, 0.0, Ground, false, false);
+				}
+				// Steps: 0.18 m risers and 0.28 m treads (IRC R311.7) down from a landing (a house's
+				// stoop 1.0 m deep, else 0.3 m), each step its own block so no two faces share a plane.
+				const double Rise = Zf - Grade;
+				if (Rise > 0.05)
+				{
+					const int32 Steps = FMath::Max(1, FMath::RoundToInt(Rise / 0.18));
+					const double Landing = bHome ? 1.0 : 0.3;
+					const FVector2d S0 = D0 - T * 0.45, S1 = D1 + T * 0.45;
+					const FLinearColor Concrete = Srgb(TEXT("b8b4aa"));
+					W.Slab(S0, S1, N2, 0.0, Landing, Grade - 0.25, Zf, Concrete, Kind::Terrazzo, 0.0, Ground, false, false);
+					for (int32 j = Steps - 1; j >= 1; --j)
+					{
+						const double Out0 = Landing + (Steps - 1 - j) * 0.28, Out1 = Out0 + 0.28;
+						W.Slab(S0, S1, N2, Out0, Out1, Grade - 0.25, Grade + j * Rise / Steps, Concrete, Kind::Terrazzo, 0.0, Ground, false, false);
+					}
+				}
+				return Zf + DoorH;
+			};
+
 			for (int32 i = 0; i < N; ++i)
 			{
 				const FVector2d A = Ring[i], C = Ring[(i + 1) % N];
@@ -807,6 +1125,7 @@ namespace SimCruiseTileDetail
 				if (Len < 0.05) continue;
 				const FVector2d T = (C - A) / Len;
 				const FVector2d N2 = EdgeNormal(i);
+				const float Role = RoleOf(i);
 				const double Along0 = -0.5 * Len; // windows centre on each facade
 				const bool bPorch = PorchEdge[i];
 				// Ends that meet a rounded corner run on into it (no gap in the wrapped bands).
@@ -820,14 +1139,32 @@ namespace SimCruiseTileDetail
 				// coloured uplight wash that lights Ocean Drive at night. A rounded corner is
 				// plain stucco (its windows would be cut by the chords).
 				const float WallKind = Arc[i] ? Kind::Trim : !Front[i] ? Kind::Wall : bPorch ? (bDeco ? Kind::DecoUpper : Kind::Wall) : (bDeco ? Kind::DecoFront : Kind::WallFront);
+				// The window grid fits the wall (Detroit, Woodward: a top row of windows cut by the
+				// roof line read as battlements, shop glass ran up to the parapet, towers had windows
+				// to the top): rows on whole storeys only, the last one where its glass ends 0.4 m or
+				// more under the wall's top; above it a plain band in the wall's own colour (the
+				// shader's stucco without the grid, so no seam).
+				auto FacadeWall = [&](const FVector2d& P0, const FVector2d& P1, double Z0, double Zt, const FLinearColor& Colour, float WKind, double Along)
+				{
+					const bool bGrid = WKind == Kind::Wall || WKind == Kind::WallFront || WKind == Kind::DecoFront || WKind == Kind::DecoUpper;
+					const bool bShopKind = WKind == Kind::WallFront || WKind == Kind::DecoFront;
+					const double Split = bGrid ? FMath::Clamp(FacadeGridTop(Ground, Zt, FloorH, bShopKind), Z0, Zt) : Zt;
+					if (Split > Z0 + 0.01) W.Panel(P0, P1, Z0, Split, N2, Colour, bGrid ? WKind + Role : WKind, Along, Ground);
+					if (Zt > FMath::Max(Split, Z0) + 0.01) W.Panel(P0, P1, FMath::Max(Split, Z0), Zt, N2, Colour, Kind::Trim, Along, Ground);
+				};
 				if (bCurtain)
 				{
 					// A glass curtain wall over a lobby storey: mullions every 1.5 m and a spandrel
-					// band at every floor slab.
+					// band at every floor slab; the glass ends at a slab line, the band above it in the
+					// frame's colour (not a missing floor).
 					const double Lobby = Ground + 4.5;
-					W.Panel(A, C, WallStart, Lobby, N2, Wall, Front[i] ? Kind::WallFront : Kind::Wall, Along0, Ground);
-					W.Panel(A, C, Lobby, Top + Parapet, N2, Wall, Kind::Railing, Along0, Ground);
 					const FLinearColor Frame = Srgb(TEXT("3A3F44"));
+					FacadeWall(A, C, WallStart, Lobby, Wall, Front[i] ? Kind::WallFront : Kind::Wall, Along0);
+					const double GlassTop = bFitFacadeGrid
+						? FMath::Clamp(Lobby + FMath::FloorToDouble(FMath::Max(Top + Parapet - 0.6 - Lobby, 0.0) / FloorH) * FloorH, Lobby, Top + Parapet)
+						: Top + Parapet;
+					if (GlassTop > Lobby + 0.01) W.Panel(A, C, Lobby, GlassTop, N2, Wall, Kind::Railing, Along0, Ground);
+					if (Top + Parapet > GlassTop + 0.01) W.Panel(A, C, GlassTop, Top + Parapet, N2, Frame, Kind::Metal, Along0, Ground);
 					const int32 Mullions = FMath::FloorToInt(Len / 1.5);
 					for (int32 k = 1; k < Mullions; ++k)
 					{
@@ -858,20 +1195,36 @@ namespace SimCruiseTileDetail
 							LotWall = WeatheredPaint(LotWall);
 							LotWall.A = Wall.A;
 							const double Rise = 0.35 * (Hash(H, 240 + Lot) % 3);
-							W.Panel(L0, L1, WallStart, Top + Parapet + Rise, N2, LotWall, WallKind, -0.5 * Width, Ground);
+							FacadeWall(L0, L1, WallStart, Top + Parapet + Rise, LotWall, WallKind, -0.5 * Width);
 							if (Rise > 0.0) W.Panel(L1, L0, Top + Parapet, Top + Parapet + Rise, -N2, LotWall, Kind::Trim, -0.5 * Width, Ground);
 							if (S0 > 0.0) W.Slab(L0 - T * 0.15, L0 + T * 0.15, N2, 0.0, 0.07, WallStart, Top + Parapet - 0.3, LotWall * 0.85f, Kind::Trim, 0.0, Ground, false, false);
 							S0 += Width;
 							++Lot;
 						}
 					}
+					else if (i == DoorEdge)
+					{
+						// The wall round the door: either side of it to the top, and over it from its head.
+						const FVector2d D0 = A + T * DoorS, D1 = A + T * (DoorS + DoorW);
+						const double Head = Door(A, T, N2, Along0);
+						FacadeWall(A, D0, WallStart, Top + Parapet, Wall, WallKind, Along0);
+						FacadeWall(D1, C, WallStart, Top + Parapet, Wall, WallKind, Along0 + DoorS + DoorW);
+						if (Top + Parapet > Head + 0.01) FacadeWall(D0, D1, Head, Top + Parapet, Wall, WallKind, Along0 + DoorS);
+					}
 					else
 					{
-						W.Panel(A, C, WallStart, Top + Parapet, N2, Wall, WallKind, Along0, Ground);
+						FacadeWall(A, C, WallStart, Top + Parapet, Wall, WallKind, Along0);
 					}
 				}
 				// The parapet's inside, seen from above and from taller neighbours.
 				if (Parapet > 0.05) W.Panel(C, A, Top, Top + Parapet, -N2, Wall, Kind::Trim, Along0, Ground);
+				// A coping on the parapet (Detroit: flat roofs had no roof edge): 0.34 m across, 0.1 m
+				// high, a shade darker than the wall. Main Street fronts keep their cornice; curtain
+				// walls end in the frame band; rounded corners are chords.
+				if (bFitFacadeGrid && Parapet > 0.05 && !bCurtain && !Arc[i] && !(bMainStreet && Front[i]))
+				{
+					W.Slab(A, C, N2, -0.3, 0.04, Top + Parapet, Top + Parapet + 0.1, Wall * 0.82f, Kind::Trim, Along0, Ground, false, false);
+				}
 				// Main Street: a projecting cornice under the parapet's coping and a belt course
 				// over the shopfronts, in a cream or darker trim (the commercial blocks of 1880-1930).
 				if (bMainStreet && Front[i] && Len >= 2.0)
@@ -1360,6 +1713,10 @@ namespace SimCruiseTileDetail
 						const float Seed = static_cast<float>(Unit(Hash(GetTypeHash(Base2.X * 10.0), GetTypeHash(Base2.Y * 10.0))));
 						FWriter W{ Props, Seed };
 						const double PoleH = bDeco ? 5.2 : 8.5;
+						// The pole's foot goes into the ground under it: the sidewalk top was its height, and where
+						// the verge or the ground is lower the pole floated (Detroit review).
+						const double GroundZ = B.TerrainN > 0 ? B.TerrainHeightAt(Base2) : Kerb;
+						const double Foot = FMath::Min(Kerb, GroundZ) - 0.3;
 						// Pole: a slim hexagonal shaft.
 						constexpr int32 PSides = 6;
 						const double Rb = bDeco ? 0.09 : 0.1, Rt = bDeco ? 0.06 : 0.065;
@@ -1368,7 +1725,7 @@ namespace SimCruiseTileDetail
 							const double Aa = UE_DOUBLE_TWO_PI * s / PSides, Ab = UE_DOUBLE_TWO_PI * (s + 1) / PSides;
 							const FVector2d Da(FMath::Cos(Aa), FMath::Sin(Aa)), Db(FMath::Cos(Ab), FMath::Sin(Ab));
 							const FVector2d Nm = (Da + Db).GetSafeNormal();
-							const FVector3d P[4] = { FVector3d(Base2.X + Da.X * Rb, Base2.Y + Da.Y * Rb, Kerb - 0.05), FVector3d(Base2.X + Db.X * Rb, Base2.Y + Db.Y * Rb, Kerb - 0.05),
+							const FVector3d P[4] = { FVector3d(Base2.X + Da.X * Rb, Base2.Y + Da.Y * Rb, Foot), FVector3d(Base2.X + Db.X * Rb, Base2.Y + Db.Y * Rb, Foot),
 								FVector3d(Base2.X + Db.X * Rt, Base2.Y + Db.Y * Rt, Kerb + PoleH), FVector3d(Base2.X + Da.X * Rt, Base2.Y + Da.Y * Rt, Kerb + PoleH) };
 							const FVector2D UV[4] = { FVector2D(0, 0), FVector2D(0.1, 0), FVector2D(0.1, PoleH), FVector2D(0, PoleH) };
 							W.Quad(P, FVector(Nm.X, Nm.Y, 0.0), PoleColour, UV, Kind::Metal);

@@ -28,6 +28,8 @@ namespace
 		TEXT("1: traffic cars within 40 m are heard (their engines, in place); 0: silent traffic."));
 	TAutoConsoleVariable<int32> CVarTrafficGridlockRules(TEXT("simcruise.Traffic.GridlockRules"), 1,
 		TEXT("1: crossing cars give way to the right and break a gridlock after 6 s; 0: the old rule (every car waits for any car across its path), for comparison."));
+	TAutoConsoleVariable<int32> CVarFeatureTraffic(TEXT("sc.Feature.Traffic"), 0,
+		TEXT("1: moving traffic in the world (read when the world starts). 0 (default): traffic is out of the game for now."));
 	constexpr double VoiceRangeM = 40.0;
 
 	constexpr double SpawnMinM = 60.0, SpawnMaxM = 260.0, RemoveM = 320.0;
@@ -240,6 +242,11 @@ ASimCruiseTraffic::FPose ASimCruiseTraffic::PoseAt(const FIntPoint& Tile, int32 
 	Pose.Heading = Tn * static_cast<double>(Dir);
 	Pose.bValid = true;
 	return Pose;
+}
+
+bool ASimCruiseTraffic::IsEnabled()
+{
+	return CVarFeatureTraffic.GetValueOnGameThread() != 0 || FParse::Param(FCommandLine::Get(), TEXT("SimCruiseTraffic"));
 }
 
 bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bool bAtEnd) const
