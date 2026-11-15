@@ -45,6 +45,9 @@ from collections import defaultdict
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Graph tables live next to the script (project folder) or in data/knowledge/world (repo: lab/world-graph).
+DATA = next((d for d in (HERE, os.path.normpath(os.path.join(HERE, "..", "..", "data", "knowledge", "world")))
+             if os.path.exists(os.path.join(d, "things.json"))), HERE)
 SOC_URL = "https://www.census.gov/construction/chars/xls/"
 NSI_API = "https://nsi.sec.usace.army.mil/nsiapi/structures?fips=%s"
 USER_AGENT = "OSDS-world-graph-learner/0.1 (open source driving simulator; one request at a time)"
@@ -410,7 +413,7 @@ def synthetic_soc(seed=5, n=40000):
 
 
 def selftest():
-    materials = json.load(open(os.path.join(HERE, "materials.json"), encoding="utf-8"))
+    materials = json.load(open(os.path.join(DATA, "materials.json"), encoding="utf-8"))
     df = synthetic_soc()
     out = os.path.join(HERE, "selftest_out_walls")
     nsi_rows = aggregate_nsi_records("99001", (
@@ -450,8 +453,8 @@ def main():
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--out", default=os.path.join(HERE, "out"))
     ap.add_argument("--cache", default=os.path.join(HERE, "cache", "soc"))
-    ap.add_argument("--materials", default=os.path.join(HERE, "materials.json"))
-    ap.add_argument("--counties", default=os.path.join(HERE, "counties.json"))
+    ap.add_argument("--materials", default=os.path.join(DATA, "materials.json"))
+    ap.add_argument("--counties", default=os.path.join(DATA, "counties.json"))
     ap.add_argument("--nsi", default="", help="comma list of county FIPS to aggregate from the NSI API (run time only)")
     ap.add_argument("--offline", action="store_true")
     a = ap.parse_args()

@@ -44,6 +44,9 @@ from collections import defaultdict
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Graph tables live next to the script (project folder) or in data/knowledge/world (repo: lab/world-graph).
+DATA = next((d for d in (HERE, os.path.normpath(os.path.join(HERE, "..", "..", "data", "knowledge", "world")))
+             if os.path.exists(os.path.join(d, "things.json"))), HERE)
 EARTH_R = 6371008.8
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 USER_AGENT = "OSDS-world-graph-learner/0.1 (open source driving simulator; one request at a time)"
@@ -992,7 +995,7 @@ def synthetic_elements(seed=7, hydrant_gap=120.0, pole_gap=45.0, drop_hydrants_e
 
 
 def selftest():
-    things = load_json(os.path.join(HERE, "things.json"))
+    things = load_json(os.path.join(DATA, "things.json"))
     ctx = {"dens_edges": next(f for f in things["contexts"]["fields"] if f["id"] == "dens")["bins_km_per_km2"]}
     els, _ = synthetic_elements()
     held_els, _ = synthetic_elements(seed=11)
@@ -1050,8 +1053,8 @@ def selftest():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--selftest", action="store_true")
-    ap.add_argument("--things", default=os.path.join(HERE, "things.json"))
-    ap.add_argument("--counties", default=os.path.join(HERE, "counties.json"))
+    ap.add_argument("--things", default=os.path.join(DATA, "things.json"))
+    ap.add_argument("--counties", default=os.path.join(DATA, "counties.json"))
     ap.add_argument("--cache", default=os.path.join(HERE, "cache", "osm"))
     ap.add_argument("--out", default=os.path.join(HERE, "out"))
     ap.add_argument("--only", default="", help="comma list of county FIPS")

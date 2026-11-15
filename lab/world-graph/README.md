@@ -1,8 +1,8 @@
 # World knowledge graph, first step (V0), 15 Nov 2026
 
-Innovation lane. Design: `../world-knowledge-graph.md` (v3; sections 4-9 the graph and method, 10 data supply at scale, 11 "id to detail"). These files are the first step that the coordinator accepted on 14 Nov 23:45Z: the graph tables, the learning script for the roadside things, the wall-material priors from the Census building survey, plus the tree and bush layer and the building variety between neighbours.
+Innovation lane. Design: `docs/research/innovation/world-knowledge-graph.md` (v3; sections 4-9 the graph and method, 10 data supply at scale, 11 "id to detail"). These files are the first step that the coordinator accepted on 14 Nov 23:45Z: the graph tables, the learning script for the roadside things, the wall-material priors from the Census building survey, plus the tree and bush layer and the building variety between neighbours.
 
-Nothing here is game code. The AI lane runs the two scripts on the PC; the world lane writes the sampler in the scan engine that reads the tables. The files are not on GitHub yet; a PC lane copies them into the repo at `data/knowledge/world/` (tables) and `tools/world-graph/` (scripts) and pushes from the PC.
+Nothing here is game code. The AI lane runs the two scripts on the PC; the world lane writes the sampler in the scan engine that reads the tables. In the repo the tables are in `data/knowledge/world/` and the scripts in `lab/world-graph/` (the scripts find the tables in either place).
 
 ## Files
 

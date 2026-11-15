@@ -345,7 +345,7 @@ The cleared use is "run time only, no saved or bundled raw responses". If every 
 
 ## 11. "Id to detail": the owner's idea, made exact (the owner, 23:59Z)
 
-the owner: "imagines grass so it adds grass, imagines tree bark, details, the gravel on the road, buildings, imperfections, paint, the details, leaves, more texture, then a layer over the whole image that adds more imperfections and real detail. How does it come up with when to add what? The objects like grass, road, etc have a code which is context for that pixel and it generates based off that."
+The owner: "imagines grass so it adds grass, imagines tree bark, details, the gravel on the road, buildings, imperfections, paint, the details, leaves, more texture, then a layer over the whole image that adds more imperfections and real detail. How does it come up with when to add what? The objects like grass, road, etc have a code which is context for that pixel and it generates based off that."
 
 ### 11.1 Short answer
 

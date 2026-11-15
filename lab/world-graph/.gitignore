@@ -1,0 +1,5 @@
+out/
+cache/
+selftest_out/
+selftest_out_walls/
+__pycache__/
