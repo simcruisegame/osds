@@ -22,6 +22,8 @@ struct SIMCRUISE_API FSimCruisePreflightStats
 	// The drive.
 	float DriveSeconds = 0.f;
 	float DistanceM = 0.f;
+	/** The least distance the drive must cover (m): MinDistanceM, less for a slow run (-SimCruisePreflightKmh). */
+	float MinDistanceAskedM = 200.f;
 	float MeanSpeedMps = 0.f;
 	/** Longest time (s) without a road surface under the car. */
 	float OffRoadSeconds = 0.f;

@@ -206,6 +206,9 @@ bool FSimCruisePreflightCarStateTest::RunTest(const FString& Parameters)
 	S = SimCruisePreflightTest::Good(); S.Hits = 1; TestTrue(TEXT("a hit fails"), Judge(S).Contains(TEXT("hit-1")));
 	S = SimCruisePreflightTest::Good(); S.DeckJumps = 2; S.MaxDeckDeg = 9.f; TestTrue(TEXT("a warped deck fails"), Judge(S).Contains(TEXT("deck-not-smooth-2-max-9deg")));
 	S = SimCruisePreflightTest::Good(); S.WheelsOffSeconds = 3.f; TestTrue(TEXT("wheels in the air fail"), Judge(S).Contains(TEXT("wheels-off-ground-3.0s")));
+	// A slow look (10 km/h for 30 s) covers 48 m: it passes with its own least distance, a normal drive does not.
+	S = SimCruisePreflightTest::Good(); S.DistanceM = 48.f; S.MinDistanceAskedM = 41.7f; TestEqual(TEXT("a slow look passes"), Judge(S), FString());
+	S = SimCruisePreflightTest::Good(); S.DistanceM = 48.f; TestTrue(TEXT("a normal drive of 48 m fails"), Judge(S).Contains(TEXT("robot-moved-only-48m")));
 	// The hang watchdog: the Detroit start's 312 s fails; a 15 s stall is a note; 5 s is nothing.
 	S = SimCruisePreflightTest::Good(); S.LongestHangS = 312.f; TestTrue(TEXT("a 5-minute hang fails"), Judge(S).Contains(TEXT("hang-312s")));
 	S = SimCruisePreflightTest::Good(); S.LongestHangS = 15.f; TestEqual(TEXT("a 15 s stall passes"), Judge(S), FString());

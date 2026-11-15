@@ -162,7 +162,7 @@ namespace SimCruisePreflightRules
 	FString Judge(const FSimCruisePreflightStats& S)
 	{
 		TArray<FString> R;
-		if (S.DistanceM < MinDistanceM) R.Add(FString::Printf(TEXT("robot-moved-only-%.0fm"), S.DistanceM));
+		if (S.DistanceM < FMath::Min(MinDistanceM, S.MinDistanceAskedM)) R.Add(FString::Printf(TEXT("robot-moved-only-%.0fm"), S.DistanceM));
 		if (S.OffRoadSeconds > MaxOffRoadSeconds) R.Add(FString::Printf(TEXT("left-the-road-%.1fs"), S.OffRoadSeconds));
 		if (S.bFellBack) R.Add(TEXT("start-fell-back-to-bundled-place"));
 		if (S.bStartByNearestRoad) R.Add(TEXT("start-by-nearest-road-rule"));
@@ -320,6 +320,8 @@ void ASimCruisePreflight::BeginPlay()
 	if (FParse::Value(Cmd, TEXT("SimCruisePreflightKmh="), Kmh) && Kmh > 0.0)
 	{
 		SpeedOverrideMps = FMath::Clamp(Kmh, 10.0, 300.0) / 3.6;
+		// A slow run (the slow look beside buildings) covers less ground: half the distance at that speed.
+		Stats.MinDistanceAskedM = static_cast<float>(FMath::Min<double>(SimCruisePreflightRules::MinDistanceM, 0.5 * SpeedOverrideMps * DriveSeconds));
 	}
 	// -SimCruisePreflightKeen: a keen driver on an empty road (the owner's acceptance drive): no
 	// speed limit, corners at 75 % of the car's own skidpad grip, brakes at 70 % of it, up to 45 m/s,
