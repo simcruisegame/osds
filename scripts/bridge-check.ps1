@@ -38,8 +38,8 @@ New-Item -ItemType Directory -Force $OutRoot | Out-Null
 $Cases = @(
     @{ Name = 'bixby-north'; Start = '36.3745,-121.9035'; Road = 'Cabrillo Highway'; Car = 'meridian_z'; Utc = '2026-11-12T20:08:00Z' },
     @{ Name = 'bixby-south'; Start = '36.3690,-121.9012'; Road = 'Cabrillo Highway'; Car = 'meridian_z'; Utc = '2026-11-12T20:08:00Z' },
-    @{ Name = 'detroit-woodward-north'; Start = '42.3445,-83.0560'; Road = 'Woodward Avenue'; Car = 'nb2001_aaron'; Utc = '2026-11-12T17:32:14Z' },
-    @{ Name = 'detroit-woodward-south'; Start = '42.3390,-83.0532'; Road = 'Woodward Avenue'; Car = 'nb2001_aaron'; Utc = '2026-11-12T17:32:14Z' }
+    @{ Name = 'detroit-woodward-north'; Start = '42.3445,-83.0560'; Road = 'Woodward Avenue'; Car = 'nb2001_lowered'; Utc = '2026-11-12T17:32:14Z' },
+    @{ Name = 'detroit-woodward-south'; Start = '42.3390,-83.0532'; Road = 'Woodward Avenue'; Car = 'nb2001_lowered'; Utc = '2026-11-12T17:32:14Z' }
 )
 foreach ($C in $Cases) {
     $Args = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'launch-review.ps1'), '-Start', $C.Start, '-StartRoad', $C.Road, '-Car', $C.Car,

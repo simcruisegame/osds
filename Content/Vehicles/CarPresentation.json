@@ -1,7 +1,7 @@
 {
  "_comment": "How each car looks in the Unreal client (Source/SimCruise/*/Presentation). Physics stays in data/cars/<id>.json. Boxes and points use the Unreal vehicle frame: X forward, Y right, Z up, metres, origin midway between the axles at the physics body origin. Colours are \"#rrggbb\" sRGB. Roles: see SimCruiseCarMaterialRoles.h. Every value that copies a real car names its source.",
  "cars": {
-  "nb2001_aaron": {
+  "nb2001_lowered": {
    "model": "data/art/traffic/miata_nb-5d103c56/scene.gltf",
    "dials_note": "The NB cluster's five dials (Godot vehicle frame, metres: x right, y up, z rearward): hubs and scales fitted to the model's own dial faces in a 1600x900 cockpit capture (each needle's pivot, and the angle of 0, 20, 80 and 140 mph and of 0, 4 and 8 thousand r/min), each turned to the driver's eye. The model keeps its faces (\"face\": false): a needle mesh turns over each. The model's own white needles are part of the dash mesh and stay at rest under them. The model sits on each car's mount height (0.545 m for the lowered Miata, 0.51 m for the stock NBs), so the stock cars' hubs are 3.5 cm lower. Left to right: fuel, tachometer (red from 7000), coolant (top), speedometer (0-150 mph, US), oil pressure.",
    "dials": [
