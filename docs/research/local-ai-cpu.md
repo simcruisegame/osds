@@ -23,7 +23,7 @@ still leave 9-10 threads idle.
 
 ## 2. Licence rule
 
-Aaron's rule (14 November 2026): if a model's makers do not say we cannot use it, we can; what it
+The owner's rule (14 November 2026): if a model's makers do not say we cannot use it, we can; what it
 was trained on is the makers' responsibility. The gate is the publisher's licence for the weights,
 for a free open-source game that redistributes them. We still obey every licence term (attribution,
 share-alike, use limits). Weights marked non-commercial or research-only stay out. We record the
