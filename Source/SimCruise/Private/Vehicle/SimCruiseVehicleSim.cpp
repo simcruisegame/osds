@@ -838,7 +838,11 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 				const double EngineAhead = Engaged * (Torque + Governor - Drag) * Ds / Car.EngineRotationalInertiaKgM2;
 				ClutchLoad = State.SelectedGear == 0 ? 0.0 : FMath::Clamp((Gap + EngineAhead) * ManualCoupling, -Capacity, Capacity);
 			}
-			else if (AxleSpeed * ForwardRatio * 60.0 / Tau < LaunchTargetRpm && ClutchLoad > 0.0)
+			// Pulling away the clutch slips to hold the launch speed: in first (and reverse) only,
+			// unless a torque converter does it (it slips in any gear). It held every gear: in 3rd at
+			// 36 mph the Mustang's clutch slipped its engine to 4672 rpm against the road's 1900.
+			else if ((State.Gear == 0 || State.bInReverse || Car.TransmissionKind == TEXT("automatic")) &&
+				AxleSpeed * ForwardRatio * 60.0 / Tau < LaunchTargetRpm && ClutchLoad > 0.0)
 			{
 				ClutchLoad = FMath::Min(ClutchLoad, FMath::Max(0.0, Torque - Drag + (Rpm - LaunchTargetRpm) * 0.16));
 			}
