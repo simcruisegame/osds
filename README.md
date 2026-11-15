@@ -219,7 +219,7 @@ It prints each failure with its first errors and `CHECKS PASSED` or `CHECKS FAIL
 
 **Is SimCruise free?** Yes. The game is free and open source (the code is under the MIT License). There is no account, no API key, no subscription, no ads and no telemetry.
 
-**What do I need to play?** 64-bit Windows 10 or 11, a DirectX 12 graphics card with 6 GB of video memory (for example an NVIDIA GTX 1660 or AMD RX 5600), 8 GB of memory, 3 GB of disk and an internet connection for the map data. The full list is in [docs/install.md](docs/install.md#system-requirements). There is no macOS or Linux build of the Unreal client yet.
+**What do I need to play?** 64-bit Windows 10 or 11, a DirectX 12 graphics card with 6 GB of video memory (for example an NVIDIA GTX 1660 or AMD RX 5600), 16 GB of memory, 3 GB of disk and an internet connection for all places except the bundled Ocean Drive, Miami Beach. The installer installs the Microsoft parts that the game needs (Visual C++ runtime, GameInput). We tested on one PC only (RTX 2070 Super Max-Q, Windows 11); the full list is in [docs/install.md](docs/install.md#system-requirements). There is no macOS or Linux build of the Unreal client yet.
 
 **Can I drive my own street?** Yes, if it is in the United States. Press / and type the address or the place name. The game builds the roads, terrain, buildings and trees there from public data. The detail depends on how well OpenStreetMap maps that place. Places outside the United States are not supported yet.
 

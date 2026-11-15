@@ -53,12 +53,28 @@ $Stale = Join-Path $Out 'Windows'
 if (Test-Path $Stale) { Remove-Item -Recurse -Force $Stale }
 Write-Host "BuildCookRun Win64 $Configuration"
 & (Join-Path $EngineDir 'Engine\Build\BatchFiles\RunUAT.bat') BuildCookRun "-project=$Project" -noP4 -platform=Win64 `
-    "-clientconfig=$Configuration" -build -cook -map=/Engine/Maps/Entry -stage -pak -archive "-archivedirectory=$Out" -unattended -utf8output
+    "-clientconfig=$Configuration" -build -cook -map=/Engine/Maps/Entry -stage -pak -prereqs -archive "-archivedirectory=$Out" -unattended -utf8output
 if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 }
 
 $Game = Join-Path $Out 'Windows\SimCruise'
 if (-not (Test-Path $Game)) { throw "No staged game at $Game" }
+
+# The runtimes a clean Windows does not have (scripts\dep-check.py lists the DLLs): the
+# Visual C++ 2015-2022 x64 runtime (MSVCP140, MSVCP140_1, VCRUNTIME140, VCRUNTIME140_1) and
+# GameInput (racing wheels). -prereqs stages Microsoft's redistributable installers from the
+# engine; they are copied here too, so a -NoBuild run or an older package also has them. The
+# launcher SimCruise.exe offers to run them when they are missing, and the installer runs them
+# (packaging\windows\simcruise.iss). Terms: licenses\microsoft-redistributables.md.
+$Redist = Join-Path $Out 'Windows\Engine\Extras\Redist\en-us'
+New-Item -ItemType Directory -Force $Redist | Out-Null
+# vc_redist.arm64.exe: the launcher asks for it on Windows on Arm (the game runs there in emulation).
+foreach ($Name in 'vc_redist.x64.exe', 'vc_redist.arm64.exe', 'GameInputRedist.msi') {
+    $From = Join-Path $EngineDir "Engine\Extras\Redist\en-us\$Name"
+    if (-not (Test-Path $From)) { throw "The engine has no $From (a clean PC cannot start the game without it)" }
+    Copy-Item $From $Redist -Force
+    if ((Get-AuthenticodeSignature (Join-Path $Redist $Name)).Status -ne 'Valid') { throw "$Name has no valid signature" }
+}
 Write-Host 'Copying the loose data the game reads from disk'
 # Only the car models a profile uses, and not data\observed (the Godot client's; unread here).
 $Profiles = Get-Content -Raw (Join-Path $Root 'Content\Vehicles\CarPresentation.json') | ConvertFrom-Json
