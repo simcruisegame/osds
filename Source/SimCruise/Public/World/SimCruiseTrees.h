@@ -127,5 +127,9 @@ private:
 	FString SeenTitle;
 	bool bMeshesTried = false;
 	bool bDirty = false;
+	/** Colour per crown, rounded crown light, darker crown inside and trunk foot (off: -SimCruiseOldTreeLook). */
+	bool bCrownLook = true;
+	/** Each species' leaf colour (its cluster texture's mean, linear, times its tint): the colour per crown is relative to it. */
+	FLinearColor LeafMean[2] = { FLinearColor(0.12f, 0.16f, 0.06f), FLinearColor(0.08f, 0.11f, 0.06f) };
 	int32 Placed = 0;
 };

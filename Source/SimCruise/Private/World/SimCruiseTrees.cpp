@@ -15,7 +15,10 @@
 #include "GameFramework/PlayerController.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionConstant.h"
+#include "Materials/MaterialExpressionConstant3Vector.h"
 #include "Materials/MaterialExpressionCustom.h"
+#include "Materials/MaterialExpressionLocalPosition.h"
+#include "Materials/MaterialExpressionSubtract.h"
 #include "Materials/MaterialExpressionCameraPositionWS.h"
 #include "Materials/MaterialExpressionDistance.h"
 #include "Materials/MaterialExpressionWorldPosition.h"
@@ -30,6 +33,7 @@
 #include "Misc/App.h"
 #include "Misc/Paths.h"
 #include "Presentation/SimCruiseGltfModel.h"
+#include "World/SimCruiseGeo.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseTileData.h"
 #include "World/SimCruiseTileDetail.h"
@@ -67,19 +71,28 @@ float n = frac(52.9829189 * frac(dot(sp, float2(0.06711056, 0.00583715)))); // i
 float keep = ((1.0 - n) < fin ? 1.0 : 0.0) * (n < fout ? 1.0 : 0.0);
 )HLSL");
 
+	// Crown: the tree's own colour, a multiplier on the species' tint (per-instance data 0-2, set
+	// from the aerial photograph at the crown and a per-tree jitter; 1 where an instance has none).
+	// Leaves deep inside the crown see less sky: up to 40 % darker at the crown's middle, from the
+	// leaf's place in the crown's box (CrownCentre, CrownRadii: the level's leaf bounds, mesh space).
 	const TCHAR* LeafCode = TEXT(R"HLSL(
 float4 t = Texture2DSample(Foliage, FoliageSampler, UV);
 RawMask = t.a;
 Mask = t.a * keep;
-float3 c = t.rgb * Tint.rgb;
+float3 q = (LP - CrownCentre.xyz) / max(CrownRadii.xyz, 1.0);
+float shell = saturate(length(q));
+float3 c = t.rgb * Tint.rgb * Crown * lerp(1.0 - Inner, 1.0, shell * shell);
 Sss = c * float3(0.7, 1.0, 0.4);
 Roughness = 0.8;
 return c;
 )HLSL");
 
+	// Rel: the pixel's place from the tree's foot (world cm; the foot stands 10 cm into the ground).
+	// The bark is darker at the ground: soil splash and damp, 35 % at the foot, gone 30 cm up.
 	const TCHAR* BarkCode = TEXT(R"HLSL(
 Mask = keep;
 float3 b = Texture2DSample(Bark, BarkSampler, UV * float2(2.0, 6.0)).rgb;
+b *= lerp(1.0 - Foot, 1.0, saturate((Rel.z - 10.0) / 30.0));
 Roughness = 0.95;
 return b;
 )HLSL");
@@ -149,6 +162,51 @@ return b;
 			S->Shadow.Connect(0, One);
 		}
 		return S;
+	}
+
+	/**
+	 * The instance's own colour (per-instance data 0-2), white without any. The engine's node class
+	 * is not exported to other modules, so it is made by name and its settings set by reflection;
+	 * without it (an engine that renamed it) the trees keep their species' colour.
+	 */
+	UMaterialExpression* InstanceColour(UMaterial* Material)
+	{
+		UClass* Class = FindObject<UClass>(nullptr, TEXT("/Script/Engine.MaterialExpressionPerInstanceCustomData3Vector"));
+		if (Class)
+		{
+			UMaterialExpression* E = NewObject<UMaterialExpression>(Material, Class);
+			Material->GetExpressionCollection().AddExpression(E);
+			if (FStructProperty* P = FindFProperty<FStructProperty>(Class, TEXT("ConstDefaultValue")))
+			{
+				*P->ContainerPtrToValuePtr<FLinearColor>(E) = FLinearColor::White;
+			}
+			if (FUInt32Property* I = FindFProperty<FUInt32Property>(Class, TEXT("DataIndex")))
+			{
+				I->SetPropertyValue_InContainer(E, 0u);
+			}
+			return E;
+		}
+		UE_LOG(LogSimCruiseTrees, Warning, TEXT("No per-instance colour node: trees keep their species' colour"));
+		UMaterialExpressionConstant3Vector* White = AddExpression<UMaterialExpressionConstant3Vector>(Material);
+		White->Constant = FLinearColor::White;
+		return White;
+	}
+
+	/** The pixel's place from the instance's origin (world cm): the origin moved to world per vertex. */
+	UMaterialExpression* FromOrigin(UMaterial* Material)
+	{
+		UMaterialExpressionConstant3Vector* Zero = AddExpression<UMaterialExpressionConstant3Vector>(Material);
+		Zero->Constant = FLinearColor(0.f, 0.f, 0.f, 0.f);
+		UMaterialExpressionTransformPosition* ToWorld = AddExpression<UMaterialExpressionTransformPosition>(Material);
+		ToWorld->TransformSourceType = TRANSFORMPOSSOURCE_Local;
+		ToWorld->TransformType = TRANSFORMPOSSOURCE_World;
+		ToWorld->Input.Connect(0, Zero);
+		UMaterialExpressionVertexInterpolator* PerTree = AddExpression<UMaterialExpressionVertexInterpolator>(Material);
+		PerTree->Input.Connect(0, ToWorld);
+		UMaterialExpressionSubtract* Rel = AddExpression<UMaterialExpressionSubtract>(Material);
+		Rel->A.Connect(0, AddExpression<UMaterialExpressionWorldPosition>(Material));
+		Rel->B.Connect(0, PerTree);
+		return Rel;
 	}
 
 	UMaterialExpression* TextureParam(UMaterial* Material, const TCHAR* Name)
@@ -312,6 +370,17 @@ UMaterial* ASimCruiseTrees::BuildLeafMaterial(UObject* Outer, FName Name, EObjec
 	Tint->ParameterName = TEXT("Tint");
 	Tint->DefaultValue = FLinearColor(0.62f, 0.68f, 0.55f);
 	AddInput(Custom, TEXT("Tint"), Tint);
+	AddInput(Custom, TEXT("Crown"), InstanceColour(Material));
+	AddInput(Custom, TEXT("LP"), AddExpression<UMaterialExpressionLocalPosition>(Material));
+	UMaterialExpressionVectorParameter* CrownCentre = AddExpression<UMaterialExpressionVectorParameter>(Material);
+	CrownCentre->ParameterName = TEXT("CrownCentre");
+	CrownCentre->DefaultValue = FLinearColor(0.f, 0.f, 0.f, 0.f);
+	AddInput(Custom, TEXT("CrownCentre"), CrownCentre);
+	UMaterialExpressionVectorParameter* CrownRadii = AddExpression<UMaterialExpressionVectorParameter>(Material);
+	CrownRadii->ParameterName = TEXT("CrownRadii");
+	CrownRadii->DefaultValue = FLinearColor(1.0e6f, 1.0e6f, 1.0e6f, 0.f); // no box: no darkening
+	AddInput(Custom, TEXT("CrownRadii"), CrownRadii);
+	AddInput(Custom, TEXT("Inner"), ScalarParam(Material, TEXT("Inner"), 0.4f));
 	Custom->RebuildOutputs();
 	Material->GetEditorOnlyData()->BaseColor.Connect(0, Custom);
 	Material->GetEditorOnlyData()->OpacityMask.Connect(0, FadeOrShadow(Material, Custom, 1, Custom, 4));
@@ -343,6 +412,8 @@ UMaterial* ASimCruiseTrees::BuildBarkMaterial(UObject* Outer, FName Name, EObjec
 	AddFadeInputs(Material, Custom);
 	AddInput(Custom, TEXT("UV"), AddExpression<UMaterialExpressionTextureCoordinate>(Material));
 	AddInput(Custom, TEXT("Bark"), TextureParam(Material, TEXT("Bark")));
+	AddInput(Custom, TEXT("Rel"), FromOrigin(Material));
+	AddInput(Custom, TEXT("Foot"), ScalarParam(Material, TEXT("Foot"), 0.35f));
 	Custom->RebuildOutputs();
 	Material->GetEditorOnlyData()->BaseColor.Connect(0, Custom);
 	Material->GetEditorOnlyData()->Roughness.Connect(1, Custom);
@@ -482,6 +553,8 @@ bool ASimCruiseTrees::BuildMeshes()
 	}
 	// -SimCruiseOldTreeMips: the plain box-filtered leaf mips (for an A/B).
 	const bool bLeafMips = !FParse::Param(FCommandLine::Get(), TEXT("SimCruiseOldTreeMips"));
+	// -SimCruiseOldTreeLook: no colour per crown, no rounded crown light, no darker inside or foot (for an A/B).
+	bCrownLook = !FParse::Param(FCommandLine::Get(), TEXT("SimCruiseOldTreeLook"));
 	auto Texture = [this, bLeafMips](const TCHAR* File) -> UTexture2D*
 	{
 		TArray<FColor> Pixels;
@@ -517,6 +590,18 @@ bool ASimCruiseTrees::BuildMeshes()
 	for (int32 S = 0; S < 2; ++S)
 	{
 		UMaterialInstanceDynamic* Crown = Leaf(*FString::Printf(TEXT("cluster-%s.png"), Species[S]));
+		{
+			// The species' leaf colour as drawn: its cluster texture's mean (alpha weighted, linear) times the tint.
+			TArray<FColor> Px;
+			int32 W = 0, H = 0;
+			if (USimCruiseWorldResources::DecodeImageFile(TreeArt(FString::Printf(TEXT("cluster-%s.png"), Species[S])), Px, W, H))
+			{
+				FLinearColor Sum(0, 0, 0, 0);
+				double Wt = 0.0;
+				for (const FColor& C : Px) { const float A = C.A / 255.f; Sum += FLinearColor::FromSRGBColor(C) * A; Wt += A; }
+				if (Wt > 0.0) LeafMean[S] = Sum * static_cast<float>(1.0 / Wt) * FLinearColor(0.62f, 0.68f, 0.55f);
+			}
+		}
 		UMaterialInstanceDynamic* Spray = Leaf(*FString::Printf(TEXT("spray-%s.png"), Species[S]));
 		UStaticMesh* LevelMeshes[3] = { nullptr, nullptr, nullptr };
 		TArray<UMaterialInstanceDynamic*> LevelMaterials;
@@ -573,6 +658,46 @@ bool ASimCruiseTrees::BuildMeshes()
 				}
 			}
 			Parts.SetNum(Slots.Num());
+			// The crown: this level's leaves (every part after the wood). Its box darkens the leaves
+			// inside it (CrownCentre, CrownRadii), and the leaf normals lean out from its middle
+			// (70 % of the way), so a crown is lit as one rounded mass, brighter on its sunny side and
+			// darker under it, not as hundreds of flat cards each lit alike.
+			FBox CrownBox(ForceInit);
+			for (int32 p = 1; p < Parts.Num(); ++p) for (const FVector& P : Parts[p].Positions) CrownBox += P;
+			if (CrownBox.IsValid && bCrownLook)
+			{
+				const FVector Mid = CrownBox.GetCenter(), Half = CrownBox.GetExtent().ComponentMax(FVector(1.0));
+				for (int32 p = 1; p < Parts.Num(); ++p)
+				{
+					FSimCruiseMeshData& Leaves = Parts[p];
+					for (int32 v = 0; v < Leaves.Positions.Num(); ++v)
+					{
+						const FVector Out = ((Leaves.Positions[v] - Mid) / (Half * Half)).GetSafeNormal(); // the box's ellipsoid
+						if (Out.IsNearlyZero() || !Leaves.Normals.IsValidIndex(v)) continue;
+						// A card's normal faces either way (two-sided); lean the side that faces out.
+						const FVector N = FVector::DotProduct(Leaves.Normals[v], Out) < 0.0 ? -Leaves.Normals[v] : Leaves.Normals[v];
+						Leaves.Normals[v] = FMath::Lerp(N, Out, 0.7).GetSafeNormal();
+					}
+				}
+				for (UMaterialInterface* M : Slots)
+				{
+					UMaterialInstanceDynamic* L = Cast<UMaterialInstanceDynamic>(M);
+					if (!L || M == Slots[0]) continue;
+					L->SetVectorParameterValue(TEXT("CrownCentre"), FLinearColor(Mid.X, Mid.Y, Mid.Z, 0.f));
+					L->SetVectorParameterValue(TEXT("CrownRadii"), FLinearColor(Half.X, Half.Y, Half.Z, 0.f));
+				}
+			}
+			if (!bCrownLook)
+			{
+				for (UMaterialInterface* M : Slots)
+				{
+					if (UMaterialInstanceDynamic* L = Cast<UMaterialInstanceDynamic>(M))
+					{
+						L->SetScalarParameterValue(TEXT("Inner"), 0.f);
+						L->SetScalarParameterValue(TEXT("Foot"), 0.f);
+					}
+				}
+			}
 			TArray<const FSimCruiseMeshData*> Ptrs;
 			for (const FSimCruiseMeshData& P : Parts) Ptrs.Add(&P);
 			UStaticMesh* Mesh = SimCruiseWorldMaterials::BuildRuntimeMesh(*FString::Printf(TEXT("SM_SimCruiseTree_%s%d"), Species[S], Level), Ptrs, true, false);
@@ -605,6 +730,7 @@ bool ASimCruiseTrees::BuildMeshes()
 		{
 			UHierarchicalInstancedStaticMeshComponent* Ring = NewObject<UHierarchicalInstancedStaticMeshComponent>(this);
 			Ring->SetStaticMesh(LevelMeshes[Level]);
+			Ring->NumCustomDataFloats = bCrownLook ? 3 : 0; // the crown's colour
 			Ring->SetMobility(EComponentMobility::Movable);
 			Ring->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			Ring->SetupAttachment(RootComponent);
@@ -666,6 +792,8 @@ void ASimCruiseTrees::Refresh()
 	const double Side = Frame.TileSizeM;
 	TArray<TArray<FTransform>> Lists;
 	Lists.SetNum(6);
+	TArray<TArray<float>> Colours; // 3 floats per instance of each list: the crown's colour
+	Colours.SetNum(6);
 	// The palm variants the tiles plant on lawns, for the measured trees where palms grow.
 	if (PalmRings.Num() == 0 && Stream->Resources && Stream->Resources->PalmMeshes.Num() > 0)
 	{
@@ -709,8 +837,72 @@ void ASimCruiseTrees::Refresh()
 				RoadCells.Add(FIntPoint(FMath::FloorToInt(St.C.X / 20.0), FMath::FloorToInt(St.C.Y / 20.0)), FVector3d(St.C.X, St.C.Y, St.HalfW));
 			}
 		}
-		for (const FSimCruiseTreeRow& Row : *Rows)
+		// Each crown's colour in the aerial photograph (the middle of the crown, its sunlit top),
+		// and the tile's crowns as a whole: a crown takes its difference from the tile's (the
+		// photograph's own exposure and white balance cancel out) and half the tile's hue against
+		// the species' leaf colour (dry olive crowns in the west, blue-green in the north woods).
+		TArray<FLinearColor> Seen;
+		Seen.Init(FLinearColor::Transparent, Rows->Num());
+		FLinearColor TileHue = FLinearColor::White;
+		if (bCrownLook)
 		{
+			const TSharedPtr<const FSimCruiseAerialImage, ESPMode::ThreadSafe> Photo = SimCruiseAerialCache::Find(Tile->GetBuild()->AerialKey);
+			if (Photo.IsValid() && Photo->Width > 0 && Photo->Pixels.Num() == Photo->Width * Photo->Height)
+			{
+				const FIntPoint Z14 = SimCruiseGeo::AerialTileOf(Id);
+				const FVector2D CellUnit(Id.X - Z14.X * 4, Id.Y - Z14.Y * 4);
+				const double PxM = Side * 4.0 / Photo->Width;
+				TArray<float> Rs, Gs, Bs;
+				for (int32 r = 0; r < Rows->Num(); ++r)
+				{
+					const FSimCruiseTreeRow& Row = (*Rows)[r];
+					const FSimCruiseCrownFit Fit = FitCrown(Row);
+					const FVector2D Mid = Row.TileUV * Side + Fit.OffsetM;
+					const double Reach = FMath::Max(0.25 * FMath::Min(Fit.LongM, Fit.ShortM), 0.6 * PxM);
+					const int32 Cx = FMath::FloorToInt((Mid.X / Side + CellUnit.X) / 4.0 * Photo->Width);
+					const int32 Cy = FMath::FloorToInt((Mid.Y / Side + CellUnit.Y) / 4.0 * Photo->Height);
+					const int32 Rp = FMath::Clamp(FMath::FloorToInt(Reach / PxM), 0, 6);
+					FLinearColor Sum(0, 0, 0, 0);
+					int32 N = 0;
+					for (int32 dy = -Rp; dy <= Rp; ++dy)
+					for (int32 dx = -Rp; dx <= Rp; ++dx)
+					{
+						if (dx * dx + dy * dy > Rp * Rp) continue;
+						const int32 X = Cx + dx, Y = Cy + dy;
+						if (X < 0 || Y < 0 || X >= Photo->Width || Y >= Photo->Height) continue;
+						Sum += FLinearColor::FromSRGBColor(Photo->Pixels[Y * Photo->Width + X]);
+						++N;
+					}
+					if (N == 0) continue;
+					const FLinearColor C = Sum / static_cast<float>(N);
+					// Leaves only: roofs, roads and bare ground under a mapped crown (the canopy map is
+					// from another year than the photograph) and deep shadow say nothing about them.
+					if (C.G < 0.85f * FMath::Max(C.R, C.B) || C.G < 0.008f) continue;
+					Seen[r] = FLinearColor(C.R, C.G, C.B, 1.f);
+					Rs.Add(C.R); Gs.Add(C.G); Bs.Add(C.B);
+				}
+				if (Rs.Num() >= 8)
+				{
+					Rs.Sort(); Gs.Sort(); Bs.Sort();
+					const FLinearColor Median(Rs[Rs.Num() / 2], Gs[Gs.Num() / 2], Bs[Bs.Num() / 2], 1.f);
+					for (FLinearColor& S : Seen) if (S.A > 0.f) S = FLinearColor(S.R / FMath::Max(Median.R, 1e-4f), S.G / FMath::Max(Median.G, 1e-4f), S.B / FMath::Max(Median.B, 1e-4f), 1.f);
+					// The tile's hue (chroma at equal brightness) against the broadleaf leaf colour's.
+					auto Chroma = [](const FLinearColor& C) { const float L = FMath::Max(0.2126f * C.R + 0.7152f * C.G + 0.0722f * C.B, 1e-4f); return FLinearColor(C.R / L, C.G / L, C.B / L, 1.f); };
+					const FLinearColor Want = Chroma(Median), Have = Chroma(LeafMean[0]);
+					TileHue = FLinearColor(
+						FMath::Clamp(FMath::Sqrt(Want.R / FMath::Max(Have.R, 1e-3f)), 0.8f, 1.25f),
+						FMath::Clamp(FMath::Sqrt(Want.G / FMath::Max(Have.G, 1e-3f)), 0.8f, 1.25f),
+						FMath::Clamp(FMath::Sqrt(Want.B / FMath::Max(Have.B, 1e-3f)), 0.8f, 1.25f), 1.f);
+				}
+				else
+				{
+					for (FLinearColor& S : Seen) S = FLinearColor::Transparent;
+				}
+			}
+		}
+		for (int32 RowIndex = 0; RowIndex < Rows->Num(); ++RowIndex)
+		{
+			const FSimCruiseTreeRow& Row = (*Rows)[RowIndex];
 			// A segmented crown stands at its own middle (its top is where the canopy is highest,
 			// which for a one-sided or leaning crown is off the middle), turned to its long axis.
 			const FSimCruiseCrownFit Fit = FitCrown(Row);
@@ -761,9 +953,21 @@ void ASimCruiseTrees::Refresh()
 			// A round crown (within 15 %) keeps a random turn, so the meshes do not all face one way.
 			const double Yaw = Row.bShape && Fit.LongM > 1.15 * Fit.ShortM ? Fit.YawDeg : (H >> 10) % 360;
 			const FTransform Xf(FRotator(0.0, Yaw, 0.0), At, FVector(Long, Short, Row.HeightM));
+			// The crown's colour: its own difference from the tile's crowns in the photograph (softened
+			// to 70 %, at most -30 %/+35 % a channel), the tile's hue, and a jitter of its own: hue
+			// +-8 % (red against blue) and brightness +-15 %.
+			FLinearColor Own = TileHue;
+			if (Seen[RowIndex].A > 0.f)
+			{
+				const FLinearColor& S = Seen[RowIndex];
+				Own *= FLinearColor(FMath::Clamp(FMath::Pow(S.R, 0.7f), 0.7f, 1.35f), FMath::Clamp(FMath::Pow(S.G, 0.7f), 0.7f, 1.35f), FMath::Clamp(FMath::Pow(S.B, 0.7f), 0.7f, 1.35f), 1.f);
+			}
+			const float HueJ = ((H >> 16) & 255) / 255.f * 2.f - 1.f, LumJ = ((H >> 24) & 255) / 255.f * 2.f - 1.f;
+			Own *= FLinearColor(1.f + 0.08f * HueJ, 1.f, 1.f - 0.08f * HueJ, 1.f) * (1.f + 0.15f * LumJ);
 			for (int32 Level = 0; Level < 3; ++Level)
 			{
 				Lists[(bPine ? 3 : 0) + Level].Add(Xf);
+				Colours[(bPine ? 3 : 0) + Level].Append({ Own.R, Own.G, Own.B });
 			}
 			// Trunk about a sixtieth of the height across (Grove.gd row[4]), 8 to 45 cm radius.
 			Feet.Add(FVector4(At.X, At.Y, At.Z, FMath::Clamp(Row.HeightM * 100.0 / 120.0, 8.0, 45.0)));
@@ -777,6 +981,10 @@ void ASimCruiseTrees::Refresh()
 	for (int32 i = 0; i < 6; ++i)
 	{
 		Rings[i]->AddInstances(Lists[i], false, true, false);
+		if (Rings[i]->NumCustomDataFloats == 3 && Lists[i].Num() > 0)
+		{
+			Rings[i]->SetCustomData(0, Lists[i].Num() - 1, Colours[i], false);
+		}
 		Rings[i]->BuildTreeIfOutdated(false, true);
 	}
 	for (int32 i = 0; i < PalmRings.Num(); ++i)
