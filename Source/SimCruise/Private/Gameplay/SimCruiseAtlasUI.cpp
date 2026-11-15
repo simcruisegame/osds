@@ -2,6 +2,7 @@
 
 #include "Gameplay/SimCruiseAtlasUI.h"
 #include "Gameplay/SimCruiseUiTheme.h"
+#include "Gameplay/SimCruiseFeatures.h"
 #include "Gameplay/SimCruiseSpeedUnits.h"
 
 #include "Async/Async.h"
@@ -388,13 +389,15 @@ void SSimCruisePlaceSearch::Construct(const FArguments& InArgs)
 					+ SVerticalBox::Slot().AutoHeight().Padding(0, 12, 0, 0)
 					[
 						SNew(STextBlock).Font(Font(10)).ColorAndOpacity(SimCruiseUiStyle::Dim()).AutoWrapText(true)
-						.Text(FText::FromString(TEXT("Map data © OpenStreetMap contributors (ODbL), served by OpenFreeMap and OpenMapTiles · search by Photon (komoot) · elevation USGS 3DEP and Mapzen · aerial photographs USGS NAIP and The National Map · trees WRI and Meta canopy height map v2 (CC BY 4.0) · buildings Overture Maps and OpenStreetMap · weather data by Open-Meteo.com (CC BY 4.0) · aircraft adsb.lol (ODbL) · full list in DATA-SOURCES.md")))
+						.Text(FText::FromString(FString(TEXT("Map data © OpenStreetMap contributors (ODbL), served by OpenFreeMap and OpenMapTiles · search by Photon (komoot) · elevation USGS 3DEP and Mapzen · aerial photographs USGS NAIP and The National Map · trees WRI and Meta canopy height map v2 (CC BY 4.0) · buildings Overture Maps and OpenStreetMap · weather data by Open-Meteo.com (CC BY 4.0) · "))
+							// No aircraft are fetched while they are off (SimCruiseFeatures): no adsb.lol credit then.
+							+ (SimCruiseFeatures::IsAircraftEnabled() ? TEXT("aircraft adsb.lol (ODbL) · ") : TEXT("")) + TEXT("full list in DATA-SOURCES.md")))
 					]
 					// The live data (SimCruiseLiveData): the sky's weather and the aircraft overhead.
 					+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 0)
 					[
 						SNew(STextBlock).Font(Font(10)).ColorAndOpacity(SimCruiseUiStyle::Dim()).AutoWrapText(true)
-						.Text(FText::FromString(TEXT("Weather by Open-Meteo (CC BY 4.0) · aircraft by adsb.lol (ODbL)")))
+						.Text(FText::FromString(SimCruiseFeatures::IsAircraftEnabled() ? TEXT("Weather by Open-Meteo (CC BY 4.0) · aircraft by adsb.lol (ODbL)") : TEXT("Weather by Open-Meteo (CC BY 4.0)")))
 					]
 				]
 			]
@@ -760,10 +763,12 @@ void SSimCruiseRoadAtlas::Construct(const FArguments& InArgs)
 			[
 				SAssignNew(Text, STextBlock).Font(Font(14)).ColorAndOpacity(SimCruiseUiStyle::Paper())
 			];
+		SettingLabels.Add(Text);
+		// 13 is Traffic: not on the panel while traffic is off for the release (SimCruiseFeatures).
+		if (Index == 13 && !SimCruiseFeatures::IsTrafficEnabled()) continue;
 		const int32 Row = Index < 7 || Index == 13 ? 2 : Index < 11 ? 3 : 4;
 		(Row == 2 ? SettingsRow : Row == 3 ? ControlsRow : CarRow)->AddSlot().AutoWidth().Padding(0, 0, 5, 0)[Ring(B)];
 		PadRows[Row].Add(B);
-		SettingLabels.Add(Text);
 	}
 	ChildSlot
 	[

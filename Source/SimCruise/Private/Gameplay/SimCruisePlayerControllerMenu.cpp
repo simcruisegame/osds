@@ -12,6 +12,7 @@
 #include "Gameplay/SimCruiseAtlasUI.h"
 #include "Gameplay/SimCruiseDriveHud.h"
 #include "Gameplay/SimCruiseFamousRoads.h"
+#include "Gameplay/SimCruiseFeatures.h"
 #include "Gameplay/SimCruiseGameMode.h"
 #include "Gameplay/SimCruiseHUD.h"
 #include "Gameplay/SimCruisePauseMenu.h"
@@ -230,6 +231,7 @@ FSimCruiseMenuState ASimCruisePlayerController::MenuState() const
 	Set(ESimCruiseMenuRow::Seat, FString())->bUnavailable = !bSeatMenuReady();
 	Set(ESimCruiseMenuRow::Sound, bSoundOn ? TEXT("On") : TEXT("Off"));
 	Set(ESimCruiseMenuRow::HudLevel, AfterDot(1));
+	Set(ESimCruiseMenuRow::HudMap, FSimCruiseDriveHud::IsMapAlways() ? TEXT("Always") : TEXT("With route"));
 	Set(ESimCruiseMenuRow::SpeedUnits, SimCruiseSpeedUnits::Label(SimCruiseSpeedUnits::Get()))->Chosen = SimCruiseSpeedUnits::Get() == ESimCruiseSpeedUnits::Kmh ? 1 : 0;
 	const float Rumble = MenuVar(TEXT("simcruise.Rumble.Strength"));
 	Set(ESimCruiseMenuRow::Rumble, FString::FromInt(FMath::RoundToInt(Rumble * 100.f)), TEXT("%"), Along(RumbleLadder(), Rumble), 1.f);
@@ -283,6 +285,8 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 		ShowMessage(TEXT("Route ended"), 2.f);
 		break;
 	case ESimCruiseMenuRow::Traffic:
+		// The row is hidden while traffic is off for the release (SimCruiseFeatures).
+		if (!SimCruiseFeatures::IsTrafficEnabled()) break;
 		if (bTrafficSettingReady()) ChangeSetting(13);
 		else ShowMessage(TEXT("The traffic setting comes with the next driving update"), 3.f);
 		break;
@@ -317,6 +321,11 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 	case ESimCruiseMenuRow::EyeDistance: StepLadder(TEXT("simcruise.Lens.ViewDistanceCm"), EyeLadder(), Dir, -1.f, TEXT("view_distance_cm"), 1.f); break;
 	case ESimCruiseMenuRow::Sound: OnToggleSound(); break;
 	case ESimCruiseMenuRow::HudLevel: OnCycleHud(); break;
+	case ESimCruiseMenuRow::HudMap:
+		// Two values: left is With route, right is Always, A switches.
+		if ((Dir < 0 && !FSimCruiseDriveHud::IsMapAlways()) || (Dir > 0 && FSimCruiseDriveHud::IsMapAlways())) break;
+		FSimCruiseDriveHud::SetMapAlways(!FSimCruiseDriveHud::IsMapAlways());
+		break;
 	case ESimCruiseMenuRow::SpeedUnits:
 		// Left picks mph, right km/h, A switches.
 		if ((Dir < 0 && SimCruiseSpeedUnits::Get() == ESimCruiseSpeedUnits::Mph) || (Dir > 0 && SimCruiseSpeedUnits::Get() == ESimCruiseSpeedUnits::Kmh)) break;

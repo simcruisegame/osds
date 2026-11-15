@@ -25,6 +25,14 @@ class FSimCruiseDriveHud
 public:
 	static bool IsEnabled();
 
+	/**
+	 * The round map: only while the GPS has a route (the default), or always
+	 * (simcruise.Hud.MapAlways, remembered as hud_map_always). In the driver's seat it
+	 * sits at 75 % in the top-left corner, over the A-pillar and the sky, clear of the dash and the mirror.
+	 */
+	static bool IsMapAlways();
+	static void SetMapAlways(bool bAlways, bool bRemember = true);
+
 	void Draw(ASimCruiseHUD& Hud, float DeltaTimeS);
 
 	/** Local clock at a place: the environment's UTC time and the live weather's offset (else the longitude's). */
@@ -46,7 +54,10 @@ private:
 	void DrawMessage(const FString& Text, float Y);
 	void DrawRoundMap(ASimCruiseHUD& Hud, const USimCruiseRouteSubsystem* Gps, float Alpha);
 	void DrawRoadGuides(ASimCruiseHUD& Hud, const USimCruiseRouteSubsystem& Gps);
-	void DrawPlaceCard(ASimCruiseHUD& Hud, float Bottom);
+	/** The co-driver's card: X is its left edge (bLeft) or its right edge; Edge is its bottom, or its top when bFromTop. */
+	void DrawPlaceCard(ASimCruiseHUD& Hud, float X, float Edge, bool bFromTop, bool bLeft);
+	/** The camera is in the driver's seat (the dash and its instruments are on screen). */
+	static bool IsCockpitView(const ASimCruiseHUD& Hud);
 	void GatherStations(ASimCruiseHUD& Hud, const FVector2D& CarM);
 	/** World height (cm) of the road surface at a point in world metres, from the nearest ribbon station. */
 	bool RoadHeightCm(const FVector2D& PointM, double& OutZCm) const;
@@ -60,7 +71,11 @@ private:
 	void Strokes(const TArray<TArray<FVector2D>>& In, const FVector2D& Origin, float Size, const FLinearColor& Color, float Thickness);
 	void Quad(const FVector2D& A, const FVector2D& B, const FVector2D& C, const FVector2D& D, const FLinearColor& Color);
 	FVector2D Measure(const FString& Text, SimCruiseTheme::EWeight Weight, float Px) const;
-	/** Text at X, Y (top); Align 0 left, 1 centre, 2 right. Digits get one width when bTabular. */
+	/**
+	 * Text at X, Y (top); Align 0 left, 1 centre, 2 right. Digits get one width when bTabular.
+	 * Drawn at its real point size (the canvas rasterises a runtime font at the font info's
+	 * size, not at the item's scale) on whole pixels, with a hard 2 px shadow.
+	 */
 	float TextAt(const FString& Text, SimCruiseTheme::EWeight Weight, float Px, float X, float Y, const FLinearColor& Color, int32 Align = 0, bool bTabular = false, bool bShadow = true);
 
 	UCanvas* Canvas = nullptr;
@@ -71,6 +86,8 @@ private:
 	FVector2D StationsAt = FVector2D::ZeroVector;
 	float SmoothLateral = 0.f;
 	float RouteAlpha = 0.f;
+	/** This frame: the width the map holds in a top corner (the turn sign keeps clear of it on both sides). */
+	float TopCornerReserveX = 0.f;
 };
 
 /** Overpass as runtime UFonts for the canvas (FCanvasTextItem does not draw Slate composite fonts here). */

@@ -12,6 +12,7 @@
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Text/STextBlock.h"
+#include "Gameplay/SimCruiseFeatures.h"
 
 using namespace SimCruiseTheme;
 
@@ -82,7 +83,7 @@ TSharedRef<SWidget> SimCruiseMenuBackdrop(TAttribute<float> LeftFraction, TAttri
 
 const TArray<FRowInfo>& SSimCruisePauseMenu::Rows(int32 InPage)
 {
-	static const TArray<FRowInfo> Drive = {
+	static const TArray<FRowInfo> DriveWithTraffic = {
 		Row(ESimCruiseMenuRow::Continue, EKind::Action, EIcon::Drive, TEXT("Continue driving"), TEXT("Back to the road"), TEXT("Close the menu and drive on.")),
 		Row(ESimCruiseMenuRow::WhereTo, EKind::Action, EIcon::Search, TEXT("Where to?"), TEXT("Find a place, then go there or make it your stop"), TEXT("Type a place or an address. Go there now, or let the GPS take you there.")),
 		Row(ESimCruiseMenuRow::PlanRoute, EKind::Action, EIcon::Route, TEXT("Plan a route"), TEXT("Put stops on the map"), TEXT("Move the cross over the map and add stops. The GPS finds the roads between them.")),
@@ -90,6 +91,8 @@ const TArray<FRowInfo>& SSimCruisePauseMenu::Rows(int32 InPage)
 		Row(ESimCruiseMenuRow::Traffic, EKind::Value, EIcon::Traffic, TEXT("Traffic"), TEXT("Other cars on the road"), TEXT("How many other cars drive near you.")),
 		Row(ESimCruiseMenuRow::Atlas, EKind::Action, EIcon::Map, TEXT("Road atlas"), TEXT("Jump to any place on the map"), TEXT("The full map. Pin a place and drive there now.")),
 	};
+	// Traffic off for this release (SimCruiseFeatures): the same page without its row.
+	static const TArray<FRowInfo> Drive = DriveWithTraffic.FilterByPredicate([](const FRowInfo& R) { return R.Row != ESimCruiseMenuRow::Traffic; });
 	static const TArray<FRowInfo> Car = {
 		Row(ESimCruiseMenuRow::Car, EKind::Value, EIcon::Car, TEXT("Car"), TEXT("Change the car you drive"), TEXT("Change to the next car. You keep your place on the road.")),
 		Row(ESimCruiseMenuRow::Transmission, EKind::Value, EIcon::Gearbox, TEXT("Gearbox"), TEXT("Automatic or manual"), TEXT("With the manual gearbox you use the clutch and shift the gears yourself.")),
@@ -106,6 +109,7 @@ const TArray<FRowInfo>& SSimCruisePauseMenu::Rows(int32 InPage)
 	static const TArray<FRowInfo> Settings = {
 		Row(ESimCruiseMenuRow::Sound, EKind::Value, EIcon::Sound, TEXT("Sound"), TEXT("The engine and the road"), TEXT("Turn the sound on or off.")),
 		Row(ESimCruiseMenuRow::HudLevel, EKind::Value, EIcon::Hud, TEXT("HUD"), TEXT("Off, Glance or Full"), TEXT("Glance shows the speed and fades while you cruise. Full shows all the readouts.")),
+		Row(ESimCruiseMenuRow::HudMap, EKind::Value, EIcon::Map, TEXT("Map"), TEXT("With route or always"), TEXT("The round map in the corner. With route shows it only while the GPS has a route.")),
 		Row(ESimCruiseMenuRow::SpeedUnits, EKind::Segmented, EIcon::Hud, TEXT("Speed units"), TEXT(""), TEXT("The units of the speed on the HUD and of the GPS distances: mph and miles, or km/h and kilometres.")),
 		Row(ESimCruiseMenuRow::Rumble, EKind::Slider, EIcon::Rumble, TEXT("Rumble"), TEXT(""), TEXT("How strong the pad shakes for the tyres and the road.")),
 		Row(ESimCruiseMenuRow::StickSpeed, EKind::Slider, EIcon::Stick, TEXT("Stick steering speed"), TEXT(""), TEXT("How fast the wheels turn when you move the stick.")),
@@ -118,7 +122,7 @@ const TArray<FRowInfo>& SSimCruisePauseMenu::Rows(int32 InPage)
 	case 1: return Car;
 	case 2: return Seat;
 	case 3: return Settings;
-	default: return Drive;
+	default: return SimCruiseFeatures::IsTrafficEnabled() ? DriveWithTraffic : Drive;
 	}
 }
 
