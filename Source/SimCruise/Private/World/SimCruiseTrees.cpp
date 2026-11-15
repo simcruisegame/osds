@@ -18,7 +18,7 @@
 #include "Materials/MaterialExpressionConstant3Vector.h"
 #include "Materials/MaterialExpressionCustom.h"
 #include "Materials/MaterialExpressionLocalPosition.h"
-#include "Materials/MaterialExpressionSubtract.h"
+#include "Materials/MaterialExpressionTransform.h"
 #include "Materials/MaterialExpressionCameraPositionWS.h"
 #include "Materials/MaterialExpressionDistance.h"
 #include "Materials/MaterialExpressionWorldPosition.h"
@@ -192,21 +192,17 @@ return b;
 		return White;
 	}
 
-	/** The pixel's place from the instance's origin (world cm): the origin moved to world per vertex. */
+	/**
+	 * The pixel's place from the instance's origin (world-space cm, the tree's foot): its local
+	 * position turned and scaled by the instance's transform (a vector, so no large world numbers).
+	 */
 	UMaterialExpression* FromOrigin(UMaterial* Material)
 	{
-		UMaterialExpressionConstant3Vector* Zero = AddExpression<UMaterialExpressionConstant3Vector>(Material);
-		Zero->Constant = FLinearColor(0.f, 0.f, 0.f, 0.f);
-		UMaterialExpressionTransformPosition* ToWorld = AddExpression<UMaterialExpressionTransformPosition>(Material);
-		ToWorld->TransformSourceType = TRANSFORMPOSSOURCE_Local;
-		ToWorld->TransformType = TRANSFORMPOSSOURCE_World;
-		ToWorld->Input.Connect(0, Zero);
-		UMaterialExpressionVertexInterpolator* PerTree = AddExpression<UMaterialExpressionVertexInterpolator>(Material);
-		PerTree->Input.Connect(0, ToWorld);
-		UMaterialExpressionSubtract* Rel = AddExpression<UMaterialExpressionSubtract>(Material);
-		Rel->A.Connect(0, AddExpression<UMaterialExpressionWorldPosition>(Material));
-		Rel->B.Connect(0, PerTree);
-		return Rel;
+		UMaterialExpressionTransform* ToWorld = AddExpression<UMaterialExpressionTransform>(Material);
+		ToWorld->TransformSourceType = TRANSFORMSOURCE_Local;
+		ToWorld->TransformType = TRANSFORM_World;
+		ToWorld->Input.Connect(0, AddExpression<UMaterialExpressionLocalPosition>(Material));
+		return ToWorld;
 	}
 
 	UMaterialExpression* TextureParam(UMaterial* Material, const TCHAR* Name)
