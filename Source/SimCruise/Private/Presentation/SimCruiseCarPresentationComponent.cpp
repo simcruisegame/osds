@@ -861,7 +861,7 @@ void USimCruiseCarPresentationComponent::SetMirrorsLive(bool bLive, USceneCompon
 	// convex); 1152 x 480 puts about 11.5 texels in each degree (768 x 320 read as a blocky,
 	// blurred picture in the rear-view glass at 1080p: release review 2026-11-14).
 	constexpr float FovDeg = 100.f;
-	constexpr int32 SizeX = 768, SizeY = 320; // with mips and anti-aliasing 768 holds; 1152 cost GPU time (savings 2026-11-14)
+	constexpr int32 SizeX = 768, SizeY = 320; // mip-mapped; 576 x 240 read blurred in the glass. The capture cost 6.4-7.3 ms before its shadows, range and LODs were cut (2026-11-15)
 	if (!MirrorTarget)
 	{
 		MirrorTarget = NewObject<UTextureRenderTarget2D>(this);
@@ -886,6 +886,9 @@ void USimCruiseCarPresentationComponent::SetMirrorsLive(bool bLive, USceneCompon
 	MirrorCapture->bCaptureEveryFrame = false;
 	MirrorCapture->bCaptureOnMovement = false;
 	MirrorCapture->bAlwaysPersistRenderingState = true;
+	// What a mirror the size of a hand shows: nothing past 300 m, coarser mesh levels.
+	MirrorCapture->MaxViewDistanceOverride = 30000.f;
+	MirrorCapture->LODDistanceFactor = 2.f;
 	// Cheap: no Lumen in the mirror view (direct light, sky light and fog are what it shows).
 	FPostProcessSettings& PP = MirrorCapture->PostProcessSettings;
 	PP.bOverride_DynamicGlobalIlluminationMethod = true;
@@ -902,7 +905,8 @@ void USimCruiseCarPresentationComponent::SetMirrorsLive(bool bLive, USceneCompon
 	// show-flag settings: registering the capture rebuilds its flags from them.)
 	TArray<FEngineShowFlagsSetting> Flags;
 	for (const TCHAR* Name : {TEXT("MotionBlur"), TEXT("Bloom"), TEXT("VolumetricFog"), TEXT("DistanceFieldAO"),
-		TEXT("RayTracedDistanceFieldShadows"), TEXT("Cloud"), TEXT("AmbientOcclusion"), TEXT("ContactShadows")})
+		TEXT("RayTracedDistanceFieldShadows"), TEXT("Cloud"), TEXT("AmbientOcclusion"), TEXT("ContactShadows"),
+		TEXT("DynamicShadows")}) // no shadow maps in the capture: the virtual shadow pages for a second view were most of its cost
 	{
 		FEngineShowFlagsSetting Flag;
 		Flag.ShowFlagName = Name;
