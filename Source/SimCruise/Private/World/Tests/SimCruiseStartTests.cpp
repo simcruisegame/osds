@@ -1350,13 +1350,14 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 	TArray<FString> Roots = { FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("StartPlaces")) };
 	const FString Probe = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_PROBE_DIR"));
 	if (!Probe.IsEmpty()) Roots.Add(Probe);
-	// v2.0.3: a report (warnings), not a gate yet: the first run found 1,638 points over 20 recorded
-	// places (most 0.1-0.3 m along tile seams, where the ground keeps the shared height; some of
-	// several metres at interchanges). Each place lists its five worst, and every point over 1 m on a
-	// seam or off it is counted apart.
+	// A gate on the recorded start places (Saved/StartPlaces): any point fails. The places under
+	// SIMCRUISE_PROBE_DIR (the review lane's civil-structure places) are a report: each place's five
+	// worst as warnings. The first run found 1,638 points on the start places, nearly all where a
+	// ground triangle at a carriageway's edge rose over the lane (the cap now reaches past the edge).
 	int32 Places = 0, Faults = 0, Big = 0, OnSeam = 0;
 	for (const FString& Root : Roots)
 	{
+		const bool bGate = Root == Roots[0];
 		TArray<FString> Dirs;
 		IFileManager::Get().FindFiles(Dirs, *FPaths::Combine(Root, TEXT("*")), false, true);
 		for (const FString& Place : Dirs)
@@ -1421,7 +1422,11 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 			}
 			Faults += PlaceFaults;
 			Spots.Sort([](const FSpot& X, const FSpot& Y) { return X.Over > Y.Over; });
-			for (int32 k = 0; k < FMath::Min(5, Spots.Num()); ++k) AddWarning(Spots[k].Line);
+			for (int32 k = 0; k < FMath::Min(5, Spots.Num()); ++k)
+			{
+				if (bGate) AddError(Spots[k].Line); else AddWarning(Spots[k].Line);
+			}
+			if (bGate && Spots.Num() > 5) AddError(FString::Printf(TEXT("%s: %d points in all"), *Place, Spots.Num()));
 			AddInfo(FString::Printf(TEXT("TERRAIN-OVER-ROAD %s: %d tiles, %d points over the road by more than 0.1 m, worst %.2f m"), *Place, Built.Num(), PlaceFaults, Worst));
 		}
 	}
