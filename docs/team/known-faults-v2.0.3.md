@@ -1,0 +1,25 @@
+# Known faults, v2.0.3
+
+Every fault the owner reported, then the test escapes and the blind reviews, each with its state: **fixed and verified** (the after-the-fix frame at the same spot and view, path), **open** (the owner lane), or **accepted** (who accepted it and why). The final test fills the last two columns; until then the state is what the lanes report. Frames: the release test folders on the PC (`D:\sc\lane-rc*\Saved\ReleaseTest\...`).
+
+## The owner's reports
+
+| # | Date (UTC) | The owner's words / what | Where it showed in our frames | Lane | State | After the fix (frame) |
+|---|---|---|---|---|---|---|
+| 1 | 11-11 | "atlas not ported" | first Unreal playtest | ui | fixed (atlas in the pause menu) | to check in the controller pass |
+| 2 | 11-11 | "steering wheel didn't work" | first playtest | cockpit | fixed (rim pivot, lock from the car data) | cockpit review per car |
+| 3 | 11-11 | traffic blocking roads; traffic wheels not rolling | first playtest | driving | accepted for v2.0.3: traffic is off (owner, 11-14 20:31Z) | - |
+| 4 | 11-11 | "the car's driving physics don't feel real, it's all over the place" | first playtest | driving | open until the drive-real part passes | drive-real part, per car |
+| 5 | 11-11 | buildings don't look real | first playtest | world | open: facades with doors and shopfronts (v2.0.3 scope) | Detroit slow look |
+| 6 | 11-14 19:30Z | "cars arent following traffic" (freeway cars crossing Woodward at grade) | c1a6b76 Detroit south video 51 s (`aaron-1930\south-51s.png`) | driving | accepted for v2.0.3: traffic is off | - |
+| 7 | 11-14 19:30Z, 20:23Z | "top of buildings are missing": the top window row cut by the roof line, no parapet | c1a6b76 and e9db211 Detroit start frames (`release7-traffic\building-tops\`) | world | open: release-10 has building tops; to verify | Detroit slow look, same spot |
+| 8 | 11-14 20:22Z | the inside mirror black at 0 mph (Detroit north approach) | e9db211 Detroit north video frames 1-18, right after a 5-min freeze (`release7-traffic\aaron-2022-mirror\`) | picture | open | first second of every drive |
+| 9 | 11-14 20:2xZ | the dash very dark in shade | c1a6b76 Detroit north video frame 444 (`aaron-1930\tops\detroit-north\00444.jpg`) | picture | open | same spot |
+| 10 | 11-14 20:28Z | "bridge was warped" (Doraville, Northcrest Road over I-285): a lumpy deck, tilted wall pieces, the Corvette stuck at 6600 rpm | e9db211 and c1a6b76 Doraville Corvette 30.3-50 s (`release7-traffic\aaron-2028\`) | world | open: plan A clearance (release-12); the judge now catches it (hit, stuck, deck-not-smooth) | Doraville both ways |
+| 11 | 11-14 20:15Z | the game stood still for 5 minutes at a Detroit start (the owner at the keyboard) | e9db211 Detroit north log 20:15:16-20:20:30 | release | open: cause not proven; the hang watchdog now logs the stack | every run (`longest_hang_s`) |
+| 12 | 11-14 21:06Z | "yall need to optoize your testing" | - | review | in progress: "How we look", the new review method | this test |
+| 13 | 11-14 23:32Z | the installer must work on any PC | dep-check: the VC++ runtime is not shipped or installed | release | open: the installer thread | dep-check 0, installer gate |
+
+## Test escapes and blind-review findings
+
+See [test-escapes.md](test-escapes.md): building tops, freeway traffic at grade, the pad menus' top row, wheel and gauges, and the 15 findings of the blind review of c1a6b76 (terrain shards beside the motorway, binnacle streaks, the cabin clay-grey on the motorway, a floating street light, road markings on sidewalks, white windows by day, untextured towers, the minimap over the clock, fading HUD digits, blocky mirrors, the wheel badge, first gear held at full throttle). Each gets a row here with its state when the final test has checked it.
