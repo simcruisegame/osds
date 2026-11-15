@@ -28,7 +28,7 @@ public:
 	/**
 	 * The round map: only while the GPS has a route (the default), or always
 	 * (simcruise.Hud.MapAlways, remembered as hud_map_always). In the driver's seat it
-	 * sits at 75 % in the top-right corner, over the windscreen, clear of the dash.
+	 * sits at 75 % in the top-left corner, over the A-pillar and the sky, clear of the dash and the mirror.
 	 */
 	static bool IsMapAlways();
 	static void SetMapAlways(bool bAlways, bool bRemember = true);
@@ -54,8 +54,8 @@ private:
 	void DrawMessage(const FString& Text, float Y);
 	void DrawRoundMap(ASimCruiseHUD& Hud, const USimCruiseRouteSubsystem* Gps, float Alpha);
 	void DrawRoadGuides(ASimCruiseHUD& Hud, const USimCruiseRouteSubsystem& Gps);
-	/** The co-driver's card, right-aligned at Right; Edge is its bottom, or its top when bFromTop. */
-	void DrawPlaceCard(ASimCruiseHUD& Hud, float Right, float Edge, bool bFromTop);
+	/** The co-driver's card: X is its left edge (bLeft) or its right edge; Edge is its bottom, or its top when bFromTop. */
+	void DrawPlaceCard(ASimCruiseHUD& Hud, float X, float Edge, bool bFromTop, bool bLeft);
 	/** The camera is in the driver's seat (the dash and its instruments are on screen). */
 	static bool IsCockpitView(const ASimCruiseHUD& Hud);
 	void GatherStations(ASimCruiseHUD& Hud, const FVector2D& CarM);
@@ -86,8 +86,8 @@ private:
 	FVector2D StationsAt = FVector2D::ZeroVector;
 	float SmoothLateral = 0.f;
 	float RouteAlpha = 0.f;
-	/** This frame: the width the map holds at the top right (the turn sign keeps clear of it on both sides). */
-	float TopRightReserveX = 0.f;
+	/** This frame: the width the map holds in a top corner (the turn sign keeps clear of it on both sides). */
+	float TopCornerReserveX = 0.f;
 };
 
 /** Overpass as runtime UFonts for the canvas (FCanvasTextItem does not draw Slate composite fonts here). */

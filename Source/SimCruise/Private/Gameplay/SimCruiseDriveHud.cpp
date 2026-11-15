@@ -292,7 +292,7 @@ void FSimCruiseDriveHud::Draw(ASimCruiseHUD& Hud, float DeltaTimeS)
 	if (!Canvas) return;
 	Scale = Canvas->ClipY / 1080.f;
 	Clock += DeltaTimeS;
-	TopRightReserveX = 0.f;
+	TopCornerReserveX = 0.f;
 	UWorld* World = Hud.GetWorld();
 	const USimCruiseRouteSubsystem* Gps = USimCruiseRouteSubsystem::Get(World);
 	const bool bRoute = Gps && Gps->HasRoute();
@@ -410,8 +410,8 @@ void FSimCruiseDriveHud::DrawTurnSign(const USimCruiseRouteSubsystem& Gps)
 	const float TextW = FMath::Max(Measure(Instruction, EWeight::Bold, 32.f).X, Measure(Number + TEXT(" ") + Unit, EWeight::ExtraBold, 56.f).X) + P(56.f);
 	const FString ThenStreet = Then ? (Then->Street.IsEmpty() ? SimCruiseRouteText::TurnVerb(Then->Turn) : Then->Street) : FString();
 	const float ThenW = Then ? P(64.f) + P(44.f) + Measure(ThenStreet, EWeight::Bold, 26.f).X + P(40.f) : 0.f;
-	// Centred, and clear of the map when it is in the top-right corner (the driver's seat).
-	const float W = FMath::Min(ArrowW + TextW + ThenW, Canvas->ClipX - FMath::Max(P(80.f), 2.f * TopRightReserveX));
+	// Centred, and clear of the map when it is in a top corner (the driver's seat).
+	const float W = FMath::Min(ArrowW + TextW + ThenW, Canvas->ClipX - FMath::Max(P(80.f), 2.f * TopCornerReserveX));
 	const float X = (Canvas->ClipX - W) * 0.5f, Y = P(28.f);
 
 	RoundRect(X, Y, W, H, P(14.f), A(Guide(), Alpha));
@@ -639,22 +639,27 @@ void FSimCruiseDriveHud::DrawRoundMap(ASimCruiseHUD& Hud, const USimCruiseRouteS
 	// Settings > Map: with a route only (the default), or always.
 	const bool bDrawMap = bRoute || IsMapAlways();
 	// From the driver's seat the bottom of the screen is the dash (gauges, clock, the centre
-	// screen): the map goes to the top-right corner at 75 %, over the windscreen, inside the
-	// 5 % title-safe margin. The other views keep it at the bottom right.
+	// screen) and the rear-view mirror hangs at the top, centre to right (the Corvette's at the
+	// top-right edge). The map goes to the top-left corner at 75 %, over the A-pillar and the
+	// sky, inside the 5 % title-safe margin; the route lines go under it and the co-driver's card
+	// to its right, below the turn sign. Checked in the Miata, Mustang and Corvette
+	// (scripts/hud-shots.ps1). The other views keep the map at the bottom right.
 	const bool bCockpit = IsCockpitView(Hud);
 	const float R = P(165.f) * (bCockpit ? 0.75f : 1.f);
-	const float SafeX = Canvas->ClipX * 0.05f, SafeY = Canvas->ClipY * 0.05f;
+	const float SafeX = FMath::RoundToFloat(Canvas->ClipX * 0.05f), SafeY = FMath::RoundToFloat(Canvas->ClipY * 0.05f);
 	const FVector2D Centre = bCockpit
-		? FVector2D(FMath::RoundToFloat(Canvas->ClipX - SafeX - R), FMath::RoundToFloat(SafeY + R))
+		? FVector2D(FMath::RoundToFloat(SafeX + R), FMath::RoundToFloat(SafeY + R))
 		: FVector2D(Canvas->ClipX - P(64.f) - R, Canvas->ClipY - P(bRoute ? 128.f : 56.f) - R);
-	TopRightReserveX = bCockpit && bDrawMap ? SafeX + 2.f * R + P(24.f) : 0.f;
+	TopCornerReserveX = bCockpit && bDrawMap ? SafeX + 2.f * R + P(24.f) : 0.f;
+	// The turn sign's bottom (DrawTurnSign: 28 + 132 px) and a gap.
+	const float BelowSign = P(176.f);
 	if (!bDrawMap)
 	{
 		// No map: the co-driver's card takes its corner.
 		if (!Hud.bOnTestPad)
 		{
-			if (bCockpit) DrawPlaceCard(Hud, Canvas->ClipX - SafeX, SafeY, true);
-			else DrawPlaceCard(Hud, Canvas->ClipX - P(64.f), Canvas->ClipY - P(56.f), false);
+			if (bCockpit) DrawPlaceCard(Hud, SafeX, SafeY, true, true);
+			else DrawPlaceCard(Hud, Canvas->ClipX - P(64.f), Canvas->ClipY - P(56.f), false, false);
 		}
 		return;
 	}
@@ -751,27 +756,27 @@ void FSimCruiseDriveHud::DrawRoundMap(ASimCruiseHUD& Hud, const USimCruiseRouteS
 	const FVector2D NAt = Centre + North * (R - P(18.f));
 	TextAt(TEXT("N"), EWeight::Black, 20.f, NAt.X, NAt.Y - P(12.f), A(Mist(), Alpha), 1);
 
-	float Below = Centre.Y + R + P(12.f);
 	if (bRoute)
 	{
 		const FSimCruiseRoute& Route = Gps->GetRoute();
 		const FSimCruiseRouteStop* Stop = Route.GetNextStop();
 		const FSimCruiseRouteProgress& Progress = Route.GetProgress();
-		const float TX = Centre.X + R, TY = Below;
-		TextAt(SimCruiseRouteText::Distance(Progress.LegRemainingM), EWeight::ExtraBold, bCockpit ? 34.f : 40.f, TX, TY, White(), 2, true);
+		// Under the map: right-aligned to it at the bottom right, left-aligned in the driver's seat.
+		const int32 Align = bCockpit ? 0 : 2;
+		const float TX = bCockpit ? Centre.X - R : Centre.X + R, TY = Centre.Y + R + P(12.f);
+		TextAt(SimCruiseRouteText::Distance(Progress.LegRemainingM), EWeight::ExtraBold, bCockpit ? 34.f : 40.f, TX, TY, White(), Align, true);
 		double Lon = 0.0, Lat = 0.0;
 		Gps->GetFrame().WorldCmToLonLat(CarCm, Lon, Lat);
 		const FDateTime Arrive = LocalTime(Hud.GetWorld(), Lon) + FTimespan::FromSeconds(Progress.LegRemainingS);
-		TextAt(FString::Printf(TEXT("to %s, %s"), Stop ? *Stop->Title : TEXT("the stop"), *SimCruiseRouteText::Clock(Arrive)), EWeight::SemiBold, 22.f, TX, TY + P(bCockpit ? 44.f : 52.f), Mist(), 2);
-		Below = TY + P(bCockpit ? 84.f : 92.f);
+		TextAt(FString::Printf(TEXT("to %s, %s"), Stop ? *Stop->Title : TEXT("the stop"), *SimCruiseRouteText::Clock(Arrive)), EWeight::SemiBold, 22.f, TX, TY + P(bCockpit ? 44.f : 52.f), Mist(), Align);
 	}
 	if (Hud.bOnTestPad) return;
-	// In the driver's seat the card hangs under the map; elsewhere it stands on top of it.
-	if (bCockpit) DrawPlaceCard(Hud, Centre.X + R, Below, true);
-	else DrawPlaceCard(Hud, Canvas->ClipX - P(64.f), Centre.Y - R - P(22.f), false);
+	// In the driver's seat the card is right of the map, below the turn sign; elsewhere it stands on top of the map.
+	if (bCockpit) DrawPlaceCard(Hud, Centre.X + R + P(20.f), FMath::Max(BelowSign, Centre.Y - R), true, true);
+	else DrawPlaceCard(Hud, Canvas->ClipX - P(64.f), Centre.Y - R - P(22.f), false, false);
 }
 
-void FSimCruiseDriveHud::DrawPlaceCard(ASimCruiseHUD& Hud, float Right, float Edge, bool bFromTop)
+void FSimCruiseDriveHud::DrawPlaceCard(ASimCruiseHUD& Hud, float X, float Edge, bool bFromTop, bool bLeft)
 {
 	const USimCruisePlaceGraphSubsystem* Graph = USimCruisePlaceGraphSubsystem::Get(Hud.GetWorld());
 	FSimCruisePlaceCard Card;
@@ -780,11 +785,15 @@ void FSimCruiseDriveHud::DrawPlaceCard(ASimCruiseHUD& Hud, float Right, float Ed
 	const float W = FMath::Max3(T.X, L.X, N.X) + P(40.f);
 	const float H = T.Y + L.Y + N.Y + P(30.f);
 	const float Bottom = bFromTop ? Edge + H : Edge;
-	RoundRect(Right - W, Bottom - H, W, H, P(12.f), A(Glass(), Card.Alpha));
+	// X is the card's left edge when bLeft, else its right edge; the text follows that side.
+	const float Left = bLeft ? X : X - W;
+	const float TextX = bLeft ? Left + P(20.f) : Left + W - P(20.f);
+	const int32 Align = bLeft ? 0 : 2;
+	RoundRect(Left, Bottom - H, W, H, P(12.f), A(Glass(), Card.Alpha));
 	float Y = Bottom - H + P(12.f);
-	TextAt(Card.Title, EWeight::ExtraBold, 26.f, Right - P(20.f), Y, A(White(), Card.Alpha), 2);
+	TextAt(Card.Title, EWeight::ExtraBold, 26.f, TextX, Y, A(White(), Card.Alpha), Align);
 	Y += T.Y + P(2.f);
-	TextAt(Card.Line, EWeight::SemiBold, 20.f, Right - P(20.f), Y, A(Amber(), Card.Alpha), 2);
+	TextAt(Card.Line, EWeight::SemiBold, 20.f, TextX, Y, A(Amber(), Card.Alpha), Align);
 	Y += L.Y + P(2.f);
-	TextAt(Card.Note, EWeight::Regular, 17.f, Right - P(20.f), Y, A(Mist(), Card.Alpha), 2);
+	TextAt(Card.Note, EWeight::Regular, 17.f, TextX, Y, A(Mist(), Card.Alpha), Align);
 }
