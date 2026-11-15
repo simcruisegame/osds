@@ -20,6 +20,8 @@
 #include "Gameplay/SimCruiseViewCheck.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformStackWalk.h"
+#include "AudioMixerBlueprintLibrary.h"
+#include "Sound/SoundSubmixSend.h"
 #include "ImageCore.h"
 #include "ImageUtils.h"
 #include "InputCoreTypes.h"
@@ -800,6 +802,13 @@ void ASimCruisePreflight::Tick(float DeltaSeconds)
 			RebaseHandle = Stream->OnRebased.AddUObject(this, &ASimCruisePreflight::OnRebased);
 			FrameHandle = UGameViewportClient::OnScreenshotCaptured().AddUObject(this, &ASimCruisePreflight::OnFrame);
 			LastYawDeg = Pawn->GetActorRotation().Yaw;
+			// Sound: the game's own mix from the drive's start (review runs), so the engine note, the
+			// tyres and the wind can be graded on the video (drive.wav in the run folder).
+			if (Review.IsOn() && !FParse::Param(FCommandLine::Get(), TEXT("nosound")))
+			{
+				UAudioMixerBlueprintLibrary::StartRecordingOutput(this, DriveSeconds + 10.f);
+				bRecordingSound = true;
+			}
 			if (bTrafficOff)
 			{
 				IConsoleVariable* Cars = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Traffic.Cars"));
@@ -1529,6 +1538,12 @@ void ASimCruisePreflight::Finish()
 
 	MeasureFrames(TimedFrameMs, Stats);
 	Stats.LongestHangS = static_cast<float>(LongestHangS.load());
+	if (bRecordingSound)
+	{
+		bRecordingSound = false;
+		UAudioMixerBlueprintLibrary::StopRecordingOutput(this, EAudioRecordingExportType::WavFile, TEXT("drive"), OutputDir);
+		UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: the drive's sound -> %s/drive.wav"), *OutputDir);
+	}
 	FrameTimes.Insert(TEXT("frame,drive_s,path_m"), 0);
 	FFileHelper::SaveStringArrayToFile(FrameTimes, *FPaths::Combine(OutputDir, TEXT("frames.csv")));
 	const FString Reasons = Judge(Stats);

@@ -33,9 +33,11 @@ def frame_times(run, n_frames, drive_s):
     """Drive time of each video frame."""
     p = os.path.join(run, 'frames.csv')
     if os.path.exists(p):
+        # launch-review.ps1 builds the video on the drive's clock from frames.csv (each frame lasts until
+        # the next), at 10 fps: video frame i is at the first frame's drive time plus i / 10 s.
         rows = list(csv.DictReader(open(p)))
-        t = [float(r['drive_s']) for r in rows]
-        if len(t) >= n_frames: return t[:n_frames], 'frames.csv'
+        t0 = float(rows[0]['drive_s']) if rows else 0.0
+        return [t0 + i / FPS for i in range(n_frames)], 'frames.csv (video on the drive clock)'
     # Older runs have no frames.csv: a straight line over the drive (the frames are not evenly spaced,
     # so an old run's clips can be a second or two off; new runs write frames.csv).
     return [i * drive_s / max(n_frames - 1, 1) for i in range(n_frames)], 'linear over the drive (no frames.csv; times can be 1-2 s off)'

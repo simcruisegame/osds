@@ -166,7 +166,29 @@ if ($Evidence.Crashed -or $Evidence.Hung -or -not $Result) { $Result = 'FAIL'; $
 $Frames = Join-Path $RunDir 'frames'
 $FrameCount = @(Get-ChildItem $Frames -Filter '*.jpg' -ErrorAction SilentlyContinue).Count
 if ($Ffmpeg -and $FrameCount -gt 0) {
-    & $Ffmpeg -hide_banner -loglevel error -y -framerate 10 -i (Join-Path $Frames '%05d.jpg') -c:v libx264 -pix_fmt yuv420p -crf 23 (Join-Path $RunDir 'video.mp4')
+    $Times = Join-Path $RunDir 'frames.csv'
+    if (Test-Path $Times) {
+        # Real time: each frame lasts until the next one (frames.csv has the drive time of each), so the
+        # video's clock is the drive's and the drive's sound lines up with it.
+        $T = @(Import-Csv $Times)
+        $List = for ($K = 0; $K -lt $T.Count; $K++) {
+            $Jpg = Join-Path $Frames ('{0:D5}.jpg' -f [int]$T[$K].frame)
+            if (-not (Test-Path $Jpg)) { continue }
+            $Dur = if ($K + 1 -lt $T.Count) { [Math]::Max(0.01, [double]$T[$K + 1].drive_s - [double]$T[$K].drive_s) } else { 0.1 }
+            "file '$($Jpg -replace '\\', '/')'"; "duration $([Math]::Round($Dur, 3).ToString([Globalization.CultureInfo]::InvariantCulture))"
+        }
+        $ListFile = Join-Path $RunDir 'frames-list.txt'
+        $List | Set-Content -Encoding ascii $ListFile
+        & $Ffmpeg -hide_banner -loglevel error -y -f concat -safe 0 -i $ListFile -vf fps=10 -c:v libx264 -pix_fmt yuv420p -crf 23 (Join-Path $RunDir 'video.mp4')
+        Remove-Item $ListFile -ErrorAction SilentlyContinue
+    } else {
+        & $Ffmpeg -hide_banner -loglevel error -y -framerate 10 -i (Join-Path $Frames '%05d.jpg') -c:v libx264 -pix_fmt yuv420p -crf 23 (Join-Path $RunDir 'video.mp4')
+    }
+    # The drive's sound (drive.wav, the game's own mix from the drive's start) on the video.
+    $Wav = Join-Path $RunDir 'drive.wav'
+    if ((Test-Path $Wav) -and (Test-Path (Join-Path $RunDir 'video.mp4'))) {
+        & $Ffmpeg -hide_banner -loglevel error -y -i (Join-Path $RunDir 'video.mp4') -i $Wav -c:v copy -c:a aac -b:a 160k -shortest (Join-Path $RunDir 'video-sound.mp4')
+    }
     $Every = [Math]::Max(1, [Math]::Floor($FrameCount / 12))
     & $Ffmpeg -hide_banner -loglevel error -y -i (Join-Path $Frames '%05d.jpg') -vf "select='not(mod(n\,$Every))',scale=426:-1,tile=4x3" -frames:v 1 -fps_mode vfr (Join-Path $RunDir 'sheet.png')
     if (Test-Path (Join-Path $RunDir 'video.mp4')) { Remove-Item -Recurse -Force $Frames }
