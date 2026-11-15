@@ -176,6 +176,9 @@ void FSimCruiseGraphics::Apply(ESimCruiseGraphicsPreset Preset)
 	const FSimCruisePresetSpec S = Spec(Preset);
 	Scalability::FQualityLevels Levels;
 	Levels.SetFromSingleQualityLevel(S.ScalabilityLevel);
+	// Ultra keeps Lumen GI at High (scalability 2): Epic GI cost about 1.5 ms of the 21.5 ms Ultra
+	// frame for a difference in bounce light the release review could not see (2026-11-14).
+	Levels.GlobalIlluminationQuality = FMath::Min(Levels.GlobalIlluminationQuality, 2);
 	Levels.ResolutionQuality = S.ScreenPercentage;
 	Scalability::SetQualityLevels(Levels, true);
 
@@ -188,7 +191,7 @@ void FSimCruiseGraphics::Apply(ESimCruiseGraphicsPreset Preset)
 	// Frame guard: when the GPU cannot hold 60 fps (a laptop held at 28 W), TSR's internal picture
 	// shrinks, down to 50 %, so frames come on time; the preset's screen percentage stays the top.
 	SetCVar(TEXT("r.DynamicRes.OperationMode"), TEXT("2"));
-	SetCVar(TEXT("r.DynamicRes.FrameTimeBudget"), TEXT("16.0"));
+	SetCVar(TEXT("r.DynamicRes.FrameTimeBudget"), TEXT("15.0")); // headroom under 16.7 ms: a frame never waits a whole refresh
 	// The floor sits 15 % under the preset, not at 50 %: the release test found Ultra held at
 	// 50-53 % on Tail of the Dragon and Ocean Drive (smeared trees, a coarse mirror) although at a
 	// fixed 75 % the frame p95 was 16.9 and 20.1 ms (main 8456dea, 2026-11-14).
