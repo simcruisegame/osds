@@ -570,7 +570,9 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 		if (bStartCarBuilt)
 		{
 			const TArray<FString> Models = SimCruiseParkedCars::AllCarIds();
-			if (PrebuiltModels < Models.Num())
+			// Each model only once its worker-thread part is done: Get would otherwise wait for it on
+			// the game thread (the Miata: 29 s with the window not answering).
+			if (PrebuiltModels < Models.Num() && SimCruiseCarAssets::IsReadyToGet(Models[PrebuiltModels]))
 			{
 				const double ModelStart = FPlatformTime::Seconds();
 				FString ModelError;
@@ -586,7 +588,12 @@ bool ASimCruiseGameMode::TryPlacePendingPlayers()
 			bModelsReady = false;
 		}
 		const double Waited = FPlatformTime::Seconds() - WaitStartedSeconds;
-		if (!bStartCarBuilt && (CarId.IsEmpty() || bTilesUnderWay))
+		// The player's car once its worker-thread part (glTF and rig) is done; until then the loading
+		// screen keeps drawing. Every Miata start froze the game for about 29 s here (Get waited on
+		// the worker from the game thread), long enough for Windows to call it Not Responding.
+		// Past the start timeout it is taken as it is.
+		if (!bStartCarBuilt && (CarId.IsEmpty() || bTilesUnderWay) &&
+			(SimCruiseCarAssets::IsReadyToGet(CarId) || FPlatformTime::Seconds() - WaitStartedSeconds > StartTimeoutSeconds))
 		{
 			bStartCarBuilt = true;
 			const double Before = FPlatformTime::Seconds();

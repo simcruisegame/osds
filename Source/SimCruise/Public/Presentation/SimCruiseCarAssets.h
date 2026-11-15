@@ -91,6 +91,12 @@ namespace SimCruiseCarAssets
 	 */
 	SIMCRUISE_API void PrepareAsync(const FString& CarId);
 
+	/**
+	 * Whether Get would not wait on the worker thread: the car is built, or its CPU work is done.
+	 * A car never started is started here (PrepareAsync) and is not ready yet. Game thread only.
+	 */
+	SIMCRUISE_API bool IsReadyToGet(const FString& CarId);
+
 	/** Whether the car is built already (Get returns it at once). */
 	SIMCRUISE_API bool IsBuilt(const FString& CarId);
 
