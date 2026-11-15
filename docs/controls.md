@@ -38,9 +38,11 @@ The engine sound is on at the start.
 
 - **Pause menu.** Menu opens and closes it. Up and down move between rows. Up from the first row goes to the page tabs at the top (Drive, Your car, Seat & view, Settings): left and right move along them, and A or Down opens that page. LB and RB change the page from anywhere. A new page always starts on its first row. On a slider or a choice row, D-pad left and right change it; Y puts a slider back to stock. B goes back to the drive.
 - **Back one step.** B on a screen you opened from the menu (Where to?, Plan a route, Famous roads, Road atlas, Tune car, Seat & view) takes you back to the menu, on the row you came from. Menu closes everything and goes back to the drive.
-- **Where to?** The D-pad moves between the search box, Search, Surprise me, the places and Back to drive; A chooses. On the search box, press A for the pad keyboard: the D-pad moves over the keys, A types the key, X deletes, Y types a space, Search searches, and B closes the keyboard (your text stays).
+- **Where to?** The D-pad moves between the search box, Search, Surprise me, the places and Back to drive; A chooses. On the search box, press A for the pad keyboard: the D-pad (or the stick) moves over the keys, A types the key, B deletes the letter before the cursor, X types a space, Y or Menu searches, and LB and RB move the cursor. B on an empty box closes the keyboard.
 - **Road atlas.** D-pad left or right moves from the map onto the buttons at the top (zoom, Recenter, Drive here, Back to drive, Find a place, Surprise me, the car, the gearbox and every setting). Then the D-pad moves between the buttons, A presses one, and B goes back to the map. On the map, B goes back.
-- **Tune car and Seat & view.** Up and down choose a row, left and right change it, A saves, B (or Menu) cancels.
+- **Tune car and Seat & view.** Up and down choose a row, left and right change it (the stick too: one push is one step), X resets the row, Y resets all, A saves, B (or Menu) cancels.
+- **Quit.** The last row of the Drive page, *Quit the game*, asks first: *Keep driving* (where the pad starts) or *Quit to the desktop*. A chooses, B goes back.
+- Every screen's button hints come from the same list as its key handling, and a test (`SimCruise.UI.PadHintsMatch`) presses each hinted button to check it does what it says.
 - The left stick works like the D-pad in the menus: one push is one step, and holding it repeats. A mouse resting on the menu does not move your place; moving the mouse does.
 - The button hints at the bottom of every screen follow what you used last: press any pad button and they show the pad's buttons (A, B, LB RB); press a key or move the mouse and they show the keyboard's keys.
 
