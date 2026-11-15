@@ -986,6 +986,32 @@ namespace SimCruiseTileDetail
 				if (bHotel) bHotelSign = true;
 			}
 
+			// Windows by the wall's role (Buildings step 2): the street fronts keep every bay; a side
+			// wall has a window in a third of its bays (a house half, in pairs), the back a quarter (a
+			// house 60 %), a garage, shed or metal-clad wall almost none (a warehouse's front a few).
+			// Front: the longest street-facing edge's normal (none: every wall a side).
+			FVector2d FrontDir = FVector2d::ZeroVector;
+			{
+				double Longest = 0.0;
+				for (int32 i = 0; i < N; ++i)
+				{
+					const double L = FVector2d::Distance(Ring[i], Ring[(i + 1) % N]);
+					if (Front[i] && !Arc[i] && L > Longest) { Longest = L; FrontDir = EdgeNormal(i); }
+				}
+			}
+			const FString UseLower = Row.Use.ToLower();
+			const bool bOutbuilding = UseLower.Contains(TEXT("garage")) || UseLower.Contains(TEXT("shed")) || UseLower.Contains(TEXT("carport")) || (FMath::Abs(Area) < 45.0 && Height < 5.0);
+			const bool bWorks = WallMat == SimCruiseWallMaterial::Metal || UseLower.Contains(TEXT("industrial")) || UseLower.Contains(TEXT("warehouse")) || UseLower.Contains(TEXT("storage"));
+			auto RoleOf = [&](int32 i) -> float
+			{
+				if (!bWallMaterials || bDeco || bTower || bCurtain) return 0.f;
+				if (bOutbuilding) return SimCruiseWindowRole::Encode(Front[i] ? 0.2 : 0.0, false);
+				if (Front[i]) return bWorks ? SimCruiseWindowRole::Encode(0.3, false) : 0.f;
+				if (bWorks) return SimCruiseWindowRole::Encode(0.1, false);
+				const bool bBack = !FrontDir.IsZero() && FVector2d::DotProduct(EdgeNormal(i), FrontDir) < -0.7;
+				return bHouse ? SimCruiseWindowRole::Encode(bBack ? 0.6 : 0.5, true) : SimCruiseWindowRole::Encode(bBack ? 0.25 : 0.35, false);
+			};
+
 			for (int32 i = 0; i < N; ++i)
 			{
 				const FVector2d A = Ring[i], C = Ring[(i + 1) % N];
@@ -993,6 +1019,7 @@ namespace SimCruiseTileDetail
 				if (Len < 0.05) continue;
 				const FVector2d T = (C - A) / Len;
 				const FVector2d N2 = EdgeNormal(i);
+				const float Role = RoleOf(i);
 				const double Along0 = -0.5 * Len; // windows centre on each facade
 				const bool bPorch = PorchEdge[i];
 				// Ends that meet a rounded corner run on into it (no gap in the wrapped bands).
@@ -1016,7 +1043,7 @@ namespace SimCruiseTileDetail
 					const bool bGrid = WKind == Kind::Wall || WKind == Kind::WallFront || WKind == Kind::DecoFront || WKind == Kind::DecoUpper;
 					const bool bShopKind = WKind == Kind::WallFront || WKind == Kind::DecoFront;
 					const double Split = bGrid ? FMath::Clamp(FacadeGridTop(Ground, Zt, FloorH, bShopKind), Z0, Zt) : Zt;
-					if (Split > Z0 + 0.01) W.Panel(P0, P1, Z0, Split, N2, Colour, WKind, Along, Ground);
+					if (Split > Z0 + 0.01) W.Panel(P0, P1, Z0, Split, N2, Colour, bGrid ? WKind + Role : WKind, Along, Ground);
 					if (Zt > FMath::Max(Split, Z0) + 0.01) W.Panel(P0, P1, FMath::Max(Split, Z0), Zt, N2, Colour, Kind::Trim, Along, Ground);
 				};
 				if (bCurtain)

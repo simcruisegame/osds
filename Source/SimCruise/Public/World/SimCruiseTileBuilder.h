@@ -47,6 +47,20 @@ namespace SimCruiseSurfaceKind
 }
 
 /**
+ * A wall's windows by its role (side, back, garage): the fraction added to a window-grid kind in
+ * UV1.x (the shaders round the kind). The share of the wall's bays that have a window, in ninths,
+ * and whether a house's windows come in pairs. No fraction: every bay.
+ */
+namespace SimCruiseWindowRole
+{
+	inline float Encode(double Share, bool bPairs)
+	{
+		const int32 Q = FMath::Clamp(FMath::RoundToInt(Share * 9.0), 0, 9);
+		return (static_cast<float>((bPairs ? 10 : 0) + Q) + 0.5f) / 48.f;
+	}
+}
+
+/**
  * What a building's walls are built of: the integer part of UV1.y on the building mesh (the
  * fraction is the building's seed). The building shader draws its coursing on the wall kinds.
  */

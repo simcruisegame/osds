@@ -660,6 +660,22 @@ if (kind < 0.5 || (kind > 10.5 && kind < 13.5))
 	{
 		bayW = 3.6; x = frac(along / bayW + 0.5) * bayW; winW = 3.1; x0 = 0.25; y0 = 0.35; y1 = storey - 0.45;
 	}
+	// The wall's role (the fraction of UV1.x, SimCruiseWindowRole): the share of its bays that
+	// have a window, the same bays up every storey (side and back walls 0-60 %, garages none), and
+	// on houses the windows in pairs, 0.3 m apart. No fraction: every bay, as on a street front.
+	float roleF = UV1.x - kind;
+	float keepWin = 1.0;
+	if (roleF > 0.005 && !shop)
+	{
+		float code = floor(roleF * 48.0);
+		float share = fmod(code, 10.0) / 9.0;
+		float bay = floor(along / bayW + 0.5);
+		bool pairs = code > 9.5;
+		float key = pairs ? floor(bay * 0.5) : bay;
+		float rk = frac(sin((key + seed * 53.0) * 12.9898) * 43758.5453);
+		keepWin = share > 0.995 ? 1.0 : step(rk, share);
+		if (pairs) x0 = fmod(abs(bay), 2.0) < 0.5 ? bayW - winW - 0.15 : 0.15;
+	}
 	// Edges filtered over the pixel's footprint: a window a few pixels across (down the
 	// street) must not alias into a speckle under the temporal jitter.
 	float fx = max(fwidth(along), 1e-4), fy = max(fwidth(h), 1e-4), fm = max(fx, fy);
@@ -670,6 +686,7 @@ if (kind < 0.5 || (kind > 10.5 && kind < 13.5))
 	float winSize = max(min(winW, y1 - y0), 0.1);
 	float farWin = saturate((2.0 * fm - winSize) / winSize);
 	inWin = lerp(inWin, (winW / bayW) * saturate((y1 - y0) / storey) * step(0.0, h), farWin);
+	inWin *= keepWin;
 	float edge = min(min(x - x0, x0 + winW - x), min(y - y0, y1 - y));
 	// Frames and mullions thinner than a pixel fade to their share of the window.
 	float thin = saturate(1.5 - fm / 0.06);
@@ -687,7 +704,7 @@ if (kind < 0.5 || (kind > 10.5 && kind < 13.5))
 	col = lerp(stucco, glass, pane);
 	// Rain runs dirt off each sill: a streak under the window, darkest at the sill, fading over
 	// a metre (one window in three barely streaked).
-	float under = step(x0 + 0.05, x) * step(x, x0 + winW - 0.05) * (1.0 - inWin);
+	float under = step(x0 + 0.05, x) * step(x, x0 + winW - 0.05) * (1.0 - inWin) * keepWin;
 	float below = y0 - y;
 	float streak = under * step(0.0, below) * exp(-below / 0.7) * (0.06 + 0.12 * frac(r * 5.3));
 	col *= 1.0 - streak;

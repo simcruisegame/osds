@@ -83,6 +83,17 @@ bool FSimCruiseWallMaterialTest::RunTest(const FString& Parameters)
 		const int32 A = WallMaterialFor(In), B = WallMaterialFor(In);
 		TestEqual(TEXT("deterministic"), A, B);
 	}
+	// A window role stays under half (the shaders round the kind) and decodes to its share and pairs.
+	for (int32 q = 0; q <= 9; ++q)
+	for (int32 p = 0; p <= 1; ++p)
+	{
+		const float F = SimCruiseWindowRole::Encode(q / 9.0, p == 1);
+		TestTrue(TEXT("role under half a kind"), F > 0.005f && F < 0.5f);
+		const int32 Code = FMath::FloorToInt(F * 48.f);
+		TestEqual(TEXT("role share"), Code % 10, q);
+		TestEqual(TEXT("role pairs"), Code >= 10, p == 1);
+		TestEqual(TEXT("kind survives"), FMath::RoundToFloat(SimCruiseSurfaceKind::WallFront + F), SimCruiseSurfaceKind::WallFront);
+	}
 	// The packed seed keeps its material and its seed bin.
 	for (int32 m = 0; m <= M::Metal; ++m)
 	{
