@@ -237,6 +237,21 @@ namespace SimCruiseTileDetail
 	bool bFitFacadeGrid = true;
 	bool bWallMaterials = true;
 
+	int32 BuildingBand(const FWallMaterialInput& In)
+	{
+		const FString R = In.Region.ToString(), C = In.Climate.ToString();
+		if (C == TEXT("climate:arid") || C == TEXT("climate:mediterranean") || R == TEXT("region:southwest") || R == TEXT("region:california")) return Dry;
+		if (C == TEXT("climate:tropical") || R == TEXT("region:florida") || R == TEXT("region:hawaii")) return Tropic;
+		if (R == TEXT("region:pacific_northwest") || C == TEXT("climate:oceanic")) return Wet;
+		if (R == TEXT("region:south") || C == TEXT("climate:humid_subtropical")) return South;
+		if (R == TEXT("region:northeast") || R == TEXT("region:midwest") || C == TEXT("climate:humid_continental")) return North;
+		if ((In.LonDeg < -114.0 && In.LatDeg < 38.0) || (In.LonDeg < -103.0 && In.LonDeg > -122.0 && In.LatDeg < 40.0)) return Dry;
+		if (In.LonDeg < -116.0 && In.LatDeg >= 42.0) return Wet;
+		if ((In.LatDeg < 28.5 && In.LonDeg > -83.0) || In.LonDeg < -150.0) return Tropic;
+		if (In.LatDeg < 36.5 && In.LonDeg > -100.0) return South;
+		return North;
+	}
+
 	int32 WallMaterialFor(const FWallMaterialInput& In, bool* bOutFromData)
 	{
 		using namespace SimCruiseWallMaterial;
@@ -266,18 +281,7 @@ namespace SimCruiseTileDetail
 		// Survey of Construction principal exterior wall material by region, 2010s: vinyl siding the
 		// North's and Pacific Northwest's houses, brick the South's, stucco the Southwest's, Florida's
 		// and California's; commercial low-rise in block and render, industrial in metal and block).
-		enum EBand { North, South, Dry, Tropic, Wet };
-		EBand Band = North;
-		const FString R = In.Region.ToString(), C = In.Climate.ToString();
-		if (C == TEXT("climate:arid") || C == TEXT("climate:mediterranean") || R == TEXT("region:southwest") || R == TEXT("region:california")) Band = Dry;
-		else if (C == TEXT("climate:tropical") || R == TEXT("region:florida") || R == TEXT("region:hawaii")) Band = Tropic;
-		else if (R == TEXT("region:pacific_northwest") || C == TEXT("climate:oceanic")) Band = Wet;
-		else if (R == TEXT("region:south") || C == TEXT("climate:humid_subtropical")) Band = South;
-		else if (R == TEXT("region:northeast") || R == TEXT("region:midwest") || C == TEXT("climate:humid_continental")) Band = North;
-		else if ((In.LonDeg < -114.0 && In.LatDeg < 38.0) || (In.LonDeg < -103.0 && In.LonDeg > -122.0 && In.LatDeg < 40.0)) Band = Dry;
-		else if (In.LonDeg < -116.0 && In.LatDeg >= 42.0) Band = Wet;
-		else if ((In.LatDeg < 28.5 && In.LonDeg > -83.0) || In.LonDeg < -150.0) Band = Tropic;
-		else if (In.LatDeg < 36.5 && In.LonDeg > -100.0) Band = South;
+		const int32 Band = BuildingBand(In);
 		const FString Use = In.Use.ToLower();
 		const bool bIndustrial = Use.Contains(TEXT("industrial")) || Use.Contains(TEXT("warehouse")) || Use.Contains(TEXT("manufactur")) || Use.Contains(TEXT("storage"))
 			|| Use.Contains(TEXT("agricultur")) || Use.Contains(TEXT("barn")) || Use.Contains(TEXT("farm")) || Use.Contains(TEXT("hangar"));
@@ -989,27 +993,129 @@ namespace SimCruiseTileDetail
 			// Windows by the wall's role (Buildings step 2): the street fronts keep every bay; a side
 			// wall has a window in a third of its bays (a house half, in pairs), the back a quarter (a
 			// house 60 %), a garage, shed or metal-clad wall almost none (a warehouse's front a few).
-			// Front: the longest street-facing edge's normal (none: every wall a side).
+			// Street: an edge a street faces (the shopfront edges, Front, are among them; on ordinary
+			// buildings only Street is asked, not the shop glass). Front direction: the longest street
+			// edge's normal (none: every wall a side).
+			const bool bDetailed = bWallMaterials && !bFloating && !bDeco && !bTower;
+			TArray<bool> Street;
+			Street.Init(false, N);
 			FVector2d FrontDir = FVector2d::ZeroVector;
 			{
 				double Longest = 0.0;
 				for (int32 i = 0; i < N; ++i)
 				{
-					const double L = FVector2d::Distance(Ring[i], Ring[(i + 1) % N]);
-					if (Front[i] && !Arc[i] && L > Longest) { Longest = L; FrontDir = EdgeNormal(i); }
+					const FVector2d Ai = Ring[i], Ci = Ring[(i + 1) % N];
+					const double L = FVector2d::Distance(Ai, Ci);
+					if (Arc[i] || L < 2.0) continue;
+					Street[i] = Front[i] || (bDetailed && StreetRankFaced(Roads, (Ai + Ci) * 0.5, EdgeNormal(i)) >= 0);
+					if (Street[i] && L > Longest) { Longest = L; FrontDir = EdgeNormal(i); }
 				}
 			}
 			const FString UseLower = Row.Use.ToLower();
 			const bool bOutbuilding = UseLower.Contains(TEXT("garage")) || UseLower.Contains(TEXT("shed")) || UseLower.Contains(TEXT("carport")) || (FMath::Abs(Area) < 45.0 && Height < 5.0);
 			const bool bWorks = WallMat == SimCruiseWallMaterial::Metal || UseLower.Contains(TEXT("industrial")) || UseLower.Contains(TEXT("warehouse")) || UseLower.Contains(TEXT("storage"));
+			const bool bHome = bHouse || UseLower == TEXT("house") || UseLower == TEXT("detached") || UseLower == TEXT("residential") || UseLower == TEXT("semidetached_house")
+				|| UseLower == TEXT("bungalow") || UseLower == TEXT("cabin") || UseLower == TEXT("terrace") || UseLower == TEXT("farmhouse");
 			auto RoleOf = [&](int32 i) -> float
 			{
-				if (!bWallMaterials || bDeco || bTower || bCurtain) return 0.f;
-				if (bOutbuilding) return SimCruiseWindowRole::Encode(Front[i] ? 0.2 : 0.0, false);
+				if (!bDetailed || bCurtain) return 0.f;
+				if (bOutbuilding) return SimCruiseWindowRole::Encode(Street[i] ? 0.2 : 0.0, false);
 				if (Front[i]) return bWorks ? SimCruiseWindowRole::Encode(0.3, false) : 0.f;
-				if (bWorks) return SimCruiseWindowRole::Encode(0.1, false);
+				if (bWorks) return SimCruiseWindowRole::Encode(Street[i] ? 0.3 : 0.1, false);
+				if (Street[i]) return bHome ? SimCruiseWindowRole::Encode(0.8, true) : 0.f;
 				const bool bBack = !FrontDir.IsZero() && FVector2d::DotProduct(EdgeNormal(i), FrontDir) < -0.7;
-				return bHouse ? SimCruiseWindowRole::Encode(bBack ? 0.6 : 0.5, true) : SimCruiseWindowRole::Encode(bBack ? 0.25 : 0.35, false);
+				return bHome ? SimCruiseWindowRole::Encode(bBack ? 0.6 : 0.5, true) : SimCruiseWindowRole::Encode(bBack ? 0.25 : 0.35, false);
+			};
+
+			// Buildings step 3, the door: one on the building's main street edge (not a shop front:
+			// its glass is the way in), set in a gap between windows, recessed, with steps up to the
+			// floor. A house: a 0.91 x 2.03 m door (IRC R311.2) in a painted casing, 0.12 m deep, a stoop
+			// and steps up to its floor (crawl space and basement floors in the North, slabs in the
+			// South-west and Florida); a commercial or civic building: a glass door, 0.2 m deep, one step;
+			// a garage: a 2.44 x 2.13 m (8 x 7 ft) panel door at grade.
+			int32 DoorEdge = INDEX_NONE;
+			double DoorS = 0.0, DoorW = 0.91, DoorH = 2.03, DoorDepth = 0.12, FloorUp = 0.0;
+			if (bDetailed && !bCurtain && !bMainStreet)
+			{
+				double Longest = 0.0;
+				for (int32 i = 0; i < N; ++i)
+				{
+					const double L = FVector2d::Distance(Ring[i], Ring[(i + 1) % N]);
+					if (Street[i] && !Front[i] && !PorchEdge[i] && L > Longest) { Longest = L; DoorEdge = i; }
+				}
+				if (DoorEdge != INDEX_NONE)
+				{
+					const double Len = Longest;
+					if (bOutbuilding) { DoorW = 2.44; DoorH = 2.13; DoorDepth = 0.08; }
+					else if (!bHome) { DoorW = 0.91; DoorH = 2.13; DoorDepth = 0.2; }
+					// Floor height: a house's foundation by region (FEMA/NSI defaults: slab 0.75 ft,
+					// crawl 2-3 ft, basement 2 ft and more), a step for other buildings, none for a garage.
+					FWallMaterialInput Where;
+					Where.LatDeg = X.LatDeg; Where.LonDeg = X.LonDeg;
+					if (BP) { Where.Region = BP->Facts.Strongest(TEXT("region")); Where.Climate = BP->Facts.Strongest(TEXT("climate")); }
+					const int32 Band = BuildingBand(Where);
+					const double Jitter = 0.1 * (Unit(Hash(H, 51)) * 2.0 - 1.0);
+					FloorUp = bOutbuilding ? 0.0 : !bHome ? 0.15
+						: (Band == North || Band == Wet) ? 0.6 + Jitter : Band == South ? 0.45 + Jitter : 0.2 + 0.5 * Jitter;
+					FloorUp = FMath::Max(FloorUp, 0.0);
+					// In a gap between windows: on a bay line of the shader's grid (its bay width from
+					// the building's seed, as the shader works it out); a house's between two pairs.
+					const double Seed = FMath::FloorToDouble(FMath::Frac(W.Seed) * 4096.0) / 4096.0;
+					const double BayW = 2.5 + 0.8 * FMath::Frac(Seed * 7.13);
+					const double Want = Len * (bHome ? 0.3 + 0.4 * Unit(Hash(H, 52)) : 0.5);
+					int32 K = FMath::RoundToInt((Want - 0.5 * Len) / BayW - 0.5);
+					if (bHome && (K % 2 == 0)) K += (Want - 0.5 * Len) / BayW - 0.5 > K ? 1 : -1;
+					DoorS = (K + 0.5) * BayW + 0.5 * Len - 0.5 * DoorW;
+					if (bOutbuilding) DoorS = 0.5 * (Len - DoorW);
+					DoorS = FMath::Clamp(DoorS, 0.35, Len - 0.35 - DoorW);
+					if (Len < DoorW + 0.7) DoorEdge = INDEX_NONE;
+				}
+			}
+			auto Door = [&](const FVector2d& A, const FVector2d& T, const FVector2d& N2, double Along0)
+			{
+				const FVector2d D0 = A + T * DoorS, D1 = A + T * (DoorS + DoorW), Mid = (D0 + D1) * 0.5;
+				const double Outside = Data.HeightAtUnit((Mid + N2 * 1.2) / X.Side);
+				const double Grade = FMath::Max(Ground, Outside);
+				const double Zf = Grade + FloorUp;
+				const FVector2d In = -N2 * DoorDepth;
+				const FLinearColor Reveal = Wall * 0.85f;
+				static const TCHAR* DoorPaints[] = { TEXT("f2f0ea"), TEXT("1f2326"), TEXT("7b2d26"), TEXT("2c3e57"), TEXT("2f4f3a"), TEXT("6b4a2f"), TEXT("5a5f63"), TEXT("f2f0ea") };
+				const FLinearColor Leaf = bOutbuilding ? Srgb(TEXT("e9e7e1")) : Srgb(DoorPaints[Hash(H, 53) % 8]);
+				// The wall under the door (to the floor) and the recess: leaf, jambs, head and threshold.
+				W.Panel(D0, D1, Bottom, Zf, N2, Wall, Kind::Wall, Along0 + DoorS, Ground);
+				W.Panel(D0 + In, D1 + In, Zf, Zf + DoorH, N2, bHome || bOutbuilding ? Leaf : Srgb(TEXT("3a3f44")), bHome || bOutbuilding ? Kind::Trim : Kind::Railing, 0.0, Ground);
+				W.Panel(D0, D0 + In, Zf, Zf + DoorH, T, Reveal, Kind::Trim, 0.0, Ground);
+				W.Panel(D1 + In, D1, Zf, Zf + DoorH, -T, Reveal, Kind::Trim, 0.0, Ground);
+				{
+					const FVector2d Q[4] = { D0, D1, D1 + In, D0 + In };
+					W.Flat(Q, Zf + DoorH, false, Reveal, Kind::Trim);
+					W.Flat(Q, Zf, true, Srgb(TEXT("b8b4aa")), Kind::Terrazzo);
+				}
+				// The casing: 90 mm, 30 mm proud, white on a house, dark bronze on a shop or office.
+				const FLinearColor Casing = bHome ? WeatheredPaint(Srgb(TEXT("f4f2ec")), MaxTrimAlbedo) : Srgb(TEXT("3a3f44"));
+				if (!bOutbuilding)
+				{
+					W.Slab(D0 - T * 0.09, D0, N2, 0.0, 0.03, Zf, Zf + DoorH + 0.09, Casing, Kind::Trim, 0.0, Ground, false, false);
+					W.Slab(D1, D1 + T * 0.09, N2, 0.0, 0.03, Zf, Zf + DoorH + 0.09, Casing, Kind::Trim, 0.0, Ground, false, false);
+					W.Slab(D0 - T * 0.09, D1 + T * 0.09, N2, 0.0, 0.03, Zf + DoorH, Zf + DoorH + 0.09, Casing, Kind::Trim, 0.0, Ground, false, false);
+				}
+				// Steps: 0.18 m risers and 0.28 m treads (IRC R311.7) down from a landing (a house's
+				// stoop 1.0 m deep, else 0.3 m), each step its own block so no two faces share a plane.
+				const double Rise = Zf - Grade;
+				if (Rise > 0.05)
+				{
+					const int32 Steps = FMath::Max(1, FMath::RoundToInt(Rise / 0.18));
+					const double Landing = bHome ? 1.0 : 0.3;
+					const FVector2d S0 = D0 - T * 0.45, S1 = D1 + T * 0.45;
+					const FLinearColor Concrete = Srgb(TEXT("b8b4aa"));
+					W.Slab(S0, S1, N2, 0.0, Landing, Grade - 0.25, Zf, Concrete, Kind::Terrazzo, 0.0, Ground, false, false);
+					for (int32 j = Steps - 1; j >= 1; --j)
+					{
+						const double Out0 = Landing + (Steps - 1 - j) * 0.28, Out1 = Out0 + 0.28;
+						W.Slab(S0, S1, N2, Out0, Out1, Grade - 0.25, Grade + j * Rise / Steps, Concrete, Kind::Terrazzo, 0.0, Ground, false, false);
+					}
+				}
+				return Zf + DoorH;
 			};
 
 			for (int32 i = 0; i < N; ++i)
@@ -1095,6 +1201,15 @@ namespace SimCruiseTileDetail
 							S0 += Width;
 							++Lot;
 						}
+					}
+					else if (i == DoorEdge)
+					{
+						// The wall round the door: either side of it to the top, and over it from its head.
+						const FVector2d D0 = A + T * DoorS, D1 = A + T * (DoorS + DoorW);
+						const double Head = Door(A, T, N2, Along0);
+						FacadeWall(A, D0, WallStart, Top + Parapet, Wall, WallKind, Along0);
+						FacadeWall(D1, C, WallStart, Top + Parapet, Wall, WallKind, Along0 + DoorS + DoorW);
+						if (Top + Parapet > Head + 0.01) FacadeWall(D0, D1, Head, Top + Parapet, Wall, WallKind, Along0 + DoorS);
 					}
 					else
 					{
