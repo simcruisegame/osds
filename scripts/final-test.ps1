@@ -65,14 +65,16 @@ if (-not $SkipEditorTest) {
     New-Item -ItemType Directory -Force $Out | Out-Null
     $Log = Join-Path $Out 'final-test-steps.log'
     function Step([string]$What) { $L = "$((Get-Date).ToUniversalTime().ToString('HH:mm'))Z $What"; Write-Host $L; Add-Content -Encoding utf8 $Log $L }
+    # 3. Bridges first (the new bridge decks are the newest change): Doraville Northcrest Road over I-285,
+    # Bixby, Detroit Woodward over I-75, both ways.
+    Step 'part 3: bridge-check'
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'bridge-check.ps1') -OutRoot (Join-Path $Out 'bridges') -ShowWindow | Select-Object -Last 1
+    Step 'part 3 done'
     # 2. The full visible Ultra test: four hero roads x three cars, 30 random places (3 AK, 3 HI), the cases.
     Step 'part 2: release-test -ShowWindow -AllCars'
     & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'release-test.ps1') -ShowWindow -AllCars | Select-Object -Last 5
     $Run = Get-ChildItem (Join-Path $TestTree 'Saved\ReleaseTest') -Directory | Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-8) -and (Test-Path (Join-Path $_.FullName 'summary.md')) } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     Step "part 2 done: $($Run.FullName)"
-    # 3. Bridges: Bixby, Detroit Woodward over I-75, Doraville Northcrest Road over I-285, both ways.
-    Step 'part 3: bridge-check'
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $S 'bridge-check.ps1') -OutRoot (Join-Path $Out 'bridges') -ShowWindow | Select-Object -Last 1
     # 3b. Civil structures: each example of data\civil-places.json from its approaches (the random one both ways).
     $Civil = Join-Path $TestTree 'data\civil-places.json'
     if (Test-Path $Civil) {
