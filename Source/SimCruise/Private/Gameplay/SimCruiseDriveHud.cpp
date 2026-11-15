@@ -301,18 +301,12 @@ void FSimCruiseDriveHud::Draw(ASimCruiseHUD& Hud, float DeltaTimeS)
 
 	if (bShow)
 	{
-		float Alpha = 1.f;
-		if (Hud.Level == ESimCruiseHudLevel::Glance)
-		{
-			const bool bMoving = Hud.Mph >= SimCruiseHudRules::SpeedWakeMph;
-			const bool bAwake = Hud.WakeTime > 0.f || !bMoving || !Hud.Message.IsEmpty();
-			Hud.GlanceAlphaValue = SimCruiseHudRules::GlanceAlpha(Hud.GlanceAlphaValue, bAwake, DeltaTimeS);
-			Alpha = Hud.GlanceAlphaValue;
-		}
+		// No HUD card fades (a blind review: a fading card reads as a fault, and the map let the
+		// Corvette's centre screen show through). Glance is the smaller card, always solid.
+		const float Alpha = 1.f;
 		if (bRoute) DrawRoadGuides(Hud, *Gps);
 		DrawSpeed(Hud, Alpha);
-		// The map stays clear while a route is followed.
-		DrawRoundMap(Hud, Gps, bRoute ? 1.f : Alpha);
+		DrawRoundMap(Hud, Gps, Alpha);
 	}
 
 	// A menu covers the top of the screen: the turn sign waits.
@@ -664,7 +658,8 @@ void FSimCruiseDriveHud::DrawRoundMap(ASimCruiseHUD& Hud, const USimCruiseRouteS
 		return;
 	}
 	Disc(Centre, R + P(4.f), A(FLinearColor(1.f, 1.f, 1.f, 0.55f), Alpha), 64);
-	Disc(Centre, R, A(Glass(0.86f), Alpha), 64);
+	// An opaque backing: nothing behind the map (a screen, a sign) shows through its roads.
+	Disc(Centre, R, A(Glass(1.f), Alpha), 64);
 
 	static const float PxPerM[] = { 1.2f, 0.75f, 0.45f, 0.26f, 0.14f };
 	const double S = PxPerM[FMath::Clamp(Hud.MinimapZoom, 0, 4)] * Scale;
