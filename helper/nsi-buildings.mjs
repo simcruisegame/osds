@@ -1,6 +1,6 @@
 // Optional building-use estimates from public USACE NSI, strictly inside
 // mapped ground footprints. Height, roof shape and facade materials stay with
-// their existing sources. No raw USACE response is written to disk.
+// their existing sources. Only the public fields this needs are kept (cached), never the raw response.
 import fs from 'node:fs';
 import path from 'node:path';
 import {classifyRings} from '@mapbox/vector-tile';
