@@ -21,6 +21,7 @@
 #include "Misc/Paths.h"
 #include "World/SimCruiseGeo.h"
 #include "World/SimCruiseTileData.h"
+#include "Atlas/SimCruiseUserAgent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSimCruisePlaceFactsCommandlet, Log, All);
 
@@ -32,7 +33,7 @@ namespace
 		const TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
 		Req->SetURL(Url);
 		Req->SetVerb(Verb);
-		Req->SetHeader(TEXT("User-Agent"), TEXT("SimCruise/2.0 (+https://github.com/simcruisegame/simcruise)"));
+		Req->SetHeader(TEXT("User-Agent"), SimCruiseUserAgent::Get());
 		Req->SetHeader(TEXT("Accept"), Accept);
 		if (!Body.IsEmpty())
 		{
@@ -67,7 +68,7 @@ namespace
 		const TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
 		Req->SetURL(Url);
 		Req->SetVerb(TEXT("GET"));
-		Req->SetHeader(TEXT("User-Agent"), TEXT("SimCruise/2.0 (+https://github.com/simcruisegame/simcruise)"));
+		Req->SetHeader(TEXT("User-Agent"), SimCruiseUserAgent::Get());
 		Req->SetTimeout(60.0f);
 		bool bDone = false, bOk = false;
 		Req->OnProcessRequestComplete().BindLambda([&](FHttpRequestPtr, FHttpResponsePtr Response, bool bConnected)

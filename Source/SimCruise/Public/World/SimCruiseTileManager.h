@@ -46,7 +46,11 @@ class SIMCRUISE_API FSimCruiseTileManager
 public:
 	int32 RingRadius = 1;          // 3 x 3 tiles (Drive.gd)
 	int32 MaxInFlight = 2;
-	double RetryDelaySeconds = 15.0;
+	double RetryDelaySeconds = 15.0;  // after a tile's first failure; it doubles with each failure in a row
+	double RetryMaxSeconds = 900.0;   // ... up to 15 minutes (a host that is down is not asked again and again)
+
+	/** The wait after a tile's n-th failure in a row. */
+	double RetryDelay(int32 Failures) const { return FMath::Min(RetryMaxSeconds, RetryDelaySeconds * FMath::Pow(2.0, FMath::Clamp(Failures - 1, 0, 16))); }
 
 	/** Forget everything and start a new place. Returns the new generation. */
 	uint32 Reset();
@@ -88,4 +92,5 @@ private:
 	TSet<FIntPoint> Resident;
 	TMap<FIntPoint, uint64> InFlight;   // tile -> serial
 	TMap<FIntPoint, double> RetryAt;
+	TMap<FIntPoint, int32> Failures;   // tile -> failures in a row
 };
