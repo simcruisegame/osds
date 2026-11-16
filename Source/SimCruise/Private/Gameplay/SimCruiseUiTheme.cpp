@@ -475,6 +475,52 @@ namespace SimCruiseTheme
 			];
 	}
 
+	TArray<FKey> PadKeysOf(const FString& Glyph)
+	{
+		TArray<FString> Parts;
+		Glyph.Replace(TEXT("/"), TEXT(" ")).ParseIntoArrayWS(Parts);
+		TArray<FKey> Keys;
+		bool bDpad = false;
+		TArray<FKey> Ways;
+		for (const FString& P : Parts)
+		{
+			if (P == TEXT("A")) Keys.Add(EKeys::Gamepad_FaceButton_Bottom);
+			else if (P == TEXT("B")) Keys.Add(EKeys::Gamepad_FaceButton_Right);
+			else if (P == TEXT("X")) Keys.Add(EKeys::Gamepad_FaceButton_Left);
+			else if (P == TEXT("Y")) Keys.Add(EKeys::Gamepad_FaceButton_Top);
+			else if (P == TEXT("LB")) Keys.Add(EKeys::Gamepad_LeftShoulder);
+			else if (P == TEXT("RB")) Keys.Add(EKeys::Gamepad_RightShoulder);
+			else if (P == TEXT("LT")) Keys.Add(EKeys::Gamepad_LeftTrigger);
+			else if (P == TEXT("RT")) Keys.Add(EKeys::Gamepad_RightTrigger);
+			else if (P == TEXT("Menu")) Keys.Add(EKeys::Gamepad_Special_Right);
+			else if (P == TEXT("View")) Keys.Add(EKeys::Gamepad_Special_Left);
+			else if (P == TEXT("LS")) Keys.Add(EKeys::Gamepad_LeftThumbstick);
+			else if (P == TEXT("RS")) Keys.Add(EKeys::Gamepad_RightThumbstick);
+			else if (P == TEXT("D-pad")) bDpad = true;
+			else if (P == TEXT("Up")) Ways.Add(EKeys::Gamepad_DPad_Up);
+			else if (P == TEXT("Down")) Ways.Add(EKeys::Gamepad_DPad_Down);
+			else if (P == TEXT("Left")) Ways.Add(EKeys::Gamepad_DPad_Left);
+			else if (P == TEXT("Right")) Ways.Add(EKeys::Gamepad_DPad_Right);
+		}
+		if (bDpad)
+		{
+			if (Ways.Num() == 0) Ways = { EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down, EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right };
+			Keys.Append(Ways);
+		}
+		return Keys;
+	}
+
+	FString HintLine(const TArray<FHint>& InHints, bool bPad)
+	{
+		TArray<FString> Parts;
+		for (const FHint& Hint : InHints)
+		{
+			const FString Key = bPad || Hint.Key.IsEmpty() ? Hint.Glyph : Hint.Key;
+			Parts.Add(FString::Printf(TEXT("%s: %s"), *Key, *Hint.Text));
+		}
+		return FString::Join(Parts, TEXT("  ·  "));
+	}
+
 	TSharedRef<SWidget> Hints(const TArray<FHint>& InHints, const TAttribute<bool>& /*bPadOfScreen*/)
 	{
 		// Every screen follows the last device used (one flag for all), not its own guess.

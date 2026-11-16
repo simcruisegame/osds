@@ -63,6 +63,10 @@ public:
 		FTyre Tyres[4];
 		bool bTyres = false;
 		bool bCabin = true;
+		/** Share of the tyres in contact on concrete (ESimCruiseSurfaceKind::Concrete), 0..1. */
+		double ConcreteShare = 0.0;
+		/** Air speed past the car, m/s (the wind noise); below 0 the road speed stands in. */
+		double AirSpeedMps = -1.0;
 	};
 
 	FSimCruiseRoadNoiseSynth();

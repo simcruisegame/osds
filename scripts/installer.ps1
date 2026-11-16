@@ -7,8 +7,8 @@
   package in Saved\Package\Windows, compiles packaging\windows\simcruise.iss with
   Inno Setup 6 (ISCC.exe; install it with
   `winget install --id JRSoftware.InnoSetup -e --scope user`) into
-  Saved\Package\SimCruise-<ProjectVersion>-windows-x64-setup.exe, and writes
-  Saved\Package\SimCruise-<ProjectVersion>-SHA256SUMS.txt for the installer and the zip.
+  Saved\Package\OSDS-<ProjectVersion>-windows-x64-setup.exe, and writes
+  Saved\Package\OSDS-<ProjectVersion>-SHA256SUMS.txt for the installer and the zip.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\installer.ps1
@@ -35,14 +35,26 @@ $Version = ((Get-Content (Join-Path $Root 'Config\DefaultGame.ini')) -match '^Pr
 # Windows file versions are numeric: 2.0.0-preview.1 -> 2.0.0.
 $Numeric = ($Version -split '-')[0]
 $Script = Join-Path $Root 'packaging\windows\simcruise.iss'
-Write-Host "Inno Setup: SimCruise $Version from $Source"
-& $Iscc "/DAppVersion=$Version" "/DNumericVersion=$Numeric" "/DSourceDir=$Source" "/DOutputDir=$Out" /Qp $Script
+
+# A clean Windows has neither the Visual C++ runtime nor GameInput; the installer runs
+# Microsoft's installers for them from the package (scripts\package.ps1 copies them in).
+$Redist = Join-Path $Source 'Engine\Extras\Redist\en-us'
+foreach ($Name in 'vc_redist.x64.exe', 'GameInputRedist.msi') {
+    $File = Join-Path $Redist $Name
+    if (-not (Test-Path $File)) { throw "No $File in the package: a clean PC could not start the game (run scripts\package.ps1 again)" }
+    if ((Get-AuthenticodeSignature $File).Status -ne 'Valid') { throw "$File has no valid signature" }
+}
+# The installer replaces a runtime older than the packaged one.
+$Vc = (Get-Item (Join-Path $Redist 'vc_redist.x64.exe')).VersionInfo
+Write-Host "Inno Setup: OSDS $Version from $Source (Visual C++ runtime $($Vc.FileMajorPart).$($Vc.FileMinorPart).$($Vc.FileBuildPart))"
+& $Iscc "/DAppVersion=$Version" "/DNumericVersion=$Numeric" "/DSourceDir=$Source" "/DOutputDir=$Out" `
+    "/DVcMajor=$($Vc.FileMajorPart)" "/DVcMinor=$($Vc.FileMinorPart)" "/DVcBuild=$($Vc.FileBuildPart)" /Qp $Script
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
-$Setup = Join-Path $Out "SimCruise-$Version-windows-x64-setup.exe"
+$Setup = Join-Path $Out "OSDS-$Version-windows-x64-setup.exe"
 if (-not (Test-Path $Setup)) { throw "No installer at $Setup" }
 
-$Sums = Join-Path $Out "SimCruise-$Version-SHA256SUMS.txt"
-$Files = @($Setup, (Join-Path $Out "SimCruise-$Version-windows-x64.zip")) | Where-Object { Test-Path $_ }
+$Sums = Join-Path $Out "OSDS-$Version-SHA256SUMS.txt"
+$Files = @($Setup, (Join-Path $Out "OSDS-$Version-windows-x64.zip")) | Where-Object { Test-Path $_ }
 $Lines = foreach ($F in $Files) { '{0}  {1}' -f (Get-FileHash -Algorithm SHA256 $F).Hash.ToLower(), (Split-Path -Leaf $F) }
 Set-Content -Path $Sums -Value $Lines -Encoding ascii
 foreach ($F in $Files) { Write-Host ('{0}  {1:N0} MB' -f (Split-Path -Leaf $F), ((Get-Item $F).Length / 1MB)) }

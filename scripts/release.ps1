@@ -24,10 +24,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
+. (Join-Path $PSScriptRoot 'ShippedModels.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
 $Out = Join-Path $Root 'Saved\Package'
 $Version = ((Get-Content (Join-Path $Root 'Config\DefaultGame.ini')) -match '^ProjectVersion=' | Select-Object -First 1).Split('=')[1]
-$Zip = Join-Path $Out "SimCruise-$Version-windows-x64.zip"
+$Zip = Join-Path $Out "OSDS-$Version-windows-x64.zip"
 # The game itself, not the SimCruise.exe launcher stub: the stub's exit code is not always
 # the game's, and a Shipping game writes no log, so the self-test's exit code decides.
 $Exe = Join-Path $Out 'Windows\SimCruise\Binaries\Win64\SimCruise-Win64-Shipping.exe'
@@ -46,7 +47,9 @@ $Tar = Join-Path $env:SystemRoot 'System32\tar.exe'
 $Listing = & $Tar -t -f $Zip
 if ($Listing -match '\.pdb$') { Write-Host 'RELEASE FAILED: the zip has debug symbols'; exit 1 }
 if ($Listing -match '^SimCruise/Saved/') { Write-Host 'RELEASE FAILED: the zip has a Saved folder'; exit 1 }
-if ($Listing -match '(?i)\.onnx$|cityscapes') { Write-Host 'RELEASE FAILED: the zip has neural-network weights (.onnx), which may not be shipped for licence reasons'; exit 1 }
+# AI models: only the two cleared ones (scripts\ShippedModels.ps1); any other .onnx, or a Cityscapes file, fails.
+$Unshippable = Get-UnshippableModels $Listing
+if ($Unshippable.Count) { Write-Host "RELEASE FAILED: the zip has neural-network weights that may not be shipped: $($Unshippable -join ', ')"; exit 1 }
 if (-not ($Listing -match 'SimCruise/tools/atlas\.exe$')) { Write-Host 'RELEASE FAILED: the zip has no map helper (tools\atlas.exe)'; exit 1 }
 
 & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'installer.ps1')
@@ -61,6 +64,6 @@ try {
 }
 finally { Exit-EditorLock }
 
-Get-ChildItem $Out -File -Filter "SimCruise-$Version*" | ForEach-Object { Write-Host ('{0}  {1:N1} MB' -f $_.Name, ($_.Length / 1MB)) }
+Get-ChildItem $Out -File -Filter "OSDS-$Version*" | ForEach-Object { Write-Host ('{0}  {1:N1} MB' -f $_.Name, ($_.Length / 1MB)) }
 Write-Host 'RELEASE PACKAGE OK'
 exit 0

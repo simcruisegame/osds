@@ -1,6 +1,6 @@
 # Credits
 
-SimCruise is built on the work of many people and organisations. This file gives credit to each maker whose AI model, data, 3D model, texture, font, library or tool we use, with its licence and a link. We use a work only when its licence lets a free, open-source game use it, and we obey the terms of each licence.
+OSDS is built on the work of many people and organisations. This file gives credit to each maker whose AI model, data, 3D model, texture, font, library or tool we use, with its licence and a link. We use a work only when its licence lets a free, open-source game use it, and we obey the terms of each licence.
 
 The game code is under the [MIT License](LICENSE). Everything below keeps its own licence. The full licence texts are in [`licenses/`](licenses/). Place-by-place sources (single buildings, surveys, photographs used for one place) are in [Credits.txt](Credits.txt) and [`licenses/Road Atlas.txt`](licenses/Road%20Atlas.txt). How each data layer reaches the game is in [docs/data-sources.md](docs/data-sources.md).
 
@@ -16,6 +16,7 @@ Licences were checked at each maker's own page on 14 November 2026.
 - [Textures, sky and trees](#textures-sky-and-trees)
 - [Fonts](#fonts)
 - [Engine, libraries and tools](#engine-libraries-and-tools)
+- [Logo and brand](#logo-and-brand)
 - [Named in our research, not used now](#named-in-our-research-not-used-now)
 
 ## Credit shown in the game
@@ -28,13 +29,13 @@ Some licences need the credit where the player sees the data, not only in a file
 
 | Licence | What it needs in the game | Sources under it |
 |---|---|---|
-| ODbL 1.0 | "© OpenStreetMap contributors" where the map data is seen, and a way to find the licence | OpenStreetMap (roads, buildings, routes, place facts), Overture Maps, Photon search results, adsb.lol aircraft |
-| CC BY 4.0 | The maker's name, the licence and a link, in a manner that fits the medium | WRI and Meta canopy heights, Open-Meteo weather, Esri Community Maps buildings (through Overture), the Sketchfab cars, ESA WorldCover (training only) |
-| ODC-BY 1.0 | Credit to the database maker when you use or share it | Satlas model weights (testing) |
+| ODbL 1.0 | "© OpenStreetMap contributors" where the map data is seen, and a way to find the licence | OpenStreetMap (roads, buildings, routes, place facts), Overture Maps, Photon search results, adsb.lol aircraft (not used in 2.0.3) |
+| CC BY 4.0 | The maker's name, the licence and a link, in a manner that fits the medium | WRI and Meta canopy heights, Köppen-Geiger climate maps (Beck et al.), Open-Meteo weather, Esri Community Maps buildings (through Overture), the Sketchfab cars, ESA WorldCover (training only) |
+| ODC-BY 1.0 | Credit to the database maker when you use or share it | Satlas model weights (the first two stages are inside the shipped aerial eye) |
 | CC BY-SA | Credit and the same licence for adapted works | The place photographs listed in [Credits.txt](Credits.txt), the Detectron2 weights (development tool) |
 | US public domain | Nothing required; USGS, USDA and NOAA ask for credit as a courtesy | USGS, USDA, NOAA, NASA, FHWA, US Army Corps of Engineers data |
 
-**Gaps to close** (the code has not changed yet): the road atlas line does not name **Open-Meteo** (CC BY 4.0; Open-Meteo asks for "Weather data by Open-Meteo.com" with a link) or **adsb.lol** (ODbL), and the live aircraft and weather have no credit near them on the screen. One short line on the road atlas page, for example "Weather data by Open-Meteo.com (CC BY 4.0) · aircraft from adsb.lol (ODbL)", closes both.
+**Live data credit on the screen:** the road atlas page shows "Weather by Open-Meteo (CC BY 4.0)". The adsb.lol credit shows only when the aircraft are on (`sc.Feature.Planes` / `sc.Feature.Aircraft`); in 2.0.3 they are off and no aircraft data is fetched.
 
 ## AI models
 
@@ -42,10 +43,11 @@ All models run on the player's own computer, or only on our computers when we ma
 
 | Model | Maker | Licence | What we use it for | Where it is | Training data (as the maker states it) |
 |---|---|---|---|---|---|
-| [Real-ESRGAN General x4v3](https://github.com/xinntao/Real-ESRGAN) | Xintao Wang, Liangbin Xie, Chao Dong and Ying Shan (Tencent ARC Lab); ONNX export by [Qualcomm AI Hub](https://github.com/qualcomm/ai-hub-models) | [BSD 3-Clause](https://github.com/xinntao/Real-ESRGAN/blob/master/LICENSE) (code and released weights; Qualcomm's card also lists bsd-3-clause) | Adds detail to the aerial photographs the ground is shaded with, once per place, then from a cache | In the repository as `data/ai/real-esrgan-general-x4v3.onnx` for development builds; not in the installer | DIV2K ("academic research purpose only"), Flickr2K and OST, with synthetic damage ([paper](https://arxiv.org/abs/2107.10833)) |
+| [Real-ESRGAN General x4v3](https://github.com/xinntao/Real-ESRGAN) | Xintao Wang, Liangbin Xie, Chao Dong and Ying Shan (Tencent ARC Lab); ONNX export by [Qualcomm AI Hub](https://github.com/qualcomm/ai-hub-models) | [BSD 3-Clause](https://github.com/xinntao/Real-ESRGAN/blob/master/LICENSE) (code and released weights; Qualcomm's card also lists bsd-3-clause) | Adds detail to the aerial photographs the ground is shaded with, once per place, then from a cache | `data/ai/real-esrgan-general-x4v3.onnx` (5 MB), in the installer from 2.0.3 | DIV2K ("academic research purpose only"), Flickr2K and OST, with synthetic damage ([paper](https://arxiv.org/abs/2107.10833)) |
 | [Stable Diffusion XL base 1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) | Stability AI | [CreativeML Open RAIL++-M](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md) (use limits in its Attachment A; Stability AI claims no rights in the output) | Made the 8 textures of the fine-detail kit offline (asphalt, concrete, soil, sand, leaf litter; stucco, brick and bark are not used); prompts and seeds in `lab/detail-kit/raw/prompts.json` | Only the textures, in `data/art/detail-kit/`; the model is not in the repository or the game | The model card does not name the training data |
 | [Detectron2 Panoptic FPN R50](https://github.com/facebookresearch/detectron2) (semantic head) | Meta AI Research (FAIR); ONNX export by [Qualcomm AI Hub](https://github.com/qualcomm/ai-hub-models) | Code: [Apache 2.0](https://github.com/facebookresearch/detectron2/blob/main/LICENSE). Weights: [CC BY-SA 3.0](https://github.com/facebookresearch/detectron2/blob/main/MODEL_ZOO.md#license) ("All models available for download through this document") | A development tool that finds the walls in place photographs, so that we can measure wall colours | Downloaded into `Saved/AI` by `scripts/ai/fetch_open_models.py`; not in the repository or the game. Only the measured colours are bundled | COCO panoptic (annotations CC BY 4.0; images from Flickr under their own licences) |
-| [SatlasPretrain Aerial_SwinB_SI](https://github.com/allenai/satlaspretrain_models) | Allen Institute for AI (Ai2) | Weights: [ODC-BY 1.0](https://github.com/allenai/satlas/blob/main/DataLicense). Code: Apache 2.0 | **Testing, not in the game yet.** The backbone of an "aerial eye" that reads land cover from aerial photographs; we train our own heads on openly licensed labels | Development only | SatlasPretrain: USDA NAIP aerial images (public domain), Sentinel-2, Sentinel-1 and Landsat images, labels from OpenStreetMap (ODbL) and new Ai2 labels (ODC-BY) ([dataset notes](https://github.com/allenai/satlas/blob/main/SatlasPretrain.md)) |
+| [SatlasPretrain Aerial_SwinB_SI](https://github.com/allenai/satlaspretrain_models) | Allen Institute for AI (Ai2) | Weights: [ODC-BY 1.0](https://github.com/allenai/satlas/blob/main/DataLicense). Code: Apache 2.0 | The whole backbone with our head is the development "satlas_landcover" eye (the teacher); its first two stages (2.1 M of 89.6 M weights) are inside the shipped "aerial_student" eye | The first two stages inside `data/ai/scan-eye-student.onnx`; the whole model only on our computers |
+| SimCruise aerial student (`aerial_student` scan eye) | OSDS contributors (named SimCruise contributors until November 2026) | [MIT](LICENSE) for our layers; it contains the first two Satlas stages above (ODC-BY 1.0: credit to Ai2). Contains information from OpenStreetMap, © OpenStreetMap contributors, ODbL (labels) | Reads the aerial photo of each world tile into land-cover probabilities (road, roof, water, tree, grass, crop, bare, built ground ...) and the place's own colours, on the CPU, on by default (`-SimCruiseScanEye=none` turns it off); lower 48 states only; in 2.0.3 its classes reach the picture only with the development option `-SimCruiseScan` | `data/ai/scan-eye-student.onnx` (11 MB), in the installer from 2.0.3 | Trained by us from USGS The National Map aerial photos (public domain) with labels from OpenStreetMap (ODbL), the WRI and Meta canopy height map v2 (CC BY 4.0) and ESA WorldCover 2021 (CC BY 4.0), and the teacher eye's answers on 2,100 more USGS tiles (`lab/scan/`, `docs/research/local-ai-cpu.md`) | SatlasPretrain: USDA NAIP aerial images (public domain), Sentinel-2, Sentinel-1 and Landsat images, labels from OpenStreetMap (ODbL) and new Ai2 labels (ODC-BY) ([dataset notes](https://github.com/allenai/satlas/blob/main/SatlasPretrain.md)) |
 | [DeepForest tree crown model](https://github.com/weecology/DeepForest) | Weecology lab, University of Florida (Ben Weinstein and others) | [MIT](https://github.com/weecology/DeepForest/blob/main/LICENSE) (code and the [weights on Hugging Face](https://huggingface.co/weecology/deepforest-tree)) | **Planned, not in the game yet.** Finds single tree crowns in aerial photographs | Not used yet | Millions of tree labels made from lidar by an unsupervised method, then hand labels on RGB airborne images from selected sites ([paper](https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13472)) |
 
 The models run with [ONNX Runtime](https://github.com/microsoft/onnxruntime) (Microsoft, [MIT](https://github.com/microsoft/onnxruntime/blob/main/LICENSE)) through Unreal Engine's Neural Network Engine plugin `NNERuntimeORT`. Training and export on our computers use [PyTorch](https://github.com/pytorch/pytorch) (BSD-style), [ONNX](https://github.com/onnx/onnx) (Apache 2.0), [NumPy](https://github.com/numpy/numpy) (BSD 3-Clause) and [rasterio](https://github.com/rasterio/rasterio) (BSD 3-Clause).
@@ -63,11 +65,12 @@ An earlier scene model, DDRNet23-Slim trained on Cityscapes, was removed because
 | Building heights, roofs, extra footprints, traffic signals | [Overture Maps Foundation](https://docs.overturemaps.org/attribution/) | Buildings theme: ODbL 1.0 | © OpenStreetMap contributors, Overture Maps Foundation |
 | Building footprints inside Overture | [Microsoft Global ML Building Footprints](https://github.com/microsoft/GlobalMLBuildingFootprints) | ODbL 1.0 in Overture (Microsoft's own release is CDLA Permissive 2.0) | Microsoft |
 | Building footprints inside Overture | Esri Community Maps contributors | CC BY 4.0 | Esri Community Maps contributors |
-| Building use | US Army Corps of Engineers, National Structure Inventory | US public domain | USACE NSI |
+| Building use, construction type, foundation height and storeys | [US Army Corps of Engineers, National Structure Inventory](https://www.hec.usace.army.mil/confluence/nsi/) (public base layer) | US public domain | U.S. Army Corps of Engineers National Structure Inventory (USACE NSI) |
 | Ground elevation | [USGS 3D Elevation Program](https://www.usgs.gov/3d-elevation-program) (1/3 arc-second and 1 m), Mapzen/Tilezen Terrarium tiles | US public domain; Tilezen [attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) | U.S. Geological Survey; Mapzen |
 | Lidar for roofs and road camber | USGS 3DEP lidar (EPT on AWS); Miami-Dade County; NOAA Digital Coast | US public domain; CC0 (Miami-Dade) | U.S. Geological Survey |
 | Aerial photographs | [USDA NAIP](https://naip-usdaonline.hub.arcgis.com/) and USGS The National Map imagery; USDA Forest Service (Alaska) | US public domain | USDA Farm Production and Conservation; U.S. Geological Survey |
-| Tree canopy heights | [WRI and Meta, High Resolution Canopy Height Maps v2](https://registry.opendata.aws/dataforgood-fb-forestsv2/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Version 2 High Resolution Canopy Height Maps by WRI and Meta |
+| Tree canopy heights | [WRI and Meta, High Resolution Canopy Height Maps v2](https://registry.opendata.aws/dataforgood-fb-forestsv2/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Version 2 High Resolution Canopy Height Maps by WRI and Meta, accessed November 7, 2026, from https://registry.opendata.aws/dataforgood-fb-forestsv2. Meta and World Resources Institute (WRI) - 2026. Version 2 High Resolution Canopy Height Maps (CHMv2). Source imagery for CHM © 2016 Vantor. CC BY 4.0. Tree positions, crown sizes and crown shapes are derived from it (changed). |
+| Climate classes (bundled grid `data/climate`, 0.05 degree, cut down from the 1 km map) | Beck, H.E. et al. (2023), High-resolution (1 km) Köppen-Geiger maps for 1901-2099 based on constrained CMIP6 projections, *Scientific Data* 10, 724 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Köppen-Geiger climate classes 1991-2020, Beck et al. 2023 (changed: cut down to a coarser grid) |
 | Forest type and shrub cover | USGS/USDA LANDFIRE EVT; MRLC NLCD and RCMAP; USDA ARS Rangeland Analysis Platform | US public domain | LANDFIRE; MRLC; USDA ARS |
 | Recent surface colour (optional) | Copernicus Sentinel-2 L2A, through Element 84 Earth Search | Copernicus Sentinel data terms (free, with credit) | Contains modified Copernicus Sentinel data |
 | Snow cover | NASA NSIDC DAAC, MODIS MOD10A1 v61, through NASA GIBS | Free, with credit | NASA NSIDC DAAC |
@@ -81,10 +84,10 @@ An earlier scene model, DDRNet23-Slim trained on Cityscapes, was removed because
 
 | Data | Maker | Licence | Credit line |
 |---|---|---|---|
-| Weather, air quality, sea and waves | [Open-Meteo](https://open-meteo.com/) (with Copernicus CAMS for air quality) | Data [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the free API is for non-commercial use, which SimCruise is | Weather data by Open-Meteo.com |
+| Weather, air quality, sea and waves | [Open-Meteo](https://open-meteo.com/) (with Copernicus CAMS for air quality) | Data [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the free API is for non-commercial use, which OSDS is | Weather data by Open-Meteo.com |
 | Airport weather | NOAA Aviation Weather Center METAR; NWS observations through Iowa Environmental Mesonet; NOAA GOES | US public domain | NOAA |
 | Tides | NOAA CO-OPS water levels | US public domain | NOAA |
-| Aircraft | [adsb.lol](https://adsb.lol/) | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) | adsb.lol |
+| Aircraft (off in 2.0.3; no data is fetched) | [adsb.lol](https://adsb.lol/) | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) | adsb.lol |
 | Traffic counts, lanes, road roughness | FHWA Highway Performance Monitoring System; US Census geocoder | US public domain | FHWA; US Census Bureau |
 
 ## Cars
@@ -122,7 +125,7 @@ The car physics are calibrated against published road tests (Car and Driver, Mot
 
 | Font | Maker | Licence |
 |---|---|---|
-| [Overpass](https://github.com/RedHatOfficial/Overpass) (menus and HUD) | Delve Withrington and the Overpass Project Authors, for Red Hat | [SIL OFL 1.1](licenses/Overpass%20font%20(OFL-1.1).txt) |
+| [Overpass](https://github.com/RedHatOfficial/Overpass) (menus, HUD and the OSDS logo letters) | Delve Withrington and the Overpass Project Authors, for Red Hat | [SIL OFL 1.1](licenses/Overpass%20font%20(OFL-1.1).txt) |
 | Roboto (Unreal Engine's default font) | Christian Robertson, Google | Apache 2.0 |
 
 ## Engine, libraries and tools
@@ -144,11 +147,21 @@ The car physics are calibrated against published road tests (Car and Driver, Mot
 
 Licence texts for all of these are in [`licenses/`](licenses/).
 
+## Logo and brand
+
+The OSDS logo, icon and brand kit ([`docs/brand/`](docs/brand/README.md)) are our own work, under the MIT License like the rest of the repository. We drew every mark ourselves; no logo from another project was traced or copied.
+
+| Work | Maker | Licence | Use |
+|---|---|---|---|
+| [logo-design Agent Skill](https://github.com/kaankiziltug/logo-design-skill) | kaankiziltug | MIT | The design method, test list and delivery list we followed to make the logo. We did not use or ship its reference logos (they belong to their owners). |
+| [Overpass](https://github.com/RedHatOfficial/Overpass) | Delve Withrington and the Overpass Project Authors, for Red Hat | [SIL OFL 1.1](licenses/Overpass%20font%20(OFL-1.1).txt) | The letters of the wordmark, turned into outlines. The OFL lets a logo use the font. |
+| [fontTools](https://github.com/fonttools/fonttools) | Just van Rossum and the fontTools authors | MIT | Turns the Overpass letters into SVG outlines (`authoring/brand/make_brand.py`, a build tool; not shipped) |
+| [Pillow](https://python-pillow.org/) | Jeffrey A. Clark and contributors | MIT-CMU (HPND) | Scales the icon images and writes the `.ico` file (build tool; not shipped) |
+
 ## Named in our research, not used now
 
 These are named in our research notes, but no code in the game or its tools uses them now. When one is used, it moves into the tables above with its credit:
 
-- Köppen-Geiger climate maps by Beck et al. (CC BY 4.0). The game uses rough latitude bands now.
 - USDA Forest Service TreeMap.
 - ambientCG materials (CC0).
 

@@ -33,6 +33,77 @@ bool FSimCruiseSignTextTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseWallMaterialTest, "SimCruise.World.Buildings.WallMaterial", SimCruiseBuildingTest::Flags)
+bool FSimCruiseWallMaterialTest::RunTest(const FString& Parameters)
+{
+	using namespace SimCruiseTileDetail;
+	namespace M = SimCruiseWallMaterial;
+	// Data wins: a mapped material is drawn as it is, whatever the region says.
+	{
+		FWallMaterialInput In;
+		In.LatDeg = 33.45; In.LonDeg = -112.07; In.HeightM = 6.0; In.AreaM2 = 180.0; In.bHouse = true; // Phoenix
+		In.MaterialFact = TEXT("material:brick");
+		bool bData = false;
+		TestEqual(TEXT("mapped brick in Phoenix"), WallMaterialFor(In, &bData), M::Brick);
+		TestTrue(TEXT("... from data"), bData);
+		In.MaterialFact = TEXT("material:vinyl_siding");
+		TestEqual(TEXT("mapped vinyl siding"), WallMaterialFor(In), M::Siding);
+		In.MaterialFact = TEXT("material:limestone");
+		TestEqual(TEXT("mapped limestone"), WallMaterialFor(In), M::Stone);
+	}
+	// The Art Deco hotels, resort towers and curtain walls keep their own look.
+	{
+		FWallMaterialInput In;
+		In.LatDeg = 25.78; In.LonDeg = -80.13; In.bDeco = true; In.MaterialFact = TEXT("material:brick");
+		TestEqual(TEXT("deco stays render"), WallMaterialFor(In), M::Render);
+	}
+	// The rules, over 2,000 houses each: the US Census Survey of Construction's regional picture.
+	auto Share = [](double Lat, double Lon, const TCHAR* Use, bool bHouse, double AreaM2, double HeightM, int32 Material)
+	{
+		int32 N = 0;
+		for (uint32 i = 0; i < 2000; ++i)
+		{
+			FWallMaterialInput In;
+			In.LatDeg = Lat; In.LonDeg = Lon; In.Use = Use; In.bHouse = bHouse; In.AreaM2 = AreaM2; In.HeightM = HeightM;
+			In.Hash = HashCombine(i * 2654435761u, 0x9E3779B9u);
+			N += WallMaterialFor(In) == Material ? 1 : 0;
+		}
+		return N / 2000.0;
+	};
+	TestTrue(TEXT("Columbus OH houses mostly siding"), Share(39.96, -83.0, TEXT("house"), true, 160.0, 7.0, M::Siding) > 0.45);
+	TestTrue(TEXT("Atlanta houses mostly brick"), Share(33.75, -84.39, TEXT("house"), true, 160.0, 7.0, M::Brick) > 0.4);
+	TestTrue(TEXT("Phoenix houses mostly stucco"), Share(33.45, -112.07, TEXT("house"), true, 160.0, 7.0, M::Render) > 0.7);
+	TestTrue(TEXT("Portland OR houses mostly siding"), Share(45.52, -122.68, TEXT("house"), true, 160.0, 7.0, M::Siding) > 0.65);
+	TestTrue(TEXT("warehouses metal or block"), Share(39.96, -83.0, TEXT("warehouse"), false, 4000.0, 9.0, M::Metal) + Share(39.96, -83.0, TEXT("warehouse"), false, 4000.0, 9.0, M::Block) > 0.8);
+	TestTrue(TEXT("no siding on a big box"), Share(33.75, -84.39, TEXT("retail"), false, 6000.0, 8.0, M::Siding) < 0.01);
+	// The same building always gets the same material.
+	{
+		FWallMaterialInput In;
+		In.LatDeg = 42.33; In.LonDeg = -83.05; In.Use = TEXT("commercial"); In.HeightM = 9.0; In.AreaM2 = 600.0; In.Hash = 12345u;
+		const int32 A = WallMaterialFor(In), B = WallMaterialFor(In);
+		TestEqual(TEXT("deterministic"), A, B);
+	}
+	// A window role stays under half (the shaders round the kind) and decodes to its share and pairs.
+	for (int32 q = 0; q <= 9; ++q)
+	for (int32 p = 0; p <= 1; ++p)
+	{
+		const float F = SimCruiseWindowRole::Encode(q / 9.0, p == 1);
+		TestTrue(TEXT("role under half a kind"), F > 0.005f && F < 0.5f);
+		const int32 Code = FMath::FloorToInt(F * 48.f);
+		TestEqual(TEXT("role share"), Code % 10, q);
+		TestEqual(TEXT("role pairs"), Code >= 10, p == 1);
+		TestEqual(TEXT("kind survives"), FMath::RoundToFloat(SimCruiseSurfaceKind::WallFront + F), SimCruiseSurfaceKind::WallFront);
+	}
+	// The packed seed keeps its material and its seed bin.
+	for (int32 m = 0; m <= M::Metal; ++m)
+	{
+		const float P = M::Pack(m, 0.73f);
+		TestEqual(TEXT("material from the integer part"), FMath::FloorToInt(P), m);
+		TestTrue(TEXT("seed mid-bin"), FMath::Abs(FMath::Frac(P) * 4096.f - (FMath::FloorToFloat(0.73f * 4096.f) + 0.5f)) < 0.01f);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseWallAlbedoTest, "SimCruise.World.Buildings.WallAlbedo", SimCruiseBuildingTest::Flags)
 bool FSimCruiseWallAlbedoTest::RunTest(const FString& Parameters)
 {

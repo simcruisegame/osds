@@ -61,7 +61,7 @@ void FSimCruiseRoadNoiseSynth::Render(float* Out, int32 Frames, const FInputs& I
 	RoadScratch.SetNumUninitialized(Frames * 2, EAllowShrinking::No);
 	WindScratch.SetNumUninitialized(Frames * 2, EAllowShrinking::No);
 	RenderRoad(RoadScratch.GetData(), Frames, In);
-	RenderWind(WindScratch.GetData(), Frames, In.SpeedMps);
+	RenderWind(WindScratch.GetData(), Frames, In.AirSpeedMps >= 0.0 ? In.AirSpeedMps : In.SpeedMps);
 	for (int32 I = 0; I < Frames * 2; ++I)
 	{
 		const float Mixed = static_cast<float>(RoadScratch[I] * RoadBus + WindScratch[I] * WindBus);
@@ -83,10 +83,14 @@ void FSimCruiseRoadNoiseSynth::RenderRoad(float* Out, int32 Frames, const FInput
 	const double Offroad = 1.0 - SmoothStep(.62, GravelGrip, Grip);
 	const double Pace = FMath::Clamp(Speed / 35.0, 0.0, 1.3);
 	// Pass-by tyre noise rises about 30 dB per decade of speed: amplitude ~ v^1.5.
-	const double HissTarget = (.04 + .96 * FMath::Pow(Pace, 1.5)) * (1.0 - .45 * Loose) * Contact;
+	// Concrete rolls louder and brighter than asphalt: tined concrete measures about 3-5 dB over
+	// dense-graded asphalt at the tyre (FHWA on-board sound intensity studies); +3 dB here, the
+	// low end, for any concrete under the tyres.
+	const double Concrete = FMath::Clamp(In.ConcreteShare, 0.0, 1.0);
+	const double HissTarget = (.04 + .96 * FMath::Pow(Pace, 1.5)) * (1.0 - .45 * Loose) * (1.0 + .41 * Concrete) * Contact;
 	const double CrunchTarget = SmoothStep(.5, 8.0, Speed) * (.35 + .65 * FMath::Clamp(Speed / 22.0, 0.0, 1.0)) * Loose * Contact;
 	const double RumbleTarget = FMath::Clamp(.28 * Offroad * SmoothStep(.5, 6.0, Speed) + 1.2 * In.Bump, 0.0, 1.0) * Contact;
-	const double CutoffTarget = (850.0 + 9.0 * Speed) * (1.0 - .35 * Loose);
+	const double CutoffTarget = (850.0 + 9.0 * Speed) * (1.0 - .35 * Loose) * (1.0 + .15 * Concrete);
 	HissCutoff += (CutoffTarget - HissCutoff) * .3;
 	const double F = 2.0 * FMath::Sin(UE_DOUBLE_PI * HissCutoff / SampleRate);
 	const double Smoothing = 1.0 - FMath::Exp(-1.0 / (SampleRate * .04));

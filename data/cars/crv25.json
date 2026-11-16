@@ -128,6 +128,7 @@
  "layout": "fwd",
  "front_diff_bias": 1.0,
  "transmission": "automatic",
+ "aspiration": "turbo",
  "bar_rate_n_m": [
   24000.0,
   14000.0

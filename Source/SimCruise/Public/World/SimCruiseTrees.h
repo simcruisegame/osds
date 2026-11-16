@@ -19,6 +19,23 @@ struct FSimCruiseTreeRow
 	FVector2D TileUV = FVector2D::ZeroVector;
 	double HeightM = 0.0;
 	double CrownM = 0.0;
+	/**
+	 * The crown's segmented shape (helper/crown-segments.mjs, `canopy --segment`), when there is
+	 * one: its reach from the top in 8 directions (east first, anticlockwise, metres) and the
+	 * crown base height. bShape false: a round crown of CrownM.
+	 */
+	bool bShape = false;
+	float RadiiM[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	float CrownBaseM = 0.f;
+};
+
+/** A crown grown to its segmented shape: the ellipse the 8 reaches fit. */
+struct FSimCruiseCrownFit
+{
+	/** Where the crown's middle is, from the top (metres, x east, y south: tile axes). */
+	FVector2D OffsetM = FVector2D::ZeroVector;
+	/** The ellipse's long and short widths (metres) and the long axis' yaw (degrees, tile axes: from x towards y). */
+	double LongM = 0.0, ShortM = 0.0, YawDeg = 0.0;
 };
 
 /**
@@ -56,6 +73,8 @@ public:
 
 	/** The helper's canopy document: trees [[u, v, height m, crown m], ...]. */
 	static TArray<FSimCruiseTreeRow> ParseCanopy(const TSharedPtr<class FJsonValue>& Json);
+	/** The ellipse a segmented crown's 8 reaches fit (its middle, widths and long axis). */
+	static FSimCruiseCrownFit FitCrown(const FSimCruiseTreeRow& Row);
 
 	/** Share of conifers at a place (0..1). */
 	static double ConiferShare(double LatDeg, double LonDeg, double ElevationM);
@@ -108,5 +127,9 @@ private:
 	FString SeenTitle;
 	bool bMeshesTried = false;
 	bool bDirty = false;
+	/** Colour per crown, rounded crown light, darker crown inside and trunk foot (off: -SimCruiseOldTreeLook). */
+	bool bCrownLook = true;
+	/** Each species' leaf colour (its cluster texture's mean, linear, times its tint): the colour per crown is relative to it. */
+	FLinearColor LeafMean[2] = { FLinearColor(0.12f, 0.16f, 0.06f), FLinearColor(0.08f, 0.11f, 0.06f) };
 	int32 Placed = 0;
 };

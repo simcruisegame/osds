@@ -184,7 +184,7 @@
   1.1
  ],
  "traction_control": true,
- "calibration_open": "0-60 mph 3.22 s with Car and Driver's 1 ft rollout (3.53 s from rest) against their 2.8 s. Launch control (3500 rpm) and the real TR-9080 ratios are modelled; the launch is limited by rear-tyre grip on the legacy tyre curve. The physics lane's TMeasy fit gives 3.31 s from rest (about 3.0 s with rollout).",
+ "calibration_open": "Passing 50-70 mph 1.8 s against Car and Driver's 2.5 s (30-50: 1.6 s against 1.8 s): full-pedal kickdown goes to 2nd at 50 mph by the generic kickdown map (upshift point x 0.62), not the real car's unpublished shift map; refitted to the 2.5 s in v2.0.4. 0-60 mph 3.22 s with Car and Driver's 1 ft rollout (3.53 s from rest) against their 2.8 s. Launch control (3500 rpm) and the real TR-9080 ratios are modelled; the launch is limited by rear-tyre grip on the legacy tyre curve. The physics lane's TMeasy fit gives 3.31 s from rest (about 3.0 s with rollout).",
  "model_scene": "data/art/traffic/c8-790c40cc/scene.gltf",
  "model_rig": {
   "fit": true

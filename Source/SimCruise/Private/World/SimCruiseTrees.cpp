@@ -14,15 +14,26 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialExpressionConstant.h"
+#include "Materials/MaterialExpressionConstant3Vector.h"
 #include "Materials/MaterialExpressionCustom.h"
+#include "Materials/MaterialExpressionLocalPosition.h"
+#include "Materials/MaterialExpressionTransform.h"
+#include "Materials/MaterialExpressionCameraPositionWS.h"
+#include "Materials/MaterialExpressionDistance.h"
+#include "Materials/MaterialExpressionWorldPosition.h"
+#include "Materials/MaterialExpressionShadowReplace.h"
 #include "Materials/MaterialExpressionScalarParameter.h"
 #include "Materials/MaterialExpressionTextureCoordinate.h"
 #include "Materials/MaterialExpressionTextureObjectParameter.h"
+#include "Materials/MaterialExpressionTransformPosition.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
+#include "Materials/MaterialExpressionVertexInterpolator.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/App.h"
 #include "Misc/Paths.h"
 #include "Presentation/SimCruiseGltfModel.h"
+#include "World/SimCruiseGeo.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseTileData.h"
 #include "World/SimCruiseTileDetail.h"
@@ -35,17 +46,53 @@ DEFINE_LOG_CATEGORY_STATIC(LogSimCruiseTrees, Log, All);
 
 namespace
 {
+	/**
+	 * Where a tree changes detail level (cm from the camera), and the cross-fade band either side.
+	 * Outside the bands one level draws; inside, the two levels dither into each other. The
+	 * distance is the tree's (its bounds centre, the point the GPU's per-instance draw distances
+	 * test), the same for both levels, so a ring ends exactly where its fade does.
+	 */
+	constexpr float LodSwitchCm[2] = { 3300.f, 9200.f };
+	constexpr float LodBandCm[2] = { 200.f, 400.f };
+}
+
+namespace
+{
+	// The detail levels cross-fade over a band of distance instead of switching: a level fades
+	// out (pixel shown while n < w) as the next fades in (shown while 1 - n < w) with the same
+	// screen noise n, so every pixel shows exactly one level. Depth is the tree's distance (one
+	// value for the whole tree and both levels), not the pixel's. Shadows keep the whole mask
+	// (the rings' own draw distances switch them).
+	const TCHAR* FadeCode = TEXT(R"HLSL(
+float fin = FadeIn > 0.0 ? saturate((Depth - (FadeIn - BandIn)) / max(2.0 * BandIn, 1.0)) : 1.0;
+float fout = saturate(((FadeOut + BandOut) - Depth) / max(2.0 * BandOut, 1.0));
+float2 sp = Parameters.SvPosition.xy + float2(View.StateFrameIndexMod8 * 7.0, View.StateFrameIndexMod8 * 3.0);
+float n = frac(52.9829189 * frac(dot(sp, float2(0.06711056, 0.00583715)))); // interleaved gradient noise
+float keep = ((1.0 - n) < fin ? 1.0 : 0.0) * (n < fout ? 1.0 : 0.0);
+)HLSL");
+
+	// Crown: the tree's own colour, a multiplier on the species' tint (per-instance data 0-2, set
+	// from the aerial photograph at the crown and a per-tree jitter; 1 where an instance has none).
+	// Leaves deep inside the crown see less sky: up to 40 % darker at the crown's middle, from the
+	// leaf's place in the crown's box (CrownCentre, CrownRadii: the level's leaf bounds, mesh space).
 	const TCHAR* LeafCode = TEXT(R"HLSL(
 float4 t = Texture2DSample(Foliage, FoliageSampler, UV);
-Mask = t.a;
-float3 c = t.rgb * Tint.rgb;
+RawMask = t.a;
+Mask = t.a * keep;
+float3 q = (LP - CrownCentre.xyz) / max(CrownRadii.xyz, 1.0);
+float shell = saturate(length(q));
+float3 c = t.rgb * Tint.rgb * Crown * lerp(1.0 - Inner, 1.0, shell * shell);
 Sss = c * float3(0.7, 1.0, 0.4);
 Roughness = 0.8;
 return c;
 )HLSL");
 
+	// Rel: the pixel's place from the tree's foot (world cm; the foot stands 10 cm into the ground).
+	// The bark is darker at the ground: soil splash and damp, 35 % at the foot, gone 30 cm up.
 	const TCHAR* BarkCode = TEXT(R"HLSL(
+Mask = keep;
 float3 b = Texture2DSample(Bark, BarkSampler, UV * float2(2.0, 6.0)).rgb;
+b *= lerp(1.0 - Foot, 1.0, saturate((Rel.z - 10.0) / 30.0));
 Roughness = 0.95;
 return b;
 )HLSL");
@@ -66,6 +113,96 @@ return b;
 		Input.InputName = Name;
 		Input.Input.Connect(Output, From);
 		Custom->Inputs.Add(Input);
+	}
+
+	UMaterialExpression* ScalarParam(UMaterial* Material, const TCHAR* Name, float Default)
+	{
+		UMaterialExpressionScalarParameter* P = AddExpression<UMaterialExpressionScalarParameter>(Material);
+		P->ParameterName = Name;
+		P->DefaultValue = Default;
+		return P;
+	}
+
+	/** The cross-fade's inputs: the tree's distance and the level's band (cm; FadeIn 0: no fade in). */
+	void AddFadeInputs(UMaterial* Material, UMaterialExpressionCustom* Custom)
+	{
+		// The tree's distance from the camera: its bounds centre (FadeCentre, in the mesh's own
+		// space, the same for all three levels of a species) to the camera, radial, as the GPU's
+		// per-instance draw distances measure it. Worked out per vertex (the instance's transform
+		// is there) and passed on, constant over the tree.
+		UMaterialExpressionVectorParameter* Centre = AddExpression<UMaterialExpressionVectorParameter>(Material);
+		Centre->ParameterName = TEXT("FadeCentre");
+		Centre->DefaultValue = FLinearColor(0.f, 0.f, 0.f, 0.f);
+		UMaterialExpressionTransformPosition* ToWorld = AddExpression<UMaterialExpressionTransformPosition>(Material);
+		ToWorld->TransformSourceType = TRANSFORMPOSSOURCE_Local;
+		ToWorld->TransformType = TRANSFORMPOSSOURCE_World;
+		ToWorld->Input.Connect(0, Centre);
+		UMaterialExpressionDistance* Dist = AddExpression<UMaterialExpressionDistance>(Material);
+		Dist->A.Connect(0, ToWorld);
+		Dist->B.Connect(0, AddExpression<UMaterialExpressionCameraPositionWS>(Material));
+		UMaterialExpressionVertexInterpolator* PerTree = AddExpression<UMaterialExpressionVertexInterpolator>(Material);
+		PerTree->Input.Connect(0, Dist);
+		AddInput(Custom, TEXT("Depth"), PerTree);
+		AddInput(Custom, TEXT("FadeIn"), ScalarParam(Material, TEXT("FadeIn"), 0.f));
+		AddInput(Custom, TEXT("BandIn"), ScalarParam(Material, TEXT("BandIn"), 0.f));
+		AddInput(Custom, TEXT("FadeOut"), ScalarParam(Material, TEXT("FadeOut"), 1.0e9f));
+		AddInput(Custom, TEXT("BandOut"), ScalarParam(Material, TEXT("BandOut"), 1.f));
+	}
+
+	/** Main passes take the faded mask, shadow passes the whole one. */
+	UMaterialExpression* FadeOrShadow(UMaterial* Material, UMaterialExpression* From, int32 Faded, UMaterialExpression* Whole, int32 WholeOut)
+	{
+		UMaterialExpressionShadowReplace* S = AddExpression<UMaterialExpressionShadowReplace>(Material);
+		S->Default.Connect(Faded, From);
+		if (Whole) S->Shadow.Connect(WholeOut, Whole);
+		else
+		{
+			UMaterialExpressionConstant* One = AddExpression<UMaterialExpressionConstant>(Material);
+			One->R = 1.f;
+			S->Shadow.Connect(0, One);
+		}
+		return S;
+	}
+
+	/**
+	 * The instance's own colour (per-instance data 0-2), white without any. The engine's node class
+	 * is not exported to other modules, so it is made by name and its settings set by reflection;
+	 * without it (an engine that renamed it) the trees keep their species' colour.
+	 */
+	UMaterialExpression* InstanceColour(UMaterial* Material)
+	{
+		UClass* Class = FindObject<UClass>(nullptr, TEXT("/Script/Engine.MaterialExpressionPerInstanceCustomData3Vector"));
+		if (Class)
+		{
+			UMaterialExpression* E = NewObject<UMaterialExpression>(Material, Class);
+			Material->GetExpressionCollection().AddExpression(E);
+			if (FStructProperty* P = FindFProperty<FStructProperty>(Class, TEXT("ConstDefaultValue")))
+			{
+				*P->ContainerPtrToValuePtr<FLinearColor>(E) = FLinearColor::White;
+			}
+			if (FUInt32Property* I = FindFProperty<FUInt32Property>(Class, TEXT("DataIndex")))
+			{
+				I->SetPropertyValue_InContainer(E, 0u);
+			}
+			return E;
+		}
+		UE_LOG(LogSimCruiseTrees, Warning, TEXT("No per-instance colour node: trees keep their species' colour"));
+		UMaterialExpressionConstant3Vector* White = AddExpression<UMaterialExpressionConstant3Vector>(Material);
+		White->Constant = FLinearColor::White;
+		return White;
+	}
+
+	/**
+	 * The pixel's place from the instance's origin (world-space cm, the tree's foot): its local
+	 * position turned and scaled by the instance's transform (a vector, so no large world numbers).
+	 */
+	UMaterialExpression* FromOrigin(UMaterial* Material)
+	{
+		UMaterialExpressionTransform* ToWorld = AddExpression<UMaterialExpressionTransform>(Material);
+		ToWorld->TransformSourceType = TRANSFORMSOURCE_Local;
+		ToWorld->TransformType = TRANSFORM_World;
+		ToWorld->Input.Connect(0, AddExpression<UMaterialExpressionLocalPosition>(Material));
+		return ToWorld;
 	}
 
 	UMaterialExpression* TextureParam(UMaterial* Material, const TCHAR* Name)
@@ -217,19 +354,32 @@ UMaterial* ASimCruiseTrees::BuildLeafMaterial(UObject* Outer, FName Name, EObjec
 	UMaterialExpressionCustom* Custom = AddExpression<UMaterialExpressionCustom>(Material);
 	Custom->Inputs.Reset();
 	Custom->OutputType = CMOT_Float3;
-	Custom->Code = LeafCode;
+	Custom->Code = FString(FadeCode) + LeafCode;
 	Custom->AdditionalOutputs.Add({ FName(TEXT("Mask")), CMOT_Float1 });
 	Custom->AdditionalOutputs.Add({ FName(TEXT("Sss")), CMOT_Float3 });
 	Custom->AdditionalOutputs.Add({ FName(TEXT("Roughness")), CMOT_Float1 });
+	Custom->AdditionalOutputs.Add({ FName(TEXT("RawMask")), CMOT_Float1 });
+	AddFadeInputs(Material, Custom);
 	AddInput(Custom, TEXT("UV"), AddExpression<UMaterialExpressionTextureCoordinate>(Material));
 	AddInput(Custom, TEXT("Foliage"), TextureParam(Material, TEXT("Foliage")));
 	UMaterialExpressionVectorParameter* Tint = AddExpression<UMaterialExpressionVectorParameter>(Material);
 	Tint->ParameterName = TEXT("Tint");
 	Tint->DefaultValue = FLinearColor(0.62f, 0.68f, 0.55f);
 	AddInput(Custom, TEXT("Tint"), Tint);
+	AddInput(Custom, TEXT("Crown"), InstanceColour(Material));
+	AddInput(Custom, TEXT("LP"), AddExpression<UMaterialExpressionLocalPosition>(Material));
+	UMaterialExpressionVectorParameter* CrownCentre = AddExpression<UMaterialExpressionVectorParameter>(Material);
+	CrownCentre->ParameterName = TEXT("CrownCentre");
+	CrownCentre->DefaultValue = FLinearColor(0.f, 0.f, 0.f, 0.f);
+	AddInput(Custom, TEXT("CrownCentre"), CrownCentre);
+	UMaterialExpressionVectorParameter* CrownRadii = AddExpression<UMaterialExpressionVectorParameter>(Material);
+	CrownRadii->ParameterName = TEXT("CrownRadii");
+	CrownRadii->DefaultValue = FLinearColor(1.0e6f, 1.0e6f, 1.0e6f, 0.f); // no box: no darkening
+	AddInput(Custom, TEXT("CrownRadii"), CrownRadii);
+	AddInput(Custom, TEXT("Inner"), ScalarParam(Material, TEXT("Inner"), 0.4f));
 	Custom->RebuildOutputs();
 	Material->GetEditorOnlyData()->BaseColor.Connect(0, Custom);
-	Material->GetEditorOnlyData()->OpacityMask.Connect(1, Custom);
+	Material->GetEditorOnlyData()->OpacityMask.Connect(0, FadeOrShadow(Material, Custom, 1, Custom, 4));
 	Material->GetEditorOnlyData()->SubsurfaceColor.Connect(2, Custom);
 	Material->GetEditorOnlyData()->Roughness.Connect(3, Custom);
 	Material->PreEditChange(nullptr);
@@ -245,17 +395,25 @@ UMaterial* ASimCruiseTrees::BuildBarkMaterial(UObject* Outer, FName Name, EObjec
 #if WITH_EDITOR
 	UMaterial* Material = NewObject<UMaterial>(Outer, Name, Flags);
 	Material->TwoSided = true;
+	// Masked only for the detail levels' cross-fade (dithered, never translucent).
+	Material->BlendMode = BLEND_Masked;
+	Material->OpacityMaskClipValue = 0.5f;
 	Material->SetUsageByFlag(MATUSAGE_InstancedStaticMeshes, true);
 	UMaterialExpressionCustom* Custom = AddExpression<UMaterialExpressionCustom>(Material);
 	Custom->Inputs.Reset();
 	Custom->OutputType = CMOT_Float3;
-	Custom->Code = BarkCode;
+	Custom->Code = FString(FadeCode) + BarkCode;
 	Custom->AdditionalOutputs.Add({ FName(TEXT("Roughness")), CMOT_Float1 });
+	Custom->AdditionalOutputs.Add({ FName(TEXT("Mask")), CMOT_Float1 });
+	AddFadeInputs(Material, Custom);
 	AddInput(Custom, TEXT("UV"), AddExpression<UMaterialExpressionTextureCoordinate>(Material));
 	AddInput(Custom, TEXT("Bark"), TextureParam(Material, TEXT("Bark")));
+	AddInput(Custom, TEXT("Rel"), FromOrigin(Material));
+	AddInput(Custom, TEXT("Foot"), ScalarParam(Material, TEXT("Foot"), 0.35f));
 	Custom->RebuildOutputs();
 	Material->GetEditorOnlyData()->BaseColor.Connect(0, Custom);
 	Material->GetEditorOnlyData()->Roughness.Connect(1, Custom);
+	Material->GetEditorOnlyData()->OpacityMask.Connect(0, FadeOrShadow(Material, Custom, 2, nullptr, 0));
 	Material->PreEditChange(nullptr);
 	Material->PostEditChange();
 	return Material;
@@ -273,8 +431,14 @@ TArray<FSimCruiseTreeRow> ASimCruiseTrees::ParseCanopy(const TSharedPtr<FJsonVal
 	{
 		return Rows;
 	}
-	for (const TSharedPtr<FJsonValue>& T : *Trees)
+	// With `--segment` the helper adds "shapes", one per segmented crown, in the order of the
+	// first rows of "trees" (rows a city inventory adds after them have none): the 8 reaches and
+	// the crown base.
+	const TArray<TSharedPtr<FJsonValue>>* Shapes = nullptr;
+	if (!(*Doc)->TryGetArrayField(TEXT("shapes"), Shapes)) Shapes = nullptr;
+	for (int32 i = 0; i < Trees->Num(); ++i)
 	{
+		const TSharedPtr<FJsonValue>& T = (*Trees)[i];
 		const TArray<TSharedPtr<FJsonValue>>* R = nullptr;
 		if (!T.IsValid() || !T->TryGetArray(R) || R->Num() < 4) continue;
 		FSimCruiseTreeRow Row;
@@ -284,9 +448,54 @@ TArray<FSimCruiseTreeRow> ASimCruiseTrees::ParseCanopy(const TSharedPtr<FJsonVal
 		// Peaks under 3 m are shrubs; the map tops out near 60 m.
 		if (Row.HeightM < 3.0 || Row.HeightM > 70.0 || Row.CrownM <= 0.0) continue;
 		if (Row.TileUV.X < 0.0 || Row.TileUV.Y < 0.0 || Row.TileUV.X > 1.0 || Row.TileUV.Y > 1.0) continue;
+		const TArray<TSharedPtr<FJsonValue>>* Shape = nullptr;
+		if (Shapes && Shapes->IsValidIndex(i) && (*Shapes)[i].IsValid() && (*Shapes)[i]->TryGetArray(Shape) && Shape->Num() >= 9)
+		{
+			bool bOk = true;
+			for (int32 k = 0; k < 8; ++k)
+			{
+				Row.RadiiM[k] = static_cast<float>((*Shape)[k]->AsNumber());
+				bOk &= Row.RadiiM[k] > 0.f && Row.RadiiM[k] < 30.f;
+			}
+			Row.CrownBaseM = static_cast<float>(FMath::Clamp((*Shape)[8]->AsNumber(), 0.0, Row.HeightM));
+			Row.bShape = bOk;
+		}
 		Rows.Add(Row);
 	}
 	return Rows;
+}
+
+FSimCruiseCrownFit ASimCruiseTrees::FitCrown(const FSimCruiseTreeRow& Row)
+{
+	FSimCruiseCrownFit Fit;
+	Fit.LongM = Fit.ShortM = Row.CrownM;
+	if (!Row.bShape) return Fit;
+	// Directions k * 45 degrees anticlockwise from east (north up); the reach r_k from the top.
+	// The crown's middle: opposite reaches differ by twice the offset along their axis, and the
+	// four axes 45 degrees apart give o = 1/2 sum_k (r_k - r_k+4) / 2 * dir_k.
+	FVector2D East(0.0, 0.0); // x east, y north
+	double Half[4];
+	for (int32 k = 0; k < 4; ++k)
+	{
+		const double A = k * UE_DOUBLE_PI / 4.0;
+		const double D = 0.5 * (Row.RadiiM[k] - Row.RadiiM[k + 4]);
+		East += 0.5 * D * FVector2D(FMath::Cos(A), FMath::Sin(A));
+		Half[k] = FMath::Max(0.25, 0.5 * (Row.RadiiM[k] + Row.RadiiM[k + 4]));
+	}
+	Fit.OffsetM = FVector2D(East.X, -East.Y); // tile axes: y south
+	// An ellipse's 1/r^2 = P + Q cos 2t + R sin 2t (semi-axes a >= b at angle f: P = (1/a^2 +
+	// 1/b^2) / 2, (Q, R) = (1/a^2 - 1/b^2) / 2 (cos 2f, sin 2f)): fitted from the four axes' half
+	// widths. The long axis is where 1/r^2 is least.
+	double Inv[4];
+	for (int32 k = 0; k < 4; ++k) Inv[k] = 1.0 / (Half[k] * Half[k]);
+	const double P = 0.25 * (Inv[0] + Inv[1] + Inv[2] + Inv[3]);
+	const double Q = 0.5 * (Inv[0] - Inv[2]), R = 0.5 * (Inv[1] - Inv[3]);
+	const double Amp = FMath::Min(FMath::Sqrt(Q * Q + R * R), 0.9 * P);
+	const double LongAngle = 0.5 * FMath::Atan2(-R, -Q); // anticlockwise from east, north up
+	Fit.LongM = 2.0 / FMath::Sqrt(P - Amp);
+	Fit.ShortM = 2.0 / FMath::Sqrt(P + Amp);
+	Fit.YawDeg = FMath::RadiansToDegrees(-LongAngle); // tile axes (y south): clockwise from above
+	return Fit;
 }
 
 double ASimCruiseTrees::ConiferShare(double LatDeg, double LonDeg, double ElevationM)
@@ -340,6 +549,8 @@ bool ASimCruiseTrees::BuildMeshes()
 	}
 	// -SimCruiseOldTreeMips: the plain box-filtered leaf mips (for an A/B).
 	const bool bLeafMips = !FParse::Param(FCommandLine::Get(), TEXT("SimCruiseOldTreeMips"));
+	// -SimCruiseOldTreeLook: no colour per crown, no rounded crown light, no darker inside or foot (for an A/B).
+	bCrownLook = !FParse::Param(FCommandLine::Get(), TEXT("SimCruiseOldTreeLook"));
 	auto Texture = [this, bLeafMips](const TCHAR* File) -> UTexture2D*
 	{
 		TArray<FColor> Pixels;
@@ -375,7 +586,21 @@ bool ASimCruiseTrees::BuildMeshes()
 	for (int32 S = 0; S < 2; ++S)
 	{
 		UMaterialInstanceDynamic* Crown = Leaf(*FString::Printf(TEXT("cluster-%s.png"), Species[S]));
+		{
+			// The species' leaf colour as drawn: its cluster texture's mean (alpha weighted, linear) times the tint.
+			TArray<FColor> Px;
+			int32 W = 0, H = 0;
+			if (USimCruiseWorldResources::DecodeImageFile(TreeArt(FString::Printf(TEXT("cluster-%s.png"), Species[S])), Px, W, H))
+			{
+				FLinearColor Sum(0, 0, 0, 0);
+				double Wt = 0.0;
+				for (const FColor& C : Px) { const float A = C.A / 255.f; Sum += FLinearColor::FromSRGBColor(C) * A; Wt += A; }
+				if (Wt > 0.0) LeafMean[S] = Sum * static_cast<float>(1.0 / Wt) * FLinearColor(0.62f, 0.68f, 0.55f);
+			}
+		}
 		UMaterialInstanceDynamic* Spray = Leaf(*FString::Printf(TEXT("spray-%s.png"), Species[S]));
+		UStaticMesh* LevelMeshes[3] = { nullptr, nullptr, nullptr };
+		TArray<UMaterialInstanceDynamic*> LevelMaterials;
 		for (int32 Level = 0; Level < 3; ++Level)
 		{
 			// Level 0: the wood with its sprays plus the crown clusters; levels 1 and 2: one mesh of bark and crown.
@@ -406,7 +631,69 @@ bool ASimCruiseTrees::BuildMeshes()
 				if (!LoadInto(FString::Printf(TEXT("crown-%s-%d.glb"), Species[S], Level))) return false;
 				Slots = { Bark, Crown };
 			}
+			// This level's own instances of the materials: its cross-fade band (FadeCode).
+			{
+				static const float FadeIn[3] = { 0.f, LodSwitchCm[0], LodSwitchCm[1] };
+				static const float BandIn[3] = { 0.f, LodBandCm[0], LodBandCm[1] };
+				static const float FadeOut[3] = { LodSwitchCm[0], LodSwitchCm[1], 1.0e9f };
+				static const float BandOut[3] = { LodBandCm[0], LodBandCm[1], 1.f };
+				for (UMaterialInterface*& M : Slots)
+				{
+					// From the base material with the slot's overrides copied (its leaf texture and
+					// tint): an instance parented to another dynamic instance drew with the default
+					// texture and a solid mask (grey shards in the Dragon capture, 2026-11-14).
+					UMaterialInstanceDynamic* Src = Cast<UMaterialInstanceDynamic>(M);
+					UMaterialInstanceDynamic* L = UMaterialInstanceDynamic::Create(Src ? Src->GetMaterial() : M, this);
+					if (Src) L->CopyParameterOverrides(Src);
+					L->SetScalarParameterValue(TEXT("FadeIn"), FadeIn[Level]);
+					L->SetScalarParameterValue(TEXT("BandIn"), BandIn[Level]);
+					L->SetScalarParameterValue(TEXT("FadeOut"), FadeOut[Level]);
+					L->SetScalarParameterValue(TEXT("BandOut"), BandOut[Level]);
+					Materials.Add(L);
+					M = L;
+				}
+			}
 			Parts.SetNum(Slots.Num());
+			// The crown: this level's leaves (every part after the wood). Its box darkens the leaves
+			// inside it (CrownCentre, CrownRadii), and the leaf normals lean out from its middle
+			// (70 % of the way), so a crown is lit as one rounded mass, brighter on its sunny side and
+			// darker under it, not as hundreds of flat cards each lit alike.
+			FBox CrownBox(ForceInit);
+			for (int32 p = 1; p < Parts.Num(); ++p) for (const FVector& P : Parts[p].Positions) CrownBox += P;
+			if (CrownBox.IsValid && bCrownLook)
+			{
+				const FVector Mid = CrownBox.GetCenter(), Half = CrownBox.GetExtent().ComponentMax(FVector(1.0));
+				for (int32 p = 1; p < Parts.Num(); ++p)
+				{
+					FSimCruiseMeshData& Leaves = Parts[p];
+					for (int32 v = 0; v < Leaves.Positions.Num(); ++v)
+					{
+						const FVector Out = ((Leaves.Positions[v] - Mid) / (Half * Half)).GetSafeNormal(); // the box's ellipsoid
+						if (Out.IsNearlyZero() || !Leaves.Normals.IsValidIndex(v)) continue;
+						// A card's normal faces either way (two-sided); lean the side that faces out.
+						const FVector N = FVector::DotProduct(Leaves.Normals[v], Out) < 0.0 ? -Leaves.Normals[v] : Leaves.Normals[v];
+						Leaves.Normals[v] = FMath::Lerp(N, Out, 0.7).GetSafeNormal();
+					}
+				}
+				for (UMaterialInterface* M : Slots)
+				{
+					UMaterialInstanceDynamic* L = Cast<UMaterialInstanceDynamic>(M);
+					if (!L || M == Slots[0]) continue;
+					L->SetVectorParameterValue(TEXT("CrownCentre"), FLinearColor(Mid.X, Mid.Y, Mid.Z, 0.f));
+					L->SetVectorParameterValue(TEXT("CrownRadii"), FLinearColor(Half.X, Half.Y, Half.Z, 0.f));
+				}
+			}
+			if (!bCrownLook)
+			{
+				for (UMaterialInterface* M : Slots)
+				{
+					if (UMaterialInstanceDynamic* L = Cast<UMaterialInstanceDynamic>(M))
+					{
+						L->SetScalarParameterValue(TEXT("Inner"), 0.f);
+						L->SetScalarParameterValue(TEXT("Foot"), 0.f);
+					}
+				}
+			}
 			TArray<const FSimCruiseMeshData*> Ptrs;
 			for (const FSimCruiseMeshData& P : Parts) Ptrs.Add(&P);
 			UStaticMesh* Mesh = SimCruiseWorldMaterials::BuildRuntimeMesh(*FString::Printf(TEXT("SM_SimCruiseTree_%s%d"), Species[S], Level), Ptrs, true, false);
@@ -415,16 +702,46 @@ bool ASimCruiseTrees::BuildMeshes()
 			StaticSlots.SetNum(Slots.Num());
 			for (int32 i = 0; i < Slots.Num(); ++i) StaticSlots[i].MaterialInterface = Slots[i];
 			Meshes.Add(Mesh);
-
+			LevelMeshes[Level] = Mesh;
+			for (UMaterialInterface* M : Slots) LevelMaterials.Add(Cast<UMaterialInstanceDynamic>(M));
+		}
+		// One bounds box for the species' three levels (their union), so a tree has one centre
+		// and one distance in every level: the GPU's draw distances and the materials' fade
+		// (FadeCentre) both measure from it, and the two levels in a band add up to one tree.
+		FBox Union(ForceInit);
+		for (UStaticMesh* M : LevelMeshes) Union += M->GetBoundingBox();
+		for (UStaticMesh* M : LevelMeshes)
+		{
+			const FBox Own = M->GetBoundingBox();
+			M->SetPositiveBoundsExtension(Union.Max - Own.Max);
+			M->SetNegativeBoundsExtension(Own.Min - Union.Min);
+			M->CalculateExtendedBounds();
+		}
+		const FVector Centre = Union.GetCenter();
+		for (UMaterialInstanceDynamic* M : LevelMaterials)
+		{
+			if (M) M->SetVectorParameterValue(TEXT("FadeCentre"), FLinearColor(Centre.X, Centre.Y, Centre.Z, 0.f));
+		}
+		for (int32 Level = 0; Level < 3; ++Level)
+		{
 			UHierarchicalInstancedStaticMeshComponent* Ring = NewObject<UHierarchicalInstancedStaticMeshComponent>(this);
-			Ring->SetStaticMesh(Mesh);
+			Ring->SetStaticMesh(LevelMeshes[Level]);
+			Ring->NumCustomDataFloats = bCrownLook ? 3 : 0; // the crown's colour
 			Ring->SetMobility(EComponentMobility::Movable);
 			Ring->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			Ring->SetupAttachment(RootComponent);
-			// The crowns' detail by distance (Grove.gd: 33 m, 92 m, 485 m).
-			static const int32 Near[3] = { 0, 3300, 9200 };
-			static const int32 Far[3] = { 3300, 9200, 60000 };
-			Ring->SetCullDistances(Near[Level], Far[Level]);
+			// The crowns' detail by distance: the full tree to 33 m, the cluster crown to 92 m, the low
+			// crown to 600 m (Grove.gd's distances; 45 and 130 m were tried and cost frame time). SetCullDistances is where a ring
+			// ends; its near limit is InstanceMinDrawDistance. Without one every ring drew from the
+			// camera out, so near the car all three crowns stood on top of each other (three times
+			// the triangles, and the blobby low crown over the detailed one). Each ring starts where
+			// its fade in starts and ends where its fade out ends (one tree distance for both, see
+			// FadeCentre), so outside the bands one level draws; 50 cm spare for rounding.
+			constexpr float SpareCm = 50.f;
+			const int32 Near = Level == 0 ? 0 : FMath::RoundToInt(FMath::Max(0.f, LodSwitchCm[Level - 1] - LodBandCm[Level - 1] - SpareCm));
+			const int32 Far = Level == 2 ? 60000 : FMath::RoundToInt(LodSwitchCm[Level] + LodBandCm[Level] + SpareCm);
+			Ring->InstanceMinDrawDistance = Near;
+			Ring->SetCullDistances(Far, Far);
 			Ring->SetCastShadow(Level < 2);
 			Ring->bAffectDistanceFieldLighting = false;
 			Ring->RegisterComponent();
@@ -471,6 +788,8 @@ void ASimCruiseTrees::Refresh()
 	const double Side = Frame.TileSizeM;
 	TArray<TArray<FTransform>> Lists;
 	Lists.SetNum(6);
+	TArray<TArray<float>> Colours; // 3 floats per instance of each list: the crown's colour
+	Colours.SetNum(6);
 	// The palm variants the tiles plant on lawns, for the measured trees where palms grow.
 	if (PalmRings.Num() == 0 && Stream->Resources && Stream->Resources->PalmMeshes.Num() > 0)
 	{
@@ -514,9 +833,76 @@ void ASimCruiseTrees::Refresh()
 				RoadCells.Add(FIntPoint(FMath::FloorToInt(St.C.X / 20.0), FMath::FloorToInt(St.C.Y / 20.0)), FVector3d(St.C.X, St.C.Y, St.HalfW));
 			}
 		}
-		for (const FSimCruiseTreeRow& Row : *Rows)
+		// Each crown's colour in the aerial photograph (the middle of the crown, its sunlit top),
+		// and the tile's crowns as a whole: a crown takes its difference from the tile's (the
+		// photograph's own exposure and white balance cancel out) and half the tile's hue against
+		// the species' leaf colour (dry olive crowns in the west, blue-green in the north woods).
+		TArray<FLinearColor> Seen;
+		Seen.Init(FLinearColor::Transparent, Rows->Num());
+		FLinearColor TileHue = FLinearColor::White;
+		if (bCrownLook)
 		{
-			const FVector2D Local = Row.TileUV * Side;
+			const TSharedPtr<const FSimCruiseAerialImage, ESPMode::ThreadSafe> Photo = SimCruiseAerialCache::Find(Tile->GetBuild()->AerialKey);
+			if (Photo.IsValid() && Photo->Width > 0 && Photo->Pixels.Num() == Photo->Width * Photo->Height)
+			{
+				const FIntPoint Z14 = SimCruiseGeo::AerialTileOf(Id);
+				const FVector2D CellUnit(Id.X - Z14.X * 4, Id.Y - Z14.Y * 4);
+				const double PxM = Side * 4.0 / Photo->Width;
+				TArray<float> Rs, Gs, Bs;
+				for (int32 r = 0; r < Rows->Num(); ++r)
+				{
+					const FSimCruiseTreeRow& Row = (*Rows)[r];
+					const FSimCruiseCrownFit Fit = FitCrown(Row);
+					const FVector2D Mid = Row.TileUV * Side + Fit.OffsetM;
+					const double Reach = FMath::Max(0.25 * FMath::Min(Fit.LongM, Fit.ShortM), 0.6 * PxM);
+					const int32 Cx = FMath::FloorToInt((Mid.X / Side + CellUnit.X) / 4.0 * Photo->Width);
+					const int32 Cy = FMath::FloorToInt((Mid.Y / Side + CellUnit.Y) / 4.0 * Photo->Height);
+					const int32 Rp = FMath::Clamp(FMath::FloorToInt(Reach / PxM), 0, 6);
+					FLinearColor Sum(0, 0, 0, 0);
+					int32 N = 0;
+					for (int32 dy = -Rp; dy <= Rp; ++dy)
+					for (int32 dx = -Rp; dx <= Rp; ++dx)
+					{
+						if (dx * dx + dy * dy > Rp * Rp) continue;
+						const int32 X = Cx + dx, Y = Cy + dy;
+						if (X < 0 || Y < 0 || X >= Photo->Width || Y >= Photo->Height) continue;
+						Sum += FLinearColor::FromSRGBColor(Photo->Pixels[Y * Photo->Width + X]);
+						++N;
+					}
+					if (N == 0) continue;
+					const FLinearColor C = Sum / static_cast<float>(N);
+					// Leaves only: roofs, roads and bare ground under a mapped crown (the canopy map is
+					// from another year than the photograph) and deep shadow say nothing about them.
+					if (C.G < 0.85f * FMath::Max(C.R, C.B) || C.G < 0.008f) continue;
+					Seen[r] = FLinearColor(C.R, C.G, C.B, 1.f);
+					Rs.Add(C.R); Gs.Add(C.G); Bs.Add(C.B);
+				}
+				if (Rs.Num() >= 8)
+				{
+					Rs.Sort(); Gs.Sort(); Bs.Sort();
+					const FLinearColor Median(Rs[Rs.Num() / 2], Gs[Gs.Num() / 2], Bs[Bs.Num() / 2], 1.f);
+					for (FLinearColor& S : Seen) if (S.A > 0.f) S = FLinearColor(S.R / FMath::Max(Median.R, 1e-4f), S.G / FMath::Max(Median.G, 1e-4f), S.B / FMath::Max(Median.B, 1e-4f), 1.f);
+					// The tile's hue (chroma at equal brightness) against the broadleaf leaf colour's.
+					auto Chroma = [](const FLinearColor& C) { const float L = FMath::Max(0.2126f * C.R + 0.7152f * C.G + 0.0722f * C.B, 1e-4f); return FLinearColor(C.R / L, C.G / L, C.B / L, 1.f); };
+					const FLinearColor Want = Chroma(Median), Have = Chroma(LeafMean[0]);
+					TileHue = FLinearColor(
+						FMath::Clamp(FMath::Sqrt(Want.R / FMath::Max(Have.R, 1e-3f)), 0.8f, 1.25f),
+						FMath::Clamp(FMath::Sqrt(Want.G / FMath::Max(Have.G, 1e-3f)), 0.8f, 1.25f),
+						FMath::Clamp(FMath::Sqrt(Want.B / FMath::Max(Have.B, 1e-3f)), 0.8f, 1.25f), 1.f);
+				}
+				else
+				{
+					for (FLinearColor& S : Seen) S = FLinearColor::Transparent;
+				}
+			}
+		}
+		for (int32 RowIndex = 0; RowIndex < Rows->Num(); ++RowIndex)
+		{
+			const FSimCruiseTreeRow& Row = (*Rows)[RowIndex];
+			// A segmented crown stands at its own middle (its top is where the canopy is highest,
+			// which for a one-sided or leaning crown is off the middle), turned to its long axis.
+			const FSimCruiseCrownFit Fit = FitCrown(Row);
+			const FVector2D Local = Row.TileUV * Side + Fit.OffsetM;
 			const double Clear = FMath::Max(1.5, Row.CrownM * 0.3);
 			bool bOnRoad = false;
 			const FIntPoint Cell(FMath::FloorToInt(Local.X / 20.0), FMath::FloorToInt(Local.Y / 20.0));
@@ -555,13 +941,29 @@ void ASimCruiseTrees::Refresh()
 				}
 			}
 			const bool bPine = !bPalms && (H % 1000) < Conifers * 1000.0;
-			const double Yaw = (H >> 10) % 360;
-			// A conifer's crown is narrower than the canopy peak's footprint suggests.
-			const double Width = FMath::Clamp(Row.CrownM * (bPine ? 0.75 : 1.0), 1.5, Row.HeightM * 0.95);
-			const FTransform Xf(FRotator(0.0, Yaw, 0.0), At, FVector(Width, Width, Row.HeightM));
+			// A conifer's crown is narrower than the canopy peak's footprint suggests; a segmented
+			// crown is its own measured width (a conifer's mesh a little inside it).
+			const double Narrow = Row.bShape ? (bPine ? 0.85 : 1.0) : (bPine ? 0.75 : 1.0);
+			const double Long = FMath::Clamp(Fit.LongM * Narrow, 1.5, Row.HeightM * 0.95);
+			const double Short = FMath::Clamp(Fit.ShortM * Narrow, 1.5, Row.HeightM * 0.95);
+			// A round crown (within 15 %) keeps a random turn, so the meshes do not all face one way.
+			const double Yaw = Row.bShape && Fit.LongM > 1.15 * Fit.ShortM ? Fit.YawDeg : (H >> 10) % 360;
+			const FTransform Xf(FRotator(0.0, Yaw, 0.0), At, FVector(Long, Short, Row.HeightM));
+			// The crown's colour: its own difference from the tile's crowns in the photograph (softened
+			// to 70 %, at most -30 %/+35 % a channel), the tile's hue, and a jitter of its own: hue
+			// +-8 % (red against blue) and brightness +-15 %.
+			FLinearColor Own = TileHue;
+			if (Seen[RowIndex].A > 0.f)
+			{
+				const FLinearColor& S = Seen[RowIndex];
+				Own *= FLinearColor(FMath::Clamp(FMath::Pow(S.R, 0.7f), 0.7f, 1.35f), FMath::Clamp(FMath::Pow(S.G, 0.7f), 0.7f, 1.35f), FMath::Clamp(FMath::Pow(S.B, 0.7f), 0.7f, 1.35f), 1.f);
+			}
+			const float HueJ = ((H >> 16) & 255) / 255.f * 2.f - 1.f, LumJ = ((H >> 24) & 255) / 255.f * 2.f - 1.f;
+			Own *= FLinearColor(1.f + 0.08f * HueJ, 1.f, 1.f - 0.08f * HueJ, 1.f) * (1.f + 0.15f * LumJ);
 			for (int32 Level = 0; Level < 3; ++Level)
 			{
 				Lists[(bPine ? 3 : 0) + Level].Add(Xf);
+				Colours[(bPine ? 3 : 0) + Level].Append({ Own.R, Own.G, Own.B });
 			}
 			// Trunk about a sixtieth of the height across (Grove.gd row[4]), 8 to 45 cm radius.
 			Feet.Add(FVector4(At.X, At.Y, At.Z, FMath::Clamp(Row.HeightM * 100.0 / 120.0, 8.0, 45.0)));
@@ -575,6 +977,15 @@ void ASimCruiseTrees::Refresh()
 	for (int32 i = 0; i < 6; ++i)
 	{
 		Rings[i]->AddInstances(Lists[i], false, true, false);
+		if (Rings[i]->NumCustomDataFloats == 3 && Lists[i].Num() > 0)
+		{
+			// One instance at a time: the hierarchical component's own SetCustomData keeps its
+			// instance order (it hides the engine's range form).
+			for (int32 n = 0; n < Lists[i].Num(); ++n)
+			{
+				Rings[i]->SetCustomData(n, TArrayView<const float>(Colours[i].GetData() + 3 * n, 3), false);
+			}
+		}
 		Rings[i]->BuildTreeIfOutdated(false, true);
 	}
 	for (int32 i = 0; i < PalmRings.Num(); ++i)
@@ -689,6 +1100,10 @@ void ASimCruiseTrees::Tick(float DeltaSeconds)
 			FSimCruiseAtlasRequest Request;
 			Request.Command = TEXT("canopy");
 			Request.Args = { FString::FromInt(Id.X), FString::FromInt(Id.Y) };
+			// Crowns segmented from the canopy height grid (helper/crown-segments.mjs); the old
+			// peak finder with -SimCruiseOldCrowns (for an A/B).
+			static const bool bOldCrowns = FParse::Param(FCommandLine::Get(), TEXT("SimCruiseOldCrowns"));
+			if (!bOldCrowns) Request.Args.Add(TEXT("--segment"));
 			Request.TimeoutSeconds = 90.0;
 			const FSimCruiseAtlasResult Result = FSimCruiseAtlasClient::RunBlocking(Config, Request, nullptr);
 			if (Result.IsOk())

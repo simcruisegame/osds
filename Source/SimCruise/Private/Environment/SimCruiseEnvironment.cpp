@@ -449,9 +449,11 @@ void ASimCruiseEnvironment::ApplyExposure()
 	const float Day = FMath::SmoothStep(8.f, 11.f, static_cast<float>(ReferenceEV100));
 	S.AutoExposureBias = ExposureCompensation + DaylightCompensation * Day;
 	S.bOverride_AutoExposureSpeedUp = true;
-	S.AutoExposureSpeedUp = 2.0f;
+	// From the seat the eye adapts over seconds; at 2 / 1 EV/s the cabin flipped grey to near
+	// black within half a second where a tree or building shadow crossed the road (blind review).
+	S.AutoExposureSpeedUp = bDriverView ? 0.8f : 2.0f;
 	S.bOverride_AutoExposureSpeedDown = true;
-	S.AutoExposureSpeedDown = 1.0f;
+	S.AutoExposureSpeedDown = bDriverView ? 0.5f : 1.0f;
 	S.bOverride_AutoExposureLowPercent = true;
 	S.AutoExposureLowPercent = ExposureLowPercent;
 	S.bOverride_AutoExposureHighPercent = true;

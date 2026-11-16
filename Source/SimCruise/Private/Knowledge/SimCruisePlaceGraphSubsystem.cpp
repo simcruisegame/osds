@@ -26,6 +26,7 @@
 #define SIMCRUISE_PLACE_GRAPH_LIVE 0
 #endif
 #include "Misc/App.h"
+#include "Atlas/SimCruiseUserAgent.h"
 #include "Misc/Paths.h"
 #include "UnrealClient.h"
 #include "Misc/CommandLine.h"
@@ -51,7 +52,10 @@ namespace
 		return bOffline ? FString(TEXT("http://127.0.0.1:9/")) : Url;
 	}
 
-	const TCHAR* UserAgent = TEXT("SimCruise/2.0 (+https://github.com/simcruisegame/simcruise)");
+	const TCHAR* UserAgent = SimCruiseUserAgent::Get();
+
+	/** The pause after the n-th failure in a row: 30 s doubling to an hour. */
+	double FailurePause(int32 Failures) { return FMath::Min(3600.0, 30.0 * FMath::Pow(2.0, FMath::Clamp(Failures - 1, 0, 12))); }
 
 	FAutoConsoleCommandWithWorldAndArgs GExplain(
 		TEXT("SimCruise.Knowledge.Explain"), TEXT("SimCruise.Knowledge.Explain [n]: the n buildings nearest the car, their facts and why each detail"),
@@ -164,8 +168,12 @@ void USimCruisePlaceGraphSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	const TCHAR* Cmd = FCommandLine::Get();
 	const bool bForce = FParse::Param(Cmd, TEXT("SimCruiseLive"));
 	bAI = !FParse::Param(Cmd, TEXT("SimCruiseNoPlaceAI"));
-	bNetwork = !FParse::Param(Cmd, TEXT("SimCruiseNoLive")) && !FParse::Param(Cmd, TEXT("SimCruiseNoPlaceFetch"))
-		&& (bForce || (!FApp::IsUnattended() && !GIsAutomationTesting));
+	// Open data at run time (Overpass, Wikidata, Wikipedia) only when asked for with -SimCruiseLive:
+	// the public Overpass and Wikidata servers are community services that cannot carry a game's
+	// players (detail-staging/server-load.md). The bundled start tiles keep their facts; elsewhere
+	// the graph bakes from its region and climate rules. The facts for every place come later from
+	// a data pack built once per release.
+	bNetwork = bForce && !FParse::Param(Cmd, TEXT("SimCruiseNoLive")) && !FParse::Param(Cmd, TEXT("SimCruiseNoPlaceFetch"));
 	const FSimCruisePlaceRules& R = SimCruisePlaceGraph::Rules();
 	UE_LOG(LogSimCruisePlaceGraph, Display, TEXT("Place graph: %d rules, %d live rules, %d regions, %d palettes; open-data fetch %s."),
 		R.Rules.Num(), R.LiveRules.Num(), R.Regions.Num(), R.Palettes.Num(), bNetwork ? TEXT("on") : TEXT("off"));
@@ -299,8 +307,9 @@ void USimCruisePlaceGraphSubsystem::FetchAhead()
 	if (!ObserverLonLat(Lat, Lon)) return;
 	const FVector2d T = SimCruiseGeo::LonLatToTile(Lon, Lat);
 	const FIntPoint Here(FMath::FloorToInt(T.X), FMath::FloorToInt(T.Y));
-	// Nearest first: the tile under the car, its ring, then the next ring.
-	for (int32 R = 0; R <= 2; ++R)
+	// Nearest first: the tile under the car, then its ring (not a 5 x 5 ring: one player's share of
+	// a public server stays small).
+	for (int32 R = 0; R <= 1; ++R)
 	{
 		for (int32 dy = -R; dy <= R; ++dy)
 		{
@@ -352,10 +361,9 @@ void USimCruisePlaceGraphSubsystem::OnOverpass(const FIntPoint& Tile, const FStr
 		if (!bOk)
 		{
 			LastError = FString::Printf(TEXT("Overpass %s (%s): no answer"), *SimCruiseTileName(Tile), *SimCruisePlaceFacts::OverpassUrl(OverpassAttempt));
-			++OverpassAttempt;
 			bFetching = false;
 			Failed.Add(Tile);
-			NextFetch = FPlatformTime::Seconds() + 10.0;
+			NextFetch = FPlatformTime::Seconds() + FailurePause(++FetchFailures);
 			return;
 		}
 		TWeakObjectPtr<USimCruisePlaceGraphSubsystem> Weak(this);
@@ -373,18 +381,20 @@ void USimCruisePlaceGraphSubsystem::OnOverpass(const FIntPoint& Tile, const FStr
 				++S.Fetched;
 				if (!bParsed) S.Failed.Add(Tile);
 				// The Overpass fair-use rule: one request at a time, a pause between them.
-				S.NextFetch = FPlatformTime::Seconds() + 3.0;
+				S.FetchFailures = bParsed ? 0 : S.FetchFailures;
+				S.NextFetch = FPlatformTime::Seconds() + 30.0;
 			});
 		});
 		return;
 	}
 	PendingOsmBody = bOk ? Body : FString();
+	if (bOk) FetchFailures = 0;
 	if (!bOk)
 	{
-		// Overpass is busy at times (429/504): the next request goes to the next instance;
-		// keep going with Wikidata alone.
+		// Overpass is busy at times (429/504): keep going with Wikidata alone, and wait longer
+		// before the next request (one instance only: rotating spreads the load to every mirror).
 		LastError = FString::Printf(TEXT("Overpass %s (%s): no answer"), *SimCruiseTileName(Tile), *SimCruisePlaceFacts::OverpassUrl(OverpassAttempt));
-		++OverpassAttempt;
+		++FetchFailures;
 		UE_LOG(LogSimCruisePlaceGraph, Display, TEXT("%s"), *LastError);
 	}
 	const TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
@@ -412,7 +422,7 @@ void USimCruisePlaceGraphSubsystem::OnWikidata(const FIntPoint& Tile, const FStr
 		bFetching = false;
 		PendingOsmBody.Reset();
 		Failed.Add(Tile);
-		NextFetch = FPlatformTime::Seconds() + 10.0;
+		NextFetch = FPlatformTime::Seconds() + FailurePause(++FetchFailures);
 		return;
 	}
 	// Parse, merge and save on a worker thread; only the result comes back.
@@ -450,7 +460,7 @@ void USimCruisePlaceGraphSubsystem::OnWikidata(const FIntPoint& Tile, const FStr
 			++S.Fetched;
 			UE_LOG(LogSimCruisePlaceGraph, Display, TEXT("%s"), *Line);
 			// The Overpass fair-use rule: one request at a time, a pause between them.
-			S.NextFetch = FPlatformTime::Seconds() + 3.0;
+			S.NextFetch = FPlatformTime::Seconds() + (S.FetchFailures > 0 ? FailurePause(S.FetchFailures) : 30.0);
 		});
 	});
 }

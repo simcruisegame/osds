@@ -13,6 +13,8 @@
 #include "Engine/Engine.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/SimCruiseAtlasUI.h"
+#include "Gameplay/SimCruiseDriveHud.h"
+#include "Gameplay/SimCruiseFeatures.h"
 #include "Gameplay/SimCruiseSeatUI.h"
 #include "Gameplay/SimCruiseTuningUI.h"
 #include "Gameplay/SimCruiseGameMode.h"
@@ -277,6 +279,8 @@ void ASimCruisePlayerController::PlayerTick(float DeltaTime)
 			for (int32 i = 0; i < 3 && static_cast<int32>(Camera->GetLens()) != Lens; ++i) Camera->CycleLens();
 			const int32 TrafficCars = SimCruisePreferences::GetInt(TEXT("traffic_cars"), -1, -1, 60);
 			if (TrafficCars >= 0) if (IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Traffic.Cars"))) Var->Set(TrafficCars, ECVF_SetByCode);
+			// The round map: with a route only (the default) or always.
+			FSimCruiseDriveHud::SetMapAlways(SimCruisePreferences::GetBool(TEXT("hud_map_always"), false), false);
 			// The screen the true-FOV lens is computed for: diagonal in tenths of an inch, eye distance in cm.
 			const int32 Tenths = SimCruisePreferences::GetInt(TEXT("screen_tenths_inch"), -1, -1, 1000);
 			const int32 Distance = SimCruisePreferences::GetInt(TEXT("view_distance_cm"), -1, -1, 400);
@@ -799,6 +803,8 @@ void ASimCruisePlayerController::ChangeSetting(int32 Index)
 	case 12: OpenSeatMenu(); break;
 	case 13:
 	{
+		// Traffic off for the release (SimCruiseFeatures): the atlas hides the button; nothing changes.
+		if (!SimCruiseFeatures::IsTrafficEnabled()) break;
 		// Normal (20 cars about you), light (8) or none; remembered as the car count.
 		const float Now = SimCruiseSettingValue(TEXT("simcruise.Traffic.Cars"));
 		const int32 Next = Now > 12.f ? 8 : Now > 0.5f ? 0 : 20;

@@ -154,6 +154,10 @@ class SIMCRUISE_API ASimCruiseTraffic : public AActor
 
 public:
 	ASimCruiseTraffic();
+	/** Traffic is out of the game for now (2026-11-14: the details and the driving first). The one
+	 * switch: sc.Feature.Traffic (default 0; -SimCruiseTraffic on the command line sets it) brings it back.
+	 * Read when the world starts: the streamer spawns the traffic actor only with it. */
+	static bool IsEnabled();
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 

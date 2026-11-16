@@ -530,6 +530,75 @@ namespace SimCruiseTileBuilder
 
 		// ---------------------------------------------------------------- roads
 		B.Roads.Build(Data, Side, NeighbourEnds);
+		{
+			// The ground on a tile's seam keeps the height both tiles share (no tile sees every road
+			// near its edge), so a road that runs along or near a seam cannot press it down: the road
+			// clears it instead. Where a carriageway lies within a cell and a half of the seam, its
+			// surface stays 5 cm over that shared ground, lifted on a 15 m ease along the road. Not at a
+			// road's own seam ends (their contract) and not where another road joins or crosses within
+			// 2 m (the junction made the two one surface: lifting one apart broke a Miami crossing).
+			const int32 SeamN = Data.Grid * FMath::Max(1, FMath::RoundToInt(Side / Data.Grid / FineCellTargetM));
+			const double Band = 1.5 * Side / FMath::Max(SeamN, 1);
+			for (int32 r = 0; r < B.Roads.Ribbons.Num(); ++r)
+			{
+				FSimCruiseRibbon& Ribbon = B.Roads.Ribbons[r];
+				const int32 NS = Ribbon.St.Num();
+				TArray<double> Need;
+				Need.Init(0.0, NS);
+				TArray<bool> Joined;
+				Joined.Init(false, NS);
+				bool bAny = false;
+				for (int32 k = 0; k < NS; ++k)
+				{
+					const FSimCruiseRibbonStation& St = Ribbon.St[k];
+					if ((Ribbon.bStartOnBoundary && St.S - Ribbon.St[0].S < 15.0) || (Ribbon.bEndOnBoundary && Ribbon.St.Last().S - St.S < 15.0)) continue;
+					for (int32 c = 0; c < 5 && !Joined[k]; ++c)
+					{
+						FSimCruiseRoadHit Other;
+						Joined[k] = B.Roads.FindCarriageway(St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW), Other, r, 2.0);
+					}
+					if (Joined[k]) continue;
+					for (int32 c = 0; c < 5; ++c)
+					{
+						const double L = FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW;
+						const FVector2d P = St.C + St.R * L;
+						const double DX = FMath::Min(P.X, Side - P.X), DY = FMath::Min(P.Y, Side - P.Y);
+						if (FMath::Min(DX, DY) > Band) continue;
+						FVector2d Q = P;
+						if (DX <= DY) Q.X = P.X < Side - P.X ? 0.0 : Side; else Q.Y = P.Y < Side - P.Y ? 0.0 : Side;
+						const double Ground = FMath::Max(Data.HeightAtUnit(Q / Side), Data.HeightAtUnit(FVector2d(FMath::Clamp(P.X, 0.0, Side), FMath::Clamp(P.Y, 0.0, Side)) / Side));
+						const double Lift = Ground + 0.05 - St.Height(L);
+						if (Lift > Need[k]) { Need[k] = Lift; bAny = true; }
+					}
+				}
+				if (!bAny) continue;
+				TArray<double> Lift;
+				Lift.Init(0.0, NS);
+				for (int32 k = 0; k < NS; ++k)
+				{
+					if (Need[k] <= 0.0) continue;
+					for (int32 m = 0; m < NS; ++m)
+					{
+						const double D = FMath::Abs(Ribbon.St[m].S - Ribbon.St[k].S);
+						if (D >= 15.0) continue;
+						Lift[m] = FMath::Max(Lift[m], Need[k] * (1.0 - FMath::SmoothStep(0.0, 1.0, D / 15.0)));
+					}
+				}
+				for (int32 k = 0; k < NS; ++k)
+				{
+					FSimCruiseRibbonStation& St = Ribbon.St[k];
+					if (Lift[k] <= 0.0 || Joined[k]) continue;
+					double Keep = 1.0;
+					// Eased to nothing at a joined station (the junction keeps the shared surface).
+					for (int32 m = 0; m < NS; ++m) if (Joined[m]) Keep = FMath::Min(Keep, FMath::SmoothStep(0.0, 1.0, FMath::Abs(Ribbon.St[m].S - St.S) / 15.0));
+					if (Ribbon.bStartOnBoundary) Keep = FMath::Min(Keep, FMath::SmoothStep(0.0, 1.0, (St.S - Ribbon.St[0].S) / 15.0));
+					if (Ribbon.bEndOnBoundary) Keep = FMath::Min(Keep, FMath::SmoothStep(0.0, 1.0, (Ribbon.St.Last().S - St.S) / 15.0));
+					const double Up = Lift[k] * Keep;
+					St.Z += Up;
+					for (int32 c = 0; c < 5; ++c) St.Column(c) += Up;
+				}
+			}
+		}
 		B.Roads.CollectSeamEnds(B.SeamEnds);
 		const FSimCruiseRoadNetwork& Roads = B.Roads;
 
@@ -569,7 +638,38 @@ namespace SimCruiseTileBuilder
 			for (int32 k = 0; k < Stride * Stride; ++k) if (Fill.Bits[k]) VertexBody[k] = Body;
 		}
 
+		// The OSM road lines themselves (the tile data's rows), binned by 10 m: where no road ribbon
+		// covers a point of a mapped carriageway (a ribbon trimmed short at a junction or a deck end, a
+		// gap the network left), the ground there is still kept under the line's own centre height.
+		struct FRowSeg { FVector2d A, B; double HalfW; };
+		TArray<FRowSeg> RowSegs;
+		TMultiMap<FIntPoint, int32> RowBins;
+		for (const FSimCruiseRoadRow& MappedRow : Data.Roads)
+		{
+			if (MappedRow.bBridge) continue; // a deck's line is not the ground's
+			for (int32 rk = 0; rk + 1 < MappedRow.Points.Num(); ++rk)
+			{
+				const FVector2d RA = MappedRow.Points[rk] * Side, RB = MappedRow.Points[rk + 1] * Side;
+				const int32 RIdx = RowSegs.Add({ RA, RB, 0.5 * MappedRow.WidthM });
+				const double RPad = 0.5 * MappedRow.WidthM + 1.0;
+				for (int32 bx = FMath::FloorToInt((FMath::Min(RA.X, RB.X) - RPad) / 10.0); bx <= FMath::FloorToInt((FMath::Max(RA.X, RB.X) + RPad) / 10.0); ++bx)
+				for (int32 by = FMath::FloorToInt((FMath::Min(RA.Y, RB.Y) - RPad) / 10.0); by <= FMath::FloorToInt((FMath::Max(RA.Y, RB.Y) + RPad) / 10.0); ++by)
+				{
+					RowBins.Add(FIntPoint(bx, by), RIdx);
+				}
+			}
+		}
+		auto NaturalAt = [&](const FVector2d& Q)
+		{
+			const double QX = FMath::Clamp(Q.X / Cell, 0.0, N - 1e-6), QY = FMath::Clamp(Q.Y / Cell, 0.0, N - 1e-6);
+			const int32 I0 = FMath::FloorToInt(QX), J0 = FMath::FloorToInt(QY);
+			const double Fx = QX - I0, Fy = QY - J0;
+			auto G = [&](int32 Gi, int32 Gj) { return static_cast<double>(B.NaturalHeights[Gj * Stride + Gi]); };
+			return FMath::Lerp(FMath::Lerp(G(I0, J0), G(I0 + 1, J0), Fx), FMath::Lerp(G(I0, J0 + 1), G(I0 + 1, J0 + 1), Fx), Fy);
+		};
+
 		// Road conditioning: ground under every paved footprint sits just below it.
+		const double EdgeReach = 1.42 * Cell; // a ground cell's diagonal
 		TArray<TPair<int32, int32>> Segments;
 		for (int32 j = 0; j <= N; ++j)
 		for (int32 i = 0; i <= N; ++i)
@@ -595,6 +695,14 @@ namespace SimCruiseTileBuilder
 
 			double InsideTarget = TNumericLimits<double>::Max();
 			bool bInside = false;
+			// The ground never stands over a carriageway: under every road ribbon, bridge or not, at
+			// most the road's surface less 0.15 m (its thickness and a little), across the carriageway
+			// (a deck 0.3 m past each edge, its parapet's foot). Under a bridge the ground otherwise keeps
+			// its own height. A hillside stood over a carriageway at Bixby Creek's south end, 2026-11-15.
+			double RoadCap = TNumericLimits<double>::Max();
+			// ... and out to a ground cell's diagonal past the edge (at the edge's height), so that no
+			// ground triangle touching a lane rises over it.
+			double EdgeCap = TNumericLimits<double>::Max();
 			double BestWeight = 0.0, BestTarget = H;
 
 			const double Natural = H;
@@ -644,7 +752,16 @@ namespace SimCruiseTileBuilder
 				{
 					const FSimCruiseRibbon& Ribbon = Roads.Ribbons[Seg.Key];
 					// Under a bridge the ground stays where it is: the river, the road or the valley below.
-					if (Ribbon.St[Seg.Value].bBridge && Ribbon.St[Seg.Value + 1].bBridge) continue;
+					if (Ribbon.St[Seg.Value].bBridge && Ribbon.St[Seg.Value + 1].bBridge)
+					{
+						const FSimCruiseRoadHit Under = Roads.Project(Seg.Key, Seg.Value, P);
+						// Along: on a curve the station normals are not square to the chord, so a point off the
+						// centre line shows some Along even inside the segment (Bixby's south deck end: 0.1-0.3 m);
+						// 1.2 m, as the conditioning below.
+						if (FMath::Abs(Under.Along) <= 1.2 && FMath::Abs(Under.Lateral) <= Under.HalfW + 0.3) RoadCap = FMath::Min(RoadCap, Under.Height - 0.15);
+						else if (FMath::Abs(Under.Along) <= 1.2 && FMath::Abs(Under.Lateral) <= Under.HalfW + EdgeReach) EdgeCap = FMath::Min(EdgeCap, Under.Height - 0.15);
+						continue;
+					}
 					const FSimCruiseRoadHit Hit = Roads.Project(Seg.Key, Seg.Value, P);
 					const bool bFirst = Seg.Value == 0 && Hit.T <= 0.0;
 					const bool bLast = Seg.Value + 2 == Ribbon.St.Num() && Hit.T >= 1.0;
@@ -674,12 +791,40 @@ namespace SimCruiseTileBuilder
 					const bool bRural = !Ribbon.bService && Ribbon.Sides[SideIndex].Edge.IsValidIndex(Seg.Value)
 						&& Ribbon.Sides[SideIndex].Edge[Seg.Value] == ESimCruiseRoadEdge::Rural && !Ribbon.Sides[SideIndex].Cut[Seg.Value];
 					Consider(FMath::Abs(Hit.Lateral), Hit.HalfW, Outer, Lowest, OuterH, Along, bRural);
+					if (Along <= 0.0 && FMath::Abs(Hit.Along) <= 1.2)
+					{
+						if (FMath::Abs(Hit.Lateral) <= Hit.HalfW) RoadCap = FMath::Min(RoadCap, Hit.Height - UnderDepthM);
+						else if (FMath::Abs(Hit.Lateral) <= Hit.HalfW + EdgeReach) EdgeCap = FMath::Min(EdgeCap, Hit.Height - UnderDepthM);
+					}
 				}
 			}
 
 			if (bInside) H = InsideTarget;
 			else if (SectionDist < TNumericLimits<double>::Max()) H = SectionTarget;
 			else if (BestWeight > 0.0) H = FMath::Lerp(H, BestTarget, BestWeight);
+			H = FMath::Min(H, RoadCap);
+			// The lower lane wins where two carriageways' footprints overlap within a cell (a motorway's
+			// two directions at different heights, a ramp, a driveway): ground over a lane stops a car,
+			// ground a little under the higher road's shoulder is hidden by that road's own surface.
+			H = FMath::Min(H, EdgeCap);
+			if (RoadCap == TNumericLimits<double>::Max() && !bInside)
+			{
+				// No ribbon here: the mapped line's own carriageway, at the ground of its centre line.
+				TArray<int32> RowNear;
+				RowBins.MultiFind(FIntPoint(FMath::FloorToInt(P.X / 10.0), FMath::FloorToInt(P.Y / 10.0)), RowNear);
+				for (const int32 RowIdx : RowNear)
+				{
+					const FRowSeg& Sg = RowSegs[RowIdx];
+					const FVector2d RD = Sg.B - Sg.A;
+					const double RL2 = RD.SizeSquared();
+					if (RL2 < 1e-6) continue;
+					const double RT = FVector2d::DotProduct(P - Sg.A, RD) / RL2;
+					if (RT < 0.0 || RT > 1.0) continue;
+					const FVector2d RQ = Sg.A + RD * RT;
+					if (FVector2d::Distance(P, RQ) > Sg.HalfW) continue;
+					H = FMath::Min(H, NaturalAt(RQ) - UnderDepthM);
+				}
+			}
 			if (FMath::Abs(H - B.NaturalHeights[K]) > 0.001) ++B.ConditionedVertices;
 			B.TerrainHeights[K] = static_cast<float>(H);
 		}
@@ -1150,13 +1295,42 @@ namespace SimCruiseTileBuilder
 						}
 						for (const FVector2d& Piece : Pieces)
 						{
+							// Never inside another carriageway that runs through here (a twin
+							// carriageway's overlap, a flare, a road crossing at grade): a yellow line
+							// lay across the lanes of the road beside it (Detroit review). A road that
+							// ends into this one (a T's stem) does not stop it.
+							{
+								const double Tm = 0.5 * (Piece.X + Piece.Y);
+								const FVector2d Pm = FMath::Lerp(A.C, Bs.C, Tm) + FMath::Lerp(A.R, Bs.R, Tm).GetSafeNormal() * FMath::Lerp(Line.L, LB[l].L, Tm);
+								TArray<TPair<int32, int32>> Near;
+								Roads.GatherSegments(Pm, 1.0, Near);
+								bool bCovered = false;
+								for (const TPair<int32, int32>& Sg : Near)
+								{
+									if (Sg.Key == r) continue;
+									const FSimCruiseRoadHit Hit = Roads.Project(Sg.Key, Sg.Value, Pm);
+									if (FMath::Abs(Hit.Along) > 0.01 || FMath::Abs(Hit.Lateral) > Hit.HalfW - 0.3) continue;
+									const FSimCruiseRibbon& Other = Roads.Ribbons[Sg.Key];
+									const double FromStart = Other.St[Hit.Station].S + Hit.T * (Other.St[Hit.Station + 1].S - Other.St[Hit.Station].S) - Other.St[0].S;
+									const double FromEnd = Other.Length() - FromStart;
+									const double Stem = FMath::Lerp(A.HalfW, Bs.HalfW, Tm) + 1.5;
+									if ((!Other.bStartOnBoundary && FromStart < Stem) || (!Other.bEndOnBoundary && FromEnd < Stem)) continue;
+									bCovered = true;
+									break;
+								}
+								if (bCovered) continue;
+							}
 							FVector Q[4];
 							for (int32 e = 0; e < 2; ++e)
 							{
 								const double T = e == 0 ? Piece.X : Piece.Y;
 								const FVector2d C = FMath::Lerp(A.C, Bs.C, T);
 								const FVector2d R = FMath::Lerp(A.R, Bs.R, T).GetSafeNormal();
-								const double L = FMath::Lerp(Line.L, LB[l].L, T);
+								// On its own drawn carriageway: an edge or lane line stays 0.15 m or more
+								// inside the drawn edge where the width tapers or flares (lines lay on the
+								// sidewalk and the verge; Detroit review).
+								const double Lim = FMath::Max(FMath::Lerp(A.HalfW, Bs.HalfW, T) - 0.15 - 0.5 * Line.Width, 0.0);
+								const double L = FMath::Clamp(FMath::Lerp(Line.L, LB[l].L, T), -Lim, Lim);
 								for (int32 s = 0; s < 2; ++s)
 								{
 									const double Ls = L + (s == 0 ? -0.5 : 0.5) * Line.Width;
@@ -1337,6 +1511,10 @@ namespace SimCruiseTileBuilder
 		B.RoadTops = MakeShared<const SimCruiseRoadCheck::FTopSurface, ESPMode::ThreadSafe>(B);
 
 		B.BuildMs = (FPlatformTime::Seconds() - Started) * 1000.0;
+		// TINT by colour match (the place's own grass, soil, sand and paving hues from its aerial
+		// photograph; about 2 ms), for the ground material and the scan. -SimCruiseNoTint: x1.0.
+		static const bool bNoTint = FParse::Param(FCommandLine::Get(), TEXT("SimCruiseNoTint"));
+		if (Aerial && !bNoTint) SimCruiseScan::MatchTints(B.Mask, SimCruiseGroundMask::Size, Data.Id, *Aerial, B.Tint);
 		// -SimCruiseScan / -SimCruiseScanView: the tile scan (rules only for now), from the disk cache
 		// or baked here on the worker; the view writes its class map to Saved/Scan/view.
 		static const bool bScanView = FParse::Param(FCommandLine::Get(), TEXT("SimCruiseScanView"));

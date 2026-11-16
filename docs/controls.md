@@ -1,4 +1,4 @@
-# Playing SimCruise
+# Playing OSDS
 
 The Unreal client starts in the 2001 roadster in Ocean Drive's lane, Miami Beach, in a morning sun (the bundled start: no network needed). The keys and buttons are one table in `Source/SimCruise/Private/Gameplay/SimCruiseInputConfig.cpp`, checked by the `SimCruise.Gameplay.Input` tests.
 
@@ -32,15 +32,17 @@ The Unreal client starts in the 2001 roadster in Ocean Drive's lane, Miami Beach
 
 The engine sound is on at the start.
 
-**Pause menu and GPS.** Tab (Menu) opens the pause menu. Up and down (D-pad, stick, arrows) choose a row, A (Enter) chooses it, left and right change a value, Y puts a slider back to stock, LB and RB (Q and E) change the page, B (Esc) goes back to the drive. On the Drive page: Where to?, Plan a route, Famous roads and the road atlas; X ends a route. In Plan a route the left stick (arrows, drag) moves the map under the cross, A (Enter, a click) adds a stop, X (Delete) removes the stop under the cross or the last one, LT and RT (- and +, the wheel) zoom, Y starts the route and B goes back. While you follow a route the turn sign is at the top, magenta chevrons are on the road ahead and the round map shows the course; leave the route for more than 30 m for 3 s and the GPS finds a new one from where you are.
+**Pause menu and GPS.** Tab (Menu) opens the pause menu. Up and down (D-pad, stick, arrows) choose a row, A (Enter) chooses it, left and right change a value, Y puts a slider back to stock, LB and RB (Q and E) change the page, B (Esc) goes back to the drive. On the Drive page: Where to?, Plan a route, Famous roads and the road atlas; X ends a route. In Plan a route the left stick (arrows, drag) moves the map under the cross, A (Enter, a click) adds a stop, X (Delete) removes the stop under the cross or the last one, LT and RT (- and +, the wheel) zoom, Y starts the route and B goes back. While you follow a route the turn sign is at the top, magenta chevrons are on the road ahead and the round map shows the course (in the driver's seat the map is at the top left); leave the route for more than 30 m for 3 s and the GPS finds a new one from where you are.
 
 **Menus with an Xbox controller.** Every button and row on every menu works with the pad alone. The pad's place always has a white border, so you can see where you are.
 
 - **Pause menu.** Menu opens and closes it. Up and down move between rows. Up from the first row goes to the page tabs at the top (Drive, Your car, Seat & view, Settings): left and right move along them, and A or Down opens that page. LB and RB change the page from anywhere. A new page always starts on its first row. On a slider or a choice row, D-pad left and right change it; Y puts a slider back to stock. B goes back to the drive.
 - **Back one step.** B on a screen you opened from the menu (Where to?, Plan a route, Famous roads, Road atlas, Tune car, Seat & view) takes you back to the menu, on the row you came from. Menu closes everything and goes back to the drive.
-- **Where to?** The D-pad moves between the search box, Search, Surprise me, the places and Back to drive; A chooses. On the search box, press A for the pad keyboard: the D-pad moves over the keys, A types the key, X deletes, Y types a space, Search searches, and B closes the keyboard (your text stays).
+- **Where to?** The D-pad moves between the search box, Search, Surprise me, the places and Back to drive; A chooses. On the search box, press A for the pad keyboard: the D-pad (or the stick) moves over the keys, A types the key, B deletes the letter before the cursor, X types a space, Y or Menu searches, and LB and RB move the cursor. B on an empty box closes the keyboard.
 - **Road atlas.** D-pad left or right moves from the map onto the buttons at the top (zoom, Recenter, Drive here, Back to drive, Find a place, Surprise me, the car, the gearbox and every setting). Then the D-pad moves between the buttons, A presses one, and B goes back to the map. On the map, B goes back.
-- **Tune car and Seat & view.** Up and down choose a row, left and right change it, A saves, B (or Menu) cancels.
+- **Tune car and Seat & view.** Up and down choose a row, left and right change it (the stick too: one push is one step), X resets the row, Y resets all, A saves, B (or Menu) cancels.
+- **Quit.** The last row of the Drive page, *Quit the game*, asks first: *Keep driving* (where the pad starts) or *Quit to the desktop*. A chooses, B goes back.
+- Every screen's button hints come from the same list as its key handling, and a test (`SimCruise.UI.PadHintsMatch`) presses each hinted button to check it does what it says.
 - The left stick works like the D-pad in the menus: one push is one step, and holding it repeats. A mouse resting on the menu does not move your place; moving the mouse does.
 - The button hints at the bottom of every screen follow what you used last: press any pad button and they show the pad's buttons (A, B, LB RB); press a key or move the mouse and they show the keyboard's keys.
 
@@ -54,7 +56,9 @@ The engine sound is on at the start.
 
 **New pad layout in 2.0.0.** The clutch moved from LB to A, the parking brake from A to B, shift down from X to LB, the gearbox switch from B to the right-stick click, the engine restart from the right-stick click to D-pad left and the HUD from the left-stick click to X; the left-stick click does nothing (since 2.0.1: it changed the lens when pressed by accident while steering; the lens is F6 or the atlas's View setting). The reason: the clutch on LB used the same finger as the brake trigger, and hard steering pressed the left stick by accident.
 
-**Traffic.** The road atlas's Settings row sets the traffic: Normal (about 20 cars around you), Light (8) or Off; it is remembered.
+**Traffic.** In 2.0.3 there are no other cars on the road and no aircraft in the sky, so the menus have no Traffic setting. The code stays in the game behind two switches, `sc.Feature.Traffic` and `sc.Feature.Aircraft` (0 is off, the default). With `sc.Feature.Traffic 1` the Drive page and the road atlas's Settings row have the Traffic setting again: Normal (about 20 cars around you), Light (8) or Off, and it is remembered.
+
+**The round map.** Settings page, *Map*: *With route* (the default) shows the round map only while the GPS has a route; *Always* shows it all the time. The choice is saved. In the driver's seat the map is smaller (75 %) and sits in the top-left corner, over the windscreen pillar and the sky, so it never covers the gauges, the clock, the centre screen or the rear-view mirror. In the other views it is in the bottom-right corner.
 
 **Seat & view.** Parked, open the menu and pick *Seat & view...* in the *Your car* row (D-pad to it, A). Seat height (up to 10 cm either way), seat fore-aft (15 cm), view tilt (8° up or down) and the view angle (Auto follows the lens; 30-75° tall) change the live picture behind the panel, held on the brakes; A saves them for this car, B puts the seat back. The view also widens slightly with speed (6 % by 130 km/h).
 
