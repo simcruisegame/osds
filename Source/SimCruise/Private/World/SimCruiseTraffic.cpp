@@ -62,6 +62,72 @@ double SimCruiseTrafficModel::IdmAcceleration(double V, double V0, double GapM, 
 	return FMath::Clamp(Accel, -9.0, A);
 }
 
+double SimCruiseTrafficModel::GapWindowS(bool bLeftTurn, double WaitedS, bool bPlayer)
+{
+	if (bLeftTurn) return bPlayer ? 4.5 : WaitedS > 15.0 ? 1.5 : WaitedS > 8.0 ? 2.5 : 4.5;
+	return bPlayer ? 5.0 : WaitedS > 20.0 ? 2.0 : WaitedS > 10.0 ? 3.0 : 5.0;
+}
+
+bool SimCruiseTrafficModel::CrossesAtGrade(const TArray<FSimCruiseRibbon>& Ribbons, int32 Index)
+{
+	// A motorway never meets another road at grade: where the map data draws it crossing a street
+	// at road level (I-75 under Woodward in Detroit, its bridge not raised), its cars would drive
+	// across the street. Traffic keeps off such a span. A ramp that joins it is no crossing: only
+	// another road's middle (beyond 10 m of its ends) crossing the motorway's line counts, where
+	// the two are less than 4.9 m apart in height (a mapped bridge drawn without clearance counts).
+	if (!Ribbons.IsValidIndex(Index)) return false;
+	const FSimCruiseRibbon& M = Ribbons[Index];
+	if (M.Class != TEXT("motorway") || M.St.Num() < 2) return false;
+	FBox2d MBox(ForceInit);
+	for (const FSimCruiseRibbonStation& St : M.St) MBox += St.C;
+	for (int32 J = 0; J < Ribbons.Num(); ++J)
+	{
+		if (J == Index) continue;
+		const FSimCruiseRibbon& O = Ribbons[J];
+		if (O.St.Num() < 2 || O.Class.StartsWith(TEXT("motorway"))) continue;
+		FBox2d OBox(ForceInit);
+		for (const FSimCruiseRibbonStation& St : O.St) OBox += St.C;
+		if (!MBox.Intersect(OBox)) continue;
+		const double OLen = O.St.Last().S - O.St[0].S;
+		for (int32 A = 0; A + 1 < M.St.Num(); ++A)
+		{
+			const FVector2d P = M.St[A].C, Q = M.St[A + 1].C;
+			for (int32 B = 0; B + 1 < O.St.Num(); ++B)
+			{
+				const FVector2d U = O.St[B].C, V = O.St[B + 1].C;
+				const FVector2d D1 = Q - P, D2 = V - U;
+				const double Den = D1.X * D2.Y - D1.Y * D2.X;
+				if (FMath::Abs(Den) < 1e-9) continue;
+				const FVector2d W = U - P;
+				const double Tm = (W.X * D2.Y - W.Y * D2.X) / Den;
+				const double To = (W.X * D1.Y - W.Y * D1.X) / Den;
+				if (Tm < 0.0 || Tm > 1.0 || To < 0.0 || To > 1.0) continue;
+				const double SAlong = FMath::Lerp(O.St[B].S, O.St[B + 1].S, To) - O.St[0].S;
+				// A mapped bridge only separates the roads when its deck clears the one below:
+				// Woodward's deck over I-75 is drawn at the motorway's own level (no freeway cut in
+				// the elevation data). Less than 4.9 m (16 ft, the US minimum) is a crossing.
+				const double Zm = FMath::Lerp(M.St[A].Z, M.St[A + 1].Z, Tm);
+				const double Zo = FMath::Lerp(O.St[B].Z, O.St[B + 1].Z, To);
+				if (FMath::Abs(Zo - Zm) >= 4.9) continue;
+				if (SAlong > 10.0 && SAlong < OLen - 10.0) return true;
+			}
+		}
+	}
+	return false;
+}
+bool SimCruiseTrafficModel::IsTrueDeadEnd(const FSimCruiseWorldFrame& Frame, const FVector& EndCm, const FVector2d& Heading)
+{
+	if (!Frame.IsValid()) return false;
+	const FIntPoint Tile = Frame.TileAtWorldCm(EndCm);
+	// 30 m on, and 30 m to either side: all still in this tile.
+	const FVector2d Side(-Heading.Y, Heading.X);
+	for (const FVector2d& Step : { Heading, Side, -Side })
+	{
+		if (Frame.TileAtWorldCm(EndCm + FVector(Step.X, Step.Y, 0.0) * 3000.0) != Tile) return false;
+	}
+	return true;
+}
+
 double SimCruiseTrafficModel::SpeedLimitMps(const FString& Class)
 {
 	// mph: motorway 65, trunk 55, primary 40, secondary 35, tertiary 30, residential 25.
@@ -244,9 +310,13 @@ ASimCruiseTraffic::FPose ASimCruiseTraffic::PoseAt(const FIntPoint& Tile, int32 
 	return Pose;
 }
 
-bool ASimCruiseTraffic::IsEnabled()
+bool ASimCruiseTraffic::CrossesAtGradeCached(const FIntPoint& Tile, const TArray<FSimCruiseRibbon>& Ribbons, int32 Index) const
 {
-	return CVarFeatureTraffic.GetValueOnGameThread() != 0 || FParse::Param(FCommandLine::Get(), TEXT("SimCruiseTraffic"));
+	const TPair<FIntPoint, int32> Key(Tile, Index);
+	if (const bool* Known = GradeCrossings.Find(Key)) return *Known;
+	const bool bCrosses = SimCruiseTrafficModel::CrossesAtGrade(Ribbons, Index);
+	GradeCrossings.Add(Key, bCrosses);
+	return bCrosses;
 }
 
 bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bool bAtEnd) const
@@ -283,12 +353,16 @@ bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bo
 			{
 				if (TileId == Car.Tile && Seg.Key == Car.Ribbon) continue;
 				const FSimCruiseRibbon& Other = Build->Roads.Ribbons[Seg.Key];
-				if (Other.bService || Other.Class == TEXT("service") || !Other.St.IsValidIndex(Seg.Value + 1)) continue;
+				if (Other.bService || Other.Class == TEXT("service") || !Other.St.IsValidIndex(Seg.Value + 1) || CrossesAtGradeCached(TileId, Build->Roads.Ribbons, Seg.Key)) continue;
 				const FVector2d A = Other.St[Seg.Value].C, B = Other.St[Seg.Value + 1].C;
 				const double Len2 = FMath::Max((B - A).SizeSquared(), 1e-9);
 				const double Tt = FMath::Clamp(FVector2d::DotProduct(Local - A, B - A) / Len2, 0.0, 1.0);
 				const double D = FVector2d::Distance(Local, FMath::Lerp(A, B, Tt));
 				if (D > Other.St[Seg.Value].HalfW + 4.0) continue;
+				// Close in plan is not a junction when the other road runs at another level (a
+				// street on its bridge over the motorway, the motorway in its cut below).
+				const double OtherZ = FMath::Lerp(Other.St[Seg.Value].Z, Other.St[Seg.Value + 1].Z, Tt);
+				if (FMath::Abs(OtherZ - Local3.Z) > 3.0) continue;
 				if (!BestDist.Contains(Seg.Key) || D < BestDist[Seg.Key])
 				{
 					BestDist.Add(Seg.Key, D);
@@ -332,7 +406,13 @@ bool ASimCruiseTraffic::ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bo
 	{
 		// Back along this same road (it has no other way on), where it is two-way.
 		const int32 Back = -Car.Dir;
-		UTurns.Add({ Car.Tile, Car.Ribbon, Back, DecisionS, 180.0, 1.0 });
+		// Only a true dead end: near a tile seam the road may go on in a tile not built yet, and a
+		// car there turned round in the middle of the road (it used to drive on out of sight).
+		const bool bOnBoundary = Car.Dir > 0 ? R->bEndOnBoundary : R->bStartOnBoundary;
+		if (!bOnBoundary && Streamer.IsValid() && SimCruiseTrafficModel::IsTrueDeadEnd(Streamer->GetFrame(), End.LocationCm, End.Heading))
+		{
+			UTurns.Add({ Car.Tile, Car.Ribbon, Back, DecisionS, 180.0, 1.0 });
+		}
 	}
 	if (Options.IsEmpty()) Options = MoveTemp(UTurns);
 	if (Options.IsEmpty()) return false;
@@ -516,7 +596,8 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 				const bool bWillStop = OtherCar && OtherCar->StopState == 1;
 				// A driver kept waiting takes a shorter gap (5 s, after 10 s 3 s, after 20 s 2 s): a
 				// steady stream never holds a stop line for good.
-				const double Window = Car.WaitS > 20.0 ? 2.0 : Car.WaitS > 10.0 ? 3.0 : 5.0;
+				// Never a shorter gap in front of the player: the player is not a stream to cut into.
+				const double Window = SimCruiseTrafficModel::GapWindowS(false, Car.WaitS, !OtherCar);
 				return bTowards && !bWillStop && OtherSpeed > 1.0 && Dist > 2.0 && Dist / OtherSpeed < Window;
 			};
 			for (const ASimCruiseTrafficCar* Other : Cars)
@@ -553,7 +634,7 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 	if (bLeftTurn && Remaining < 25.0)
 	{
 		const FPose Centre = PoseAt(Car.Tile, Car.Ribbon, Car.Dir, Car.DecisionS, Car.Lane);
-		auto Oncoming = [&](const FVector& OtherCm, const FVector2d& OtherHeading, double OtherSpeed)
+		auto Oncoming = [&](const FVector& OtherCm, const FVector2d& OtherHeading, double OtherSpeed, bool bPlayer = false)
 		{
 			if (FVector2d::DotProduct(OtherHeading, Fwd) > -0.7 || OtherSpeed < 1.0) return false;
 			const FVector2d ToJ((Centre.LocationCm.X - OtherCm.X) / 100.0, (Centre.LocationCm.Y - OtherCm.Y) / 100.0);
@@ -561,7 +642,7 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 			// The gap a left-turner waits for shrinks as it waits in the junction (4.5 s, after 8 s 2.5 s,
 			// after 15 s 1.5 s): it never stands across the junction for good while oncoming cars stream
 			// past (Stonington, Maine: a Corvette held the robot for a minute).
-			const double Window = Car.StandS > 15.0 ? 1.5 : Car.StandS > 8.0 ? 2.5 : 4.5;
+			const double Window = SimCruiseTrafficModel::GapWindowS(true, Car.StandS, bPlayer);
 			return Ahead > -2.0 && Ahead < 60.0 && Ahead / OtherSpeed < Window;
 		};
 		bool bYield = false;
@@ -572,7 +653,7 @@ void ASimCruiseTraffic::Advance(ASimCruiseTrafficCar& Car, double Dt, const FVec
 			const double Yaw = FMath::DegreesToRadians(Other->GetActorRotation().Yaw);
 			bYield = Oncoming(Other->GetActorLocation(), FVector2d(FMath::Cos(Yaw), FMath::Sin(Yaw)), Other->Speed);
 		}
-		if (!bYield) bYield = Oncoming(PlayerCm, PlayerHeading, PlayerVelCm.Size2D() / 100.0);
+		if (!bYield) bYield = Oncoming(PlayerCm, PlayerHeading, PlayerVelCm.Size2D() / 100.0, true);
 		if (bYield)
 		{
 			// The stopped car the IDM keeps 2 m behind stands at the junction's centre: the
@@ -790,7 +871,7 @@ bool ASimCruiseTraffic::Spawn(const FVector& FocusCm, const FVector& PlayerFwd, 
 		if (Build->Roads.Ribbons.IsEmpty()) continue;
 		const int32 RibbonIndex = NextRandom(Random) % Build->Roads.Ribbons.Num();
 		const FSimCruiseRibbon& R = Build->Roads.Ribbons[RibbonIndex];
-		if (R.bService || R.Class == TEXT("service") || R.St.Num() < 2 || R.Length() < 40.0) continue;
+		if (R.bService || R.Class == TEXT("service") || R.St.Num() < 2 || R.Length() < 40.0 || CrossesAtGradeCached(TileId, Build->Roads.Ribbons, RibbonIndex)) continue;
 		const double S = R.St[0].S + 10.0 + Unit(Random) * (R.Length() - 20.0);
 		const int32 Travel = R.St[R.St.Num() / 2].Travel;
 		const int32 Dir = Travel != 0 ? Travel : (Unit(Random) < 0.5 ? 1 : -1);

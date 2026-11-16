@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "World/SimCruiseRoadNetwork.h"
 #include "World/SimCruiseTraffic.h"
+#include "World/SimCruiseGeo.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -134,4 +135,62 @@ bool FSimCruiseTrafficModelTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+/**
+ * A waiting car takes a shorter gap the longer it waits, but never in front of the player; and it
+ * turns round only at a true dead end, never at the edge of a tile (where the road may go on in a
+ * tile not built yet: cars made U-turns there in the middle of the road).
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseTrafficPatienceTest, "SimCruise.World.Traffic.PatienceAndDeadEnds", SimCruiseTrafficTests::Flags)
+bool FSimCruiseTrafficPatienceTest::RunTest(const FString& Parameters)
+{
+	for (const double Waited : { 0.0, 9.0, 16.0, 25.0, 120.0 })
+	{
+		TestEqual(FString::Printf(TEXT("left turn, player, waited %.0f s: the full gap"), Waited), SimCruiseTrafficModel::GapWindowS(true, Waited, true), 4.5);
+		TestEqual(FString::Printf(TEXT("stop sign, player, waited %.0f s: the full gap"), Waited), SimCruiseTrafficModel::GapWindowS(false, Waited, true), 5.0);
+	}
+	TestEqual(TEXT("left turn, traffic, fresh: 4.5 s"), SimCruiseTrafficModel::GapWindowS(true, 0.0, false), 4.5);
+	TestEqual(TEXT("left turn, traffic, after 16 s: 1.5 s"), SimCruiseTrafficModel::GapWindowS(true, 16.0, false), 1.5);
+	TestEqual(TEXT("stop sign, traffic, after 25 s: 2 s"), SimCruiseTrafficModel::GapWindowS(false, 25.0, false), 2.0);
+
+	FSimCruiseWorldFrame Frame;
+	Frame.OriginTile = FIntPoint(18000, 27000);
+	Frame.TileSizeM = 600.0;
+	const FVector Corner = Frame.TileOriginCm(Frame.OriginTile);
+	const FVector2d Size = FVector2d(Frame.TileOriginCm(Frame.OriginTile + FIntPoint(1, 1)) - Corner);
+	const FVector Middle = Corner + FVector(Size.X * 0.5, Size.Y * 0.5, 0.0);
+	const FVector2d East(FMath::Sign(Size.X), 0.0);
+	TestTrue(TEXT("a road ending in the middle of its tile is a dead end"), SimCruiseTrafficModel::IsTrueDeadEnd(Frame, Middle, East));
+	const FVector NearEdge = Corner + FVector(Size.X - FMath::Sign(Size.X) * 1000.0, Size.Y * 0.5, 0.0);
+	TestFalse(TEXT("a road ending 10 m from its tile's edge, heading out: not a dead end"), SimCruiseTrafficModel::IsTrueDeadEnd(Frame, NearEdge, East));
+	const FVector NearSide = Corner + FVector(Size.X * 0.5, Size.Y - FMath::Sign(Size.Y) * 1000.0, 0.0);
+	TestFalse(TEXT("a road ending 10 m from its tile's side: not a dead end"), SimCruiseTrafficModel::IsTrueDeadEnd(Frame, NearSide, East));
+	TestFalse(TEXT("no world frame: never"), SimCruiseTrafficModel::IsTrueDeadEnd(FSimCruiseWorldFrame(), Middle, East));
+	// A motorway the data draws crossing a street at grade: traffic keeps off it. A ramp joining
+	// it is no crossing, nor a street on a bridge that clears it.
+	auto Road = [](const FString& Class, const FVector2d& From, const FVector2d& To)
+	{
+		FSimCruiseRibbon R = SimCruiseTrafficTests::Straight(Class, 6.0, 0);
+		for (int32 I = 0; I < R.St.Num(); ++I)
+		{
+			const double F = I / double(R.St.Num() - 1);
+			R.St[I].C = FMath::Lerp(From, To, F);
+			R.St[I].S = F * (To - From).Size();
+		}
+		return R;
+	};
+	TArray<FSimCruiseRibbon> Ribbons;
+	Ribbons.Add(Road(TEXT("motorway"), FVector2d(0.0, 0.0), FVector2d(200.0, 0.0)));
+	Ribbons.Add(Road(TEXT("motorway_link"), FVector2d(80.0, 40.0), FVector2d(100.0, 0.0)));
+	TestFalse(TEXT("a ramp joining the motorway is no crossing"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	Ribbons.Add(Road(TEXT("residential"), FVector2d(120.0, 60.0), FVector2d(120.0, 2.0)));
+	TestFalse(TEXT("a street ending at the motorway's edge is no crossing"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	Ribbons.Add(Road(TEXT("primary"), FVector2d(150.0, -60.0), FVector2d(150.0, 60.0)));
+	TestTrue(TEXT("a street drawn across the motorway at grade (I-75 under Woodward)"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	for (FSimCruiseRibbonStation& St : Ribbons.Last().St) St.bBridge = true;
+	TestTrue(TEXT("a mapped bridge drawn without clearance (Woodward over I-75) still crosses at grade"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	for (FSimCruiseRibbonStation& St : Ribbons.Last().St) St.Z += 6.0;
+	TestFalse(TEXT("the same street on a bridge 6 m above"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 0));
+	TestFalse(TEXT("only motorways are judged"), SimCruiseTrafficModel::CrossesAtGrade(Ribbons, 3));
+	return true;
+}
 #endif

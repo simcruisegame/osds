@@ -7,6 +7,8 @@
 #include "Presentation/SimCruiseCarPresentationComponent.h"
 #include "SimCruiseTraffic.generated.h"
 
+struct FSimCruiseWorldFrame;
+
 class ASimCruiseWorldStreamer;
 class UBoxComponent;
 class USimCruiseEngineSoundComponent;
@@ -24,6 +26,19 @@ namespace SimCruiseTrafficModel
 
 	/** US urban speed limit (m/s) a road class is usually posted at. */
 	SIMCRUISE_API double SpeedLimitMps(const FString& Class);
+
+	/**
+	 * The gap (s) a waiting car accepts ahead of another car: shorter the longer it has waited,
+	 * so a steady stream never holds it for good. Never shorter in front of the player.
+	 * Left turn: 4.5 s, after 8 s 2.5 s, after 15 s 1.5 s; stop sign: 5 s, after 10 s 3 s, after 20 s 2 s.
+	 */
+	SIMCRUISE_API double GapWindowS(bool bLeftTurn, double WaitedS, bool bPlayer);
+
+	/** A motorway span the data draws crossing another road at grade: traffic keeps off it. */
+	SIMCRUISE_API bool CrossesAtGrade(const TArray<FSimCruiseRibbon>& Ribbons, int32 Index);
+
+	/** A road that ends here is a true dead end (a car may turn round): it ends 30 m or more inside its tile. */
+	SIMCRUISE_API bool IsTrueDeadEnd(const FSimCruiseWorldFrame& Frame, const FVector& EndCm, const FVector2d& Heading);
 
 	/**
 	 * Lateral offset (m, + toward the station's R) of the rightmost travel lane for a car
@@ -179,6 +194,9 @@ private:
 	bool Spawn(const FVector& FocusCm, const FVector& PlayerFwd, const FVector& CameraCm, const FVector& CameraFwd, bool bAnywhere);
 	/** Picks the way on at DecisionS (a junction along the ribbon, or its end when bAtEnd). */
 	bool ChooseAt(ASimCruiseTrafficCar& Car, double DecisionS, bool bAtEnd) const;
+	/** SimCruiseTrafficModel::CrossesAtGrade, once per tile and ribbon. */
+	bool CrossesAtGradeCached(const FIntPoint& Tile, const TArray<FSimCruiseRibbon>& Ribbons, int32 Index) const;
+	mutable TMap<TPair<FIntPoint, int32>, bool> GradeCrossings;
 	void Advance(ASimCruiseTrafficCar& Car, double Dt, const FVector& PlayerCm, const FVector& PlayerVelCm);
 	/** Starts, feeds or stops a car's engine voice by its distance from the listener. */
 	void UpdateVoice(ASimCruiseTrafficCar& Car, double DistanceM, bool bSound);
