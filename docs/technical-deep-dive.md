@@ -1,6 +1,6 @@
 # Technical deep dive (version 2.0.3)
 
-This document tells how every working part of SimCruise operates, and how the parts connect. It is for people who want to read, change or check the code. It describes the code of the 2.0.3 release candidate. Where a part is in the code but is not on in a normal drive, this document says so.
+This document tells how every working part of OSDS operates, and how the parts connect. It is for people who want to read, change or check the code. It describes the code of the 2.0.3 release candidate. Where a part is in the code but is not on in a normal drive, this document says so.
 
 For a short overview, read [technical-overview.md](technical-overview.md). For the detail of each Unreal subsystem, read [unreal-architecture.md](unreal-architecture.md). For the build and test commands, read [unreal-building.md](unreal-building.md).
 
@@ -181,7 +181,7 @@ flowchart LR
 
 ## The programs and the processes
 
-SimCruise has two programs:
+OSDS has two programs:
 
 | Program | Language | Where | What it does |
 |---|---|---|---|
@@ -382,7 +382,7 @@ The fine-detail kit (8 textures for asphalt, concrete, soil, sand, leaf litter a
 
 ## 13. Vehicle physics
 
-The physics is SimCruise's own vehicle model, not Unreal's Chaos Vehicle plugin. Chaos gives only the rigid body and the collision.
+The physics is OSDS's own vehicle model, not Unreal's Chaos Vehicle plugin. Chaos gives only the rigid body and the collision.
 
 - `Vehicle/SimCruiseVehicle` is the pawn: one Chaos box body with the car's mass and inertia.
 - `Vehicle/SimCruiseVehicleMovementComponent` runs `FSimCruiseVehicleSim` in a Chaos sim callback on the physics thread at a fixed 360 Hz. Each step it casts a ray for each wheel, calculates the forces, and applies one force and one torque to the body.
@@ -446,7 +446,7 @@ GPU savings in 2.0.3 (about 2 ms on Ultra): Lumen global illumination at High qu
 
 ## 19. Data, the network and the public servers
 
-SimCruise uses only free, keyless data. There is no account and no telemetry. Every request carries one generic User-Agent with the game's version and the address of this repository (`Atlas/SimCruiseUserAgent.h`, `helper/atlas-cache.mjs`). It has no personal data.
+OSDS uses only free, keyless data. There is no account and no telemetry. Every request carries one generic User-Agent with the game's version and the address of this repository (`Atlas/SimCruiseUserAgent.h`, `helper/atlas-cache.mjs`). It has no personal data.
 
 What a normal 2.0.3 drive downloads:
 

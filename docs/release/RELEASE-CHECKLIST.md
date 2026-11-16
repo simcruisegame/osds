@@ -22,7 +22,7 @@ Copy this list into the release's report (`docs/release/v<version>-report.md`) a
   - builds `tools\atlas.exe` from `helper\atlas.mjs` (Bun),
   - packages Shipping with `scripts\package.ps1 -Configuration Shipping -Zip`,
   - builds the installer with Inno Setup 6 (`packaging\windows\simcruise.iss`, `scripts\installer.ps1`),
-  - writes `SimCruise-<version>-SHA256SUMS.txt`,
+  - writes `OSDS-<version>-SHA256SUMS.txt`,
   - runs the packaged game's self-test (`-SimCruiseShellSelfTest`).
 - [ ] The zip has no `.pdb` files and no `Saved` folder.
 - [ ] The package has `Engine\Extras\Redist\en-us\vc_redist.x64.exe` and `GameInputRedist.msi`, both signed by Microsoft (`scripts\installer.ps1` stops without them), and `python scripts\dep-check.py <package>` finds no DLL that is neither shipped, part of Windows, nor installed by those two.

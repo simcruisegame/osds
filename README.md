@@ -1,9 +1,12 @@
 <p align="center">
-  <img src="docs/images/simcruise-wordmark.png" alt="SimCruise, a free open-source driving simulator" width="384">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/png/osds-lockup-full-white.png">
+    <img src="docs/brand/png/osds-lockup-full.png" alt="OSDS, Open Source Driving Simulator" width="460">
+  </picture>
 </p>
 
 <p align="center">
-  <b>A free, open-source driving simulator for real roads.</b><br>
+  <b>OSDS, the Open Source Driving Simulator: free driving on real roads.</b><br>
   Type any US address and drive there. The roads, terrain, buildings and trees are built live from OpenStreetMap, USGS elevation data and aerial photographs.<br>
   Realistic car physics and a GPS. Keyboard, Xbox controller or USB wheel. Made in Unreal Engine 5, for Windows.
 </p>
@@ -26,7 +29,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/release-2.0.2/06-miata-tail-of-the-dragon-chase.jpg" alt="SimCruise driving simulator: a 2001 Mazda Miata on US 129, the Tail of the Dragon, in the forest of the Great Smoky Mountains, built from real map and elevation data" width="900">
+  <img src="docs/images/release-2.0.2/06-miata-tail-of-the-dragon-chase.jpg" alt="OSDS driving simulator: a 2001 Mazda Miata on US 129, the Tail of the Dragon, in the forest of the Great Smoky Mountains, built from real map and elevation data" width="900">
 </p>
 
 ---
@@ -37,15 +40,15 @@ The game is currently in its first phase of development, and all contributions a
 
 ## About
 
-SimCruise puts you behind the wheel anywhere in the United States. Roads, terrain, buildings and trees are generated on the fly from open public data (OpenStreetMap, USGS, USDA, NOAA, NASA, Overture and more), and every car is physically modelled and calibrated against published road-test numbers: the 1999 Mazda MX-5 Miata it started with, a 1965 Ford Mustang 289, a Corvette Stingray (C8) and four more.
+OSDS (Open Source Driving Simulator) puts you behind the wheel anywhere in the United States. Roads, terrain, buildings and trees are generated on the fly from open public data (OpenStreetMap, USGS, USDA, NOAA, NASA, Overture and more), and every car is physically modelled and calibrated against published road-test numbers: the 1999 Mazda MX-5 Miata it started with, a 1965 Ford Mustang 289, a Corvette Stingray (C8) and four more.
 
 No account, no API keys, no subscription, no telemetry. The game downloads open data for the place you drive and keeps it in a cache on your disk. It is careful with the public servers that give this data: see [Data and the public servers](#data-and-the-public-servers).
 
-> **SimCruise moved to Unreal Engine 5.8 in November 2026.** The Godot client that made the 1.x releases is kept at the git tag [`godot-final`](https://github.com/simcruisegame/simcruise/tree/godot-final) (`git show godot-final:game/<file>`); everything below is about the Unreal client. The Unreal client goes anywhere in the US again: a normal start is a random road from the start pool, `/` searches for a place, and Tab (Menu on the pad) opens the pause menu, whose Drive page has the road atlas to drive anywhere on the map. Trees, rangeland scrub, the land to the horizon, guard rails, bridges, gravel roads and traffic signals are built for wherever you are. What is still being ported is in [the migration ledger](docs/unreal-migration-ledger.md).
+> **OSDS moved to Unreal Engine 5.8 in November 2026.** The Godot client that made the 1.x releases is kept at the git tag [`godot-final`](https://github.com/simcruisegame/simcruise/tree/godot-final) (`git show godot-final:game/<file>`); everything below is about the Unreal client. The Unreal client goes anywhere in the US again: a normal start is a random road from the start pool, `/` searches for a place, and Tab (Menu on the pad) opens the pause menu, whose Drive page has the road atlas to drive anywhere on the map. Trees, rangeland scrub, the land to the horizon, guard rails, bridges, gravel roads and traffic signals are built for wherever you are. What is still being ported is in [the migration ledger](docs/unreal-migration-ledger.md).
 
 ## Download
 
-**SimCruise 2.0.3 for Windows** (64-bit Windows 10 or 11, DirectX 12): get `SimCruise-2.0.3-windows-x64-setup.exe` from the [latest release](https://github.com/simcruisegame/simcruise/releases/latest), run it, and start SimCruise from the Start menu. The installer also installs the two Microsoft parts that the game needs if your PC does not have them: the Visual C++ 2015-2022 runtime (x64) and GameInput. A portable zip and SHA-256 checksums are on the same page. Install steps and system requirements: [docs/install.md](docs/install.md). Controls (keyboard, Xbox controller, USB wheel): [docs/controls.md](docs/controls.md).
+**OSDS 2.0.3 for Windows** (64-bit Windows 10 or 11, DirectX 12): get `SimCruise-2.0.3-windows-x64-setup.exe` from the [latest release](https://github.com/simcruisegame/simcruise/releases/latest), run it, and start it from the Start menu (releases up to 2.0.3 use the old name, SimCruise, for their files and the Start menu entry). The installer also installs the two Microsoft parts that the game needs if your PC does not have them: the Visual C++ 2015-2022 runtime (x64) and GameInput. A portable zip and SHA-256 checksums are on the same page. Install steps and system requirements: [docs/install.md](docs/install.md). Controls (keyboard, Xbox controller, USB wheel): [docs/controls.md](docs/controls.md).
 
 **New in 2.0.3:**
 
@@ -115,7 +118,7 @@ From the 2.0.2 Shipping build, Ultra preset, 1920x1080.
 
 ## How the game works
 
-SimCruise is a C++ game module on top of Unreal Engine 5.8, and a separate map helper program. Unreal gives the renderer, the Chaos physics solver, the audio mixer and the input system. The SimCruise code makes the world, the cars and the menus. The diagram shows the main parts and how data moves between them. The [technical deep dive](docs/technical-deep-dive.md) has a diagram of all working parts and tells how each part operates.
+OSDS is a C++ game module on top of Unreal Engine 5.8, and a separate map helper program. Unreal gives the renderer, the Chaos physics solver, the audio mixer and the input system. The OSDS code makes the world, the cars and the menus. The diagram shows the main parts and how data moves between them. The [technical deep dive](docs/technical-deep-dive.md) has a diagram of all working parts and tells how each part operates.
 
 ```mermaid
 flowchart TB
@@ -126,7 +129,7 @@ flowchart TB
 
   Helper["Map helper (Bun, helper/)<br/>gets the data, keeps a disk cache,<br/>fits the roads, sends one JSON tile"]
 
-  subgraph Game["SimCruise game module (C++, Source/SimCruise)"]
+  subgraph Game["OSDS game module (C++, Source/SimCruise)"]
     UI["Menus and GPS<br/>road atlas, route, tune car, seat and view"]
     World["World<br/>tile streamer and tile builder:<br/>terrain, roads, bridges, buildings, trees"]
     Graph{{"Place knowledge graph<br/>facts + rules = details"}}
@@ -181,7 +184,7 @@ The automated tests (`scripts/check.ps1`) and the pre-flight drives check the ph
 
 ## Data and the public servers
 
-SimCruise uses only free, keyless public data. Many of these servers are run by volunteers or by public agencies, so the game must not overload them when many people play.
+OSDS uses only free, keyless public data. Many of these servers are run by volunteers or by public agencies, so the game must not overload them when many people play.
 
 - The map helper keeps everything it downloads in a cache on your disk, and asks a server again only when the data is old.
 - It sends at most two requests at the same time to each server. When a server fails, the helper waits 15 s, then longer and longer, up to 6 hours.
@@ -259,13 +262,13 @@ It prints each failure with its first errors and `CHECKS PASSED` or `CHECKS FAIL
 
 ## Questions
 
-**Is SimCruise free?** Yes. The game is free and open source (the code is under the MIT License). There is no account, no API key, no subscription, no ads and no telemetry.
+**Is OSDS free?** Yes. The game is free and open source (the code is under the MIT License). There is no account, no API key, no subscription, no ads and no telemetry.
 
 **What do I need to play?** 64-bit Windows 10 or 11, a DirectX 12 graphics card with 6 GB of video memory (for example an NVIDIA GTX 1660 or AMD RX 5600), 16 GB of memory, 3 GB of disk and an internet connection for all places except the bundled Ocean Drive, Miami Beach. The installer installs the Microsoft parts that the game needs (Visual C++ runtime, GameInput). We tested on one PC only (RTX 2070 Super Max-Q, Windows 11); the full list is in [docs/install.md](docs/install.md#system-requirements). There is no macOS or Linux build of the Unreal client yet.
 
 **Can I drive my own street?** Yes, if it is in the United States. Press / and type the address or the place name. The game builds the roads, terrain, buildings and trees there from public data. The detail depends on how well OpenStreetMap maps that place. Places outside the United States are not supported yet.
 
-**Is it a racing game?** No. SimCruise is a driving simulator: you drive real roads with realistic car physics and a GPS. It has no races or opponents.
+**Is it a racing game?** No. OSDS is a driving simulator: you drive real roads with realistic car physics and a GPS. It has no races or opponents.
 
 **Is there traffic?** Not in 2.0.3. Moving traffic and aircraft are removed for now, so that the work goes into the world and the driving. Parked cars stay.
 
@@ -309,11 +312,11 @@ Contributions are welcome: code, data sources, bug reports from places that look
 
 The game code, shaders, map helper and tests are released under the [MIT License](LICENSE). Map data, imagery, models, textures and fonts keep their own licences, listed in [CREDITS.md](CREDITS.md), [docs/data-sources.md](docs/data-sources.md), [`licenses/`](licenses/) and [Credits.txt](Credits.txt). Map data © OpenStreetMap contributors.
 
-SimCruise was called *Sunday Driver* up to version 1.0.8; older notes still use that name.
+OSDS was called *SimCruise* from version 1.1 to 2.0.3 (until November 2026), and *Sunday Driver* up to version 1.0.8; older notes still use those names. The code keeps the SimCruise name inside (the `Source/SimCruise` module, `SimCruise.uproject`, the `-SimCruise...` command-line options and the `%LOCALAPPDATA%\SimCruise` settings folder), so old saves, settings and scripts keep working. The logo and brand rules are in [docs/brand/](docs/brand/README.md).
 
 ## Credits
 
-SimCruise is built on the work of many makers. Thank you to each of them. The full list, with every licence and link, is in **[CREDITS.md](CREDITS.md)**.
+OSDS is built on the work of many makers. Thank you to each of them. The full list, with every licence and link, is in **[CREDITS.md](CREDITS.md)**.
 
 - **Map data** © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL), served by [OpenFreeMap](https://openfreemap.org/) with the [OpenMapTiles](https://openmaptiles.org/) schema. Place search by [Photon](https://photon.komoot.io/) (komoot). Buildings also from the [Overture Maps Foundation](https://overturemaps.org/), with Microsoft and Esri Community Maps footprints, and building use from the U.S. Army Corps of Engineers National Structure Inventory (public domain).
 - **Elevation, aerial photographs and land cover** from USGS (3D Elevation Program, The National Map), USDA (NAIP), LANDFIRE and MRLC (NLCD), Mapzen, NASA and Copernicus Sentinel-2. Tree heights from [Version 2 High Resolution Canopy Height Maps (CHMv2)](https://registry.opendata.aws/dataforgood-fb-forestsv2/) by Meta and the World Resources Institute (WRI), 2026, source imagery © 2016 Vantor ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)); the game derives tree positions, crown sizes and crown shapes from it (changed).

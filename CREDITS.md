@@ -1,6 +1,6 @@
 # Credits
 
-SimCruise is built on the work of many people and organisations. This file gives credit to each maker whose AI model, data, 3D model, texture, font, library or tool we use, with its licence and a link. We use a work only when its licence lets a free, open-source game use it, and we obey the terms of each licence.
+OSDS is built on the work of many people and organisations. This file gives credit to each maker whose AI model, data, 3D model, texture, font, library or tool we use, with its licence and a link. We use a work only when its licence lets a free, open-source game use it, and we obey the terms of each licence.
 
 The game code is under the [MIT License](LICENSE). Everything below keeps its own licence. The full licence texts are in [`licenses/`](licenses/). Place-by-place sources (single buildings, surveys, photographs used for one place) are in [Credits.txt](Credits.txt) and [`licenses/Road Atlas.txt`](licenses/Road%20Atlas.txt). How each data layer reaches the game is in [docs/data-sources.md](docs/data-sources.md).
 
@@ -16,6 +16,7 @@ Licences were checked at each maker's own page on 14 November 2026.
 - [Textures, sky and trees](#textures-sky-and-trees)
 - [Fonts](#fonts)
 - [Engine, libraries and tools](#engine-libraries-and-tools)
+- [Logo and brand](#logo-and-brand)
 - [Named in our research, not used now](#named-in-our-research-not-used-now)
 
 ## Credit shown in the game
@@ -46,7 +47,7 @@ All models run on the player's own computer, or only on our computers when we ma
 | [Stable Diffusion XL base 1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) | Stability AI | [CreativeML Open RAIL++-M](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md) (use limits in its Attachment A; Stability AI claims no rights in the output) | Made the 8 textures of the fine-detail kit offline (asphalt, concrete, soil, sand, leaf litter; stucco, brick and bark are not used); prompts and seeds in `lab/detail-kit/raw/prompts.json` | Only the textures, in `data/art/detail-kit/`; the model is not in the repository or the game | The model card does not name the training data |
 | [Detectron2 Panoptic FPN R50](https://github.com/facebookresearch/detectron2) (semantic head) | Meta AI Research (FAIR); ONNX export by [Qualcomm AI Hub](https://github.com/qualcomm/ai-hub-models) | Code: [Apache 2.0](https://github.com/facebookresearch/detectron2/blob/main/LICENSE). Weights: [CC BY-SA 3.0](https://github.com/facebookresearch/detectron2/blob/main/MODEL_ZOO.md#license) ("All models available for download through this document") | A development tool that finds the walls in place photographs, so that we can measure wall colours | Downloaded into `Saved/AI` by `scripts/ai/fetch_open_models.py`; not in the repository or the game. Only the measured colours are bundled | COCO panoptic (annotations CC BY 4.0; images from Flickr under their own licences) |
 | [SatlasPretrain Aerial_SwinB_SI](https://github.com/allenai/satlaspretrain_models) | Allen Institute for AI (Ai2) | Weights: [ODC-BY 1.0](https://github.com/allenai/satlas/blob/main/DataLicense). Code: Apache 2.0 | The whole backbone with our head is the development "satlas_landcover" eye (the teacher); its first two stages (2.1 M of 89.6 M weights) are inside the shipped "aerial_student" eye | The first two stages inside `data/ai/scan-eye-student.onnx`; the whole model only on our computers |
-| SimCruise aerial student (`aerial_student` scan eye) | SimCruise contributors | [MIT](LICENSE) for our layers; it contains the first two Satlas stages above (ODC-BY 1.0: credit to Ai2). Contains information from OpenStreetMap, © OpenStreetMap contributors, ODbL (labels) | Reads the aerial photo of each world tile into land-cover probabilities (road, roof, water, tree, grass, crop, bare, built ground ...) and the place's own colours, on the CPU, on by default (`-SimCruiseScanEye=none` turns it off); lower 48 states only; in 2.0.3 its classes reach the picture only with the development option `-SimCruiseScan` | `data/ai/scan-eye-student.onnx` (11 MB), in the installer from 2.0.3 | Trained by us from USGS The National Map aerial photos (public domain) with labels from OpenStreetMap (ODbL), the WRI and Meta canopy height map v2 (CC BY 4.0) and ESA WorldCover 2021 (CC BY 4.0), and the teacher eye's answers on 2,100 more USGS tiles (`lab/scan/`, `docs/research/local-ai-cpu.md`) | SatlasPretrain: USDA NAIP aerial images (public domain), Sentinel-2, Sentinel-1 and Landsat images, labels from OpenStreetMap (ODbL) and new Ai2 labels (ODC-BY) ([dataset notes](https://github.com/allenai/satlas/blob/main/SatlasPretrain.md)) |
+| SimCruise aerial student (`aerial_student` scan eye) | OSDS contributors (named SimCruise contributors until November 2026) | [MIT](LICENSE) for our layers; it contains the first two Satlas stages above (ODC-BY 1.0: credit to Ai2). Contains information from OpenStreetMap, © OpenStreetMap contributors, ODbL (labels) | Reads the aerial photo of each world tile into land-cover probabilities (road, roof, water, tree, grass, crop, bare, built ground ...) and the place's own colours, on the CPU, on by default (`-SimCruiseScanEye=none` turns it off); lower 48 states only; in 2.0.3 its classes reach the picture only with the development option `-SimCruiseScan` | `data/ai/scan-eye-student.onnx` (11 MB), in the installer from 2.0.3 | Trained by us from USGS The National Map aerial photos (public domain) with labels from OpenStreetMap (ODbL), the WRI and Meta canopy height map v2 (CC BY 4.0) and ESA WorldCover 2021 (CC BY 4.0), and the teacher eye's answers on 2,100 more USGS tiles (`lab/scan/`, `docs/research/local-ai-cpu.md`) | SatlasPretrain: USDA NAIP aerial images (public domain), Sentinel-2, Sentinel-1 and Landsat images, labels from OpenStreetMap (ODbL) and new Ai2 labels (ODC-BY) ([dataset notes](https://github.com/allenai/satlas/blob/main/SatlasPretrain.md)) |
 | [DeepForest tree crown model](https://github.com/weecology/DeepForest) | Weecology lab, University of Florida (Ben Weinstein and others) | [MIT](https://github.com/weecology/DeepForest/blob/main/LICENSE) (code and the [weights on Hugging Face](https://huggingface.co/weecology/deepforest-tree)) | **Planned, not in the game yet.** Finds single tree crowns in aerial photographs | Not used yet | Millions of tree labels made from lidar by an unsupervised method, then hand labels on RGB airborne images from selected sites ([paper](https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13472)) |
 
 The models run with [ONNX Runtime](https://github.com/microsoft/onnxruntime) (Microsoft, [MIT](https://github.com/microsoft/onnxruntime/blob/main/LICENSE)) through Unreal Engine's Neural Network Engine plugin `NNERuntimeORT`. Training and export on our computers use [PyTorch](https://github.com/pytorch/pytorch) (BSD-style), [ONNX](https://github.com/onnx/onnx) (Apache 2.0), [NumPy](https://github.com/numpy/numpy) (BSD 3-Clause) and [rasterio](https://github.com/rasterio/rasterio) (BSD 3-Clause).
@@ -83,7 +84,7 @@ An earlier scene model, DDRNet23-Slim trained on Cityscapes, was removed because
 
 | Data | Maker | Licence | Credit line |
 |---|---|---|---|
-| Weather, air quality, sea and waves | [Open-Meteo](https://open-meteo.com/) (with Copernicus CAMS for air quality) | Data [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the free API is for non-commercial use, which SimCruise is | Weather data by Open-Meteo.com |
+| Weather, air quality, sea and waves | [Open-Meteo](https://open-meteo.com/) (with Copernicus CAMS for air quality) | Data [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the free API is for non-commercial use, which OSDS is | Weather data by Open-Meteo.com |
 | Airport weather | NOAA Aviation Weather Center METAR; NWS observations through Iowa Environmental Mesonet; NOAA GOES | US public domain | NOAA |
 | Tides | NOAA CO-OPS water levels | US public domain | NOAA |
 | Aircraft (off in 2.0.3; no data is fetched) | [adsb.lol](https://adsb.lol/) | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) | adsb.lol |
@@ -124,7 +125,7 @@ The car physics are calibrated against published road tests (Car and Driver, Mot
 
 | Font | Maker | Licence |
 |---|---|---|
-| [Overpass](https://github.com/RedHatOfficial/Overpass) (menus and HUD) | Delve Withrington and the Overpass Project Authors, for Red Hat | [SIL OFL 1.1](licenses/Overpass%20font%20(OFL-1.1).txt) |
+| [Overpass](https://github.com/RedHatOfficial/Overpass) (menus, HUD and the OSDS logo letters) | Delve Withrington and the Overpass Project Authors, for Red Hat | [SIL OFL 1.1](licenses/Overpass%20font%20(OFL-1.1).txt) |
 | Roboto (Unreal Engine's default font) | Christian Robertson, Google | Apache 2.0 |
 
 ## Engine, libraries and tools
@@ -145,6 +146,17 @@ The car physics are calibrated against published road tests (Car and Driver, Mot
 | pako, fflate, zstddec, lerc, float16, quick-lru, web-worker, xml-utils, parse-headers, protocol-buffers-schema, resolve-protobuf-schema | Their authors (see [`licenses/`](licenses/)) | MIT, Apache 2.0 (lerc: Esri; web-worker), CC0 (xml-utils) | Helper support code |
 
 Licence texts for all of these are in [`licenses/`](licenses/).
+
+## Logo and brand
+
+The OSDS logo, icon and brand kit ([`docs/brand/`](docs/brand/README.md)) are our own work, under the MIT License like the rest of the repository. We drew every mark ourselves; no logo from another project was traced or copied.
+
+| Work | Maker | Licence | Use |
+|---|---|---|---|
+| [logo-design Agent Skill](https://github.com/kaankiziltug/logo-design-skill) | kaankiziltug | MIT | The design method, test list and delivery list we followed to make the logo. We did not use or ship its reference logos (they belong to their owners). |
+| [Overpass](https://github.com/RedHatOfficial/Overpass) | Delve Withrington and the Overpass Project Authors, for Red Hat | [SIL OFL 1.1](licenses/Overpass%20font%20(OFL-1.1).txt) | The letters of the wordmark, turned into outlines. The OFL lets a logo use the font. |
+| [fontTools](https://github.com/fonttools/fonttools) | Just van Rossum and the fontTools authors | MIT | Turns the Overpass letters into SVG outlines (`authoring/brand/make_brand.py`, a build tool; not shipped) |
+| [Pillow](https://python-pillow.org/) | Jeffrey A. Clark and contributors | MIT-CMU (HPND) | Scales the icon images and writes the `.ico` file (build tool; not shipped) |
 
 ## Named in our research, not used now
 

@@ -1,4 +1,7 @@
-; SimCruise Windows installer (Inno Setup 6).
+; OSDS (Open Source Driving Simulator) Windows installer (Inno Setup 6).
+; OSDS was named SimCruise until November 2026: the AppId, the program file
+; (SimCruise.exe), the package folder and %LOCALAPPDATA%\SimCruise keep the old
+; name so that an update installs over 2.0.3 and older and keeps the player's settings.
 ;
 ; Build with scripts\installer.ps1, which packages nothing itself: it reads the
 ; Shipping package in Saved\Package\Windows (scripts\package.ps1 -Configuration
@@ -54,24 +57,26 @@
 
 [Setup]
 AppId={{{#AppIdGuid}}
-AppName=SimCruise
+AppName=OSDS
 AppVersion={#AppVersion}
-AppVerName=SimCruise {#AppVersion}
-AppPublisher=SimCruise contributors
+AppVerName=OSDS {#AppVersion}
+AppPublisher=OSDS contributors
 AppPublisherURL=https://github.com/simcruisegame/simcruise
 AppSupportURL=https://github.com/simcruisegame/simcruise/issues
 AppUpdatesURL=https://github.com/simcruisegame/simcruise/releases
-DefaultDirName={autopf}\SimCruise
-DefaultGroupName=SimCruise
+DefaultDirName={autopf}\OSDS
+DefaultGroupName=OSDS
+; An update from 2.0.3 or older moves the Start menu entry from the old SimCruise folder to OSDS.
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 LicenseFile={#SourceDir}\LICENSE.txt
 ; What the player must know first: internet, the Microsoft runtimes, the PC it needs.
 InfoBeforeFile=before-you-install.txt
 OutputDir={#OutputDir}
-OutputBaseFilename=SimCruise-{#AppVersion}-windows-x64-setup
-SetupIconFile=simcruise.ico
+OutputBaseFilename=OSDS-{#AppVersion}-windows-x64-setup
+SetupIconFile=osds.ico
 UninstallDisplayIcon={app}\SimCruise.exe
-UninstallDisplayName=SimCruise {#AppVersion}
+UninstallDisplayName=OSDS {#AppVersion}
 ; Per-user install by default; the first page offers "all users" (needs administrator rights).
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog commandline
@@ -85,7 +90,7 @@ DiskSpanning=no
 WizardStyle=modern
 CloseApplications=yes
 VersionInfoVersion={#NumericVersion}
-VersionInfoProductName=SimCruise
+VersionInfoProductName=OSDS
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -100,6 +105,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Every .onnx from an earlier install goes before the files are copied: 2.0.0 shipped weights that
 ; may not ship now, and from 2.0.3 the package brings exactly the cleared ones (scripts\ShippedModels.ps1).
 Type: files; Name: "{app}\SimCruise\data\ai\*.onnx"
+; The shortcuts up to 2.0.3 had the old name, SimCruise.
+Type: filesandordirs; Name: "{autoprograms}\SimCruise"
+Type: files; Name: "{autodesktop}\SimCruise.lnk"
 
 [Files]
 ; The whole Shipping package except debug symbols, the build manifests and any local test run's Saved folder.
@@ -107,14 +115,14 @@ Type: files; Name: "{app}\SimCruise\data\ai\*.onnx"
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,Manifest_*.txt,\SimCruise\Saved\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\SimCruise"; Filename: "{app}\SimCruise.exe"; WorkingDir: "{app}"
-Name: "{group}\SimCruise controls"; Filename: "{app}\CONTROLS.md"
-Name: "{group}\{cm:UninstallProgram,SimCruise}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\SimCruise"; Filename: "{app}\SimCruise.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\OSDS"; Filename: "{app}\SimCruise.exe"; WorkingDir: "{app}"
+Name: "{group}\OSDS controls"; Filename: "{app}\CONTROLS.md"
+Name: "{group}\{cm:UninstallProgram,OSDS}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\OSDS"; Filename: "{app}\SimCruise.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
 ; Only when the runtimes are installed: without them the game cannot start.
-Filename: "{app}\SimCruise.exe"; Description: "{cm:LaunchProgram,SimCruise}"; Flags: nowait postinstall skipifsilent; Check: RuntimesReady
+Filename: "{app}\SimCruise.exe"; Description: "{cm:LaunchProgram,OSDS}"; Flags: nowait postinstall skipifsilent; Check: RuntimesReady
 
 [UninstallDelete]
 ; Files the game writes next to itself (none in a normal Shipping run; a crash may leave a folder).
@@ -234,7 +242,7 @@ begin
     Log('Not installed: ' + MissingParts);
     SuppressibleMsgBox('These Microsoft parts are not installed:' + #13#10#13#10 + MissingParts + #13#10 +
       'To install them, do one of these steps:' + #13#10 +
-      '1. Start SimCruise. It asks to install them. Click Yes, and then give Windows the permission.' + #13#10 +
+      '1. Start OSDS. It asks to install them. Click Yes, and then give Windows the permission.' + #13#10 +
       '2. Or run the files in this folder as administrator:' + #13#10 + Redist + #13#10 +
       '3. Or get the Visual C++ runtime from Microsoft: ' + VcHelpUrl,
       mbError, MB_OK, IDOK);
@@ -297,7 +305,7 @@ begin
     Exit;
   DeleteCaches(Base);
   if (not UninstallSilent) and
-    (MsgBox('Do you also want to delete your SimCruise settings, car tuning and screenshots?' + #13#10#13#10 +
+    (MsgBox('Do you also want to delete your OSDS settings, car tuning and screenshots?' + #13#10#13#10 +
       'They are in ' + Base + '.' + #13#10 + 'Click No to keep them for a new install.',
       mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES) then
     DelTree(Base, True, True, True)

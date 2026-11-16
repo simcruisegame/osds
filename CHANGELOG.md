@@ -1,9 +1,10 @@
 # Changelog
 
-Notable changes to SimCruise, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/) and versions follow [Semantic Versioning](https://semver.org/). Dates are release dates, not the survey dates of the data a release uses. The release notes written for Sunday Driver 1.0.0 to 1.0.8 are preserved word for word in [docs/history.md](docs/history.md).
+Notable changes to OSDS (named SimCruise until November 2026), newest first. The format follows [Keep a Changelog](https://keepachangelog.com/) and versions follow [Semantic Versioning](https://semver.org/). Dates are release dates, not the survey dates of the data a release uses. The release notes written for Sunday Driver 1.0.0 to 1.0.8 are preserved word for word in [docs/history.md](docs/history.md).
 
 ## Unreleased
 
+- **SimCruise is now OSDS, the Open Source Driving Simulator**, with a new logo and app icon (an "O" broken open by a road) and a brand kit in [docs/brand](docs/brand/README.md). The game window is titled OSDS and the game and installer have the new icon. The installer is now `OSDS-<version>-windows-x64-setup.exe` (and the zip and checksums `OSDS-<version>-...`); it updates an older (SimCruise) install in place and moves the Start menu entry from SimCruise to OSDS. Saves and settings stay in `%LOCALAPPDATA%\SimCruise`, and the program file is still `SimCruise.exe`.
 - **Trees, each its own colour** — every crown takes its colour from the aerial photograph at the crown (against the tile's crowns, so the photo's own exposure cancels), with a small per-tree hue and brightness change; crowns are lit as one rounded mass, darker deep inside; bark is darker at the foot. `-SimCruiseOldTreeLook` turns it off.
 - **Walls built of something** — brick coursing, lap siding, concrete block, ashlar stone, concrete panels and ribbed metal, drawn in the building shader: the building's mapped material first (OpenStreetMap, Wikidata), else the region's and the building type's usual material (siding on northern houses, brick in the South, stucco in the South-west and Florida, block and metal for warehouses). Each material has its own colours.
 - **Windows by the wall's role** — street fronts keep every bay; side and back walls fewer, houses' windows in pairs, garages and metal sheds almost none.

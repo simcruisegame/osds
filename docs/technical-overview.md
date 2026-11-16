@@ -2,7 +2,7 @@
 
 This is the short version. The [technical deep dive](technical-deep-dive.md) has a diagram of all working parts and tells how each part operates in 2.0.3.
 
-SimCruise is two programs and a cache:
+OSDS is two programs and a cache:
 
 ```
 Unreal Engine 5.8 client (Source/SimCruise)     map helper (Bun, helper/*.mjs)             public data services

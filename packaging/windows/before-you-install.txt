@@ -1,5 +1,8 @@
-SimCruise: read this before you install
-=======================================
+OSDS: read this before you install
+===================================
+
+OSDS (Open Source Driving Simulator) was named SimCruise until
+November 2026. An update keeps your settings and map cache.
 
 1. INTERNET
    Ocean Drive, Miami Beach is in this installer. You can drive there
