@@ -1054,6 +1054,94 @@
     "winshield": "glass",
     "redLamp": "lamp_rear"
    }
+  },
+  "mini15s": {
+   "model": "data/art/traffic/minif56-carla/scene.gltf",
+   "credit": "\"Mini Cooper\" by the CARLA Team (carla-simulator/carla-content), CC BY 4.0",
+   "steering_ratio": 14.2,
+   "steering_ratio_source": "14.2:1 Servotronic electric rack (MINI media information, F56).",
+   "paint": {
+    "name": "Chili Red",
+    "base": "#a8121a",
+    "metallic": 0.05,
+    "base_roughness": 0.3,
+    "flake": 0.0,
+    "clear_coat_roughness": 0.03,
+    "orange_peel": 0.25,
+    "source": "MINI Chili Red, a solid red; matched by eye to the CARLA model's own bodywork colour."
+   },
+   "roles": {
+    "MI_MiniCooper_Bodywork": "paint",
+    "MI_MiniCooper_Details01": "authored",
+    "MI_MiniCooper_Details02": "authored",
+    "MI_LicensePlate": "hidden",
+    "MI_MiniCooper_Glass_Parked": "glass"
+   },
+   "badges": [
+    "mini",
+    {"note": "winged logo on the bonnet's front edge", "material": "MI_MiniCooper_Details02", "box": [[1.55, -0.15, 0.68], [1.98, 0.15, 1.0]]},
+    {"note": "winged logo on the tailgate (the tailgate release)", "material": "MI_MiniCooper_Details02", "box": [[-1.98, -0.15, 0.72], [-1.6, 0.15, 1.05]]},
+    {"note": "COOPER S lettering on the tailgate, right of the release", "material": "MI_MiniCooper_Details02", "box": [[-1.98, 0.12, 0.6], [-1.55, 0.6, 0.95]]},
+    {"note": "red S on the grille's left edge", "material": "MI_MiniCooper_Details02", "box": [[1.7, -0.6, 0.56], [2.05, -0.28, 0.78]]}
+   ]
+  },
+  "camaro87": {
+   "model": "data/art/traffic/camaro85-c6d20cc3/scene.gltf",
+   "credit": "\"1985 Chevrolet Camaro IROC-Z\" by Tony (https://sketchfab.com/tonyferello), CC BY 4.0",
+   "steering_ratio": 14.0,
+   "steering_ratio_source": "14:1 power steering, 2.5 turns lock to lock (camarotech.com; secondary).",
+   "engine_sound": {
+    "layout": "v8_crossplane",
+    "bank_of_event": [
+     0,
+     1,
+     1,
+     0,
+     1,
+     0,
+     0,
+     1
+    ],
+    "near_gain": 1.0,
+    "far_gain": 0.62,
+    "source": "GM small-block (L98 5.7): firing order 1-8-4-3-6-5-7-2, odd cylinders on the left (driver's) bank (GM numbering); dual tips from one muffler. Bank gains 1.0 / 0.62 are an estimate, as on the other V8s."
+   },
+   "paint": {
+    "name": "Bright Red",
+    "base": "#9e0c0e",
+    "metallic": 0.0,
+    "base_roughness": 0.35,
+    "flake": 0.0,
+    "clear_coat_roughness": 0.05,
+    "orange_peel": 0.4,
+    "source": "1987 Camaro Bright Red (code 81), a solid red; base/clear of the period with more orange peel than today's."
+   },
+   "roles": {
+    "PAINT": "paint",
+    "PAINT.001": "paint",
+    "GLASS": "glass_dark",
+    "PLASTIC": "plastic_grained",
+    "PLASTIC.001": "plastic_grained",
+    "BRAKE": "lamp_rear",
+    "TURN": "lamp_amber",
+    "CLEAR": "lamp_front",
+    "HEADLIGHT": "lamp_front",
+    "Material.025": "wheel_alloy",
+    "Material.030": "wheel_alloy",
+    "Material.027": "tyre",
+    "Material.031": "tyre",
+    "Material.028": "tyre",
+    "Material.034": "tyre",
+    "IROCZ": "hidden",
+    "IROCZ.001": "hidden",
+    "CHEVY_LOGO": "hidden",
+    "Material": "hidden",
+    "Material.039": "hidden"
+   },
+   "hide_pattern": "chevy logo|irocz|z28 badge",
+   "badges": [
+    "chevrolet"
+   ]
   }
  }
 }

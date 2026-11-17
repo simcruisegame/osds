@@ -92,7 +92,7 @@ An earlier scene model, DDRNet23-Slim trained on Cityscapes, was removed because
 
 ## Cars
 
-All car models are from [Sketchfab](https://sketchfab.com/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The game fits, rigs and re-materials them, and hides maker badges. Car names and brands are trademarks of their owners and are not licensed. Details: [`licenses/Traffic models.txt`](licenses/Traffic%20models.txt).
+All car models are from [Sketchfab](https://sketchfab.com/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), except the Mini Cooper S, which is the [CARLA](https://carla.org/) Team's Mini (CC BY 4.0). The 1987 Camaro IROC-Z wears "1985 Chevrolet Camaro IROC-Z" by Tony. The game fits, rigs and re-materials them, and hides maker badges. Car names and brands are trademarks of their owners and are not licensed. Details: [`licenses/Traffic models.txt`](licenses/Traffic%20models.txt).
 
 | Car | Model and author |
 |---|---|

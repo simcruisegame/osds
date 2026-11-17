@@ -161,6 +161,42 @@
       "branded": [
         "tesla"
       ]
+    },
+    {
+      "id": "minif56-carla",
+      "uid": "carla-content/Static/Car/4Wheeled/MiniCooper",
+      "kind": "mini15s",
+      "length_m": 3.85,
+      "flip": false,
+      "scene": "data/art/traffic/minif56-carla/scene.gltf",
+      "title": "Mini Cooper (CARLA)",
+      "author": "CARLA Team",
+      "author_url": "https://carla.org",
+      "licence": "CC BY 4.0",
+      "source_url": "https://bitbucket.org/carla-simulator/carla-content (Static/Car/4Wheeled/MiniCooper)",
+      "faces": 433042,
+      "fetched": "2026-11-17",
+      "branded": [
+        "mini"
+      ]
+    },
+    {
+      "id": "camaro85-c6d20cc3",
+      "uid": "c6d20cc339f64cbfbde07f66f36ca8d0",
+      "kind": "camaro87",
+      "length_m": 4.877,
+      "flip": false,
+      "scene": "data/art/traffic/camaro85-c6d20cc3/scene.gltf",
+      "title": "1985 Chevrolet Camaro IROC-Z",
+      "author": "Tony (tonyferello)",
+      "author_url": "https://sketchfab.com/tonyferello",
+      "licence": "CC BY 4.0",
+      "source_url": "https://sketchfab.com/3d-models/1985-chevrolet-camaro-iroc-z-c6d20cc339f64cbfbde07f66f36ca8d0",
+      "faces": 38649,
+      "fetched": "2026-11-17",
+      "branded": [
+        "chevrolet"
+      ]
     }
   ]
 }
