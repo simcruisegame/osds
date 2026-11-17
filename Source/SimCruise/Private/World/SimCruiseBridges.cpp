@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseBridges.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -63,6 +64,7 @@ UMaterial* ASimCruiseBridges::BuildMaterial(UObject* Outer, FName Name, EObjectF
 	Material->GetEditorOnlyData()->BaseColor.Connect(0, Base);
 	Material->GetEditorOnlyData()->Roughness.Connect(0, Rough);
 	Material->PreEditChange(nullptr);
+	SimCruiseShaderSafety::PatchForRayTracing(Material);
 	Material->PostEditChange();
 	return Material;
 #else

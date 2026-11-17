@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseTrees.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 #include "Environment/SimCruiseGraphics.h"
 #include "HAL/IConsoleManager.h"
 
@@ -385,6 +386,7 @@ UMaterial* ASimCruiseTrees::BuildLeafMaterial(UObject* Outer, FName Name, EObjec
 	Material->GetEditorOnlyData()->SubsurfaceColor.Connect(2, Custom);
 	Material->GetEditorOnlyData()->Roughness.Connect(3, Custom);
 	Material->PreEditChange(nullptr);
+	SimCruiseShaderSafety::PatchForRayTracing(Material);
 	Material->PostEditChange();
 	return Material;
 #else
@@ -417,6 +419,7 @@ UMaterial* ASimCruiseTrees::BuildBarkMaterial(UObject* Outer, FName Name, EObjec
 	Material->GetEditorOnlyData()->Roughness.Connect(1, Custom);
 	Material->GetEditorOnlyData()->OpacityMask.Connect(0, FadeOrShadow(Material, Custom, 2, nullptr, 0));
 	Material->PreEditChange(nullptr);
+	SimCruiseShaderSafety::PatchForRayTracing(Material);
 	Material->PostEditChange();
 	return Material;
 #else

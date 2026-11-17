@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Environment/SimCruiseGraphics.h"
+#include "RenderUtils.h"
 
 #include "Gameplay/SimCruisePreferences.h"
 #include "HAL/IConsoleManager.h"
@@ -17,6 +18,9 @@ namespace
 	{
 		return Preset == ESimCruiseGraphicsPreset::Low ? Preset : static_cast<ESimCruiseGraphicsPreset>(static_cast<uint8>(Preset) - 1);
 	}
+
+	TAutoConsoleVariable<float> CVarFoliageScale(TEXT("simcruise.World.FoliageScale"), 1.0f,
+		TEXT("Scale on CARLA roadside plant density (set by the graphics preset: Ultra 1.5)."), ECVF_Default);
 
 	void SetCVar(const TCHAR* Name, const FString& Value)
 	{
@@ -84,12 +88,24 @@ FSimCruisePresetSpec FSimCruiseGraphics::Spec(ESimCruiseGraphicsPreset Preset)
 		Out.bLumenReflections = false;
 		break;
 	case ESimCruiseGraphicsPreset::High:
+		// The owner's laptop (RTX 2070 Super Max-Q): about 45 fps for ray-traced Lumen and a 75 %
+		// picture rather than 60 fps at 67 % with a half-blind Lumen (owner, 2026-11-17: "we can
+		// accept lower framerates on this PC").
 		Out.ScalabilityLevel = 2;
-		Out.ScreenPercentage = 67.0f;
+		Out.ScreenPercentage = 75.0f;
+		Out.TargetFps = 45.0f;
+		Out.bHardwareLumen = true;
+		Out.MirrorInterval = 2;
 		break;
 	case ESimCruiseGraphicsPreset::Ultra:
+		// For stronger PCs than the owner's laptop: everything on at 60 fps.
 		Out.ScalabilityLevel = 3;
-		Out.ScreenPercentage = 75.0f;
+		Out.ScreenPercentage = 100.0f;
+		Out.TargetFps = 60.0f;
+		Out.bHardwareLumen = true;
+		Out.bEpicGI = true;
+		Out.FoliageScale = 1.5f;
+		Out.MirrorInterval = 1;
 		break;
 	}
 	return Out;
@@ -136,14 +152,8 @@ ESimCruiseGraphicsPreset FSimCruiseGraphics::AutoPick(const FString& AdapterName
 	if (Desktop.IsSet())
 	{
 		Pick = bLaptop ? StepDown(Desktop.GetValue()) : Desktop.GetValue();
-		// A Max-Q part is the low-power (about 80 W, down to 28 W under load) variant: one step
-		// more. Measured in the 2.0.0 Shipping build at 1080p on the RTX 2070 Super Max-Q, Ocean
-		// Drive from the driver's seat: High 57 fps (1 % low 44), Medium 77 fps (1 % low 61), so
-		// High misses the 60 fps / 45 fps target in the city (docs/release/evidence/perf.txt).
-		if (Name.Contains(TEXT("max-q")))
-		{
-			Pick = StepDown(Pick);
-		}
+		// A Max-Q part used to step down once more (High 57 fps on Ocean Drive missed 60); High is
+		// now tuned to 45 fps on exactly that laptop (the owner's), so the laptop step is enough.
 	}
 	else if (bAllowBenchmark)
 	{
@@ -179,7 +189,7 @@ void FSimCruiseGraphics::Apply(ESimCruiseGraphicsPreset Preset)
 	Levels.SetFromSingleQualityLevel(S.ScalabilityLevel);
 	// Ultra keeps Lumen GI at High (scalability 2): Epic GI cost about 1.5 ms of the 21.5 ms Ultra
 	// frame for a difference in bounce light the release review could not see (2026-11-14).
-	Levels.GlobalIlluminationQuality = FMath::Min(Levels.GlobalIlluminationQuality, 2);
+	if (!S.bEpicGI) Levels.GlobalIlluminationQuality = FMath::Min(Levels.GlobalIlluminationQuality, 2);
 	Levels.ResolutionQuality = S.ScreenPercentage;
 	Scalability::SetQualityLevels(Levels, true);
 
@@ -192,7 +202,8 @@ void FSimCruiseGraphics::Apply(ESimCruiseGraphicsPreset Preset)
 	// Frame guard: when the GPU cannot hold 60 fps (a laptop held at 28 W), TSR's internal picture
 	// shrinks, down to 50 %, so frames come on time; the preset's screen percentage stays the top.
 	SetCVar(TEXT("r.DynamicRes.OperationMode"), TEXT("2"));
-	SetCVar(TEXT("r.DynamicRes.FrameTimeBudget"), TEXT("15.0")); // headroom under 16.7 ms: a frame never waits a whole refresh
+	// Headroom under the preset's frame time (15 ms at 60 fps): a frame never waits a whole refresh.
+	SetCVar(TEXT("r.DynamicRes.FrameTimeBudget"), FString::SanitizeFloat(FMath::RoundToFloat(900.0f / S.TargetFps)));
 	// The floor sits 15 % under the preset, not at 50 %: the release test found Ultra held at
 	// 50-53 % on Tail of the Dragon and Ocean Drive (smeared trees, a coarse mirror) although at a
 	// fixed 75 % the frame p95 was 16.9 and 20.1 ms (main 8456dea, 2026-11-14).
@@ -200,10 +211,15 @@ void FSimCruiseGraphics::Apply(ESimCruiseGraphicsPreset Preset)
 	SetCVar(TEXT("r.DynamicRes.MaxScreenPercentage"), FString::SanitizeFloat(S.ScreenPercentage));
 	SetCVar(TEXT("r.Lumen.DiffuseIndirect.Allow"), S.bLumenGI ? TEXT("1") : TEXT("0"));
 	SetCVar(TEXT("r.Lumen.Reflections.Allow"), S.bLumenReflections ? TEXT("1") : TEXT("0"));
+	// Hardware ray tracing only where the RHI has it (r.RayTracing is on in DefaultEngine.ini; a GPU
+	// without it keeps software Lumen).
+	SetCVar(TEXT("r.Lumen.HardwareRayTracing"), (S.bHardwareLumen && IsRayTracingEnabled()) ? TEXT("1") : TEXT("0"));
+	SetCVar(TEXT("simcruise.Mirrors.Interval"), FString::FromInt(S.MirrorInterval));
+	SetCVar(TEXT("simcruise.World.FoliageScale"), FString::SanitizeFloat(S.FoliageScale));
 
 	GCurrentPreset = Preset;
-	UE_LOG(LogSimCruiseGraphics, Display, TEXT("Graphics preset %s: scalability %d, %.0f%% screen percentage with TSR, Lumen GI %d reflections %d"),
-		*Name(Preset), S.ScalabilityLevel, S.ScreenPercentage, S.bLumenGI ? 1 : 0, S.bLumenReflections ? 1 : 0);
+	UE_LOG(LogSimCruiseGraphics, Display, TEXT("Graphics preset %s: scalability %d, %.0f%% screen percentage with TSR, %.0f fps target, Lumen GI %d reflections %d hardware %d"),
+		*Name(Preset), S.ScalabilityLevel, S.ScreenPercentage, S.TargetFps, S.bLumenGI ? 1 : 0, S.bLumenReflections ? 1 : 0, (S.bHardwareLumen && IsRayTracingEnabled()) ? 1 : 0);
 }
 
 ESimCruiseGraphicsPreset FSimCruiseGraphics::Current()

@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseRegionalTerrain.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 
 #include "Async/Async.h"
 #include "Atlas/SimCruiseAtlasClient.h"
@@ -324,6 +325,7 @@ UMaterial* ASimCruiseRegionalTerrain::BuildMaterial(UObject* Outer, FName Name, 
 	Material->GetEditorOnlyData()->WorldPositionOffset.Connect(0, Offset);
 	Material->GetEditorOnlyData()->OpacityMask.Connect(0, Mask);
 	Material->PreEditChange(nullptr);
+	SimCruiseShaderSafety::PatchForRayTracing(Material);
 	Material->PostEditChange();
 	return Material;
 #else

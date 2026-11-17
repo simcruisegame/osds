@@ -7,6 +7,9 @@
 #include "Environment/SimCruiseEnvironmentSubsystem.h"
 #include "Presentation/SimCruiseCarClock.h"
 #include "Presentation/SimCruiseCarMirror.h"
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
+#include "TextureResource.h"
 #include "HAL/IConsoleManager.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -764,6 +767,26 @@ void USimCruiseCarPresentationComponent::TickComponent(float DeltaTime, ELevelTi
 		{
 			if (MirrorCaptures == 0u) MirrorCaptures = 1u;
 			MirrorCapture->CaptureSceneDeferred();
+		}
+		// simcruise.Mirrors.Dump 1: write the mirror's capture to Saved/MirrorCapture.png (once), to inspect it.
+		static IConsoleVariable* Dump = IConsoleManager::Get().RegisterConsoleVariable(TEXT("simcruise.Mirrors.Dump"), 0,
+			TEXT("1: write the mirror capture to Saved/MirrorCapture.png once (then resets to 0)."), ECVF_Default);
+		if (Dump && Dump->GetInt() != 0 && MirrorTarget && MirrorCaptures >= 2u)
+		{
+			Dump->Set(0);
+			if (FTextureRenderTargetResource* Res = MirrorTarget->GameThread_GetRenderTargetResource())
+			{
+				TArray<FColor> Px;
+				FReadSurfaceDataFlags Flags(RCM_MinMax);
+				if (Res->ReadPixels(Px, Flags) && Px.Num() == MirrorTarget->SizeX * MirrorTarget->SizeY)
+				{
+					for (FColor& C : Px) C.A = 255;
+					TArray64<uint8> Png;
+					FImageUtils::PNGCompressImageArray(MirrorTarget->SizeX, MirrorTarget->SizeY, TArrayView64<const FColor>(Px.GetData(), Px.Num()), Png);
+					FFileHelper::SaveArrayToFile(Png, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("MirrorCapture.png")));
+					UE_LOG(LogTemp, Display, TEXT("MIRRORDUMP %dx%d"), MirrorTarget->SizeX, MirrorTarget->SizeY);
+				}
+			}
 		}
 		const FTransform Eye = MirrorCapture->GetComponentTransform();
 		const FVector Fwd = Eye.GetUnitAxis(EAxis::X), Right = Eye.GetUnitAxis(EAxis::Y), Up = Eye.GetUnitAxis(EAxis::Z);

@@ -1747,7 +1747,9 @@ namespace SimCruiseTileDetail
 		const TArray<int32> Bushes = SimCruiseCarlaCatalog::Find(TEXT("bush"), Band);
 		if (Grass.IsEmpty() && Bushes.IsEmpty()) return;
 		// Clumps a metre of verge: lush in the wet and northern bands, thin in the desert.
-		const double Density = Band == TEXT("dry") ? 0.25 : Band == TEXT("tropic") ? 0.8 : Band == TEXT("south") ? 0.9 : 1.0;
+		static IConsoleVariable* FoliageScale = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.World.FoliageScale"));
+		const double Density = (Band == TEXT("dry") ? 0.25 : Band == TEXT("tropic") ? 0.8 : Band == TEXT("south") ? 0.9 : 1.0)
+			* FMath::Clamp(FoliageScale ? static_cast<double>(FoliageScale->GetFloat()) : 1.0, 0.25, 2.0);
 		const FSimCruiseRoadNetwork& Roads = X.B.Roads;
 		constexpr int32 MaxInstances = 9000;
 		for (int32 r = 0; r < Roads.Ribbons.Num(); ++r)

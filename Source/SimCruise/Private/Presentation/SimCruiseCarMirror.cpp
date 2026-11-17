@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Presentation/SimCruiseCarMirror.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 
 #include "Materials/Material.h"
 #include "UObject/StrongObjectPtr.h"
@@ -51,7 +52,10 @@ if (HasCapture > 0.5 && z > 0.05)
 	uv = float2(0.5 + 0.5 * uv.x, 0.5 - 0.5 * uv.y * Aspect);
 	if (all(uv > 0.0) && all(uv < 1.0))
 	{
-		col = Texture2DSample(Tex, TexSampler, uv).rgb; // mip-mapped: a small glass no longer aliases
+		// The full-resolution level: the hardware's mip choice inside this branch is undefined
+		// (derivatives in divergent flow) and picked coarse levels, a blocky mirror (2.1 owner
+		// screenshot). The glass magnifies the capture at every size it is seen, so level 0 is right.
+		col = Texture2DSampleLevel(Tex, TexSampler, uv, 0.0).rgb;
 	}
 }
 return col * 0.7; // silvered glass about 85 %, and a driver adapted to the shaded cabin
@@ -134,6 +138,7 @@ namespace SimCruiseCarMirror
 			Built->GetEditorOnlyData()->Specular.Connect(0, Scalar(TEXT("Specular"), 0.f));
 			Built->GetEditorOnlyData()->EmissiveColor.Connect(0, Custom);
 			Built->PreEditChange(nullptr);
+			SimCruiseShaderSafety::PatchForRayTracing(Built);
 			Built->PostEditChange();
 			Material = Built;
 		}

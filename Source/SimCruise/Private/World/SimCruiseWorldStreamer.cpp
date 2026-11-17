@@ -2,6 +2,9 @@
 
 #include "World/SimCruiseWorldStreamer.h"
 #include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/CollisionProfile.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -498,6 +501,7 @@ void ASimCruiseWorldStreamer::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	TickStreaming(DeltaSeconds);
 	UpdateNightLighting(DeltaSeconds);
+	UpdateHorizonGround(DeltaSeconds);
 	// Parked cars, three a frame across the tiles.
 	int32 Budget = 3;
 	for (const TPair<FIntPoint, TObjectPtr<ASimCruiseWorldTile>>& Pair : Tiles)
@@ -505,6 +509,51 @@ void ASimCruiseWorldStreamer::Tick(float DeltaSeconds)
 		if (Budget <= 0) break;
 		if (Pair.Value) Budget -= Pair.Value->PlaceParkedCars(Budget);
 	}
+}
+
+void ASimCruiseWorldStreamer::UpdateHorizonGround(float DeltaSeconds)
+{
+	static IConsoleVariable* Enabled = IConsoleManager::Get().RegisterConsoleVariable(TEXT("simcruise.World.HorizonGround"), 1,
+		TEXT("1 (default): a far ground below the built tiles, so unbuilt distance shows hazy land, not the planet's dark surface; 0: off."), ECVF_Default);
+	if (!HorizonGround)
+	{
+		UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+		UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+		if (!Plane || !Base) return;
+		HorizonGround = NewObject<UStaticMeshComponent>(this, TEXT("HorizonGround"));
+		HorizonGround->SetStaticMesh(Plane);
+		HorizonGround->SetMobility(EComponentMobility::Movable);
+		HorizonGround->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		HorizonGround->SetCastShadow(false);
+		HorizonGround->bAffectDistanceFieldLighting = false;
+		HorizonGround->SetupAttachment(RootComponent);
+		// Distant land and sea both read as a dim blue-grey through 10-40 km of air; the
+		// atmosphere's aerial perspective does the rest.
+		UMaterialInstanceDynamic* Look = UMaterialInstanceDynamic::Create(Base, this);
+		Look->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.075f, 0.085f, 0.08f));
+		HorizonGround->SetMaterial(0, Look);
+		// The engine plane is 1 m square: 80 km across reaches past the horizon a driver sees.
+		HorizonGround->SetWorldScale3D(FVector(800.0, 800.0, 1.0));
+		HorizonGround->RegisterComponent();
+	}
+	HorizonGround->SetVisibility(Enabled->GetInt() != 0);
+	FVector Velocity;
+	const FVector Focus = CurrentFocus(Velocity);
+	HorizonGroundClock -= DeltaSeconds;
+	if (HorizonGroundClock <= 0.f)
+	{
+		// Just under the lowest ground of the built tiles, so it never shows through them.
+		HorizonGroundClock = 2.f;
+		double Lowest = TNumericLimits<double>::Max();
+		for (const TPair<FIntPoint, TObjectPtr<ASimCruiseWorldTile>>& Pair : Tiles)
+		{
+			if (!Pair.Value) continue;
+			const FBox Box = Pair.Value->GetComponentsBoundingBox(false);
+			if (Box.IsValid) Lowest = FMath::Min(Lowest, Box.Min.Z);
+		}
+		HorizonGroundZ = Lowest < TNumericLimits<double>::Max() ? Lowest - 300.0 : Focus.Z - 5000.0;
+	}
+	HorizonGround->SetWorldLocation(FVector(Focus.X, Focus.Y, HorizonGroundZ));
 }
 
 void ASimCruiseWorldStreamer::UpdateNightLighting(float DeltaSeconds)

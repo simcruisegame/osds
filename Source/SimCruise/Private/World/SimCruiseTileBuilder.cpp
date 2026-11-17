@@ -1267,6 +1267,19 @@ namespace SimCruiseTileBuilder
 								if ((Hash % 100u) >= 58u) continue;
 								const double OffCurb = 0.25 + 0.15 * static_cast<double>((Hash >> 8) & 0xFF) / 255.0;
 								const double L = Sgn * (HalfW - OffCurb - 0.9);
+								// Not across the mouth of a side street or on a junction: a road that ends at
+								// this one (a T junction) does not cut its stripes, so look past this side's
+								// edge, 9 m either way (a car, and the 20 ft MUTCD keeps clear of a
+								// crosswalk), and under the car itself, for any other carriageway.
+								// (2.1: cars parked across Miami Beach side streets blocked them.)
+								bool bMouth = false;
+								for (double Along = -9.0; Along <= 9.0 && !bMouth; Along += 3.0)
+								{
+									FSimCruiseRoadHit Other;
+									if (Roads.FindCarriageway(Cc + Tt * Along + Rr * (Sgn * (HalfW + 1.2)), Other, r)) bMouth = true;
+								}
+								FSimCruiseRoadHit Under;
+								if (bMouth || Roads.FindCarriageway(Cc + Rr * L, Under, r)) continue;
 								const double Hgt = FMath::Lerp(Ribbon.CarriagewayHeight(i, L), Ribbon.CarriagewayHeight(i + 1, L), T);
 								const FVector2d Heading = Tt * (A.Travel != 0 ? static_cast<double>(A.Travel) : Sgn);
 								FSimCruiseParkedCar Car;

@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Presentation/SimCruiseLowBeamPattern.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
@@ -102,6 +103,7 @@ namespace SimCruiseLowBeamPattern
 			Custom->RebuildOutputs();
 			Built->GetEditorOnlyData()->EmissiveColor.Connect(0, Custom);
 			Built->PreEditChange(nullptr);
+			SimCruiseShaderSafety::PatchForRayTracing(Built);
 			Built->PostEditChange();
 			Material = Built;
 		}

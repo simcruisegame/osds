@@ -176,6 +176,17 @@ public:
 	int32 NumFallbackGround() const { return FallbackGround.Num(); }
 	bool HasFallbackGround(const FIntPoint& Tile) const { return FallbackGround.Contains(Tile); }
 private:
+	/**
+	 * A far ground under the world, following the camera, just below the lowest built tile: where
+	 * the distant tiles are not built yet the eye sees hazy distant land instead of the
+	 * atmosphere's planet surface, which under an overcast sky renders near black (2.1 owner
+	 * screenshot: a black band at the end of a Miami Beach street).
+	 */
+	void UpdateHorizonGround(float DeltaSeconds);
+	UPROPERTY(Transient)
+	TObjectPtr<class UStaticMeshComponent> HorizonGround;
+	float HorizonGroundClock = 0.f;
+	double HorizonGroundZ = 0.0;
 	void Rebase(const FIntPoint& NewOrigin);
 	void RemoveTile(const FIntPoint& Tile);
 	FVector CurrentFocus(FVector& OutVelocity) const;

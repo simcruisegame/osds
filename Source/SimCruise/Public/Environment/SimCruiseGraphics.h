@@ -36,8 +36,19 @@ struct SIMCRUISE_API FSimCruisePresetSpec
 	bool bLumenReflections = true;
 	/** Lumen global illumination on (else the sky light with distance-field AO). */
 	bool bLumenGI = true;
-	/** Frame-rate the preset is tuned to hold, for the docs and the auto-pick. */
+	/** Frame-rate the preset is tuned to hold: the dynamic-resolution budget (High is tuned to the
+	 *  owner's RTX 2070 Super Max-Q laptop, taking about 45 fps for a sharper, better-lit picture). */
 	float TargetFps = 60.0f;
+	/** Lumen traces the scene with hardware ray tracing (works on the meshes the game builds at run
+	 *  time, which get no distance fields outside the editor); falls back to software where the GPU
+	 *  or driver has none. */
+	bool bHardwareLumen = false;
+	/** Global illumination at Epic (else held at High). */
+	bool bEpicGI = false;
+	/** Scale on CARLA roadside plant density and foliage draw distance. */
+	float FoliageScale = 1.0f;
+	/** Mirrors render every Nth frame. */
+	int32 MirrorInterval = 3;
 };
 
 struct SIMCRUISE_API FSimCruiseGraphics

@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseWorldResources.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 
 #include "Async/ParallelFor.h"
 #include "Engine/Texture2D.h"
@@ -600,7 +601,7 @@ stucco *= lerp(0.78, 1.0, smoothstep(0.0, 1.2, h));
 // cast concrete (5) the whole of it, as a ratio over the wall's own colour.
 if (ConcreteOn > 0.5 && kind < 0.5 && (wallMat < 0.5 || (wallMat > 4.5 && wallMat < 5.5)))
 {
-	float3 weather = Concrete.Sample(ConcreteSampler, float2(along + seed * 5.31, -h) / 3.5).rgb / max(ConcreteMean.rgb, 0.02);
+	float3 weather = Texture2DSample(Concrete, ConcreteSampler, float2(along + seed * 5.31, -h) / 3.5).rgb / max(ConcreteMean.rgb, 0.02);
 	stucco *= lerp(1.0, weather, wallMat > 4.5 ? 1.0 : 0.45);
 }
 // What a wall is built of, drawn over its colour: brick coursing (US modular brick, 3 courses to
@@ -636,7 +637,7 @@ if (wallMat > 0.5 && (kind < 0.5 || (kind > 10.5 && kind < 13.5)))
 		{
 			// Photographed brick (CARLA): its bricks and joints as a ratio over the wall's own colour,
 			// each building's wall shifted along the tile so neighbours do not match.
-			float3 tex = Brick.Sample(BrickSampler, float2(along + seed * 7.13, -h) / 2.031).rgb;
+			float3 tex = Texture2DSample(Brick, BrickSampler, float2(along + seed * 7.13, -h) / 2.031).rgb;
 			built = stucco * tex / max(BrickMean.rgb, 0.02);
 		}
 		rib.x = wallMat > 2.5 ? 1.0 : 0.0;
@@ -1202,6 +1203,7 @@ return float3(dir * bend, -0.25 * bend + flutter);
 		Material->GetEditorOnlyData()->Roughness.Connect(1, Custom);
 		Material->GetEditorOnlyData()->Normal.Connect(2, Custom);
 		Material->PreEditChange(nullptr);
+		SimCruiseShaderSafety::PatchForRayTracing(Material);
 		Material->PostEditChange();
 		return Material;
 	}
@@ -1345,6 +1347,9 @@ namespace SimCruiseWorldMaterials
 				Description.CreateTriangle(Group, { Instances[A], Instances[B], Instances[C] });
 			}
 		}
+		// Hardware Lumen (High and Ultra) traces these meshes: outside the editor they get no
+		// distance field, so without ray-tracing geometry Lumen could not see the world at all.
+		Mesh->bSupportRayTracing = true;
 		UStaticMesh::FBuildMeshDescriptionsParams Params;
 		Params.bMarkPackageDirty = false;
 		Params.bUseHashAsGuid = true;
