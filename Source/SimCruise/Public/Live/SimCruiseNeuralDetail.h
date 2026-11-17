@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 
+#include <atomic>
+
 /**
  * The local AI detail engine: a neural super-resolution network that runs on the
  * player's own GPU through Unreal's Neural Network Engine (NNE, ONNX Runtime with
@@ -86,6 +88,9 @@ private:
 	TArray<FString> Queue;
 	TSet<FString> Queued;
 	bool bWorkerRunning = false;
+	/** Set when the game starts to quit: the worker stops between windows (see StopForExit). */
+	std::atomic<bool> bStopping{false};
+	void StopForExit();
 
 	bool bTried = false;
 	bool bReady = false;
