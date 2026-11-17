@@ -2,24 +2,20 @@
 
 The short version of each release, newest first. Every release has full notes in [docs/release/notes/](docs/release/notes/). OSDS was called SimCruise up to 2.0.3 and Sunday Driver up to 1.0.8 ([history](docs/history.md)).
 
-## 2.0.4 (in development)
+## 2.0.4 (2026-11-17)
 
 **Driving you can trust.**
 
-- **The car holds its lane.** The front wheels can point dead straight now (they were always 0.03° off, so the car hunted), small road lips no longer push the tyres sideways, and the driver's view stops swinging with every correction.
-- **Manual with an automatic clutch** (new default): tap RB/LB to shift; the game does the clutch and blips the throttle on downshifts. No stalls. Your own clutch is still an option.
-- **Stability control (ESC)** on the cars that have it in real life (Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey, CR-V): it brakes one wheel and eases the engine when the car starts to slide, and the ESC light flashes. All six pass the US legal ESC test (FMVSS 126); with it off, five of them spin. Pause menu > Your car > Stability control turns it off. The 2001 Miata and the 1965 Mustang never had it.
-- **You feel and see each shift**: a rumble tick and a gear flash; a refused shift buzzes twice and tells you the speed that gear can take.
-- **Bridges are flat across**: one smooth deck from end to end, no dips, the same in every map tile; a road under a bridge is no longer pulled up to it.
-- **No ground poking through the road**: the Doraville test place went from 60 spots to 1 (a tile border), and the check now fails the build.
-- Hard launches change up instead of sitting on the limiter; the Corvette no longer skips from 1st to 3rd.
-- **Buildings from real data**: measured heights, what each building is (home, apartments, shop) and its storeys (Overture, the US National Structure Inventory), and the roof shape, wall colour and material mapped in OpenStreetMap. Window rows follow the real storeys.
-- The AI-sharpened aerial photo fades in instead of popping. Shadows are lifted the way real cameras do (dark forests and shaded streets were too dark).
-- **Bug hunt across the US**: the robot now drives random US places and 12 hard ones. Fixed what it found: no start on the Mackinac Bridge (the car was put in the lake), a building standing across the motorway there, bridge decks dipping at map-block cuts.
-- Roofs follow the map, gable ridges run along the house, sealed cracks on older asphalt.
-- Fixes: `main` builds again (a merge dropped a function); Graphics "Auto" no longer re-benchmarks.
+- **The car holds its lane.** The front wheels point dead straight (they were always 0.03° off, so the car hunted); small road lips no longer push the tyres sideways; the driver's view stops swinging with every correction.
+- **Stability control (ESC)** on the cars that have it in real life (Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey, CR-V): it brakes one wheel and eases the engine when the car starts to slide; the ESC light flashes. All six pass the US legal ESC test (FMVSS 126). Pause menu > Your car turns it off. The 2001 Miata and the 1965 Mustang never had it.
+- **Manual with an automatic clutch** (new default): tap RB/LB to shift; the game works the clutch and blips the throttle. A rumble tick and a gear flash with each shift; a refused shift says the speed that gear can take.
+- **Bridges are flat across**, the same in every map tile; a road under a bridge is no longer pulled up to it; no ground poking through the road at the Doraville test place (60 spots to 1).
+- **Buildings from real data**: measured heights, what each building is and its storeys (Overture, the US National Structure Inventory), and the roof shape, wall colour and material mapped in OpenStreetMap.
+- **Looks:** shadows lifted the way real cameras do; the AI-sharpened aerial photo fades in instead of popping; sealed cracks on older asphalt; roofs follow the map.
+- **Bug hunt across the US**: the robot drives random places and 12 hard ones. Fixed: the car put in the lake instead of on the Mackinac Bridge, a building across the motorway there, bridge decks dipping at map-block cuts, hard launches stuck on the limiter, the Corvette skipping 1st to 3rd, `main` not building.
+- Known issues: the Mackinac Bridge can still throw the car at one tile border; stacked interchanges (the High Five) may show steps between levels; small lips where some driveways join roads.
 
-[Full notes](docs/release/notes/2.0.4-dev.md)
+[Full notes](docs/release/notes/2.0.4.md)
 
 ## 2.0.3 (2026-11-15)
 

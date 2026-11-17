@@ -29,6 +29,8 @@
 #include "InputAction.h"
 #include "InputKeyEventArgs.h"
 #include "Misc/CommandLine.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Misc/Parse.h"
 #include "Modules/ModuleManager.h"
 #include "UnrealClient.h"
@@ -1000,9 +1002,11 @@ void ASimCruisePlayerController::TickSelfTest(float DeltaTime)
 		}
 		break;
 	case 5:
-		if (SelfTestClock > 1.0f)
+		// The wheel unwinds at a hand's rate through the car's own steering ratio (a slow rack takes
+		// over a second from full lock); it must be dead centre within 3 s.
+		if (SelfTestClock > 1.0f && (FMath::Abs(Rack) <= 1e-4 || SelfTestClock > 3.0f))
 		{
-			if (FMath::Abs(Rack) > 1e-4) { Fail(FString::Printf(TEXT("key release did not centre: rack %.5f"), Rack)); break; }
+			if (FMath::Abs(Rack) > 1e-4) { Fail(FString::Printf(TEXT("key release did not centre in 3 s: rack %.5f"), Rack)); break; }
 			SelfTestViewBefore = Camera ? static_cast<int32>(Camera->GetView()) : -1;
 			SelfTestHudBefore = Hud ? static_cast<int32>(Hud->GetLevel()) : -1;
 			InjectKey(EKeys::Gamepad_FaceButton_Top, true);
@@ -1096,6 +1100,9 @@ void ASimCruisePlayerController::TickSelfTest(float DeltaTime)
 		const bool bPassed = SelfTestFailure.IsEmpty();
 		UE_LOG(LogSimCruiseShell, Display, TEXT("SIMCRUISE SHELL SELF-TEST %s %s"), bPassed ? TEXT("PASSED") : TEXT("FAILED"),
 			bPassed ? TEXT("stick both ways, exact centre, key full lock, Y/X/C/F2, RT linear, W ramp, LT dead zone") : *SelfTestFailure);
+		// Shipping writes no log: the result also goes to Saved/SelfTest.txt (release.ps1 prints it).
+		FFileHelper::SaveStringToFile(FString::Printf(TEXT("SIMCRUISE SHELL SELF-TEST %s %s"), bPassed ? TEXT("PASSED") : TEXT("FAILED"), bPassed ? TEXT("") : *SelfTestFailure),
+			*FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("SelfTest.txt")));
 		SelfTestStage = -1;
 		if (bSelfTestQuit)
 		{

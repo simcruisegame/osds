@@ -60,6 +60,8 @@ if (-not (Enter-EditorLock -TimeoutMinutes $LockTimeoutMinutes -Why "release smo
 try {
     $Game = Start-Process -FilePath $Exe -ArgumentList @('-SimCruiseShellSelfTest', '-windowed', '-ResX=1280', '-ResY=720', '-unattended') -PassThru
     if (-not $Game.WaitForExit(15 * 60000)) { Stop-ProcessTree -ProcessId $Game.Id; Write-Host 'RELEASE FAILED: smoke test timed out'; exit 1 }
+    $Result = Join-Path $env:LOCALAPPDATA 'SimCruise\Saved\SelfTest.txt'
+    if (Test-Path $Result) { Write-Host (Get-Content $Result -Raw) }
     if ($Game.ExitCode -ne 0) { Write-Host "RELEASE FAILED: smoke test exit code $($Game.ExitCode)"; exit 1 }
 }
 finally { Exit-EditorLock }

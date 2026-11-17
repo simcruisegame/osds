@@ -1,4 +1,4 @@
-# SimCruise 2.0.0 release bugs
+# Release bugs (from 2.0.0)
 
 Bugs found by the release gate (`docs/release/driving-checklist.md`). Each bug has a short repro, the owner (the thread that owns the area) and a status.
 
@@ -17,6 +17,22 @@ Owners: **release** (this gate; fixed on `release/v2.0.0`), **physics** (lane1),
 | R7 | The fields in Nebraska are bright green in November | `-SimCruiseStart=40.56724,-96.5909 -SimCruiseUtc=2026-11-12T17:00:00Z`: Princeton Road between saturated green fields (`docs/images/release-2.0.0/09-rural-gravel-road-nebraska.jpg`); real fields are brown stubble after the harvest | world | open (routed): ground colour should follow the season and the crop (live NDVI or the snow layer's MODIS source) |
 | R8 | At night on an unlit rural road the low beams light the road to about 45-50 m | `docs/release/evidence/night.txt`: rural night cockpit capture, road brightness down the lane falls to 3/255 at about 50 m | cars | open (minor, routed); the rule asks for about 60 m |
 | R9 | The lowered NB stops 3.3 % shorter than its estimated target after the ride-height fix | `CarTrack.nb2001_lowered`: 70-0 154.8 ft against the 160 ft estimate (81a88f0 lowered the body 20 mm) | physics | FYI: the target is an estimate, not a test of the car |
+
+## Found by the 2.0.4 bug hunt (2026-11-17)
+
+`scripts\preflight.ps1 -Roads hard,randomus -RandomCount 6 -Seed 20261117 -Cars meridian_z -Seconds 45`: 12 hard places and 6 random US points; 12 passed the first time. Runs in `Saved/Review/20261117-*-preflight` (the C:/sc/v204 checkout).
+
+| # | Bug | Run and evidence | Owner | Status |
+|---|---|---|---|---|
+| H1 | No start on the Mackinac Bridge: the car was put on the lake beside it | `mackinac`: START FALLBACK, 3219 of 3219 stations "near a junction" (the two one-way decks touch side by side) | world | fixed: second start pass takes a side cut over 60 m for a parallel carriageway (`JunctionCuts`) |
+| H2 | A building across the motorway on the Mackinac Bridge (the tower's mapped outline); the car hit it at 64 mph | `mackinac` frames 4-6, jolt 89.9 m/s^2 | world | fixed: no building in a public road's driving space with under 4.5 m clear |
+| H3 | Long bridges dipped to the water at the helper's 2 km vector-tile cuts | `mackinac` jolt at a z14 tile edge (y = 23364) | world (helper) | fixed: cut ends take the other side's height, else a level deck (`lab/check-bridge-decks.mjs` 5-6) |
+| H4 | The Mackinac Bridge still throws the car at that border mid-span (decks now meet in the helper) | `mackinac` rerun 20261117-041149: wheels off 1.3 s at 393 m | world | open (2.0.5): the game-side seam on the deck |
+| H5 | High Five interchange (Dallas): 3-11 m "road steps" where decks stack | `high-five`, steps at 98-130 m | world / QA | open: probe artefact or a real gap, not yet told apart |
+| H6 | Lombard Street: the robot stops after 73 m | `lombard` | QA | open (robot) |
+| H7 | A jolt at a tile border on US-550 near Ouray | `million-dollar`, 1 border jolt | world | open (minor) |
+| H8 | ESC "on a straight road" counted the lamp hold after a catch in a bend | `bay-bridge-tunnel` 0.6 s | QA tool | fixed: counts braking or cutting only |
+| H9 | Pikes Peak test point was 900 m from any road | `pikes-peak` | QA tool | fixed: the point is on the highway (passes) |
 
 ## Found by the pre-flight (29b12ea, 2026-11-13)
 

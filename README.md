@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/release-2.0.2/06-miata-tail-of-the-dragon-chase.jpg" alt="A 2001 Mazda Miata on US 129, the Tail of the Dragon, built from real map and elevation data" width="900">
+  <img src="docs/images/release-2.0.4/04-corvette-tail-of-the-dragon-chase.jpg" alt="The Corvette Stingray C8 on US 129, the Tail of the Dragon, built from real map and elevation data" width="900">
 </p>
 
 ## TL;DR
@@ -66,10 +66,12 @@ Everything else, including stability control (ESC): [docs/controls.md](docs/cont
 
 | | |
 |---|---|
-| ![The GPS on Ocean Drive](docs/images/release-2.0.2/01-gps-route-ocean-drive.jpg) | ![The Corvette C8 on CA-1 near Big Sur](docs/images/release-2.0.2/07-corvette-big-sur-chase.jpg) |
-| *GPS on Ocean Drive* | *Corvette C8, Big Sur* |
-| ![From the Corvette's seat on CA-1](docs/images/release-2.0.2/08-corvette-big-sur-cockpit.jpg) | ![Ocean Drive at night](docs/images/release-2.0.1/07-ocean-drive-night-chase.jpg) |
-| *Corvette cockpit* | *Ocean Drive at night* |
+| ![The 2001 Miata on Ocean Drive, Miami Beach](docs/images/release-2.0.4/01-miata-ocean-drive-chase.jpg) | ![From the Miata's seat on Ocean Drive](docs/images/release-2.0.4/02-miata-ocean-drive-cockpit.jpg) |
+| *Miata, Ocean Drive* | *Miata cockpit* |
+| ![The Corvette's cockpit on the Tail of the Dragon](docs/images/release-2.0.4/05-corvette-tail-of-the-dragon-cockpit.jpg) | ![The Miata on California 1 near Big Sur](docs/images/release-2.0.4/06-miata-big-sur-chase.jpg) |
+| *Corvette cockpit, Tail of the Dragon* | *Miata, Big Sur* |
+| ![The 1965 Mustang on Ocean Drive at night](docs/images/release-2.0.4/03-mustang-ocean-drive-night.jpg) | ![The Model 3 at a junction in Chicago's Loop](docs/images/release-2.0.4/07-model3-chicago-chase.jpg) |
+| *Mustang, Ocean Drive at night* | *Model 3, Chicago* |
 
 More in [docs/images/](docs/images/).
 
