@@ -6,6 +6,7 @@
 #include "Engine/StaticMesh.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeLock.h"
 #include "Serialization/JsonReader.h"
@@ -17,12 +18,14 @@ namespace
 	{
 		TArray<FSimCruiseCarlaEntry> Out;
 		const FString Root = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
-		// No art, no catalogue: the world is built as before.
-		if (!IFileManager::Get().DirectoryExists(*FPaths::Combine(Root, TEXT("Content"), TEXT("Carla"))) &&
-			!IFileManager::Get().DirectoryExists(*FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Carla"))))
+#if WITH_EDITOR
+		// No art, no catalogue: the world is built as before. (A packaged game has no Content
+		// folder on disk, its art is in the paks: it checks the first model below instead.)
+		if (!IFileManager::Get().DirectoryExists(*FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Carla"))))
 		{
 			return Out;
 		}
+#endif
 		FString Text;
 		if (!FFileHelper::LoadFileToString(Text, *FPaths::Combine(Root, TEXT("data"), TEXT("carla"), TEXT("props.json")))) return Out;
 		TSharedPtr<FJsonObject> Json;
@@ -45,6 +48,14 @@ namespace
 			(*O)->TryGetNumberField(TEXT("max_scale"), E.MaxScale);
 			if (!E.Path.IsEmpty() && !E.Kind.IsEmpty()) Out.Add(MoveTemp(E));
 		}
+		// The art must really be there (a package cooked without it, or a checkout that never
+		// fetched it): otherwise the tiles would place instances of meshes that do not load.
+		if (!Out.IsEmpty() && !FPackageName::DoesPackageExist(FString(FPackageName::ObjectPathToPackageName(FStringView(Out[0].Path)))))
+		{
+			UE_LOG(LogTemp, Display, TEXT("CARLA catalogue: %s is not in this build; no CARLA plants"), *Out[0].Path);
+			Out.Reset();
+		}
+		UE_LOG(LogTemp, Display, TEXT("CARLA catalogue: %d models"), Out.Num());
 		return Out;
 	}
 
