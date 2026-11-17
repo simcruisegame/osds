@@ -66,12 +66,12 @@ Everything else, including stability control (ESC): [docs/controls.md](docs/cont
 
 | | |
 |---|---|
-| ![The 2001 Miata on Ocean Drive, Miami Beach](docs/images/release-2.0.4/01-miata-ocean-drive-chase.jpg) | ![From the Miata's seat on Ocean Drive](docs/images/release-2.0.4/02-miata-ocean-drive-cockpit.jpg) |
-| *Miata, Ocean Drive* | *Miata cockpit* |
-| ![The Corvette's cockpit on the Tail of the Dragon](docs/images/release-2.0.4/05-corvette-tail-of-the-dragon-cockpit.jpg) | ![The Miata on California 1 near Big Sur](docs/images/release-2.0.4/06-miata-big-sur-chase.jpg) |
-| *Corvette cockpit, Tail of the Dragon* | *Miata, Big Sur* |
-| ![The 1965 Mustang on Ocean Drive at night](docs/images/release-2.0.4/03-mustang-ocean-drive-night.jpg) | ![The Model 3 at a junction in Chicago's Loop](docs/images/release-2.0.4/07-model3-chicago-chase.jpg) |
-| *Mustang, Ocean Drive at night* | *Model 3, Chicago* |
+| ![The 2015 Mini Cooper S on a Nebraska county road, with roadside grass from the CARLA simulator](docs/images/release-2.1.0/01-mini-nebraska-roadside-chase.jpg) | ![The 1987 Camaro IROC-Z on California 1 near Big Sur](docs/images/release-2.1.0/04-camaro-big-sur-chase.jpg) |
+| *Mini Cooper S, Nebraska (new in 2.1)* | *Camaro IROC-Z, Big Sur (new in 2.1)* |
+| ![From the Mini's seat in Chicago's Loop](docs/images/release-2.1.0/03-mini-chicago-cockpit.jpg) | ![The Camaro IROC-Z on US 129, the Tail of the Dragon](docs/images/release-2.1.0/05-camaro-tail-of-the-dragon-chase.jpg) |
+| *Mini cockpit, Chicago* | *Camaro, Tail of the Dragon* |
+| ![From the 2001 Miata's seat on Ocean Drive, Miami Beach](docs/images/release-2.1.0/06-miata-ocean-drive-cockpit.jpg) | ![The 1965 Mustang on Ocean Drive at night](docs/images/release-2.1.0/07-mustang-ocean-drive-night.jpg) |
+| *Miata cockpit, Ocean Drive* | *Mustang, Ocean Drive at night* |
 
 More in [docs/images/](docs/images/).
 
