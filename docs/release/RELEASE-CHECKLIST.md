@@ -14,7 +14,7 @@ Copy this list into the release's report (`docs/release/v<version>-report.md`) a
 ## 2. Version and notes
 
 - [ ] `ProjectVersion` in `Config/DefaultGame.ini` is the new version.
-- [ ] `CHANGELOG.md`: the `Unreleased` section is moved under `## [<version>] - <YYYY-MM-DD>`, with the known issues.
+- [ ] `CHANGELOG.md`: the version's section is short (a bold one-line theme, at most 8 bullets, known issues); the full text goes in `docs/release/notes/<version>.md`, linked from the section.
 
 ## 3. Package
 
