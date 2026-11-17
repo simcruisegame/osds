@@ -1,6 +1,19 @@
-# Unreal client architecture
+# Unreal client architecture: how the code is organised
 
-How the Unreal client is put together, one section per area. The Godot client was the behavioural and calibration reference; since 11 November 2026 it lives only at the git tag `godot-final` (`git show godot-final:game/<file>`); see the [rewrite design](superpowers/specs/2026-11-10-simcruise-unreal-rewrite-design.md) and the [migration plan](superpowers/plans/2026-11-10-simcruise-unreal-migration.md).
+## In short
+
+- This page describes how the Unreal Engine version of OSDS is built inside, one section per area. It is for developers who want to change the code.
+- It is a detailed reference. For a guided tour of all the parts, start with [How OSDS works](technical-deep-dive.md).
+- **Car physics:** OSDS's own vehicle model in C++, run on Unreal's Chaos physics thread at a fixed 360 Hz. Chaos only provides the rigid body and collisions.
+- **World:** the map helper turns public data into tile documents; the game builds roads, terrain, water and buildings from them around the car, and moves the world origin so long drives stay accurate.
+- **Car you see:** the downloaded Sketchfab model of each car, fitted to the car's data and cut into moving parts. The physics never reads from it.
+- **Light and sky:** built in C++ at run time, with light in real physical units.
+- **Live world:** free public feeds (weather, sea, photos) for the place under the car, with no keys.
+- **Driving shell:** controls, steering and pedal shaping, cameras, HUD and rumble. It never applies a force to the car.
+- Many sections end with "Known gaps" or "Not yet done": that is where open work is listed.
+- History: the Godot client was the reference for behaviour and calibration. Since 11 November 2026 it lives only at the git tag `godot-final` (`git show godot-final:game/<file>`); see the [rewrite design](superpowers/specs/2026-11-10-simcruise-unreal-rewrite-design.md) and the [migration plan](superpowers/plans/2026-11-10-simcruise-unreal-migration.md).
+
+**On this page:** [Car physics](#vehicle-physics-core) · [Real-world streaming](#real-world-streaming) · [Place knowledge graph](#place-knowledge-graph) · [Car presentation](#car-presentation-the-car-you-see) · [Light, sky and rendering](#light-sky-and-rendering) · [Live world and AI detail](#live-world-and-ai-detail) · [Driving shell](#driving-shell) · [The drive (integration)](#the-drive-integration)
 
 ## Vehicle physics core
 
@@ -78,7 +91,9 @@ Controls set on the game thread reach the physics thread on its next step; telem
 - The ground query reads the game thread's scene-query structure from the physics thread, as Chaos Vehicles do; streamed road collision must therefore be in place before the car reaches it (the world stream's job).
 - Packaging: the car files (`data/cars/`) and calibration overlays (`Content/Vehicle/Calibration/*.json`) are loose JSON, which a cooked build does not stage by default; a packaged build needs them added to `DirectoriesToAlwaysStageAsNonUFS` (or moved into assets), or the Mustang loses its overlay. `SIMCRUISE_CALIBRATION_DIR` is read in development builds only.
 
-## Real-world streaming (`Source/SimCruise/{Public,Private}/{Atlas,World}/`)
+## Real-world streaming
+
+Source: `Source/SimCruise/{Public,Private}/{Atlas,World}/`.
 
 The streaming layer turns the atlas helper's tile documents into the drivable
 place around the car. The Godot client (`godot-final:game/Drive.gd`, `WorldTile.gd`,
@@ -211,6 +226,12 @@ once; the others wait for that file.
   come from the graph, else the Godot client's 12 common US exterior paints
   and 4 brick colours. Windows, shopfronts and the rooms
   behind them are drawn by the building shader.
+  New in 2.0.4: after a tile is built, the streamer runs the helper's
+  `buildings` command for it, which adds measured heights, building use and
+  storey counts from Overture Maps and the USACE National Structure
+  Inventory, and mapped roof shape, wall colour and material from
+  OpenStreetMap (via Overture). Supported mapped roof shapes (flat, gabled,
+  hipped) replace the guessed roof.
 - Signs: every named place in the tile's `pois` with a sign-worthy kind
   (`SignStyleFor`: hotels and bars in neon, shops, restaurants and offices in
   painted letters) is matched to the footprint it stands in (or the nearest
@@ -301,7 +322,9 @@ aerial photographs of different tone meet.
   buildings have the same friction for the car's tyres.
 - Each collision section (terrain, asphalt, concrete, buildings) restarts the
   asynchronous cook, so a dense tile cooks up to four times on a worker thread.
-## Place knowledge graph (`Source/SimCruise/{Public,Private}/Knowledge/`)
+## Place knowledge graph
+
+Source: `Source/SimCruise/{Public,Private}/Knowledge/`.
 
 Decides which real details go on each building, anywhere, from facts and a data file of rules (`data/knowledge/place-graph.json`). Full description: [place-graph.md](place-graph.md).
 
@@ -311,7 +334,9 @@ Decides which real details go on each building, anywhere, from facts and a data 
 - Consumers: `SimCruiseTileDetail::BuildBuildings` (recipe, detail chances with the old values as defaults, colours, wear), `ASimCruiseHUD::DrawPlaceCard`.
 - Tests: `SimCruise.Knowledge.*` (rules, open-data parsers, bake, bundled Ocean Drive, place card).
 
-## Car presentation (`Source/SimCruise/{Public,Private}/Presentation/`, `Content/Vehicles/`)
+## Car presentation (the car you see)
+
+Source: `Source/SimCruise/{Public,Private}/Presentation/`, `Content/Vehicles/`.
 
 The visible car: the downloaded Sketchfab model of each car, fitted to the car's data, cut into moving parts and drawn with physically based materials. It replaces `godot-final:game/ModelRig.gd`, `CarBody.gd` and the material parts of `CarFinish.gd`. Physics never reads anything from here.
 
@@ -480,7 +505,9 @@ Everything here runs on the game thread: the environment ticks in `TG_PrePhysics
 
 Stars and a moon disc with phases; wet road materials reading `GetRoadWetness`; METAR polling through the helper at run time; a white balance that follows the light; rain and snow particles; the lab's comparisons repeated on the streamed Miami Beach tiles once the world stream draws them, at the exact Panoramax pose of the Godot taste test (4b6d216b, 2025-04-24 14:34:52 UTC, heading 7°, 70.8° horizontal field of view; the lab's `morning` shot uses that time).
 
-## Live world and AI detail (`Source/SimCruise/{Public,Private}/Live/`)
+## Live world and AI detail
+
+Source: `Source/SimCruise/{Public,Private}/Live/`.
 
 The world matches the real place now. `USimCruiseLiveWorldSubsystem` (a tickable world subsystem) reads free public feeds over Unreal's HTTP module for the place under the car, with no key:
 

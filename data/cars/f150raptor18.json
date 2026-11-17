@@ -181,6 +181,8 @@
  "target_skidpad_g": 0.68,
  "calibration_open": "0-60 mph 5.5 s against 5.7 s: the launch is traction-limited (four-wheel drive with traction control), so converter and launch speed do not move it; 5.5 s lies between Car and Driver's two SuperCab tests (2017: 5.0 s, 2018: 5.7 s).",
  "traction_control": true,
+ "stability_control": true,
+ "esc_understeer_deg_per_g": 3.8,
  "abs_enabled": true,
  "slip_ratio_falloff": 0.1,
  "model_scene": "data/art/traffic/f150raptor18-096aa1ba/scene.gltf",
@@ -193,6 +195,7 @@
   -0.05
  ],
  "sources": {
+   "stability_control": "Standard Ford AdvanceTrac with RollStability Control (every US car from model year 2012 has ESC, FMVSS 126). The reference understeer gradient, 3.8 deg/g, is this car's own from the 80 km/h step-steer bench, as a maker calibrates the yaw-rate model to the car.",
   "calibration": "Car and Driver, 2018 F-150 Raptor SuperCab: 5.7 s to 60 mph, reported to match their 2017 SuperCab in every other measure: 206 ft from 70 mph, 0.68 g on a 300 ft skidpad, 5696 lb as tested (the 2017 truck ran 5.0 s).",
   "engine": "450 hp at 5000 rpm, 510 lb-ft at 3500 rpm (Ford, 3.5 L high-output EcoBoost); curve shape estimated.",
   "gearing": "10R80 ratios (published) and the Raptor's 4.10 axle.",

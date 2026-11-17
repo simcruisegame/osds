@@ -370,6 +370,14 @@ void FSimCruiseDriveHud::DrawSpeed(ASimCruiseHUD& Hud, float Alpha)
 		RoundRect(SideX + P(80.f), CardY + P(38.f), W, P(30.f), P(6.f), A(Amber(), Alpha));
 		TextAt(TEXT("ABS"), EWeight::Black, 20.f, SideX + P(88.f), CardY + P(38.f), A(GuideDeep(), Alpha), 0, false, false);
 	}
+	// Stability control acting: its light flashes at 2 Hz, as the dash lamp does.
+	if (Hud.bEsc && FMath::Frac(NowS * 4.0) < 0.5)
+	{
+		const float Left = SideX + P(80.f) + (Hud.bAbs ? Measure(TEXT("ABS"), EWeight::Black, 20.f).X + P(26.f) : 0.f);
+		const float W = Measure(TEXT("ESC"), EWeight::Black, 20.f).X + P(16.f);
+		RoundRect(Left, CardY + P(38.f), W, P(30.f), P(6.f), A(Amber(), Alpha));
+		TextAt(TEXT("ESC"), EWeight::Black, 20.f, Left + P(8.f), CardY + P(38.f), A(GuideDeep(), Alpha), 0, false, false);
+	}
 
 	// The rev bar: 360 px, white fill, the red zone from the shift point to the redline.
 	const float BarX = X, BarY = CardY + P(160.f), BarW = P(360.f), BarH = P(12.f);

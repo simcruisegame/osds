@@ -139,6 +139,22 @@ struct FSimCruiseVehicleSimState
 	double TcIntegral = 0.0;
 	double TcSlip = 0.0;
 	double TcSlipFiltered = 0.0;
+	/** Stability control: the yaw rate the steering asks for and the car's own (rad/s, + turning right),
+	 *  the filtered oversteer and understeer past the dead bands (rad/s), the brake torque it adds at
+	 *  each wheel (N m), its engine torque cut (0-1), and how long its dash light stays lit (s). */
+	double EscReferenceYawRadPerS = 0.0;
+	double EscYawRadPerS = 0.0;
+	double EscOversteer = 0.0;
+	double EscUndersteer = 0.0;
+	double EscBrakeNm[4] = { 0.0, 0.0, 0.0, 0.0 };
+	double EscCut = 0.0;
+	/** The share of an electric car's coasting regeneration it takes away in a slide (0-1). */
+	double EscRegenCut = 0.0;
+	double EscLightS = 0.0;
+	/** Braking a wheel or cutting the engine this step (the light stays on EscLightHoldS longer). */
+	bool bEscActing = false;
+	/** True while stability control brakes a wheel or cuts the engine. */
+	bool IsEscActive() const { return EscLightS > 0.0; }
 	bool bClutchSaturated = false;
 	double ShiftTimeS = 0.0;
 	/** The automatic's last change (+1 up, -1 down) and the time since it: no change back the
@@ -235,6 +251,10 @@ public:
 	 *  does not stall, and slips it to pull away. The driver's own clutch (Controls.Clutch) still works on
 	 *  top. Off for benches; the movement component sets it from simcruise.Gearbox.AutoClutch. */
 	bool bAutoClutch = false;
+	/** The driver's stability control switch (on by default, as a real car starts). It only acts on a car
+	 *  that has stability control (CarDefinition::bStabilityControlEnabled); the movement component sets it
+	 *  from simcruise.Assists.StabilityControl. */
+	bool bStabilityControlSwitch = true;
 	/** True while the automatic clutch works through a shift. */
 	bool IsAutoShifting() const { return AutoPhase != 0; }
 

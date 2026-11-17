@@ -106,8 +106,29 @@ namespace
 					Case.bSpun ? TEXT("SPIN") : TEXT("ok"), bGated ? TEXT("") : TEXT(" (reported)"),
 					Case.bReverseAtSpeed ? TEXT(" REVERSE SELECTED AT SPEED") : TEXT(""))
 				: FString::Printf(TEXT("LIFTOFF %-11s %.1f g %-5s no steady state"), CarId, Case.TargetG, Case.bBrake ? TEXT("brake") : TEXT("lift"));
-			UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
-			Test.AddInfo(Line);
+			const FString EscLine = Car.bStabilityControlEnabled
+				? FString::Printf(TEXT("  esc_circle_s %.2f  esc_after_s %.2f  esc_over %.3f  esc_under %.3f"), Case.EscCircleS, Case.EscAfterS, Case.EscPeakOver, Case.EscPeakUnder) : FString();
+			UE_LOG(LogTemp, Display, TEXT("%s%s"), *Line, *EscLine);
+			Test.AddInfo(Line + EscLine);
+			if (Car.bStabilityControlEnabled)
+			{
+				const TCHAR* Kind = Case.bBrake ? TEXT("brake") : TEXT("lift");
+				// Stability control leaves a steady bend alone at any level the circle driver holds,
+				// and a lift or a light trail brake up to 0.5 g, as a real car's system does.
+				if (Case.EscCircleS > 0.0)
+				{
+					Test.AddError(FString::Printf(TEXT("%.1f g %s: stability control acted on the steady circle (%.2f s)"), Case.TargetG, Kind, Case.EscCircleS));
+				}
+				if (bGated && Case.EscAfterS > 0.0)
+				{
+					Test.AddError(FString::Printf(TEXT("%.1f g %s: stability control acted after an ordinary lift (%.2f s)"), Case.TargetG, Kind, Case.EscAfterS));
+				}
+				// And it holds the car at every level: no spin with it on.
+				if (!bGated && Case.bSpun)
+				{
+					Test.AddError(FString::Printf(TEXT("%.1f g %s: spun with stability control on (peak sideslip %.1f deg)"), Case.TargetG, Kind, Case.PeakBetaDeg));
+				}
+			}
 			if (bGated && !Case.bSteady)
 			{
 				Test.AddError(FString::Printf(TEXT("%.1f g %s: the circle driver found no steady state"), Case.TargetG, Case.bBrake ? TEXT("brake") : TEXT("lift")));
@@ -298,6 +319,10 @@ namespace
 		const FString Line = FString::Printf(TEXT("STEPSTEER %-11s %.1f km/h  road wheels %.2f deg  steady %.1f deg/s %.2f g  t90 %.3f s  overshoot %+.2f  peak beta %.1f deg  roll %.2f deg/g"),
 			CarId, R.SpeedMps * 3.6, R.RackDeg, R.SteadyYawDegS, R.SteadyLateralG, R.YawResponseS, R.YawOvershoot, R.PeakBetaDeg, R.RollDegPerG);
 		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+		if (R.EscActiveS > 0.0)
+		{
+			Test.AddError(FString::Printf(TEXT("stability control acted in an ordinary 0.4 g step steer (%.2f s, over %.3f, under %.3f)"), R.EscActiveS, R.EscPeakOver, R.EscPeakUnder));
+		}
 		Test.AddInfo(Line);
 		// Roll per g: logged against no published figure yet (none sourced for these cars); only a
 		// sanity band here (road cars roll outward, a few degrees per g).
@@ -420,6 +445,76 @@ namespace
 	}
 }
 
+namespace
+{
+	bool RunEscOffTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, CarId, Car))
+		{
+			return false;
+		}
+		Test.TestTrue(TEXT("the car has stability control"), Car.bStabilityControlEnabled);
+		const FSimCruiseLiftOffResult R = SimCruiseRunLiftOff(Car, SimCruiseShippingFixedStepS, { 0.7 }, 40.0, false);
+		if (!Test.TestTrue(TEXT("bench completed"), R.bCompleted))
+		{
+			return false;
+		}
+		for (const FSimCruiseLiftOffCase& Case : R.Cases)
+		{
+			const FString Line = FString::Printf(TEXT("ESCOFF %-11s %.1f g %-5s peak_beta %+.1f  %s"), CarId, Case.TargetG,
+				Case.bBrake ? TEXT("brake") : TEXT("lift"), Case.PeakBetaDeg, Case.bSpun ? TEXT("SPIN") : TEXT("ok"));
+			UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+			Test.AddInfo(Line);
+			Test.TestEqual(TEXT("stability control switched off never acts"), Case.EscCircleS + Case.EscAfterS, 0.0);
+		}
+		return true;
+	}
+}
+
+namespace
+{
+	// FMVSS 126 S7.9: with stability control on, the yaw rate 1.0 s after the steering ends is at most 35 % of
+	// its peak and 1.75 s after at most 20 %; the car moves at least 1.83 m sideways 1.07 s after the start.
+	bool RunSineDwellTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, CarId, Car))
+		{
+			return false;
+		}
+		for (const bool bEsc : { false, true })
+		{
+			const FSimCruiseSineDwellResult R = SimCruiseRunSineDwell(Car, SimCruiseShippingFixedStepS, bEsc);
+			if (!Test.TestTrue(TEXT("bench completed"), R.bCompleted))
+			{
+				return false;
+			}
+			// A car that spins on the first lobe never yaws the second way: its side slip says so.
+			const bool bSpun = R.PeakBetaDeg > 30.0;
+			const bool bStable = !bSpun && R.Ratio1s <= 0.35 && R.Ratio175s <= 0.20;
+			const FString Line = FString::Printf(TEXT("SINEDWELL %-11s ESC %-3s steer %.1f deg  peak yaw %.1f deg/s  yaw left 1.0 s %.0f %%  1.75 s %.0f %%  lateral %.2f m  peak beta %.1f deg  esc %.2f s  %s"),
+				CarId, bEsc ? TEXT("on") : TEXT("off"), R.AmplitudeDeg, R.PeakYawDegS, 100.0 * R.Ratio1s, 100.0 * R.Ratio175s, R.LateralDisplacementM,
+				R.PeakBetaDeg, R.EscActiveS, bSpun ? TEXT("SPUN") : bStable ? TEXT("stable") : TEXT("UNSTABLE"));
+			UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+			Test.AddInfo(Line);
+			if (bEsc)
+			{
+				if (!bStable)
+				{
+					Test.AddError(FString::Printf(TEXT("sine with dwell, ESC on: yaw left %.0f %% at 1.0 s (rule 35 %%), %.0f %% at 1.75 s (rule 20 %%), peak side slip %.0f deg"),
+						100.0 * R.Ratio1s, 100.0 * R.Ratio175s, R.PeakBetaDeg));
+				}
+				if (R.LateralDisplacementM < 1.83)
+				{
+					Test.AddError(FString::Printf(TEXT("sine with dwell, ESC on: %.2f m sideways at 1.07 s (rule 1.83 m): it must not stop the car turning"), R.LateralDisplacementM));
+				}
+			}
+		}
+		return true;
+	}
+}
+
 #define SIMCRUISE_VEHICLE_BENCH(Kind, CarIdent) \
 	IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicle##Kind##_##CarIdent, "SimCruise.Vehicle." #Kind "." #CarIdent, VehicleBenchFlags) \
 	bool FSimCruiseVehicle##Kind##_##CarIdent::RunTest(const FString& Parameters) { return Run##Kind##Test(*this, TEXT(#CarIdent)); }
@@ -458,6 +553,14 @@ SIMCRUISE_VEHICLE_BENCH(LiftOff, f150raptor18)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, grandcherokee13)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, odyssey18)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, crv25)
+SIMCRUISE_VEHICLE_BENCH(SineDwell, model3)
+SIMCRUISE_VEHICLE_BENCH(SineDwell, meridian_z)
+SIMCRUISE_VEHICLE_BENCH(SineDwell, f150raptor18)
+SIMCRUISE_VEHICLE_BENCH(SineDwell, grandcherokee13)
+SIMCRUISE_VEHICLE_BENCH(SineDwell, odyssey18)
+SIMCRUISE_VEHICLE_BENCH(SineDwell, crv25)
+SIMCRUISE_VEHICLE_BENCH(EscOff, model3)
+SIMCRUISE_VEHICLE_BENCH(EscOff, meridian_z)
 SIMCRUISE_VEHICLE_BENCH(TopSpeed, nb2001_lowered)
 SIMCRUISE_VEHICLE_BENCH(TopSpeed, mustang65)
 SIMCRUISE_VEHICLE_BENCH(TopSpeed, meridian_z)

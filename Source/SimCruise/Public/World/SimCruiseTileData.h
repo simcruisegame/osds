@@ -75,6 +75,29 @@ struct FSimCruiseBuildingRow
 	double HeightM = 0.0;      // roof height above the ground
 	double MinHeightM = 0.0;   // > 0 for a part that floats (a canopy, an overhang)
 	FString Use;
+	/** The helper row's centre (tile units): the key the building-facts reply matches on. */
+	FVector2d Centre = FVector2d(-1.0, -1.0);
+	/** From the helper's `buildings` reply (SimCruiseTileData::ApplyBuildingFacts): the height is a
+	 *  measured one (Overture: lidar or a mapped height, checked against the OSM way), the storeys above
+	 *  ground (USACE National Structure Inventory, 0 unknown), and the mapped finishes (OSM via Overture:
+	 *  roof shape "flat" or "gabled", roof height, wall and roof material, "#rrggbb" colours). */
+	bool bHeightMeasured = false;
+	int32 Stories = 0;
+	FString RoofShape;
+	double RoofHeightM = 0.0;
+	bool bRidgeAcross = false;
+	FString WallMaterial;
+	FString RoofMaterial;
+	FString WallColour;
+	FString RoofColour;
+};
+
+/** What ApplyBuildingFacts took from a `buildings` reply. */
+struct FSimCruiseBuildingFactsCount
+{
+	int32 Heights = 0;
+	int32 Uses = 0;
+	int32 Finishes = 0;
 };
 
 /** helper `pois` row: [[x, y], name, kind] — a named place (OpenStreetMap / Overture), e.g. "lodging", "restaurant". */
@@ -120,6 +143,12 @@ namespace SimCruiseTileData
 	/** Parse a helper tile document. Returns false with a path-specific error for malformed data. */
 	SIMCRUISE_API bool Parse(const FString& JsonText, FSimCruiseTileData& Out, FString& OutError);
 	SIMCRUISE_API bool ParseObject(const TSharedPtr<class FJsonObject>& Root, FSimCruiseTileData& Out, FString& OutError);
+
+	/** Merge the helper's `buildings <x> <y>` reply into the tile's building rows: measured heights,
+	 *  building use and storeys, mapped finishes. Each record names its row by index and centre (as the
+	 *  Godot client's BuildingStream.gd did); a record whose centre or base height does not match is
+	 *  skipped, so a reply for other rows can never move a building. */
+	SIMCRUISE_API FSimCruiseBuildingFactsCount ApplyBuildingFacts(FSimCruiseTileData& Data, const TSharedPtr<class FJsonObject>& Reply);
 
 	/** Read and parse a tile file. */
 	SIMCRUISE_API bool LoadFile(const FString& Path, FSimCruiseTileData& Out, FString& OutError);

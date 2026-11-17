@@ -43,8 +43,16 @@ struct FSimCruiseStartPose
  * a dead end. Candidates come out best first; the caller takes the first one a ground trace
  * confirms (the road surface is there, at the road's height).
  */
+struct FSimCruiseRibbon;
+
 namespace SimCruiseStartPick
 {
+	/** Per station: 1 where a side is cut by a junction (another road running into this one's side).
+	 *  A side cut along more than ParallelCutM is not a junction but a carriageway beside this one with
+	 *  no gap (the two one-way decks of the Mackinac Bridge): every station there was "near a junction",
+	 *  so no start passed and the car was put on the lake beside the bridge. */
+	constexpr double ParallelCutM = 60.0;
+	SIMCRUISE_API TArray<uint8> JunctionCuts(const FSimCruiseRibbon& Ribbon);
 	/** The road ahead the start wants (60 s of driving at about 13 m/s). */
 	constexpr double WantedAheadM = 800.0;
 	/** A start stays this far from any junction (along its road). */

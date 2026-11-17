@@ -22,6 +22,10 @@ static TAutoConsoleVariable<int32> CVarGearboxAutoClutch(
 	TEXT("simcruise.Gearbox.AutoClutch"), 1,
 	TEXT("Manual gearbox: 1 (default) the game works the clutch for you (shift with RB/LB or E/Q, a throttle blip on downshifts, no stall at a stop); 0 you hold the clutch (A or Shift) to shift."));
 
+static TAutoConsoleVariable<int32> CVarStabilityControl(
+	TEXT("simcruise.Assists.StabilityControl"), 1,
+	TEXT("Stability control (ESC) on the cars that have it in real life: 1 (default) on, as the real car starts; 0 off."));
+
 DEFINE_LOG_CATEGORY_STATIC(LogSimCruiseVehicle, Log, All);
 
 /** Everything the physics thread owns for one vehicle; shared with the game thread under Mutex. */
@@ -122,6 +126,12 @@ namespace
 		T.Throttle = St.PedalThrottle * (1.0 - St.TcCut);
 		T.BrakeAmount = St.BrakeAmount;
 		T.TractionControlCut = St.TcCut;
+		T.bStabilityControlActive = St.IsEscActive();
+		T.bStabilityControlActing = St.bEscActing;
+		T.EscYawRadPerS = St.EscYawRadPerS;
+		T.EscReferenceYawRadPerS = St.EscReferenceYawRadPerS;
+		T.EscOversteer = St.EscOversteer;
+		T.EscUndersteer = St.EscUndersteer;
 		T.WheelContactCount = St.WheelContactCount;
 		T.SoundThrottle = St.SoundThrottle;
 		T.SoundCombustion = St.SoundCombustion;
@@ -290,6 +300,7 @@ static void StepVehicleOnPhysicsThread(FSimCruiseVehiclePhysicsState& S, double 
 		S.bPendingToggleManual = false;
 	}
 	S.Sim.bAutoClutch = CVarGearboxAutoClutch.GetValueOnAnyThread() != 0;
+	S.Sim.bStabilityControlSwitch = CVarStabilityControl.GetValueOnAnyThread() != 0;
 	while (S.PendingShift != 0)
 	{
 		const int32 Direction = S.PendingShift > 0 ? 1 : -1;

@@ -25,7 +25,7 @@ enum class ESimCruiseMenuRow : uint8
 	// Drive
 	Continue, WhereTo, PlanRoute, FamousRoads, Traffic, Atlas, Quit,
 	// Your car
-	Car, Transmission, Tune, Lights,
+	Car, Transmission, Stability, Tune, Lights,
 	// Seat & view
 	Lens, HeadMotion, ScreenSize, EyeDistance, Seat,
 	// Settings

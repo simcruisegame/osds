@@ -52,4 +52,37 @@ const near = (a, b, tol = 0.02) => Math.abs(a - b) <= tol;
  for (const p of [[0, 0], [60, 0], [140, 0]]) assert.ok(near(await a(p), await b(p)), `both tiles agree at ${p}`);
 }
 
+// 5. A long bridge cut by the vector tile's edge (extent 1000): the cut ends are not abutments on the
+//    lake (0 m). With a true end in the tile, the cut end takes its height (a level deck); with none,
+//    6 m over the water; and a remembered cut height (the tile on the other side) wins.
+{
+ const extent=1000;
+ const water=()=>0;
+ const one=[{pts:[[600,500],[1000,500]]}];
+ let at=await bridgeEndHeights(one,[],water,nowhere,memoOf([[600,500,25]]),worldKey,extent);
+ assert.ok(near(await at([1000,500]),25),`the cut end continues the true end's height (${await at([1000,500])})`);
+ const span=[{pts:[[0,500],[1000,500]]}];
+ const memo=memoOf([]);
+ at=await bridgeEndHeights(span,[],water,nowhere,memo,worldKey,extent);
+ assert.ok(near(await at([0,500]),6)&&near(await at([1000,500]),6),'a span cut at both ends stands 6 m over the water, not on it');
+ assert.ok(near(memo.get(worldKey(1000,500)),6),'the cut height is remembered for the tile on the other side');
+ at=await bridgeEndHeights(span,[],water,nowhere,memoOf([[1000,500,31]]),worldKey,extent);
+ assert.ok(near(await at([1000,500]),31),'a remembered cut height wins');
+}
+
+// 6. The two tiles of a cut see the bridge run on into their buffers (1.5 % past the edge): both
+//    find the same crossing point, so the height one remembers is the one the other reads.
+{
+ const extent=1000;
+ const memo=memoOf([[500,300,25]]); // the north tile's abutment, measured: 25 m
+ const north=[{pts:[[500,300],[500,1015]]}],south=[{pts:[[500,-15],[500,700]]}];
+ const a=await bridgeEndHeights(north,[],()=>0,nowhere,memo,worldKey,extent);
+ const za=await a([500,1015]);
+ // The south tile's coordinates start at the cut: its (500, 0) is the north tile's (500, 1000).
+ const shifted=(x,y)=>worldKey(x,y+1000);
+ const b=await bridgeEndHeights(south,[],()=>0,nowhere,memo,shifted,extent);
+ assert.ok(near(za,25),`the north side's cut continues its abutment (${za})`);
+ assert.ok(near(await b([500,-15]),za),`both sides of the cut meet (${za} vs ${await b([500,-15])})`);
+}
+
 console.log('check-bridge-decks: ok');

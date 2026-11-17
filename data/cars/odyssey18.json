@@ -165,6 +165,8 @@
  "target_skidpad_g": 0.74,
  "calibration_open": "0-60 mph 8.2 s against 6.7 s: traction control holds the front tyres to about 0.38 g off the line, and the converter model has no lock-up clutch, so it slips about 13 % in second and third where the real nine-speed is locked. Both are powertrain-model gaps, not car data.",
  "traction_control": true,
+ "stability_control": true,
+ "esc_understeer_deg_per_g": 2.3,
  "abs_enabled": true,
  "slip_ratio_falloff": 0.1,
  "model_scene": "data/art/traffic/odyssey-175ce6fb/scene.gltf",
@@ -177,6 +179,7 @@
   0.2
  ],
  "sources": {
+   "stability_control": "Standard Honda VSA (every US car from model year 2012 has ESC, FMVSS 126). The reference understeer gradient, 2.3 deg/g, is this car's own from the 80 km/h step-steer bench, as a maker calibrates the yaw-rate model to the car.",
   "calibration": "Car and Driver, 2018 Odyssey nine-speed: 180 ft from 70 mph, 0.74 g (stability control off); ten-speed: 184 ft, 0.75 g. Car and Driver timed the ten-speed Elite at 6.6 s to 60 mph and report the 126 lb lighter nine-speed EX-L 0.1 s behind it (6.7 s, the target), both 15.2 s at 95 mph in the quarter mile.",
   "engine": "280 hp at 6000 rpm, 262 lb-ft at 4700 rpm (Honda J35Y6); curve shape estimated.",
   "gearing": "ZF 9HP ratios; the 3.86 final drive is an estimate.",

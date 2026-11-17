@@ -77,6 +77,15 @@ struct SIMCRUISE_API FSimCruisePreflightStats
 	/** Farthest the car's centre went past the paved edge of the road ribbon (m), and the longest time (s) more than MaxOffRibbonM past it. */
 	float MaxOffRibbonM = 0.f;
 	float OffRibbonSeconds = 0.f;
+	/** Longest time (s) with fewer than three wheels on the ground above 5 m/s (a fall through, a launch). */
+	float AirborneSeconds = 0.f;
+	/** Longest time (s) rolled or pitched past 60 deg (on its side or roof). */
+	float FlippedSeconds = 0.f;
+	/** Stability control on a straight road (above 15 m/s, steering under 5 %): total and longest (s). */
+	float EscStraightSeconds = 0.f;
+	float EscStraightLongestS = 0.f;
+	/** Stability control acting anywhere (s): how often it works on this road. */
+	float EscSeconds = 0.f;
 	/** -SimCruisePreflightForceSpin: the negative test yanked the stick with the handbrake on. */
 	bool bForcedSpin = false;
 
@@ -97,6 +106,12 @@ namespace SimCruisePreflightRules
 	/** A spin: the rear axle slips past 15 deg (the drive robot's SPUN line), or the car slides backwards. */
 	constexpr float MaxRearSlipDeg = 15.f;
 	constexpr float MaxReversedSeconds = 0.3f;
+	/** A fall or a launch: fewer than three wheels down for more than this above 5 m/s. */
+	constexpr float MaxAirborneSeconds = 0.5f;
+	/** On its side or roof for more than this. */
+	constexpr float MaxFlippedSeconds = 1.f;
+	/** Stability control on a straight road for this long at once means it misreads ordinary driving. */
+	constexpr float MaxEscStraightS = 0.3f;
 	/** A run-off: the car's centre more than 2 m past the paved edge for more than 0.5 s. */
 	constexpr float MaxOffRibbonM = 2.f;
 	constexpr float MaxOffRibbonSeconds = 0.5f;
@@ -265,6 +280,9 @@ private:
 	float ForceSpinClock = 0.f;
 	bool bForceSpinBrake = false;
 	float ReverseNow = 0.f;
+	float AirborneNow = 0.f;
+	float FlippedNow = 0.f;
+	float EscStraightNow = 0.f;
 	/** The car has been above 5 m/s once in this drive. */
 	bool bHasDriven = false;
 	float OffRibbonNow = 0.f;

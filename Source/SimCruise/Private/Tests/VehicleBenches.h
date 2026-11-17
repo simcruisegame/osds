@@ -61,6 +61,12 @@ struct FSimCruiseLiftOffCase
 	double DecelG = 0.0;
 	bool bSpun = false;
 	bool bReverseAtSpeed = false;
+	/** Seconds stability control acted on the steady circle and after the lift (its dash light). */
+	double EscCircleS = 0.0;
+	double EscAfterS = 0.0;
+	/** Peak filtered oversteer and understeer it saw on the circle (rad/s past its dead bands). */
+	double EscPeakOver = 0.0;
+	double EscPeakUnder = 0.0;
 };
 
 struct FSimCruiseLiftOffResult
@@ -71,7 +77,7 @@ struct FSimCruiseLiftOffResult
 
 /** Run LiftOff on a RadiusM circle at each lateral level, lift and trail brake. */
 FSimCruiseLiftOffResult SimCruiseRunLiftOff(const FSimCruiseCarDefinition& Car, double FixedStepS,
-	const TArray<double>& LevelsG, double RadiusM = 40.0);
+	const TArray<double>& LevelsG, double RadiusM = 40.0, bool bStabilityControl = true);
 
 /** ISO 7975 braking in a turn: a steady LateralG circle, then each fixed brake pedal in turn. */
 FSimCruiseLiftOffResult SimCruiseRunBrakeInTurn(const FSimCruiseCarDefinition& Car, double FixedStepS,
@@ -92,10 +98,33 @@ struct FSimCruiseStepSteerResult
 	double PeakBetaDeg = 0.0;
 	/** Body roll in the steady state over the steady lateral g (deg per g, positive: outward). */
 	double RollDegPerG = 0.0;
+	/** Seconds stability control acted (it should not, in a 0.4 g step). */
+	double EscActiveS = 0.0;
+	double EscPeakOver = 0.0;
+	double EscPeakUnder = 0.0;
 };
 
 FSimCruiseStepSteerResult SimCruiseRunStepSteer(const FSimCruiseCarDefinition& Car, double FixedStepS,
 	double SpeedMps = 80.0 / 3.6, double LateralG = 0.4);
+
+/** FMVSS 126 / NHTSA sine with dwell, the US stability-control test: coasting from 80 km/h, one 0.7 Hz sine
+ *  of steering with a 0.5 s dwell at its second peak, at 6.5 times the steer that gives 0.3 g. */
+struct FSimCruiseSineDwellResult
+{
+	bool bCompleted = false;
+	double AmplitudeDeg = 0.0;
+	/** The yaw rate's peak after the reversal (deg/s), and the share of it left 1.0 s and 1.75 s
+	 *  after the steering ends (the rule: at most 35 % and 20 %). */
+	double PeakYawDegS = 0.0;
+	double Ratio1s = 0.0;
+	double Ratio175s = 0.0;
+	/** Lateral move of the centre of mass 1.07 s after the steering starts (the rule: 1.83 m or more). */
+	double LateralDisplacementM = 0.0;
+	double PeakBetaDeg = 0.0;
+	double EscActiveS = 0.0;
+};
+
+FSimCruiseSineDwellResult SimCruiseRunSineDwell(const FSimCruiseCarDefinition& Car, double FixedStepS, bool bStabilityControl);
 
 /** Full throttle on a long flat pad, straight, until the speed stops rising: power against drag
  *  and rolling resistance (and the rev limit in top gear). */

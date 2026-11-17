@@ -688,6 +688,8 @@ bool FSimCruiseCarDefinitionLoader::ParseJson(const FString& JsonText, const FSt
 	SIMCRUISE_READ_BOOL("traction_control", bTractionControlEnabled);
 	SIMCRUISE_READ_NUMBER("tc_target_slip", TractionControlTargetSlipRatio);
 	SIMCRUISE_READ_NUMBER("tc_gain", TractionControlIntegralGainPerSecond);
+	SIMCRUISE_READ_BOOL("stability_control", bStabilityControlEnabled);
+	SIMCRUISE_READ_NUMBER("esc_understeer_deg_per_g", StabilityControlUndersteerDegPerG);
 
 	SIMCRUISE_READ_ARRAY("coil_lb_in", CoilSpringRateLbfPerInByAxle);
 	SIMCRUISE_READ_ARRAY("lever_ratio", SpringLeverRatioByAxle);

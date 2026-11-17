@@ -9,6 +9,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Gameplay/SimCruiseHUD.h"
 #include "Async/Async.h"
+#include "Containers/Ticker.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "HttpModule.h"
@@ -168,14 +169,36 @@ void USimCruiseLiveWorldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 				return;
 			}
 			int32 Swapped = 0;
+			TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Fading;
 			for (TObjectIterator<UMaterialInstanceDynamic> It; It; ++It)
 			{
 				UTexture* Current = nullptr;
 				if (It->GetWorld() == World && It->GetTextureParameterValue(FMaterialParameterInfo(TEXT("Aerial")), Current) && Current == Old)
 				{
+					// The old photograph stays under the new one and fades out (AerialBlend in the ground shader).
+					It->SetTextureParameterValue(TEXT("AerialPrev"), Old);
 					It->SetTextureParameterValue(TEXT("Aerial"), New);
+					It->SetScalarParameterValue(TEXT("AerialBlend"), 0.f);
+					Fading.Add(*It);
 					++Swapped;
 				}
+			}
+			if (Fading.Num() > 0)
+			{
+				constexpr double FadeS = 1.5;
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Fading, New = TWeakObjectPtr<UTexture2D>(New), Start = FPlatformTime::Seconds()](float)
+				{
+					const double T = FMath::Clamp((FPlatformTime::Seconds() - Start) / FadeS, 0.0, 1.0);
+					const float Blend = static_cast<float>(FMath::SmoothStep(0.0, 1.0, T));
+					for (const TWeakObjectPtr<UMaterialInstanceDynamic>& M : Fading)
+					{
+						if (!M.IsValid()) continue;
+						M->SetScalarParameterValue(TEXT("AerialBlend"), Blend);
+						// Done: the old photograph is let go (the shader no longer samples it at 1).
+						if (T >= 1.0 && New.IsValid()) M->SetTextureParameterValue(TEXT("AerialPrev"), New.Get());
+					}
+					return T < 1.0;
+				}));
 			}
 			UE_LOG(LogSimCruiseLive, Display, TEXT("AI detail: %s now drawn at %dx%d on %d ground materials (%.1f ms on the game thread)"), *Key, Width, Height, Swapped,
 				(FPlatformTime::Seconds() - SwapStart) * 1000.0);

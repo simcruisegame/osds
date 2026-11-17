@@ -1,6 +1,23 @@
 # Cars
 
-Every car in OSDS is a JSON file in [`data/cars/`](../data/cars/). Powertrain, suspension, tyres, brakes and aerodynamics read their numbers from it through `godot-final:game/CarSpec.gd`, so adding a car means writing data, not code. The physics is shared by all cars: `godot-final:game/Powertrain.gd` (contacts, tyres, engine or motor, gearbox, differentials) and `godot-final:game/CarSuspension.gd` (springs, anti-roll bars, dampers, limited-slip split).
+## In short
+
+- This page is about the cars: which cars you can drive, where their numbers come from, and how they are checked. It is for curious players and for anyone adding or tuning a car.
+- There are **nine drivable cars**. You start in the 2001 Miata. The others are a 1999 Miata (the calibration reference), the 1965 Mustang, the Corvette C8 and five cars from traffic: Tesla Model 3, Ford F-150 Raptor, Jeep Grand Cherokee SRT8, Honda Odyssey and Honda CR-V.
+- Each car is one data file in [`data/cars/`](../data/cars/). Adding a car means writing data, not code.
+- Numbers come from published sources (maker specs, magazine road tests), and each one names its source. Guesses are labelled as estimates.
+- Every car is tested against a real road test: 0-60 mph, 70-0 mph braking and skidpad grip. It must land within 0.15 s, 5 ft and 0.02 g.
+- **Stability control (ESC)** is on the cars that have it in real life (Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey, CR-V). The 2001 Miata and 1965 Mustang never had it. See [Car file fields](#car-file-fields).
+- In manual mode the game works the clutch for you by default: tap RB / LB (E / Q) to shift. You can switch to your own clutch. See [controls.md](controls.md#gearbox).
+- The car bodies come from real 3D models on Sketchfab (CC BY 4.0). Tyres show no brand lettering.
+
+**On this page:** [The garage](#the-garage) · [How a car is calibrated](#how-a-car-is-calibrated) · [Models](#models) · [Adding a car](#adding-a-car) · [Car file fields](#car-file-fields)
+
+## How the car files are read
+
+- Powertrain, suspension, tyres, brakes and aerodynamics all read their numbers from the car file.
+- The physics is shared by all cars. In the Unreal client the file is read by `Vehicle/CarDefinitionLoader` and the forces are computed in `Vehicle/SimCruiseVehicleSim` (see [unreal-architecture.md](unreal-architecture.md#vehicle-physics-core)).
+- The Godot client, which the Unreal physics was ported from, read the file through `godot-final:game/CarSpec.gd`, with the physics in `godot-final:game/Powertrain.gd` (contacts, tyres, engine or motor, gearbox, differentials) and `godot-final:game/CarSuspension.gd` (springs, anti-roll bars, dampers, limited-slip split). Several sections below still name these Godot checks; their Unreal versions are the `SimCruise.Vehicle.*` tests.
 
 ## The garage
 
@@ -59,7 +76,7 @@ The 1999 roadster is the original car of the game and keeps its own detailed mod
 
 Bands: 0–60 ±0.15 s, 70–0 ±5 ft, skidpad ±0.02 g. A car outside them fails `sh scripts/check.sh` unless its file states the gap in `calibration_open`.
 
-### Lift-off and trail braking
+### Lift-off and trail braking (stability in a turn)
 
 `checks/LiftOff.gd` (default suite) is every car's stability gate, after ISO 9816 (power-off reaction in a turn) and ISO 7975 (braking in a turn). A path and speed driver holds the car on a 40 m circle at 0.3, 0.5 and 0.7 g; then the wheel is frozen and the driver either closes the throttle over 0.1 s, or closes it and from 0.2 s squeezes the brake over 0.3 s to a pedal worth 0.15 g. It reports the yaw-rate ratio at 1 s (ISO 9816's measure: above 1 the car tucks in), the yaw overshoot, body sideslip at 1 s and its peak, the settling time and the deceleration. Gate: no car spins (sideslip past 8°) at 0.3 or 0.5 g, and no automatic ever selects reverse while rolling forward; 0.7 g is reported. `--radius=100` repeats it on ISO's larger circle, `--trace` prints each tyre's load, slip angle and slip ratio, and `--set=field=value` overrides a car-file field for experiments.
 
@@ -132,9 +149,9 @@ Only CC0 and CC BY models are accepted. Models with a car maker in the title are
 4. Run `powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -Filter SimCruise.Vehicle.CarTrack.<id>` and adjust only the estimated fields until the car is inside its bands (see [unreal-building.md](unreal-building.md)).
 5. Run `scripts\check.ps1`; the other cars must not move.
 
-Use made-up names for real cars, and no manufacturer logos or badges.
+Name a car by its model, as the other files do ("2001 Miata", "Corvette Stingray Z51 (C8)"), and keep manufacturer logos and badges off the models.
 
-## Fields
+## Car file fields
 
 `godot-final:game/CarSpec.gd` lists every field with its unit and the 1999 car's value as the default; the main groups are mass and body, geometry, tyres, steering, brakes, aerodynamics, engine (`combustion` with a torque curve, or `electric` with peak torque, power and speed), gearbox and clutch, drivetrain (`rwd`, `fwd` or `awd` with a centre split and differential bias ratios; every car here is `rwd` and combustion, and the other layouts and the electric motor stay supported for future cars), suspension per axle, and the calibration targets. `axle_grip` gives staggered tyres their own grip per axle.
 
@@ -142,6 +159,8 @@ The tyre's longitudinal grip follows a slip-ratio curve: full grip (`static_mu`)
 
 `"tyre_model": "tmeasy"` (the 2001 roadster) replaces that curve and the friction ellipse with G. Rill's TMeasy tyre, as Project Chrono implements it (`ChTMeasyTire`, BSD-3): one force-over-slip curve per direction from its initial stiffness, its peak and the slip of the peak, and its sliding force and the slip where full sliding starts, each given at the nominal load (`reference_corner_load_n`) and at twice it (forces interpolated quadratically, slips linearly), combined along the slip direction, so a wheel spinning or locking loses side grip in proportion. The default shape is Chrono's `GuessPassCar70Par` set: side-force stiffness 16.0 and drive stiffness 18.4 per unit slip times the load, peak at slip 0.149 (about 8.5 degrees) and 0.139. A car sets four grip levels: `tmeasy_peak_mu_x` and `tmeasy_slide_mu_x` (braking and drive), `tmeasy_peak_mu_y` and `tmeasy_slide_mu_y` (side), fitted to its published 70-0 stop and skidpad by `scripts/fit-tyres.ps1 -Cars <id>` (it runs the CarTrack bench and scales the four levels until both match within 1.5 %); `tmeasy_stiffness_x`/`_y`, `tmeasy_peak_slip_x`/`_y` and `tmeasy_slide_slip_x`/`_y` override the shape where a car's tyre data is known. Camber thrust and the relaxation length work as with the old curve. `SimCruise.Vehicle.Model.TyreTmeasy` checks the shape (peak slip angle 6-9 degrees, at least 75 % of the peak at 4 degrees, load saturation, combined slip, a locked wheel at the sliding force).
 
-`abs_enabled` and `traction_control` are on only for cars that had them (of the cars here, only the Corvette). ABS modulates each wheel's brake pressure about the tyre's peak slip. Traction control cuts engine or motor torque to hold the most-slipping driven wheel at the same peak slip (`tc_target_slip` overrides it): it reads the slip through a 20 ms filter and a slew limit, acts proportional (0.15) plus integral (`tc_gain`, 3/s) on the error, holds its state through a gear change, does not wind up while the clutch slips at its capacity, and moves the cut no faster than an engine can (off within 50 ms, back on over 0.15 s). Targets past the peak (1.15 or 1.3 ×) oscillated. Three checks in the default suite guard this: `checks/TractionControlCheck.gd` (torque factor and driveline torque during a full-throttle launch and a power-on corner exit; fails on a burst of 6 or more reversals of 5 % lasting 0.5 s or more), `checks/CombinedSlip.gd` (braking while cornering at 35 % and 70 % of the skidpad target, compared with main's numbers; fails when a car without ABS gains more than 3 %) and `checks/AbsReverse.gd` (ABS stops forwards and in reverse from 6 m/s).
+`stability_control` (ESC) is on for every car here from model year 2012 on (the Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey and CR-V), as US law has required since then, with `esc_understeer_deg_per_g` the car's own linear understeer gradient from the step-steer bench (its reference yaw-rate model, as a maker calibrates it). How it works and the FMVSS 126 sine-with-dwell bench: [2.0.4 notes](release/notes/2.0.4-dev.md). The player can switch it off in the pause menu.
+
+`abs_enabled` and `traction_control` are on only for cars that had them: ABS on the six modern cars (Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey, CR-V) and the lowered 2001 Miata; traction control on the six modern cars. The 1999 and stock 2001 Miata and the 1965 Mustang have neither. ABS modulates each wheel's brake pressure about the tyre's peak slip. Traction control cuts engine or motor torque to hold the most-slipping driven wheel at the same peak slip (`tc_target_slip` overrides it): it reads the slip through a 20 ms filter and a slew limit, acts proportional (0.15) plus integral (`tc_gain`, 3/s) on the error, holds its state through a gear change, does not wind up while the clutch slips at its capacity, and moves the cut no faster than an engine can (off within 50 ms, back on over 0.15 s). Targets past the peak (1.15 or 1.3 ×) oscillated. Three checks in the default suite guard this: `checks/TractionControlCheck.gd` (torque factor and driveline torque during a full-throttle launch and a power-on corner exit; fails on a burst of 6 or more reversals of 5 % lasting 0.5 s or more), `checks/CombinedSlip.gd` (braking while cornering at 35 % and 70 % of the skidpad target, compared with main's numbers; fails when a car without ABS gains more than 3 %) and `checks/AbsReverse.gd` (ABS stops forwards and in reverse from 6 m/s).
 
 A clutch, torque converter or dual clutch couples the engine to the driven wheels with a torque proportional to their speed difference. The coupling is now limited to the torque that closes the gap in one force substep: in low gears with the tyres at their limit the wheels reflect so little inertia that the explicit coupling overshot, and on main the clutch torque alternated sign for 2.2 s in the launch of the (since retired) front-drive Kestrel S and 1.75 s in the Corvette's (`TractionControlCheck -- --all-cars`). A dual clutch changes gear without interrupting the drive.

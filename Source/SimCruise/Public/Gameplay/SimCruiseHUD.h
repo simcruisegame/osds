@@ -132,6 +132,8 @@ private:
 	int32 DrawnGear = MIN_int32;
 	double GearChangedAtS = -10.0;
 	bool bAbs = false;
+	/** Stability control acting: its light flashes, as on the dash. */
+	bool bEsc = false;
 	double Rpm = 0.0;
 	double UpshiftRpm = 6700.0;
 	double RedlineRpm = 7000.0;

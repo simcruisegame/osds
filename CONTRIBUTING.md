@@ -1,6 +1,19 @@
 # Contributing to OSDS
 
-Thanks for looking. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). OSDS is a small project with a large ambition, and the way it stays honest is by measuring. This page is the short version of how we work; the [README](README.md) explains what the game is and the [roadmap](docs/roadmap.md) explains what is wanted next.
+Thanks for looking. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## In short
+
+- This page is for anyone who wants to change OSDS: code, car data, map data or docs.
+- OSDS is a small project with a large ambition. It stays honest by measuring.
+- No keys, accounts or paid services. Every data source must be free without sign-up.
+- Every change comes with a test and before/after numbers. Screenshots are welcome; numbers are required.
+- The cars must stay inside their real-world test results (0-60 mph, 70-0 mph, skidpad).
+- New assets must be CC0 or public domain, with the licence recorded in the same commit.
+- Run all tests with `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` before a merge.
+- What the game is: [README](README.md). What is wanted next: [roadmap](docs/roadmap.md).
+
+**On this page:** [Ground rules](#ground-rules) · [Code style](#code-style) · [Running the tests](#running-the-tests) · [Where things are](#where-things-are) · [Versions and releases](#versions-and-releases) · [Security](#security) · [Pull requests and issues](#pull-requests-and-issues)
 
 ## Ground rules
 
@@ -32,14 +45,14 @@ It fails (exit 1) on any failed test, on a filter no test matched, and on an err
 
 Visual changes come with captures (`-SimCruiseDriveCapture`, docs/unreal-building.md) compared against licensed photographs of the place or car.
 
-## Repository map
+## Where things are
 
 | Path | What it is |
 |---|---|
-| `Source/SimCruise/` | The Unreal client: `Vehicle/` (Chaos vehicle physics), `World/` (tile streaming, roads, buildings, palms, street lights), `Presentation/` (car models), `Environment/` (sun, sky, exposure), `Gameplay/` (input, cameras, HUD, rumble), tests beside each. |
+| `Source/SimCruise/` | The Unreal client: `Vehicle/` (car physics on a Chaos rigid body), `World/` (tile streaming, roads, buildings, palms, street lights), `Presentation/` (car models), `Environment/` (sun, sky, exposure), `Gameplay/` (input, cameras, HUD, rumble), tests beside each. |
 | `Config/`, `Content/` | Unreal project settings; car presentation profiles (`Content/Vehicles/CarPresentation.json`) and calibration overlays. |
 | `data/` | Engine-neutral data the client reads: car files, glTF car models, detail photographs, the bundled offline tiles, helper fixtures. |
-| `helper/` | The atlas helper: `atlas.mjs` dispatches jobs; each module owns one data source or layer; its JSON datasets and the vendored HDF5 reader (`helper/vendor/`) sit beside them. `scripts/build-macos.sh` compiles it to `tools/atlas`. |
+| `helper/` | The atlas helper: `atlas.mjs` dispatches jobs; each module owns one data source or layer; its JSON datasets and the vendored HDF5 reader (`helper/vendor/`) sit beside them. `scripts\package.ps1` compiles it to `tools\atlas.exe` with Bun. |
 | `authoring/` | Model tools: the Sketchfab intake helper (`cars/sketchfab.mjs`) and the Blender car pipeline (`cars/build_car.py`). |
 | `lab/` | Measurement studies behind individual features, with their own READMEs, data and reproduction scripts. Older ones say "Sunday Driver". |
 | `licenses/`, `Credits.txt` | Per-source terms and attribution; `licenses/` ships with the game. |
@@ -61,6 +74,6 @@ Never commit keys, tokens, passwords, personal paths or personal information; th
 
 ## Pull requests and issues
 
-Keep a pull request to one stream of work and say in its description what you changed, which check measures it, the numbers before and after, and what is still unverified. For data or asset changes, include the licence entry. For rendering changes, a pair of screenshots from the same place and time helps, but the renderer runs only on Apple Silicon Macs, so say what you tested on.
+Keep a pull request to one stream of work and say in its description what you changed, which check measures it, the numbers before and after, and what is still unverified. For data or asset changes, include the licence entry. For rendering changes, a pair of screenshots from the same place and time helps; say what you tested on (GPU and graphics preset).
 
 For a bug, include your OS, GPU and Unreal Engine version, the F3 readout, the place you were driving (search text or coordinates), whether Weather, Imagery or Street photos were on, and the tail of the newest log in `Saved/Logs`. Bumps, launches and rollovers are especially useful with a location, since the ground there can be reproduced.

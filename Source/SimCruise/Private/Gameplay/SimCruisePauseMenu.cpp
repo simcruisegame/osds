@@ -97,6 +97,7 @@ const TArray<FRowInfo>& SSimCruisePauseMenu::Rows(int32 InPage)
 	static const TArray<FRowInfo> Car = {
 		Row(ESimCruiseMenuRow::Car, EKind::Value, EIcon::Car, TEXT("Car"), TEXT("Change the car you drive"), TEXT("Change to the next car. You keep your place on the road.")),
 		Row(ESimCruiseMenuRow::Transmission, EKind::Value, EIcon::Gearbox, TEXT("Gearbox"), TEXT("Automatic, manual, or manual with your clutch"), TEXT("Manual: shift with RB and LB (E and Q); the game works the clutch and blips the throttle on a downshift. Manual with your clutch: hold A (Shift) to shift.")),
+		Row(ESimCruiseMenuRow::Stability, EKind::Value, EIcon::Car, TEXT("Stability control"), TEXT("ESC, on the cars that have it"), TEXT("Brakes one wheel and eases the engine when the car starts to slide, as the real car's system does. Off: you catch the slides yourself. A 2001 Miata and a 1965 Mustang never had it.")),
 		Row(ESimCruiseMenuRow::Tune, EKind::Action, EIcon::Wrench, TEXT("Tune car"), TEXT("Springs, dampers, brakes and steering"), TEXT("Change the setup of this car in workshop units. Stop the car first.")),
 		Row(ESimCruiseMenuRow::Lights, EKind::Value, EIcon::Lights, TEXT("Headlights"), TEXT("On, or on when it gets dark"), TEXT("Auto turns the headlights on at dusk.")),
 	};

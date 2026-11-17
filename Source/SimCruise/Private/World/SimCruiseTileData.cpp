@@ -391,6 +391,7 @@ namespace SimCruiseTileData
 					Building.HeightM = NumberAt(*Row, 2, 0.0);
 					Building.MinHeightM = NumberAt(*Row, 3, 0.0);
 					Building.Use = StringAt(*Row, 6);
+					Building.Centre = FVector2d(NumberAt(*Row, 4, -1.0), NumberAt(*Row, 5, -1.0));
 					Out.Buildings.Add(MoveTemp(Building));
 					Out.BuildingFootprints.Add(MoveTemp(Ring));
 				}
@@ -424,6 +425,101 @@ namespace SimCruiseTileData
 		}
 		return true;
 	}
+
+FSimCruiseBuildingFactsCount ApplyBuildingFacts(FSimCruiseTileData& Data, const TSharedPtr<FJsonObject>& Reply)
+{
+	FSimCruiseBuildingFactsCount Count;
+	if (!Reply.IsValid()) return Count;
+	const TArray<TSharedPtr<FJsonValue>>* Id = nullptr;
+	if (!Reply->TryGetArrayField(TEXT("id"), Id) || Id->Num() != 2 ||
+		static_cast<int32>((*Id)[0]->AsNumber()) != Data.Id.X || static_cast<int32>((*Id)[1]->AsNumber()) != Data.Id.Y)
+	{
+		return Count;
+	}
+	// The row a record names: its index, and the centre the helper gave that row (to 1e-5 of a tile).
+	auto Matched = [&Data](const TSharedPtr<FJsonObject>& Record) -> int32
+	{
+		double Index = -1.0;
+		const TArray<TSharedPtr<FJsonValue>>* Centre = nullptr;
+		if (!Record.IsValid() || !Record->TryGetNumberField(TEXT("baseIndex"), Index) || Index < 0.0 || Index != FMath::FloorToDouble(Index)
+			|| Index >= Data.Buildings.Num() || !Record->TryGetArrayField(TEXT("center"), Centre) || Centre->Num() != 2)
+		{
+			return INDEX_NONE;
+		}
+		const FSimCruiseBuildingRow& Row = Data.Buildings[static_cast<int32>(Index)];
+		if (FMath::Abs((*Centre)[0]->AsNumber() - Row.Centre.X) > 1.0e-5 || FMath::Abs((*Centre)[1]->AsNumber() - Row.Centre.Y) > 1.0e-5) return INDEX_NONE;
+		return static_cast<int32>(Index);
+	};
+	auto Records = [&Reply](const TCHAR* Field)
+	{
+		TArray<TSharedPtr<FJsonObject>> Out;
+		const TArray<TSharedPtr<FJsonValue>>* Rows = nullptr;
+		if (Reply->TryGetArrayField(Field, Rows))
+		{
+			for (const TSharedPtr<FJsonValue>& V : *Rows)
+			{
+				const TSharedPtr<FJsonObject>* O = nullptr;
+				if (V.IsValid() && V->TryGetObject(O)) Out.Add(*O);
+			}
+		}
+		return Out;
+	};
+	TSet<int32> Seen;
+	for (const TSharedPtr<FJsonObject>& Change : Records(TEXT("updates")))
+	{
+		const int32 i = Matched(Change);
+		double Height = 0.0, Base = 0.0;
+		if (i == INDEX_NONE || Seen.Contains(i) || !Change->TryGetNumberField(TEXT("heightM"), Height) || !Change->TryGetNumberField(TEXT("baseHeightM"), Base)
+			|| Height < 0.8 || Height > 650.0 || FMath::Abs(Base - Data.Buildings[i].HeightM) > 0.02)
+		{
+			continue;
+		}
+		Seen.Add(i);
+		Data.Buildings[i].HeightM = Height;
+		Data.Buildings[i].bHeightMeasured = true;
+		++Count.Heights;
+	}
+	Seen.Reset();
+	for (const TSharedPtr<FJsonObject>& Record : Records(TEXT("uses")))
+	{
+		const int32 i = Matched(Record);
+		FString Use;
+		if (i == INDEX_NONE || Seen.Contains(i) || !Record->TryGetStringField(TEXT("use"), Use)) continue;
+		if (Use != TEXT("single_family") && Use != TEXT("duplex") && Use != TEXT("multi_family") && Use != TEXT("nonresidential")) continue;
+		Seen.Add(i);
+		FSimCruiseBuildingRow& Row = Data.Buildings[i];
+		// A mapped use (OSM's building=*) is more specific than the inventory's class; keep it.
+		if (Row.Use.IsEmpty() || Row.Use == TEXT("yes")) Row.Use = Use;
+		double Stories = 0.0;
+		if (Record->TryGetNumberField(TEXT("stories"), Stories) && Stories >= 1.0 && Stories <= 60.0) Row.Stories = FMath::RoundToInt32(Stories);
+		++Count.Uses;
+	}
+	Seen.Reset();
+	for (const TSharedPtr<FJsonObject>& Record : Records(TEXT("finishes")))
+	{
+		const int32 i = Matched(Record);
+		const TSharedPtr<FJsonObject>* Style = nullptr;
+		if (i == INDEX_NONE || Seen.Contains(i) || !Record->TryGetObjectField(TEXT("style"), Style)) continue;
+		Seen.Add(i);
+		FSimCruiseBuildingRow& Row = Data.Buildings[i];
+		auto Text = [&Style](const TCHAR* Key, FString& Out)
+		{
+			FString V;
+			if ((*Style)->TryGetStringField(Key, V) && V.Len() <= 32) Out = V;
+		};
+		Text(TEXT("shape"), Row.RoofShape);
+		Text(TEXT("wall_material"), Row.WallMaterial);
+		Text(TEXT("roof_material"), Row.RoofMaterial);
+		Text(TEXT("wall_color"), Row.WallColour);
+		Text(TEXT("roof_color"), Row.RoofColour);
+		double RoofHeight = 0.0;
+		if ((*Style)->TryGetNumberField(TEXT("roof_height"), RoofHeight) && RoofHeight > 0.0 && RoofHeight <= 40.0) Row.RoofHeightM = RoofHeight;
+		bool bAcross = false;
+		if ((*Style)->TryGetBoolField(TEXT("across"), bAcross)) Row.bRidgeAcross = bAcross;
+		++Count.Finishes;
+	}
+	return Count;
+}
 
 	bool LoadFile(const FString& Path, FSimCruiseTileData& Out, FString& OutError)
 	{

@@ -226,6 +226,7 @@ FSimCruiseMenuState ASimCruisePlayerController::MenuState() const
 	Set(ESimCruiseMenuRow::Traffic, Cars < 0.5f ? TEXT("Off") : Cars < 12.f ? TEXT("Light") : TEXT("Normal"))->bUnavailable = !bTrafficSettingReady();
 	Set(ESimCruiseMenuRow::Car, View.CarName);
 	Set(ESimCruiseMenuRow::Transmission, View.Transmission);
+	Set(ESimCruiseMenuRow::Stability, AfterDot(15));
 	Set(ESimCruiseMenuRow::Lights, bLightsOn ? TEXT("On") : TEXT("Auto"));
 	const ASimCruisePlayerCameraManager* Camera = Cast<ASimCruisePlayerCameraManager>(PlayerCameraManager);
 	FSimCruiseMenuValue* Lens = Set(ESimCruiseMenuRow::Lens, AfterDot(4));
@@ -317,6 +318,10 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 			}
 			OnToggleTransmission();
 		}
+		break;
+	case ESimCruiseMenuRow::Stability:
+		ChangeSetting(15);
+		ShowMessage(MenuVar(TEXT("simcruise.Assists.StabilityControl")) > 0.5f ? TEXT("Stability control on") : TEXT("Stability control off · you catch the slides"), 3.f);
 		break;
 	case ESimCruiseMenuRow::Lights: OnToggleLights(); break;
 	case ESimCruiseMenuRow::Tune:
