@@ -412,7 +412,7 @@ FString ASimCruiseVehicle::RequestGearChange(int32 Step)
 	VehicleMovement->CopyTelemetry(Telemetry);
 	if (!Telemetry.bManual && !bManualRequested)
 	{
-		return TEXT("Automatic shifting · T (B) for manual");
+		return TEXT("Automatic shifting · T (right-stick click) for manual");
 	}
 	// The gearbox answers on the physics thread; a refusal reaches the screen from Tick.
 	LastShownGearMessage.Reset();

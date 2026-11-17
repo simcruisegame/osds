@@ -1,6 +1,8 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseTrees.h"
+#include "Environment/SimCruiseGraphics.h"
+#include "HAL/IConsoleManager.h"
 
 #include "Async/Async.h"
 #include "Atlas/SimCruiseAtlasClient.h"
@@ -742,7 +744,13 @@ bool ASimCruiseTrees::BuildMeshes()
 			const int32 Far = Level == 2 ? 60000 : FMath::RoundToInt(LodSwitchCm[Level] + LodBandCm[Level] + SpareCm);
 			Ring->InstanceMinDrawDistance = Near;
 			Ring->SetCullDistances(Far, Far);
-			Ring->SetCastShadow(Level < 2);
+			// The far ring (92 m to the horizon) casts shadows on Ultra: without them shadows switched
+			// on under the trees ahead as they crossed 92 m (a light pop), and the far forest stood on
+			// the ground with none. simcruise.Trees.FarShadows 0 turns them off.
+			static IConsoleVariable* FarShadows = IConsoleManager::Get().RegisterConsoleVariable(TEXT("simcruise.Trees.FarShadows"), 1,
+				TEXT("1 (default): trees past 92 m cast shadows on the Ultra preset; 0: never (read when a tile's trees are built)."), ECVF_Default);
+			const bool bFarShadows = FarShadows && FarShadows->GetInt() != 0 && FSimCruiseGraphics::Current() == ESimCruiseGraphicsPreset::Ultra;
+			Ring->SetCastShadow(Level < 2 || bFarShadows);
 			Ring->bAffectDistanceFieldLighting = false;
 			Ring->RegisterComponent();
 			Rings.Add(Ring);

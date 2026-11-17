@@ -4,9 +4,14 @@ The short version of each release, newest first. Every release has full notes in
 
 ## 2.0.4 (in development)
 
-- **Manual shifts with the clutch pressed in the same moment are accepted** (they were refused).
-- **Bridge decks keep the helper's deck profile** across tile borders instead of being pinned to the ground under them.
-- **Roofs follow the map** (flat, gabled, hipped where OpenStreetMap says so).
+**Driving you can trust.**
+
+- **The car holds its lane.** The front wheels can point dead straight now (they were always 0.03° off, so the car hunted), small road lips no longer push the tyres sideways, and the driver's view stops swinging with every correction.
+- **Manual with an automatic clutch** (new default): tap RB/LB to shift; the game does the clutch and blips the throttle on downshifts. No stalls. Your own clutch is still an option.
+- **Bridges are flat across**: one smooth deck from end to end, no dips; a road under a bridge is no longer pulled up to it.
+- Hard launches change up instead of sitting on the limiter; the Corvette no longer skips from 1st to 3rd.
+- Roofs follow the map, gable ridges run along the house, sealed cracks on older asphalt.
+- Fixes: `main` builds again (a merge dropped a function); Graphics "Auto" no longer re-benchmarks.
 
 [Full notes](docs/release/notes/2.0.4-dev.md)
 

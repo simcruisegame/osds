@@ -138,6 +138,8 @@ struct FSimCruiseShiftDriveResult
 	/** Where the worst gap was: time, gear, pedal, brake, engine and road rpm. */
 	FString WorstAt;
 	FString Trace;
+	/** Time on the fuel cut at full pedal, s (a gearbox that will not change up). */
+	double LimiterSeconds = 0.0;
 };
 
 FSimCruiseShiftDriveResult SimCruiseRunShiftDrive(const FSimCruiseCarDefinition& Car, double FixedStepS);

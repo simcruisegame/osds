@@ -483,7 +483,7 @@ FString ASimCruisePlaceholderVehicle::RequestGearChange(int32 Step)
 {
 	if (!bManual)
 	{
-		return TEXT("Automatic shifting · T (B) for manual");
+		return TEXT("Automatic shifting · T (right-stick click) for manual");
 	}
 	if (Command.Clutch < 0.5f)
 	{

@@ -28,6 +28,12 @@
 
 namespace
 {
+	bool MenuAutoClutchOn()
+	{
+		const IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Gearbox.AutoClutch"));
+		return !Var || Var->GetInt() != 0;
+	}
+
 	/** The driving update's traffic switch (ChangeSetting 13) and seat menu (OpenSeatMenu) are on main. */
 	constexpr bool bTrafficSettingReady() { return true; }
 	constexpr bool bSeatMenuReady() { return true; }
@@ -296,7 +302,22 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 		else ShowMessage(TEXT("The traffic setting comes with the next driving update"), 3.f);
 		break;
 	case ESimCruiseMenuRow::Car: if (Mode) Mode->CycleCar(this); break;
-	case ESimCruiseMenuRow::Transmission: OnToggleTransmission(); break;
+	case ESimCruiseMenuRow::Transmission:
+		// Automatic -> Manual with the automatic clutch -> Manual with your clutch -> Automatic.
+		if (Telemetry.bManualTransmission && MenuAutoClutchOn())
+		{
+			ChangeSetting(14);
+			ShowMessage(TEXT("Manual · hold A (Shift) for the clutch, RB / LB (E / Q) to shift"), 4.f);
+		}
+		else
+		{
+			if (!Telemetry.bManualTransmission && !MenuAutoClutchOn())
+			{
+				ChangeSetting(14);
+			}
+			OnToggleTransmission();
+		}
+		break;
 	case ESimCruiseMenuRow::Lights: OnToggleLights(); break;
 	case ESimCruiseMenuRow::Tune:
 		if (FMath::Abs(Telemetry.BodyVelocityMps.X) > 1.0) ShowMessage(TEXT("Stop the car to tune it"), 2.f);

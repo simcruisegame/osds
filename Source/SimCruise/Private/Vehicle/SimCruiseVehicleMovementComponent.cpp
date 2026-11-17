@@ -16,6 +16,11 @@
 #include "Vehicle/CarDefinitionLoader.h"
 #include "Vehicle/SimCruiseUnits.h"
 #include "World/SimCruiseWorldTile.h"
+#include "HAL/IConsoleManager.h"
+
+static TAutoConsoleVariable<int32> CVarGearboxAutoClutch(
+	TEXT("simcruise.Gearbox.AutoClutch"), 1,
+	TEXT("Manual gearbox: 1 (default) the game works the clutch for you (shift with RB/LB or E/Q, a throttle blip on downshifts, no stall at a stop); 0 you hold the clutch (A or Shift) to shift."));
 
 DEFINE_LOG_CATEGORY_STATIC(LogSimCruiseVehicle, Log, All);
 
@@ -284,6 +289,7 @@ static void StepVehicleOnPhysicsThread(FSimCruiseVehiclePhysicsState& S, double 
 		S.Sim.SetManual(!S.Sim.State.bManual, Body.LinearVelocityMps.Size());
 		S.bPendingToggleManual = false;
 	}
+	S.Sim.bAutoClutch = CVarGearboxAutoClutch.GetValueOnAnyThread() != 0;
 	while (S.PendingShift != 0)
 	{
 		const int32 Direction = S.PendingShift > 0 ? 1 : -1;

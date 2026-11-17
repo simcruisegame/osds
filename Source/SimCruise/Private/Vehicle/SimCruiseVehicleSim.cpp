@@ -18,6 +18,16 @@ namespace
 	constexpr double KeyReturnFactor = 1.6;
 	constexpr double SteerDeadBand = 0.01;
 	constexpr double ManualShiftClutchBufferS = 0.12;
+	// Automatic clutch timing: a quick road-car shift (the pedal down in about 55 ms at the press rate,
+	// a short hold, the clutch out over 0.2 s up and 0.25 s down), a blip of at most 0.15 s, and gear
+	// steps of a multi-gear request 80 ms apart.
+	constexpr double AutoClutchHoldS = 0.04;
+	constexpr double AutoClutchUpReleaseS = 0.20;
+	constexpr double AutoClutchDownReleaseS = 0.25;
+	constexpr double AutoClutchBlipMaxS = 0.15;
+	constexpr double AutoClutchBlipBandRpm = 150.0;
+	constexpr double ManualGearStepGapS = 0.08;
+	constexpr int32 ManualShiftQueueMax = 3;
 
 	// Traction control (Powertrain.gd): the slip read through a 20 ms low-pass
 	// and a slew limit, proportional plus integral on the error, harder cut on
@@ -88,9 +98,7 @@ void FSimCruiseVehicleSim::Initialize(const FSimCruiseCarDefinition& InCar)
 		Car.CenterOfGravityHeightM - Car.CollisionShapeCenterYM);
 
 	State = FSimCruiseVehicleSimState();
-	PendingManualGearStep = 0;
-	PendingManualGearAgeS = 0.0;
-	GearChangeMessage.Reset();
+	ResetShiftQueue();
 	State.EngineRpm = Car.IdleSpeedRpm;
 	State.EngineOmegaRadPerSecond = Car.RestartEngineSpeedRadPerSecond;
 	for (FSimCruiseWheelState& Wheel : State.Wheels)
@@ -104,11 +112,21 @@ FVector3d FSimCruiseVehicleSim::GetPrincipalInertiaKgM2() const
 	return SimCruiseUnits::GodotInertiaToUnrealAxes(Car.InertiaKgM2);
 }
 
-void FSimCruiseVehicleSim::ResetState()
+void FSimCruiseVehicleSim::ResetShiftQueue()
 {
 	PendingManualGearStep = 0;
 	PendingManualGearAgeS = 0.0;
 	GearChangeMessage.Reset();
+	AutoPhase = 0;
+	AutoPhaseTimeS = 0.0;
+	SinceGearStepS = 10.0;
+	bAutoBlip = false;
+	bAutoDownshift = false;
+}
+
+void FSimCruiseVehicleSim::ResetState()
+{
+	ResetShiftQueue();
 	for (FSimCruiseWheelState& Wheel : State.Wheels)
 	{
 		Wheel.RollingSlipAngleRad = 0.0;
@@ -145,9 +163,7 @@ void FSimCruiseVehicleSim::SetManual(bool bEnabled, double BodySpeedMps)
 	{
 		bEnabled = false;
 	}
-	PendingManualGearStep = 0;
-	PendingManualGearAgeS = 0.0;
-	GearChangeMessage.Reset();
+	ResetShiftQueue();
 	State.bManual = bEnabled;
 	State.ClutchPedal = 0.0;
 	State.bStalled = false;
@@ -201,10 +217,16 @@ void FSimCruiseVehicleSim::QueueManualGearChange(int32 GearStep)
 		return;
 	}
 	const int32 Direction = GearStep > 0 ? 1 : -1;
-	if (PendingManualGearStep == 0 || PendingManualGearStep != Direction)
+	// Presses add up (a quick double tap of the down button drops two gears); a press the other
+	// way replaces what is still waiting.
+	if (PendingManualGearStep == 0 || (PendingManualGearStep > 0) != (Direction > 0))
 	{
 		PendingManualGearStep = Direction;
 		PendingManualGearAgeS = 0.0;
+	}
+	else
+	{
+		PendingManualGearStep = FMath::Clamp(PendingManualGearStep + Direction, -ManualShiftQueueMax, ManualShiftQueueMax);
 	}
 	GearChangeMessage.Reset();
 }
@@ -407,8 +429,85 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		State.bServiceBrake = bFoot || Back > 0.01;
 		BrakeAmount = FMath::Max(Back, bFoot ? 1.0 : 0.0);
 		State.bInReverse = State.SelectedGear == -1;
-		const double Pedal = FMath::Clamp(Controls.Clutch, 0.0, 1.0);
-		State.ClutchPedal = MoveToward(State.ClutchPedal, Pedal, Dt * (Pedal > State.ClutchPedal ? 14.0 : 2.8));
+		double Pedal = FMath::Clamp(Controls.Clutch, 0.0, 1.0);
+		double ReleaseRate = 2.8;
+		if (bAutoClutch && !IsElectric())
+		{
+			// The automatic clutch: a pedal of its own under the driver's, and the throttle while it shifts.
+			AutoPhaseTimeS += Dt;
+			double AutoPedal = 0.0;
+			if (AutoPhase == 0 && PendingManualGearStep != 0)
+			{
+				AutoPhase = 1;
+				AutoPhaseTimeS = 0.0;
+			}
+			if (AutoPhase == 1)
+			{
+				AutoPedal = 1.0;
+				Throttle = 0.0;
+			}
+			else if (AutoPhase == 2)
+			{
+				AutoPedal = 1.0;
+				Throttle = 0.0;
+				if (bAutoBlip)
+				{
+					Throttle = 1.0;
+					if (State.EngineRpm >= AutoBlipTargetRpm - AutoClutchBlipBandRpm || AutoPhaseTimeS >= AutoClutchBlipMaxS)
+					{
+						bAutoBlip = false;
+						Throttle = 0.0;
+					}
+				}
+				if (PendingManualGearStep != 0)
+				{
+					AutoPhaseTimeS = 0.0;
+				}
+				else if (!bAutoBlip && AutoPhaseTimeS >= AutoClutchHoldS)
+				{
+					AutoPhase = 3;
+					AutoPhaseTimeS = 0.0;
+				}
+			}
+			else if (AutoPhase == 3)
+			{
+				const double Release = bAutoDownshift ? AutoClutchDownReleaseS : AutoClutchUpReleaseS;
+				const double Progress = FMath::Clamp(AutoPhaseTimeS / Release, 0.0, 1.0);
+				AutoPedal = 1.0 - Progress;
+				Throttle = Gas * Progress;
+				ReleaseRate = 1.2 / Release;
+				if (PendingManualGearStep != 0)
+				{
+					AutoPhase = 1;
+					AutoPhaseTimeS = 0.0;
+				}
+				else if (Progress >= 1.0)
+				{
+					AutoPhase = 0;
+				}
+			}
+			// In gear at a crawl (the road turns the engine near or under idle) the clutch slips as a
+			// driver's left foot would: in at idle so the engine never stalls, out as the throttle raises
+			// the revs, so the car pulls away from a stop on the throttle alone.
+			if (State.SelectedGear != 0 && !State.bStalled)
+			{
+				const int32 Index = FMath::Clamp(State.SelectedGear - 1, 0, FMath::Max(Car.ForwardGearRatios.Num() - 1, 0));
+				const double GearRatio = (State.SelectedGear == -1 ? Car.ReverseGearRatio : Car.ForwardGearRatios[Index]) * Car.FinalDriveRatio;
+				const double RoadRpm = FMath::Abs(DrivenOmega()) * GearRatio * 60.0 / Tau;
+				if (RoadRpm < Car.IdleSpeedRpm + 300.0)
+				{
+					const double Hold = 1.0 - SmoothStep(Car.IdleSpeedRpm + 150.0, Car.IdleSpeedRpm + 1100.0, State.EngineRpm);
+					AutoPedal = FMath::Max(AutoPedal, Hold);
+					ReleaseRate = FMath::Max(ReleaseRate, 4.0);
+				}
+			}
+			Pedal = FMath::Max(Pedal, AutoPedal);
+		}
+		State.ClutchPedal = MoveToward(State.ClutchPedal, Pedal, Dt * (Pedal > State.ClutchPedal ? 14.0 : ReleaseRate));
+	}
+	else
+	{
+		AutoPhase = 0;
 	}
 	State.BrakeAmount = BrakeAmount;
 
@@ -459,9 +558,13 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 	const double HalfTrack = Car.FrontTrackM * 0.5;
 	const double Blend = Car.AckermannBlendFraction;
 	const double Rack = FMath::Abs(Steering);
-	const double TurnRadius = Car.WheelbaseM / FMath::Max(0.001, FMath::Tan(Rack));
-	const double InnerAngle = FMath::Lerp(Rack, FMath::Atan(Car.WheelbaseM / FMath::Max(0.2, TurnRadius - HalfTrack)), Blend);
-	const double OuterAngle = FMath::Lerp(Rack, FMath::Atan(Car.WheelbaseM / (TurnRadius + HalfTrack)), Blend);
+	// In the exact form (tan of each wheel's angle = L tan(rack) / (L -+ half track tan(rack))), which is
+	// continuous through straight ahead. The old form floored tan(rack) at 0.001, so any rack off zero
+	// put both wheels at least 0.028 deg off straight: the car could not hold the 0.015 deg a road's
+	// crown asks for and hunted left and right of it (the owner: "the car is all over the road").
+	const double TanRack = FMath::Tan(Rack);
+	const double InnerAngle = FMath::Lerp(Rack, FMath::Atan2(Car.WheelbaseM * TanRack, FMath::Max(Car.WheelbaseM - HalfTrack * TanRack, 0.2 * TanRack)), Blend);
+	const double OuterAngle = FMath::Lerp(Rack, FMath::Atan2(Car.WheelbaseM * TanRack, Car.WheelbaseM + HalfTrack * TanRack), Blend);
 	const double ToeRad = SimCruiseUnits::ToRadians(Car.ToeAngleDegPerWheel);
 	const double CasterRad = SimCruiseUnits::ToRadians(Car.CasterAngleDeg);
 
@@ -534,7 +637,19 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 						else
 						{
 							Hit.PointM += Up * (Height - (Hit.PointM - Source).Dot(Up) - Hit.RoadProfileM);
-							Hit.NormalM = Probe.NormalM;
+							// The tyre rolls over a small step (a seam or a junction lip of a centimetre
+							// or three) on its tread: the contact rises but the road under the centre still
+							// sets the normal. Taking the step's own face normal (up to 70 deg) pushed the
+							// tyre sideways by load x sin(tilt) at every 1 cm lip and steered the car.
+							// A real kerb (over 3 cm) tilts the tread's envelope: atan(step / half the
+							// tread), at most 30 deg, pushing the tyre away from the high side.
+							const double StepM = Height - CentreHeight;
+							if (StepM > 0.03)
+							{
+								const FVector3d SideDir = Offsets[Ray].GetSafeNormal();
+								const double Tilt = FMath::Min(FMath::Atan(StepM / FMath::Max(Shoulder, 0.02)), UE_DOUBLE_PI / 6.0);
+								Hit.NormalM = (Hit.NormalM * FMath::Cos(Tilt) - SideDir * FMath::Sin(Tilt)).GetSafeNormal();
+							}
 						}
 						// A step of more than 3 cm under a shoulder: the tyre is on a kerb.
 						if (Height > CentreHeight + 0.03 && CentreHeight > -1.0e8) Hit.bKerb = true;
@@ -649,14 +764,53 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 	}
 
 	// Gear selection.
+	SinceGearStepS += Dt;
 	if (State.bManual && PendingManualGearStep != 0)
 	{
 		PendingManualGearAgeS += Dt;
-		if (State.ClutchPedal >= 0.75 || PendingManualGearAgeS >= ManualShiftClutchBufferS)
+		const bool bAuto = bAutoClutch && !IsElectric();
+		const bool bReady = State.ClutchPedal >= 0.75 && SinceGearStepS >= ManualGearStepGapS;
+		// With the automatic clutch the request waits for its own pedal (there in about 55 ms); with
+		// the driver's clutch it waits a short buffer, then reports the refusal.
+		const bool bTimedOut = PendingManualGearAgeS >= (bAuto ? 0.6 : ManualShiftClutchBufferS);
+		if (bReady || bTimedOut)
 		{
-			GearChangeMessage = ChangeGear(PendingManualGearStep, Speed);
-			PendingManualGearStep = 0;
-			PendingManualGearAgeS = 0.0;
+			const int32 Direction = PendingManualGearStep > 0 ? 1 : -1;
+			const int32 Before = State.SelectedGear;
+			GearChangeMessage = ChangeGear(Direction, Speed);
+			if (GearChangeMessage.IsEmpty() && State.SelectedGear != Before)
+			{
+				PendingManualGearStep -= Direction;
+				PendingManualGearAgeS = 0.0;
+				SinceGearStepS = 0.0;
+				if (bAuto)
+				{
+					AutoPhase = 2;
+					AutoPhaseTimeS = 0.0;
+					bAutoDownshift = Direction < 0;
+					// Blip on a downshift into a forward gear: the throttle opens until the engine
+					// reaches the speed the road turns it at in the new gear.
+					bAutoBlip = false;
+					if (Direction < 0 && State.SelectedGear > 0)
+					{
+						const double NewRatio = Car.ForwardGearRatios[State.SelectedGear - 1] * Car.FinalDriveRatio;
+						AutoBlipTargetRpm = FMath::Abs(DrivenOmega()) * NewRatio * 60.0 / Tau;
+						bAutoBlip = AutoBlipTargetRpm > State.EngineRpm + AutoClutchBlipBandRpm;
+					}
+				}
+			}
+			else
+			{
+				// Refused, or already at the end of the box: drop what is waiting.
+				PendingManualGearStep = 0;
+				PendingManualGearAgeS = 0.0;
+				if (bAuto && AutoPhase != 0)
+				{
+					AutoPhase = 3;
+					AutoPhaseTimeS = 0.0;
+					bAutoBlip = false;
+				}
+			}
 		}
 	}
 	else if (!State.bManual)
@@ -680,14 +834,17 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		// reads the car's own speed, so a spinning launch does not change up.
 		const double RoadRpm = FMath::Abs(DrivenOmega()) * ForwardRatio * 60.0 / Tau;
 		const int32 Next = SimCruiseDynamics::SelectAutomaticGear(Car, State.Gear, RoadRpm,
-			FMath::Abs(Speed) * ForwardRatio / R, Throttle, State.bServiceBrake || BrakeAmount > 0.01,
+			// Both the shift point and its guard read the output shaft (a gearbox changes up on its output
+			// speed, spinning tyres or not): reading the car's own speed kept the Mustang in 1st on its fuel
+			// cut with the rears spinning, 5000 rpm from 16 to 24 mph on the Dragon.
+			FMath::Abs(DrivenOmega()) * ForwardRatio, Throttle, State.bServiceBrake || BrakeAmount > 0.01,
 			Speed * Omega.Z / SimCruiseDynamics::GravityMps2);
 		int32 NextGear = Next;
 		// At the limiter, change up: a driven tyre's slip at speed (a few percent) keeps the road's
 		// speed under the upshift point while the engine sits on its fuel cut (the C8 held 5th at
 		// 6619 rpm and 153 mph, its road speed reading 6350).
 		if (NextGear == State.Gear && State.Gear < Car.ForwardGearRatios.Num() - 1 && !(State.bServiceBrake || BrakeAmount > 0.01) &&
-			State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98 && FMath::Abs(Speed) * ForwardRatio / R * 60.0 / Tau > Car.AutomaticUpshiftSpeedRpm * 0.85)
+			State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98 && RoadRpm > Car.AutomaticUpshiftSpeedRpm * 0.85)
 		{
 			NextGear = State.Gear + 1;
 		}
@@ -696,7 +853,11 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		// 1-2-1-2 hunting as the pedal moved), unless the engine is at its limiter.
 		const bool bReversal = Direction != 0 && Direction == -State.LastShiftDirection && State.SinceShiftS < 2.0;
 		const bool bAtLimit = Direction > 0 && State.EngineRpm >= Car.FuelCutSpeedRpm * 0.98;
-		if (Direction != 0 && (!bReversal || bAtLimit))
+		// One gear at a time on the way up: no second upshift within 0.7 s of the last, unless the engine
+		// is at its limiter (the Corvette went from 1st straight to 3rd on a hard launch, its spinning
+		// rears reading over 2nd's upshift point as soon as the first change ended).
+		const bool bTooSoonUp = Direction > 0 && State.LastShiftDirection > 0 && State.SinceShiftS < 0.7;
+		if (Direction != 0 && (!bReversal || bAtLimit) && (!bTooSoonUp || (bAtLimit && State.SinceShiftS >= 0.4)))
 		{
 			State.Gear = NextGear;
 			State.ShiftTimeS = Car.GearShiftDurationS;

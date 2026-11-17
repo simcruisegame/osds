@@ -184,7 +184,7 @@ void FSimCruiseGraphics::Apply(ESimCruiseGraphicsPreset Preset)
 	Scalability::SetQualityLevels(Levels, true);
 
 	// TSR on every preset: it is what makes the lower internal resolutions hold detail.
-	SetCVar(TEXT("r.AntiAliasingMethod"), TEXT("4"));
+	// r.AntiAliasingMethod is 4 (TSR) in DefaultEngine.ini; set here it was refused with a warning on every launch.
 	SetCVar(TEXT("r.ScreenPercentage"), FString::SanitizeFloat(S.ScreenPercentage));
 	// Sharpen after the upscale, more the lower the internal resolution: TSR's output from a
 	// 58 % picture is soft (the project owner: "the graphics look fuzzy"). 100 % gets a light 0.4.
@@ -268,7 +268,14 @@ void FSimCruiseGraphics::ApplyChoice(ESimCruiseGraphicsChoice Choice)
 {
 	if (Choice == ESimCruiseGraphicsChoice::Auto)
 	{
-		Apply(AutoPickForThisMachine(true));
+		// The machine does not change during a session: pick once (the synthetic benchmark, for a GPU
+		// missing from the tier table, runs on the game thread and froze the menu on each Auto choice).
+		static TOptional<ESimCruiseGraphicsPreset> AutoPick;
+		if (!AutoPick.IsSet())
+		{
+			AutoPick = AutoPickForThisMachine(true);
+		}
+		Apply(AutoPick.GetValue());
 		return;
 	}
 	Apply(static_cast<ESimCruiseGraphicsPreset>(static_cast<uint8>(Choice) - 1));

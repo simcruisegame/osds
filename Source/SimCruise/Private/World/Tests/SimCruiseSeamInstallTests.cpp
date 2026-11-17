@@ -334,4 +334,77 @@ bool FSimCruiseBridgeDeckProfileTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBridgeDeckSmoothTest, "SimCruise.World.BridgeDeckSmooth", SimCruiseSeamInstallTest::Flags)
+bool FSimCruiseBridgeDeckSmoothTest::RunTest(const FString& Parameters)
+{
+	// The owner's report: "the bridges go up and down, not flat across". A deck row whose station
+	// heights carry noise and one point dropped to the valley floor (a chain split at a ramp) must
+	// still give one smooth deck: a straight grade from end to end plus at most a crest, never a sag.
+	const FString Json = TEXT("{\"id\":[100,100],\"grid\":1,\"h\":[0,0,0,0],")
+		TEXT("\"roads\":[[\"primary\",0,\"wavy deck\",[[0,0.5],[1,0.5]],8,\"paved\",\"bridge\"]],")
+		TEXT("\"bridges\":[[\"primary\",\"wavy deck\",[[0,0.5],[0.1,0.5],[0.2,0.5],[0.3,0.5],[0.4,0.5],[0.5,0.5],[0.6,0.5],[0.7,0.5],[0.8,0.5],[0.9,0.5],[1,0.5]],8,")
+		TEXT("[10,10.6,9.4,11.5,6,11.2,10.5,12.3,10.9,11.9,12],0,0]]}");
+	FSimCruiseTileData Data;
+	FString Error;
+	if (!TestTrue(TEXT("wavy bridge tile parses"), SimCruiseTileData::Parse(Json, Data, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	FSimCruiseRoadNetwork Roads;
+	Roads.Build(Data, 200.0);
+	TArray<double> Z;
+	for (const FSimCruiseRibbon& Ribbon : Roads.Ribbons)
+	{
+		for (const FSimCruiseRibbonStation& Station : Ribbon.St) if (Station.bBridge) Z.Add(Station.HC);
+	}
+	if (!TestTrue(TEXT("the deck has stations"), Z.Num() > 10)) return false;
+	TestTrue(FString::Printf(TEXT("the deck starts at its first end (%.2f m)"), Z[0]), FMath::Abs(Z[0] - 10.0) < 0.1 || FMath::Abs(Z[0] - 12.0) < 0.1);
+	TestTrue(FString::Printf(TEXT("the deck ends at its other end (%.2f m)"), Z.Last()), FMath::Abs(Z.Last() - 10.0) < 0.1 || FMath::Abs(Z.Last() - 12.0) < 0.1);
+	double WorstSag = 0.0, Lowest = 1e9;
+	for (int32 i = 1; i + 1 < Z.Num(); ++i)
+	{
+		WorstSag = FMath::Max(WorstSag, Z[i + 1] - 2.0 * Z[i] + Z[i - 1]);
+		Lowest = FMath::Min(Lowest, Z[i]);
+	}
+	TestTrue(FString::Printf(TEXT("no sag anywhere on the deck (worst second difference %.4f m)"), WorstSag), WorstSag < 0.005);
+	TestTrue(FString::Printf(TEXT("the dropped point does not pull the deck down (lowest %.2f m)"), Lowest), Lowest > 9.9);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBridgeOverRoadTest, "SimCruise.World.BridgeOverRoad", SimCruiseSeamInstallTest::Flags)
+bool FSimCruiseBridgeOverRoadTest::RunTest(const FString& Parameters)
+{
+	// A street on a deck 6.5 m over a primary road: neither road joins the other. The junction join
+	// pulled a deck down to the road under it within 15 m (and lifted the road below to the deck).
+	const FString Json = TEXT("{\"id\":[100,100],\"grid\":1,\"h\":[0,0,0,0],")
+		TEXT("\"roads\":[[\"residential\",0,\"over\",[[0,0.5],[1,0.5]],7,\"paved\",\"bridge\"],")
+		TEXT("[\"primary\",0,\"under\",[[0.5,0],[0.5,1]],10,\"paved\",\"\"]],")
+		TEXT("\"bridges\":[[\"residential\",\"over\",[[0,0.5],[1,0.5]],7,[6.5,6.5],0,0]]}");
+	FSimCruiseTileData Data;
+	FString Error;
+	if (!TestTrue(TEXT("overpass tile parses"), SimCruiseTileData::Parse(Json, Data, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	FSimCruiseRoadNetwork Roads;
+	Roads.Build(Data, 200.0);
+	double DeckWorst = 0.0, UnderWorst = 0.0;
+	for (const FSimCruiseRibbon& Ribbon : Roads.Ribbons)
+	{
+		for (const FSimCruiseRibbonStation& Station : Ribbon.St)
+		{
+			for (int32 c = 0; c < 5; ++c)
+			{
+				if (Station.bBridge) DeckWorst = FMath::Max(DeckWorst, FMath::Abs(Station.Column(c) - 6.5));
+				else UnderWorst = FMath::Max(UnderWorst, FMath::Abs(Station.Column(c)));
+			}
+		}
+	}
+	TestTrue(FString::Printf(TEXT("the deck keeps its height over the road (worst %.2f m off)"), DeckWorst), DeckWorst < 0.25);
+	TestTrue(FString::Printf(TEXT("the road under keeps its own level (worst %.2f m off)"), UnderWorst), UnderWorst < 0.25);
+	return true;
+}
+
 #endif

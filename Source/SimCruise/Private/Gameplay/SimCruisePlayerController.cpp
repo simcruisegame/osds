@@ -269,7 +269,8 @@ void ASimCruisePlayerController::PlayerTick(float DeltaTime)
 			using FPref = TPair<const TCHAR*, const TCHAR*>;
 			for (const FPref& Pref : { FPref(TEXT("head_motion"), TEXT("simcruise.Camera.HeadMotion")), FPref(TEXT("rumble"), TEXT("simcruise.Rumble.Strength")),
 				FPref(TEXT("pad_steer_speed"), TEXT("simcruise.Pad.SteerSpeed")), FPref(TEXT("pad_steer_linearity"), TEXT("simcruise.Pad.SteerLinearity")),
-				FPref(TEXT("pad_steer_dead_zone"), TEXT("simcruise.Pad.SteerDeadZone")), FPref(TEXT("trigger_gamma"), TEXT("simcruise.TriggerGamma")) })
+				FPref(TEXT("pad_steer_dead_zone"), TEXT("simcruise.Pad.SteerDeadZone")), FPref(TEXT("trigger_gamma"), TEXT("simcruise.TriggerGamma")),
+				FPref(TEXT("auto_clutch"), TEXT("simcruise.Gearbox.AutoClutch")) })
 			{
 				// Stored as hundredths (the throttle curve's 1.8 as 180).
 				const int32 Percent = SimCruisePreferences::GetInt(Pref.Key, -1, -1, 300);
@@ -470,7 +471,10 @@ void ASimCruisePlayerController::OnToggleTransmission()
 		// Read back now: the atlas toggles it while the game is paused.
 		Vehicle->GetVehicleTelemetry(Telemetry);
 		SimCruisePreferences::SetBool(TEXT("manual"), bManual);
-		ShowMessage(bManual ? TEXT("Manual · clutch + shift to select first gear") : TEXT("Automatic shifting"), 4.f);
+		const bool bAutoClutch = SimCruiseSettingValue(TEXT("simcruise.Gearbox.AutoClutch")) > 0.5f;
+		ShowMessage(!bManual ? TEXT("Automatic shifting")
+			: bAutoClutch ? TEXT("Manual · RB / LB (E / Q) to shift, the clutch is automatic")
+			: TEXT("Manual · hold A (Shift) for the clutch, RB (E) for first gear"), 4.f);
 	}
 }
 
@@ -662,7 +666,8 @@ FSimCruiseAtlasView ASimCruisePlayerController::AtlasView() const
 	const USimCruiseGameInstance* GameInstance = GetGameInstance<USimCruiseGameInstance>();
 	const FSimCruiseCarDefinition* CarDef = GameInstance ? GameInstance->FindCarDefinition(Mode->GetCarId()) : nullptr;
 	View.CarName = CarDef ? CarDef->Name : Mode->GetCarId();
-	View.Transmission = Telemetry.bManualTransmission ? TEXT("Manual") : TEXT("Automatic");
+	View.Transmission = !Telemetry.bManualTransmission ? TEXT("Automatic")
+		: SimCruiseSettingValue(TEXT("simcruise.Gearbox.AutoClutch")) > 0.5f ? TEXT("Manual · auto clutch") : TEXT("Manual · your clutch");
 	const ASimCruiseHUD* Hud = GetSimHUD();
 	static const TCHAR* HudNames[] = { TEXT("Off"), TEXT("Glance"), TEXT("Full") };
 	View.Settings = {
@@ -686,6 +691,7 @@ FSimCruiseAtlasView ASimCruisePlayerController::AtlasView() const
 		TEXT("Seat & view..."),
 		FString::Printf(TEXT("Traffic · %s"), SimCruiseSettingValue(TEXT("simcruise.Traffic.Cars")) < 0.5f ? TEXT("Off")
 			: SimCruiseSettingValue(TEXT("simcruise.Traffic.Cars")) < 12.f ? TEXT("Light") : TEXT("Normal")),
+		FString::Printf(TEXT("Clutch · %s"), SimCruiseSettingValue(TEXT("simcruise.Gearbox.AutoClutch")) > 0.5f ? TEXT("Automatic") : TEXT("Yours (hold A)")),
 	};
 	return View;
 }
@@ -801,6 +807,7 @@ void ASimCruisePlayerController::ChangeSetting(int32 Index)
 	// The atlas closes and the menu opens in its place.
 	case 11: OpenTuning(); break;
 	case 12: OpenSeatMenu(); break;
+	case 14: Step(TEXT("simcruise.Gearbox.AutoClutch"), { 1.f, 0.f }, TEXT("auto_clutch")); break;
 	case 13:
 	{
 		// Traffic off for the release (SimCruiseFeatures): the atlas hides the button; nothing changes.

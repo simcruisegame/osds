@@ -310,6 +310,11 @@ ASimCruiseTraffic::FPose ASimCruiseTraffic::PoseAt(const FIntPoint& Tile, int32 
 	return Pose;
 }
 
+bool ASimCruiseTraffic::IsEnabled()
+{
+	return CVarFeatureTraffic.GetValueOnGameThread() != 0 || FParse::Param(FCommandLine::Get(), TEXT("SimCruiseTraffic"));
+}
+
 bool ASimCruiseTraffic::CrossesAtGradeCached(const FIntPoint& Tile, const TArray<FSimCruiseRibbon>& Ribbons, int32 Index) const
 {
 	const TPair<FIntPoint, int32> Key(Tile, Index);

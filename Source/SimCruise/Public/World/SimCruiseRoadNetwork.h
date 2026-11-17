@@ -235,7 +235,11 @@ public:
 	 * The ribbon whose carriageway covers P (expanded by Margin), the highest
 	 * where several do; ExcludeRibbon is skipped. Returns false off every carriageway.
 	 */
-	bool FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon = INDEX_NONE, double Margin = 0.0, int32 MinRank = MIN_int32) const;
+	/** The highest carriageway (ribbon or junction pad) under P. With NearZ and MaxDz set, only a
+	 *  surface within MaxDz of NearZ counts: a deck over the road, or the road under a deck, is not
+	 *  the same road level. */
+	bool FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon = INDEX_NONE, double Margin = 0.0, int32 MinRank = MIN_int32,
+		double NearZ = TNumericLimits<double>::Max(), double MaxDz = TNumericLimits<double>::Max()) const;
 
 	/** Nearest ribbon station segment to P within Reach (any lateral), for terrain conditioning and placement. */
 	bool FindNearest(const FVector2d& P, double Reach, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon = INDEX_NONE) const;

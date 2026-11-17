@@ -1457,13 +1457,23 @@ namespace SimCruiseTileDetail
 					const double D = FVector2d::Distance(Ring[i], Ring[(i + 1) % N]);
 					if (D > LongLen) { LongLen = D; LongEdge = i; }
 				}
-				const FVector2d U = EdgeDirOf(Ring, LongEdge);
-				const FVector2d V(-U.Y, U.X);
+				FVector2d U = EdgeDirOf(Ring, LongEdge);
+				FVector2d V(-U.Y, U.X);
 				double U0 = 1e9, U1 = -1e9, V0 = 1e9, V1 = -1e9;
 				for (const FVector2d& P : Ring)
 				{
 					U0 = FMath::Min(U0, FVector2d::DotProduct(P, U)); U1 = FMath::Max(U1, FVector2d::DotProduct(P, U));
 					V0 = FMath::Min(V0, FVector2d::DotProduct(P, V)); V1 = FMath::Max(V1, FVector2d::DotProduct(P, V));
+				}
+				// The ridge runs along the box's long side. The longest single edge can be on the short
+				// side (a long wall mapped in two pieces), which turned a gable roof across the house.
+				if (U1 - U0 < V1 - V0)
+				{
+					U = V; V = FVector2d(-U.Y, U.X);
+					const double OU0 = U0, OU1 = U1;
+					U0 = V0; U1 = V1;
+					// V is now -OldU: its range is the old U range, negated.
+					V0 = -OU1; V1 = -OU0;
 				}
 				const double BoxArea = (U1 - U0) * (V1 - V0);
 				if (BoxArea > 1.0 && FMath::Abs(Area) / BoxArea > 0.78 && (V1 - V0) >= 3.0)

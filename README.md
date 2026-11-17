@@ -77,6 +77,7 @@ More in [docs/images/](docs/images/).
 
 - Some motorway bridges meet the road below at the same level instead of passing over it.
 - Small lips (6-12 cm) where some driveways and ramps join a road; ground over a lane edge at a few hundred spots.
+- In direct sun, dark jagged shadow marks can show on the Miata's dash behind the steering wheel.
 - Full list per release: [CHANGELOG.md](CHANGELOG.md).
 
 ## Build from source

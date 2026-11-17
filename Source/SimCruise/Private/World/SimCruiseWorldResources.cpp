@@ -469,6 +469,25 @@ float3 col = Tint.rgb * fine * v;
 float3 gravel = float3(0.26, 0.23, 0.19) * lerp(1.0, a, 1.0);
 col = lerp(col, gravel, VC.r);
 Roughness = saturate(0.80 + 0.10 * (1.0 - a) + 0.05 * VC.r);
+// Sealed cracks ("tar snakes"): on the older stretches of a paved road, thin meandering lines of
+// black crack sealant, a few metres apart. Drawn as the 0.5 contour of a two-octave value noise,
+// 2.4 cm wide, filtered by the pixel's footprint (coverage, not aliasing) and faded out where a
+// pixel covers more than a few centimetres, so they shimmer neither near nor far. Arithmetic only.
+{
+	#define SC_TH(c) (float(((uint(int((c).x)) * 73856093u) ^ (uint(int((c).y)) * 19349663u)) * 1274126177u >> 8) / 16777216.0)
+	#define SC_VN(q, o) (lerp(lerp(SC_TH(floor(q) + o), SC_TH(floor(q) + o + float2(1.0, 0.0)), smoothstep(0.0, 1.0, frac(q).x)), lerp(SC_TH(floor(q) + o + float2(0.0, 1.0)), SC_TH(floor(q) + o + float2(1.0, 1.0)), smoothstep(0.0, 1.0, frac(q).x)), smoothstep(0.0, 1.0, frac(q).y)))
+	float2 tq = m / 3.7;
+	float fld = 0.72 * SC_VN(tq, float2(0.0, 0.0)) + 0.28 * SC_VN(tq * 2.6 + float2(3.1, 7.7), float2(11.0, 5.0));
+	float age = saturate((macro2 - 0.97) * 5.0) * (1.0 - VC.r);
+	float px = max(length(fwidth(m)), 1e-4);
+	float hwpx = 0.012 / px;
+	float dpx = abs(fld - 0.5) / max(fwidth(fld), 1e-6);
+	float tar = saturate(hwpx + 0.5 - dpx) * saturate(2.0 * hwpx) * (1.0 - smoothstep(0.03, 0.12, px)) * age;
+	col = lerp(col, Tint.rgb * 0.38, tar);
+	Roughness = lerp(Roughness, 0.55, tar);
+	#undef SC_VN
+	#undef SC_TH
+}
 float3 g = float3(-(ax - a), -(ay - a), 0.0) * Bump;
 // The AI detail kit (DetailKitCode): aggregate and cracks up close; the gravel edge is soil.
 {
