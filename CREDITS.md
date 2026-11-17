@@ -121,6 +121,10 @@ The car physics are calibrated against published road tests (Car and Driver, Mot
 | Foliage | [paramecij's vegetation base texture pack](https://opengameart.org/content/paramecijs-vegetation-base-texture-pack), OpenGameArt | CC0 |
 | Fine-detail kit | Made with Stable Diffusion XL (see [AI models](#ai-models)) | Ours, made under CreativeML Open RAIL++-M |
 
+## Street furniture (CARLA)
+
+Traffic-signal poles, bases and mast arms (and, as they are added, signs, signal heads, street lights and facade textures) come from the [CARLA simulator](https://carla.org/)'s content, by the CARLA Team (Computer Vision Center, Barcelona, and contributors), under the [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/) licence. Source: `bitbucket.org/carla-simulator/carla-content`, branch `ue5-dev`; fetched into `Content/Carla/` by `scripts/fetch-carla.ps1` (not kept in this repository); the licence text is copied to `Content/Carla/LICENSE.txt`. Changed: placed by OSDS's own rules at the signalised junctions it finds on OpenStreetMap roads; our own signal heads and lamps hang from the CARLA arms. No brand names or logos are taken.
+
 ## Fonts
 
 | Font | Maker | Licence |

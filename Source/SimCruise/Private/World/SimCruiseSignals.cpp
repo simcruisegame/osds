@@ -14,6 +14,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/App.h"
 #include "ProceduralMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "World/SimCruiseRoadNetwork.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseWorldStreamer.h"
@@ -147,6 +149,48 @@ bool ASimCruiseSignals::IsStopFor(const FVector& PositionCm, const FVector2D& Di
 	return bStop;
 }
 
+namespace
+{
+	// CARLA art (Content/Carla, CC-BY 4.0, CARLA Team): the signal base, the pole and the mast arms.
+	const TCHAR* const CarlaSignalMeshes[] = {
+		TEXT("/Game/Carla/Static/Pole/SM_TrafficLightBase01.SM_TrafficLightBase01"),
+		TEXT("/Game/Carla/Static/Pole/SM_Pole09.SM_Pole09"),
+		TEXT("/Game/Carla/Static/Pole/SM_TrafficLightPole03.SM_TrafficLightPole03"),
+		TEXT("/Game/Carla/Static/Pole/SM_TrafficLightPole02.SM_TrafficLightPole02"),
+		TEXT("/Game/Carla/Static/Pole/SM_TrafficLightPole01.SM_TrafficLightPole01"),
+	};
+	// The arms' reach from the pole's centre (m) and the height of their pivot under the pole top: the
+	// arm's top rail is 2.02 m over its pivot, the pole top at 6.31 m.
+	constexpr double CarlaArmReachM[3] = { 3.94, 5.63, 8.14 };
+	constexpr double CarlaArmPivotZM = 6.31 - 2.02;
+}
+
+bool ASimCruiseSignals::HasCarlaParts()
+{
+	if (!bCarlaTried)
+	{
+		bCarlaTried = true;
+		TArray<UStaticMesh*> Loaded;
+		for (const TCHAR* Path : CarlaSignalMeshes)
+		{
+			UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+			if (!M) { Loaded.Reset(); break; }
+			Loaded.Add(M);
+		}
+		for (UStaticMesh* M : Loaded)
+		{
+			UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(this);
+			C->SetStaticMesh(M);
+			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			C->SetMobility(EComponentMobility::Movable);
+			C->SetupAttachment(RootComponent);
+			C->RegisterComponent();
+			CarlaParts.Add(C);
+		}
+	}
+	return CarlaParts.Num() == UE_ARRAY_COUNT(CarlaSignalMeshes);
+}
+
 void ASimCruiseSignals::Rebuild()
 {
 	ASimCruiseWorldStreamer* Stream = Streamer.Get();
@@ -207,6 +251,8 @@ void ASimCruiseSignals::Rebuild()
 
 	// Poles, mast arms and heads: one for each of the four approaches, on the far right corner.
 	FBuffers Dark, Lamps[6];
+	const bool bCarla = HasCarlaParts();
+	for (UInstancedStaticMeshComponent* C : CarlaParts) if (C) C->ClearInstances();
 	for (const FSimCruiseSignalJunction& J : Junctions)
 	{
 		for (int32 Axis = 0; Axis < 2; ++Axis)
@@ -222,10 +268,26 @@ void ASimCruiseSignals::Rebuild()
 			const FVector Up(0, 0, 1);
 			const FVector Toward(-H.X, -H.Y, 0.0);            // the head faces the oncoming traffic
 			const FVector Over(-Right.X, -Right.Y, 0.0);      // the arm reaches over the lanes
-			Dark.Box(Foot - Up * 30.0, Foot + Up * 640.0, FVector(H.X, H.Y, 0.0), 11.0, 11.0);
-			const double Reach = FMath::Clamp(J.HalfW[Axis] * 0.6 + 1.5, 2.5, 8.0) * 100.0;
-			const FVector ArmEnd = Foot + Up * 620.0 + Over * Reach;
-			Dark.Box(Foot + Up * 620.0, ArmEnd, Up, 6.0, 6.0);
+			double Reach = FMath::Clamp(J.HalfW[Axis] * 0.6 + 1.5, 2.5, 8.0) * 100.0;
+			FVector ArmEnd = Foot + Up * 620.0 + Over * Reach;
+			if (bCarla)
+			{
+				// CARLA's galvanised pole on its base, and the shortest arm that reaches the lanes; its
+				// mesh runs along -X from the pole, so -X is turned to point over the road.
+				int32 Arm = 2;
+				for (int32 a = 0; a < 3; ++a) if (CarlaArmReachM[a] * 100.0 >= Reach) { Arm = a; break; }
+				const FRotator Turn(0.0, FMath::RadiansToDegrees(FMath::Atan2(-Over.Y, -Over.X)), 0.0);
+				CarlaParts[0]->AddInstance(FTransform(Turn, Foot), true);
+				CarlaParts[1]->AddInstance(FTransform(Turn, Foot), true);
+				CarlaParts[2 + Arm]->AddInstance(FTransform(Turn, Foot + Up * CarlaArmPivotZM * 100.0), true);
+				Reach = CarlaArmReachM[Arm] * 100.0 - 20.0;
+				ArmEnd = Foot + Up * (CarlaArmPivotZM * 100.0 + 180.0) + Over * Reach;
+			}
+			else
+			{
+				Dark.Box(Foot - Up * 30.0, Foot + Up * 640.0, FVector(H.X, H.Y, 0.0), 11.0, 11.0);
+				Dark.Box(Foot + Up * 620.0, ArmEnd, Up, 6.0, 6.0);
+			}
 			const FVector HeadTop = ArmEnd - Up * 10.0, HeadBottom = ArmEnd - Up * 120.0;
 			Dark.Box(HeadBottom, HeadTop, Over, 18.0, 15.0);
 			// Back plate.
