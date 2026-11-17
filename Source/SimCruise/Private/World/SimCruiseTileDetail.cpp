@@ -237,6 +237,14 @@ namespace SimCruiseTileDetail
 	bool bFitFacadeGrid = true;
 	bool bWallMaterials = true;
 
+	EBuildingRoofForm BuildingRoofFormFromFact(FName RoofFact)
+	{
+		if (RoofFact == FName(TEXT("roof:flat"))) return EBuildingRoofForm::Flat;
+		if (RoofFact == FName(TEXT("roof:gabled"))) return EBuildingRoofForm::Gabled;
+		if (RoofFact == FName(TEXT("roof:hipped")) || RoofFact == FName(TEXT("roof:hip"))) return EBuildingRoofForm::Hipped;
+		return EBuildingRoofForm::Unspecified;
+	}
+
 	int32 BuildingBand(const FWallMaterialInput& In)
 	{
 		const FString R = In.Region.ToString(), C = In.Climate.ToString();
@@ -707,7 +715,11 @@ namespace SimCruiseTileDetail
 			const bool bHouse = bPlain && Height <= 14.0 && Recipe(TEXT("recipe:house"));
 			const bool bMainStreet = bPlain && !bHouse && Recipe(TEXT("recipe:main_street"));
 			const bool bDowntown = bPlain && !bHouse && !bMainStreet && Height >= 20.0 && (Recipe(TEXT("recipe:downtown")) || (!BP && Height > 45.0));
-			const bool bPitched = bHouse && Unit(Hash(H, 25)) < ChanceOf(TEXT("detail:pitched_roof"), 0.85);
+			// A measured roof:shape wins over the region's house recipe. Use the existing
+			// procedural mix only where the mapped record gives no supported roof form.
+			const EBuildingRoofForm RoofForm = BP ? BuildingRoofFormFromFact(BP->Facts.Strongest(TEXT("roof"))) : EBuildingRoofForm::Unspecified;
+			const bool bPitched = bHouse && (RoofForm == EBuildingRoofForm::Gabled || RoofForm == EBuildingRoofForm::Hipped
+				|| (RoofForm == EBuildingRoofForm::Unspecified && Unit(Hash(H, 25)) < ChanceOf(TEXT("detail:pitched_roof"), 0.85)));
 			const bool bCurtain = bDowntown && Unit(Hash(H, 26)) < ChanceOf(TEXT("detail:curtain_wall"), 0.6);
 			const bool bCornice = bMainStreet && Unit(Hash(H, 27)) < ChanceOf(TEXT("detail:cornice"), 0.8);
 			// Main Street's commercial blocks of 1880-1930 have tall storeys (a 4.5-5 m shop storey,
@@ -1484,8 +1496,10 @@ namespace SimCruiseTileDetail
 					};
 					const FVector Up = FVector::UpVector;
 					const FVector Uo(U.X, U.Y, 0.0), Vo(V.X, V.Y, 0.0);
-					const bool bHip = Unit(Hash(H, 32)) < 0.55 && (U1 - U0) > (V1 - V0) * 1.05;
-					const double R0 = bHip ? U0 + Half : U0, R1 = bHip ? U1 - Half : U1;
+					const bool bHip = RoofForm == EBuildingRoofForm::Hipped
+						|| (RoofForm == EBuildingRoofForm::Unspecified && Unit(Hash(H, 32)) < 0.55 && (U1 - U0) > (V1 - V0) * 1.05);
+					const double RidgeHalf = bHip ? FMath::Min(Half, 0.5 * (U1 - U0)) : 0.0;
+					const double R0 = bHip ? U0 + RidgeHalf : U0, R1 = bHip ? U1 - RidgeHalf : U1;
 					// The two long slopes.
 					Face({ At(U0, V0, Top), At(U1, V0, Top), At(R1, Vm, Zr), At(R0, Vm, Zr) }, RoofC, Kind::Roof, Up - Vo);
 					Face({ At(U1, V1, Top), At(U0, V1, Top), At(R0, Vm, Zr), At(R1, Vm, Zr) }, RoofC, Kind::Roof, Up + Vo);

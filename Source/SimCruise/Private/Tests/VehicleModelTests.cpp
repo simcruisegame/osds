@@ -536,6 +536,44 @@ bool FSimCruiseVehicleModelGearboxTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelManualShiftBufferTest, "SimCruise.Vehicle.Model.ManualShiftBuffer", VehicleTestFlags)
+bool FSimCruiseVehicleModelManualShiftBufferTest::RunTest(const FString& Parameters)
+{
+	FSimCruiseCarDefinition Car;
+	if (!SimCruiseLoadBenchCar(*this, TEXT("nb2001_lowered"), Car))
+	{
+		return false;
+	}
+
+	const FFlatRoad Road;
+	FSimCruiseBodyForces Forces;
+	FSimCruiseVehicleSim Clutched;
+	Clutched.Initialize(Car);
+	Clutched.SetManual(true, 0.0);
+	Clutched.QueueManualGearChange(1);
+	FSimCruiseVehicleControls Controls;
+	Controls.Clutch = 1.0;
+	for (int32 Step = 0; Step < 30 && Clutched.GetGearText() == TEXT("N"); ++Step)
+	{
+		Clutched.Step(1.0 / 360.0, 1, Controls, BodyAtRideHeight(Clutched, FVector3d::ZeroVector), Road, Forces);
+	}
+	TestEqual(TEXT("same-frame clutch and shift reaches first after the clutch ramps"), Clutched.GetGearText(), FString(TEXT("1")));
+	TestTrue(TEXT("successful buffered shift has no refusal"), Clutched.ConsumeGearChangeMessage().IsEmpty());
+
+	FSimCruiseVehicleSim Unclutched;
+	Unclutched.Initialize(Car);
+	Unclutched.SetManual(true, 0.0);
+	Unclutched.QueueManualGearChange(1);
+	Controls = FSimCruiseVehicleControls();
+	for (int32 Step = 0; Step < 60; ++Step)
+	{
+		Unclutched.Step(1.0 / 360.0, 1, Controls, BodyAtRideHeight(Unclutched, FVector3d::ZeroVector), Road, Forces);
+	}
+	TestEqual(TEXT("shift without clutch stays in neutral"), Unclutched.GetGearText(), FString(TEXT("N")));
+	TestEqual(TEXT("expired shift reports the clutch refusal"), Unclutched.ConsumeGearChangeMessage(), FString(TEXT("Hold the clutch to change gear")));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelShiftMapTest, "SimCruise.Vehicle.Model.ShiftMap", VehicleTestFlags)
 bool FSimCruiseVehicleModelShiftMapTest::RunTest(const FString& Parameters)
 {

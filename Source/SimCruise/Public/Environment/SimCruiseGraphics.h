@@ -15,6 +15,16 @@ enum class ESimCruiseGraphicsPreset : uint8
 	Ultra
 };
 
+/** The player's selection; Auto resolves to a preset for the graphics adapter. */
+enum class ESimCruiseGraphicsChoice : uint8
+{
+	Auto,
+	Low,
+	Medium,
+	High,
+	Ultra
+};
+
 /** What a preset sets on top of Unreal's scalability groups. */
 struct SIMCRUISE_API FSimCruisePresetSpec
 {
@@ -57,4 +67,15 @@ struct SIMCRUISE_API FSimCruiseGraphics
 
 	/** The preset last applied (High before any Apply). */
 	static ESimCruiseGraphicsPreset Current();
+
+	/** The five choices shown on the Settings page and saved in preferences. */
+	static FString ChoiceName(ESimCruiseGraphicsChoice Choice);
+	static bool ParseChoice(const FString& Text, ESimCruiseGraphicsChoice& OutChoice);
+	static ESimCruiseGraphicsChoice StepChoice(ESimCruiseGraphicsChoice Choice, int32 Direction);
+	static ESimCruiseGraphicsChoice SavedChoice();
+	static FString ChoiceDisplay();
+	static void ApplyChoice(ESimCruiseGraphicsChoice Choice);
+	static void SelectChoice(ESimCruiseGraphicsChoice Choice);
+	/** Handle the Settings row: -1/1 step, 0 advances, and 2 resets to Auto. */
+	static void ChooseQuality(int32 Direction);
 };

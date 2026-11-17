@@ -7,6 +7,7 @@
 #include "Gameplay/SimCruisePlayerController.h"
 
 #include "Engine/World.h"
+#include "Environment/SimCruiseGraphics.h"
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/SimCruiseAtlasUI.h"
@@ -242,6 +243,8 @@ FSimCruiseMenuState ASimCruisePlayerController::MenuState() const
 	const float Dead = MenuVar(TEXT("simcruise.Pad.SteerDeadZone"), 0.f);
 	Set(ESimCruiseMenuRow::StickDeadZone, FString::FromInt(FMath::RoundToInt(100.f * (0.12f + 0.88f * Dead))), TEXT("%"), Along(DeadLadder(), Dead), 0.f);
 	Set(ESimCruiseMenuRow::Trigger, AfterDot(10));
+	FSimCruiseMenuValue* Graphics = Set(ESimCruiseMenuRow::Graphics, FSimCruiseGraphics::ChoiceDisplay());
+	Graphics->Chosen = static_cast<int32>(FSimCruiseGraphics::SavedChoice());
 
 	if (const USimCruiseRouteSubsystem* Gps = USimCruiseRouteSubsystem::Get(GetWorld()); Gps && Gps->HasRoute())
 	{
@@ -339,6 +342,7 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 	case ESimCruiseMenuRow::StickDeadZone: StepLadder(TEXT("simcruise.Pad.SteerDeadZone"), DeadLadder(), Dir, 0.f, TEXT("pad_steer_dead_zone"), 100.f); break;
 	case ESimCruiseMenuRow::StickResponse: ChangeSetting(8); break;
 	case ESimCruiseMenuRow::Trigger: ChangeSetting(10); break;
+	case ESimCruiseMenuRow::Graphics: FSimCruiseGraphics::ChooseQuality(Dir); break;
 	default: break;
 	}
 }

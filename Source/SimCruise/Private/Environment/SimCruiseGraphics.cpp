@@ -2,6 +2,7 @@
 
 #include "Environment/SimCruiseGraphics.h"
 
+#include "Gameplay/SimCruisePreferences.h"
 #include "HAL/IConsoleManager.h"
 #include "RHIGlobals.h"
 #include "Scalability.h"
@@ -208,4 +209,81 @@ void FSimCruiseGraphics::Apply(ESimCruiseGraphicsPreset Preset)
 ESimCruiseGraphicsPreset FSimCruiseGraphics::Current()
 {
 	return GCurrentPreset;
+}
+
+FString FSimCruiseGraphics::ChoiceName(ESimCruiseGraphicsChoice Choice)
+{
+	switch (Choice)
+	{
+	case ESimCruiseGraphicsChoice::Low: return TEXT("low");
+	case ESimCruiseGraphicsChoice::Medium: return TEXT("medium");
+	case ESimCruiseGraphicsChoice::High: return TEXT("high");
+	case ESimCruiseGraphicsChoice::Ultra: return TEXT("ultra");
+	default: return TEXT("auto");
+	}
+}
+
+bool FSimCruiseGraphics::ParseChoice(const FString& Text, ESimCruiseGraphicsChoice& OutChoice)
+{
+	for (uint8 Index = 0; Index <= static_cast<uint8>(ESimCruiseGraphicsChoice::Ultra); ++Index)
+	{
+		const ESimCruiseGraphicsChoice Candidate = static_cast<ESimCruiseGraphicsChoice>(Index);
+		if (ChoiceName(Candidate).Equals(Text, ESearchCase::IgnoreCase))
+		{
+			OutChoice = Candidate;
+			return true;
+		}
+	}
+	return false;
+}
+
+ESimCruiseGraphicsChoice FSimCruiseGraphics::StepChoice(ESimCruiseGraphicsChoice Choice, int32 Direction)
+{
+	const int32 Now = FMath::Clamp(static_cast<int32>(Choice), 0, 4);
+	const int32 Delta = Direction < 0 ? -1 : 1;
+	return static_cast<ESimCruiseGraphicsChoice>((Now + Delta + 5) % 5);
+}
+
+ESimCruiseGraphicsChoice FSimCruiseGraphics::SavedChoice()
+{
+	ESimCruiseGraphicsChoice Choice = ESimCruiseGraphicsChoice::Auto;
+	ParseChoice(SimCruisePreferences::GetString(TEXT("graphics_quality"), TEXT("auto")), Choice);
+	return Choice;
+}
+
+FString FSimCruiseGraphics::ChoiceDisplay()
+{
+	const ESimCruiseGraphicsChoice Choice = SavedChoice();
+	const TCHAR* Labels[] = { TEXT("Auto"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Ultra") };
+	if (Choice == ESimCruiseGraphicsChoice::Auto)
+	{
+		const FString Actual = Name(Current());
+		const FString ActualTitle = Actual.Left(1).ToUpper() + Actual.Mid(1);
+		return FString::Printf(TEXT("Auto (%s)"), *ActualTitle);
+	}
+	return Labels[static_cast<uint8>(Choice)];
+}
+
+void FSimCruiseGraphics::ApplyChoice(ESimCruiseGraphicsChoice Choice)
+{
+	if (Choice == ESimCruiseGraphicsChoice::Auto)
+	{
+		Apply(AutoPickForThisMachine(true));
+		return;
+	}
+	Apply(static_cast<ESimCruiseGraphicsPreset>(static_cast<uint8>(Choice) - 1));
+}
+
+void FSimCruiseGraphics::SelectChoice(ESimCruiseGraphicsChoice Choice)
+{
+	SimCruisePreferences::SetString(TEXT("graphics_quality"), ChoiceName(Choice));
+	ApplyChoice(Choice);
+}
+
+void FSimCruiseGraphics::ChooseQuality(int32 Direction)
+{
+	const ESimCruiseGraphicsChoice Choice = Direction == 2
+		? ESimCruiseGraphicsChoice::Auto
+		: StepChoice(SavedChoice(), Direction);
+	SelectChoice(Choice);
 }

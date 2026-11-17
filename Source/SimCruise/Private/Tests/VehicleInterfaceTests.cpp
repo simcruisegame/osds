@@ -102,13 +102,12 @@ bool FSimCruiseVehicleInterfaceTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("manual selected"), T.bManual);
 	TestEqual(TEXT("manual at rest is neutral"), T.GearText, FString(TEXT("N")));
 	Vehicle->ShiftUp();
-	WaitSim(0.1);
+	Bench.RunUntil([&Telemetry]() { return !Telemetry().LastGearMessage.IsEmpty(); }, 0.5);
 	TestEqual(TEXT("no gear without the clutch"), Telemetry().LastGearMessage, FString(TEXT("Hold the clutch to change gear")));
 	Vehicle->SetClutch(1.0f);
-	WaitSim(0.3);
 	Vehicle->ShiftUp();
-	WaitSim(0.1);
-	TestEqual(TEXT("first gear with the clutch down"), Telemetry().GearText, FString(TEXT("1")));
+	Bench.RunUntil([&Telemetry]() { return Telemetry().GearText == TEXT("1"); }, 0.5);
+	TestEqual(TEXT("same-frame clutch and shift reaches first"), Telemetry().GearText, FString(TEXT("1")));
 	Vehicle->SetThrottle(0.35f);
 	for (int32 Step = 0; Step <= 20; ++Step)
 	{

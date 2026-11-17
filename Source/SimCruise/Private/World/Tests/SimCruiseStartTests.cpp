@@ -1370,7 +1370,20 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 			++Places;
 			int32 PlaceFaults = 0;
 			double Worst = 0.0;
-			struct FSpot { double Over; FString Line; };
+			struct FSpot { double Over; FString Line; FString Cell; };
+			auto TriangleHeightAt = [](const FVector2d& P, const FVector2d& A, const FVector2d& B, const FVector2d& C,
+				double ZA, double ZB, double ZC, double& OutZ)
+			{
+				const FVector2d AB = B - A, AC = C - A, AP = P - A;
+				const double Den = AB.X * AC.Y - AB.Y * AC.X;
+				if (FMath::Abs(Den) < 1e-9) return false;
+				const double WB = (AP.X * AC.Y - AP.Y * AC.X) / Den;
+				const double WC = (AB.X * AP.Y - AB.Y * AP.X) / Den;
+				const double WA = 1.0 - WB - WC;
+				if (WA < -1e-5 || WB < -1e-5 || WC < -1e-5) return false;
+				OutZ = WA * ZA + WB * ZB + WC * ZC;
+				return true;
+			};
 			TArray<FSpot> Spots;
 			for (const TPair<FIntPoint, TSharedRef<FSimCruiseTileBuild>>& Pair : Built)
 			{
@@ -1380,6 +1393,15 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 				for (int32 r = 0; r < B.Roads.Ribbons.Num(); ++r)
 				{
 					const FSimCruiseRibbon& R = B.Roads.Ribbons[r];
+					TArray<FVector2d> Tangents;
+					for (const FSimCruiseRibbonStation& St : R.St) Tangents.Add(St.T);
+					TArray<FVector2d> MeshColumns[5];
+					for (int32 Column = 0; Column < 5; ++Column)
+					{
+						for (const FSimCruiseRibbonStation& St : R.St)
+							MeshColumns[Column].Add(St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(Column) * St.HalfW));
+						if (Column != 2) SimCruiseTileBuilder::UnfoldLine(MeshColumns[Column], Tangents);
+					}
 					for (int32 i = 0; i + 1 < R.St.Num(); ++i)
 					{
 						const FSimCruiseRibbonStation& A = R.St[i];
@@ -1413,9 +1435,85 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 								bool bPad = false;
 								for (const FSimCruiseRoadPad& Pad : B.Roads.Pads) bPad |= FVector2d::Distance(P, Pad.Centre) <= Pad.RadiusAt(P) + 0.5;
 								const bool bEnd = i < 2 || i + 3 > R.St.Num();
+								FString CellDetail;
+								const int32 CellX = FMath::Clamp(FMath::FloorToInt(P.X / Cell), 0, B.TerrainN - 1);
+								const int32 CellY = FMath::Clamp(FMath::FloorToInt(P.Y / Cell), 0, B.TerrainN - 1);
+								const int32 Stride = B.TerrainN + 1;
+								const int32 FirstSeg = FMath::Max(0, i - 2);
+								const int32 LastSeg = FMath::Min(i + 2, R.St.Num() - 2);
+								for (int32 DY = 0; DY <= 1; ++DY)
+								for (int32 DX = 0; DX <= 1; ++DX)
+								{
+									const int32 VX = CellX + DX, VY = CellY + DY;
+									const FVector2d VP(VX * Cell, VY * Cell);
+									FSimCruiseRoadHit Nearest;
+									double BestD2 = TNumericLimits<double>::Max();
+									for (int32 Candidate = FirstSeg; Candidate <= LastSeg; ++Candidate)
+									{
+										const FSimCruiseRoadHit Hit = B.Roads.Project(r, Candidate, VP);
+										const double D2 = FMath::Square(Hit.Lateral) + FMath::Square(Hit.Along);
+										if (D2 < BestD2) { BestD2 = D2; Nearest = Hit; }
+									}
+									const TCHAR* Cap = FMath::Abs(Nearest.Along) > 1.2 ? TEXT("along-skip")
+										: FMath::Abs(Nearest.Lateral) <= Nearest.HalfW ? TEXT("road-cap")
+										: FMath::Abs(Nearest.Lateral) <= Nearest.HalfW + 1.42 * Cell ? TEXT("edge-cap") : TEXT("lateral-skip");
+										CellDetail += FString::Printf(TEXT(" v%d%d z=%.2f road=%.2f s%d/t%.2f lat=%+.2f along=%+.2f %s;"), DX, DY,
+											B.TerrainHeights[VY * Stride + VX], Nearest.Height, Nearest.Station, Nearest.T, Nearest.Lateral, Nearest.Along, Cap);
+								}
+								const FSimCruiseRoadHit SampleHit = B.Roads.Project(r, i, P);
+								double MeshRoad = 0.0;
+								bool bOnRoadMesh = false;
+								for (int32 Column = 0; Column < 4 && !bOnRoadMesh; ++Column)
+								{
+									const FVector2d& A0 = MeshColumns[Column][i];
+									const FVector2d& A1 = MeshColumns[Column + 1][i];
+									const FVector2d& B0 = MeshColumns[Column][i + 1];
+									const FVector2d& B1 = MeshColumns[Column + 1][i + 1];
+									bOnRoadMesh = TriangleHeightAt(P, A0, B0, B1, A.Column(Column), C.Column(Column), C.Column(Column + 1), MeshRoad)
+										|| TriangleHeightAt(P, A0, B1, A1, A.Column(Column), C.Column(Column + 1), A.Column(Column + 1), MeshRoad);
+								}
+								CellDetail += FString::Printf(TEXT(" sample i%d t%.1f L=%+.2f prof=%.2f proj(h=%.2f t=%.2f lat=%+.2f along=%+.2f) mesh=%s%.2f sections A[%.2f %.2f %.2f %.2f %.2f] B[%.2f %.2f %.2f %.2f %.2f]"), i, T, L, Road,
+									SampleHit.Height, SampleHit.T, SampleHit.Lateral, SampleHit.Along,
+									bOnRoadMesh ? TEXT("") : TEXT("miss/"), MeshRoad,
+									A.Column(0), A.Column(1), A.Column(2), A.Column(3), A.Column(4), C.Column(0), C.Column(1), C.Column(2), C.Column(3), C.Column(4));
+								for (int32 Section = 0; Section < 2; ++Section)
+								{
+									const FSimCruiseRibbonStation& St = Section == 0 ? A : C;
+									for (int32 Column = 0; Column < 5; ++Column)
+									{
+										FSimCruiseRoadHit Other;
+										const FVector2d At = St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(Column) * St.HalfW);
+
+										if (!B.Roads.FindCarriageway(At, Other, r))
+										{
+											CellDetail += FString::Printf(TEXT(" %c%d=none"), Section == 0 ? TEXT('A') : TEXT('B'), Column);
+											continue;
+										}
+										if (B.Roads.Ribbons.IsValidIndex(Other.Ribbon))
+										{
+											const FSimCruiseRibbon& OtherRibbon = B.Roads.Ribbons[Other.Ribbon];
+											CellDetail += FString::Printf(TEXT(" %c%d=r%d/%s/%s rank%d%s h=%.2f"), Section == 0 ? TEXT('A') : TEXT('B'), Column,
+												Other.Ribbon, *OtherRibbon.Class, *OtherRibbon.Name, OtherRibbon.Rank, OtherRibbon.St[Other.Station].bBridge ? TEXT(" deck") : TEXT(""), Other.Height);
+										}
+										else CellDetail += FString::Printf(TEXT(" %c%d=pad%d h=%.2f"), Section == 0 ? TEXT('A') : TEXT('B'), Column, -2 - Other.Ribbon, Other.Height);
+									}
+								}
+								for (int32 Nearby = FMath::Max(0, i - 10); Nearby <= FMath::Min(i + 11, R.St.Num() - 1); ++Nearby)
+								{
+									for (int32 Column = 0; Column < 5; ++Column)
+									{
+										const FSimCruiseRibbonStation& St = R.St[Nearby];
+										FSimCruiseRoadHit Other;
+										const FVector2d At = St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(Column) * St.HalfW);
+										if (!B.Roads.FindCarriageway(At, Other, r) || !B.Roads.Ribbons.IsValidIndex(Other.Ribbon)) continue;
+										const FSimCruiseRibbon& OtherRibbon = B.Roads.Ribbons[Other.Ribbon];
+										CellDetail += FString::Printf(TEXT(" n%d/c%d=r%d/%s/%s%s h=%.2f"), Nearby - i, Column, Other.Ribbon,
+											*OtherRibbon.Class, *OtherRibbon.Name, OtherRibbon.St[Other.Station].bBridge ? TEXT(" deck") : TEXT(""), Other.Height);
+									}
+								}
 								Spots.Add({ Over, FString::Printf(TEXT("%s tile %d_%d ribbon %d (%s %s%s) station %d of %d%s%s%s: the ground stands %.2f m over the road (road %.2f m, ground %.2f m, %+.1f m across) at %.6f, %.6f"),
 									*Place, B.Tile.X, B.Tile.Y, r, *R.Class, *R.Name, A.bBridge ? TEXT(", deck") : TEXT(""), i, R.St.Num(), bSeam ? TEXT(", on the seam") : TEXT(""),
-									bPad ? TEXT(", on a junction pad") : TEXT(""), bEnd ? TEXT(", at the ribbon's end") : TEXT(""), Over, Road, Ground, L, Lat, Lon) });
+									bPad ? TEXT(", on a junction pad") : TEXT(""), bEnd ? TEXT(", at the ribbon's end") : TEXT(""), Over, Road, Ground, L, Lat, Lon), CellDetail });
 							}
 						}
 					}
@@ -1425,7 +1523,8 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 			Spots.Sort([](const FSpot& X, const FSpot& Y) { return X.Over > Y.Over; });
 			for (int32 k = 0; k < FMath::Min(5, Spots.Num()); ++k)
 			{
-				if (bGate) AddError(Spots[k].Line); else AddWarning(Spots[k].Line);
+				if (bGate) AddError(Spots[k].Line);
+				else { AddWarning(Spots[k].Line); AddWarning(Spots[k].Cell); }
 			}
 			if (bGate && Spots.Num() > 5) AddError(FString::Printf(TEXT("%s: %d points in all"), *Place, Spots.Num()));
 			AddInfo(FString::Printf(TEXT("TERRAIN-OVER-ROAD %s: %d tiles, %d points over the road by more than 0.1 m, worst %.2f m"), *Place, Built.Num(), PlaceFaults, Worst));

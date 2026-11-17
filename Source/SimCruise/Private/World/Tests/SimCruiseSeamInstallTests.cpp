@@ -8,6 +8,7 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
 #include "World/SimCruiseGeo.h"
+#include "World/SimCruiseRoadNetwork.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseTileData.h"
 #include "World/SimCruiseWorldSubsystem.h"
@@ -251,6 +252,85 @@ bool FSimCruiseSlopedSeamTest::RunTest(const FString& Parameters)
 	AddInfo(FString::Printf(TEXT("least clearance over the ground at a seam: %.3f m"), WorstClear));
 	TestTrue(FString::Printf(TEXT("the road clears the ground at the seams (%.3f m)"), WorstClear), WorstClear >= 0.04);
 	TestTrue(FString::Printf(TEXT("seam pins bend the grade by about 1 %% at most (%.4f)"), Worst), Worst < 0.02);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBridgeDeckProfileTest, "SimCruise.World.BridgeDeckProfile", SimCruiseSeamInstallTest::Flags)
+bool FSimCruiseBridgeDeckProfileTest::RunTest(const FString& Parameters)
+{
+	// The helper supplies the full-chain deck profile in `bridges`. A deck at 10 m over
+	// flat zero-metre ground must remain at that height even when this tile has no
+	// neighbouring seam contract yet.
+	const FString Json = TEXT("{\"id\":[100,100],\"grid\":1,\"h\":[0,0,0,0],\"roads\":[[\"primary\",0,\"test deck\",[[0,0.5],[1,0.5]],8,\"paved\",\"bridge\"]],\"bridges\":[[\"primary\",\"test deck\",[[0,0.5],[1,0.5]],8,[10,10],0,0]]}");
+	FSimCruiseTileData A;
+	FString Error;
+	if (!TestTrue(TEXT("bridge tile parses"), SimCruiseTileData::Parse(Json, A, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("the tile keeps the exported bridge profile"), A.Bridges.Num(), 1);
+	constexpr double Side = 200.0;
+	auto DeckHeightError = [](const FSimCruiseRoadNetwork& Roads)
+	{
+		double Worst = 0.0;
+		for (const FSimCruiseRibbon& Ribbon : Roads.Ribbons)
+		{
+			for (const FSimCruiseRibbonStation& Station : Ribbon.St)
+			{
+				if (Station.bBridge) Worst = FMath::Max(Worst, FMath::Abs(Station.HC - 10.0));
+			}
+		}
+		return Worst;
+	};
+	auto FindEnd = [](const FSimCruiseRoadNetwork& Roads, double X, FSimCruiseSeamEnd& OutEnd)
+	{
+		TArray<FSimCruiseSeamEnd> Ends;
+		Roads.CollectSeamEnds(Ends);
+		for (const FSimCruiseSeamEnd& End : Ends)
+		{
+			if (FMath::Abs(End.P.X - X) < 0.05) { OutEnd = End; return true; }
+		}
+		return false;
+	};
+	auto Translate = [](const FSimCruiseRoadNetwork& Roads, double DX)
+	{
+		TArray<FSimCruiseSeamEnd> Ends;
+		Roads.CollectSeamEnds(Ends);
+		for (FSimCruiseSeamEnd& End : Ends) End.P.X += DX;
+		return Ends;
+	};
+
+	FSimCruiseRoadNetwork FirstBuilt;
+	FirstBuilt.Build(A, Side);
+	TestEqual(TEXT("one bridge ribbon"), FirstBuilt.Ribbons.Num(), 1);
+	const double UncontractedError = DeckHeightError(FirstBuilt);
+	TestTrue(FString::Printf(TEXT("the uncontracted deck follows its authored profile (%.3f m error)"), UncontractedError), UncontractedError < 0.02);
+
+	FSimCruiseTileData B = A;
+	B.Id = FIntPoint(101, 100);
+	FSimCruiseRoadNetwork SecondBuilt;
+	SecondBuilt.Build(B, Side, Translate(FirstBuilt, -Side));
+	FSimCruiseSeamEnd FirstEast, SecondWest;
+	const bool bFirstEast = FindEnd(FirstBuilt, Side, FirstEast);
+	const bool bSecondWest = FindEnd(SecondBuilt, 0.0, SecondWest);
+	TestTrue(TEXT("the first bridge tile has an east seam"), bFirstEast);
+	TestTrue(TEXT("the later bridge tile has a west seam"), bSecondWest);
+	if (bFirstEast && bSecondWest) TestTrue(TEXT("a later tile agrees with the existing bridge seam"), FMath::Abs(FirstEast.HC - SecondWest.HC) < 0.01);
+	TestTrue(FString::Printf(TEXT("the later tile keeps the authored deck profile (%.3f m error)"), DeckHeightError(SecondBuilt)), DeckHeightError(SecondBuilt) < 0.02);
+
+	FSimCruiseRoadNetwork ReverseFirst;
+	ReverseFirst.Build(B, Side);
+	FSimCruiseRoadNetwork ReverseSecond;
+	A.Id = FIntPoint(100, 100);
+	ReverseSecond.Build(A, Side, Translate(ReverseFirst, Side));
+	FSimCruiseSeamEnd ReverseWest, ReverseEast;
+	const bool bReverseWest = FindEnd(ReverseFirst, 0.0, ReverseWest);
+	const bool bReverseEast = FindEnd(ReverseSecond, Side, ReverseEast);
+	TestTrue(TEXT("the reverse first tile has a west seam"), bReverseWest);
+	TestTrue(TEXT("the reverse second tile has an east seam"), bReverseEast);
+	TestTrue(FString::Printf(TEXT("the reverse build order keeps its deck profile (%.3f m error)"), DeckHeightError(ReverseFirst)), DeckHeightError(ReverseFirst) < 0.02);
+	if (bReverseWest && bReverseEast) TestTrue(TEXT("reverse build order meets at the same deck height"), FMath::Abs(ReverseWest.HC - ReverseEast.HC) < 0.01);
 	return true;
 }
 

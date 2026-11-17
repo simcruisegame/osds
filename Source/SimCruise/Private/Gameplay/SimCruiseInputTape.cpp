@@ -434,15 +434,16 @@ void FSimCruiseInputTapeDriver::InstallStepReplay(ASimCruiseVehicle& Vehicle, FS
 			return;
 		}
 		const FSimCruiseInputSteps::FRow& Row = Shared->Steps.Rows[Shared->Next++];
-		const double Forward = C.Body.LinearVelocityMps.Dot(C.Body.Rotation.RotateVector(FVector3d::UnitX()));
 		if (Row.bManual != C.Sim.State.bManual)
 		{
 			C.Sim.SetManual(Row.bManual, C.Body.LinearVelocityMps.Size());
 		}
 		// The driver's own gear changes (the automatic chooses its gears itself, as it did then).
+		// Queue the change alongside this row's controls so the clutch gets its physics-step ramp
+		// before the shift is judged, just as it does for live input.
 		for (int32 Try = 0; Try < 4 && Row.bManual && C.Sim.State.SelectedGear != Row.Gear; ++Try)
 		{
-			C.Sim.ChangeGear(Row.Gear > C.Sim.State.SelectedGear ? 1 : -1, Forward);
+			C.Sim.QueueManualGearChange(Row.Gear > C.Sim.State.SelectedGear ? 1 : -1);
 		}
 		C.Controls = Row.Controls;
 	});

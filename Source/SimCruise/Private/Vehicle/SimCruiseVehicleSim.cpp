@@ -17,6 +17,7 @@ namespace
 	constexpr double KeyReturnRateMinimumRadPerSecond = 24.0 * UE_DOUBLE_PI / 180.0;
 	constexpr double KeyReturnFactor = 1.6;
 	constexpr double SteerDeadBand = 0.01;
+	constexpr double ManualShiftClutchBufferS = 0.12;
 
 	// Traction control (Powertrain.gd): the slip read through a 20 ms low-pass
 	// and a slew limit, proportional plus integral on the error, harder cut on
@@ -87,6 +88,9 @@ void FSimCruiseVehicleSim::Initialize(const FSimCruiseCarDefinition& InCar)
 		Car.CenterOfGravityHeightM - Car.CollisionShapeCenterYM);
 
 	State = FSimCruiseVehicleSimState();
+	PendingManualGearStep = 0;
+	PendingManualGearAgeS = 0.0;
+	GearChangeMessage.Reset();
 	State.EngineRpm = Car.IdleSpeedRpm;
 	State.EngineOmegaRadPerSecond = Car.RestartEngineSpeedRadPerSecond;
 	for (FSimCruiseWheelState& Wheel : State.Wheels)
@@ -102,6 +106,9 @@ FVector3d FSimCruiseVehicleSim::GetPrincipalInertiaKgM2() const
 
 void FSimCruiseVehicleSim::ResetState()
 {
+	PendingManualGearStep = 0;
+	PendingManualGearAgeS = 0.0;
+	GearChangeMessage.Reset();
 	for (FSimCruiseWheelState& Wheel : State.Wheels)
 	{
 		Wheel.RollingSlipAngleRad = 0.0;
@@ -138,6 +145,9 @@ void FSimCruiseVehicleSim::SetManual(bool bEnabled, double BodySpeedMps)
 	{
 		bEnabled = false;
 	}
+	PendingManualGearStep = 0;
+	PendingManualGearAgeS = 0.0;
+	GearChangeMessage.Reset();
 	State.bManual = bEnabled;
 	State.ClutchPedal = 0.0;
 	State.bStalled = false;
@@ -182,6 +192,28 @@ FString FSimCruiseVehicleSim::ChangeGear(int32 GearStep, double ForwardSpeedMps)
 	}
 	SelectRatio(Proposed);
 	return FString();
+}
+
+void FSimCruiseVehicleSim::QueueManualGearChange(int32 GearStep)
+{
+	if (!State.bManual || GearStep == 0)
+	{
+		return;
+	}
+	const int32 Direction = GearStep > 0 ? 1 : -1;
+	if (PendingManualGearStep == 0 || PendingManualGearStep != Direction)
+	{
+		PendingManualGearStep = Direction;
+		PendingManualGearAgeS = 0.0;
+	}
+	GearChangeMessage.Reset();
+}
+
+FString FSimCruiseVehicleSim::ConsumeGearChangeMessage()
+{
+	FString Message = MoveTemp(GearChangeMessage);
+	GearChangeMessage.Reset();
+	return Message;
 }
 
 void FSimCruiseVehicleSim::StartEngine()
@@ -617,6 +649,21 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 	}
 
 	// Gear selection.
+	if (State.bManual && PendingManualGearStep != 0)
+	{
+		PendingManualGearAgeS += Dt;
+		if (State.ClutchPedal >= 0.75 || PendingManualGearAgeS >= ManualShiftClutchBufferS)
+		{
+			GearChangeMessage = ChangeGear(PendingManualGearStep, Speed);
+			PendingManualGearStep = 0;
+			PendingManualGearAgeS = 0.0;
+		}
+	}
+	else if (!State.bManual)
+	{
+		PendingManualGearStep = 0;
+		PendingManualGearAgeS = 0.0;
+	}
 	double ForwardRatio = (State.bInReverse ? Car.ReverseGearRatio : Car.ForwardGearRatios[State.Gear]) * Car.FinalDriveRatio;
 	const double SignDirection = State.bInReverse ? -1.0 : 1.0;
 	State.ShiftTimeS = FMath::Max(0.0, State.ShiftTimeS - Dt);

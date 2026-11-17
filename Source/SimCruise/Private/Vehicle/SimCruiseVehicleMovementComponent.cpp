@@ -274,7 +274,6 @@ static void StepVehicleOnPhysicsThread(FSimCruiseVehiclePhysicsState& S, double 
 	S.bHaveLastVelocity = true;
 	S.LastVelocityMps = Body.LinearVelocityMps;
 	S.LastAngularRadPerSecond = Body.AngularVelocityRadPerSecond;
-	const double ForwardSpeed = Body.LinearVelocityMps.Dot(Body.Rotation.RotateVector(FVector3d::UnitX()));
 	if (S.PendingManual >= 0)
 	{
 		S.Sim.SetManual(S.PendingManual == 1, Body.LinearVelocityMps.Size());
@@ -288,7 +287,7 @@ static void StepVehicleOnPhysicsThread(FSimCruiseVehiclePhysicsState& S, double 
 	while (S.PendingShift != 0)
 	{
 		const int32 Direction = S.PendingShift > 0 ? 1 : -1;
-		S.LastGearMessage = S.Sim.ChangeGear(Direction, ForwardSpeed);
+		S.Sim.QueueManualGearChange(Direction);
 		S.PendingShift -= Direction;
 	}
 	if (S.bPendingEngineStart)
@@ -347,6 +346,11 @@ static void StepVehicleOnPhysicsThread(FSimCruiseVehiclePhysicsState& S, double 
 	const int32 Substeps = FMath::Max(1, FMath::CeilToInt32(DeltaTimeS / FMath::Max(S.MaxWheelSubstepSeconds, 1.0e-5) - 1.0e-6));
 	FSimCruiseBodyForces Forces;
 	S.Sim.Step(DeltaTimeS, Substeps, Controls, Body, Ground, Forces);
+	const FString GearMessage = S.Sim.ConsumeGearChangeMessage();
+	if (!GearMessage.IsEmpty())
+	{
+		S.LastGearMessage = GearMessage;
+	}
 	Handle->AddForce(SimCruiseUnits::ToUnrealForce(Forces.ForceN));
 	Handle->AddTorque(SimCruiseUnits::ToUnrealTorque(Forces.TorqueNm));
 
@@ -604,12 +608,14 @@ void USimCruiseVehicleMovementComponent::SetClutch(float Value)
 void USimCruiseVehicleMovementComponent::ShiftUp()
 {
 	FScopeLock Lock(&PhysicsState->Mutex);
+	PhysicsState->LastGearMessage.Reset();
 	++PhysicsState->PendingShift;
 }
 
 void USimCruiseVehicleMovementComponent::ShiftDown()
 {
 	FScopeLock Lock(&PhysicsState->Mutex);
+	PhysicsState->LastGearMessage.Reset();
 	--PhysicsState->PendingShift;
 }
 

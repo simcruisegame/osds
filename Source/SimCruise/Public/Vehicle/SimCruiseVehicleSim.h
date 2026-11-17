@@ -195,6 +195,10 @@ public:
 	void SetManual(bool bEnabled, double BodySpeedMps);
 	/** Manual only: returns "" on success, or why the change was refused. */
 	FString ChangeGear(int32 GearStep, double ForwardSpeedMps);
+	/** Queue one manual shift so the clutch can finish its current input ramp. */
+	void QueueManualGearChange(int32 GearStep);
+	/** Return and clear the result of the most recently processed queued shift. */
+	FString ConsumeGearChangeMessage();
 	void StartEngine();
 	void SelectRatio(int32 Ratio);
 	FString GetGearText() const;
@@ -245,4 +249,7 @@ private:
 	double RoadReferenceRad = 0.0;
 	double LimitSlipSurplusRad = 0.0;
 	double KeyRackRateParkingRadPerSecond = 0.0;
+	int32 PendingManualGearStep = 0;
+	double PendingManualGearAgeS = 0.0;
+	FString GearChangeMessage;
 };
