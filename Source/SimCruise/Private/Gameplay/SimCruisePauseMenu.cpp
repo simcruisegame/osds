@@ -11,6 +11,12 @@
 #include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
+#include "Widgets/Images/SImage.h"
+#include "Brushes/SlateDynamicImageBrush.h"
+#include "Misc/Paths.h"
+#include "HAL/FileManager.h"
+
+namespace { const FSlateBrush* OsdsLogoBrush(); }
 #include "Widgets/Text/STextBlock.h"
 #include "Gameplay/SimCruiseFeatures.h"
 
@@ -187,8 +193,31 @@ void SSimCruisePauseMenu::Construct(const FArguments& InArgs)
 		[
 			Switcher
 		]
+		// The OSDS logo (docs/brand, copied to data/brand so the package carries it loose), bottom right.
+		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0.f, 0.f, 96.f, 44.f)
+		[
+			SNew(SImage).Image(OsdsLogoBrush()).ColorAndOpacity(FLinearColor(1.f, 1.f, 1.f, 0.8f))
+			.Visibility(OsdsLogoBrush() ? EVisibility::HitTestInvisible : EVisibility::Collapsed)
+		]
 	];
 	if (OnPage.IsBound()) OnPage.Execute(Page);
+}
+
+namespace
+{
+	/** The white horizontal OSDS lockup (1200 x 415), drawn 170 px wide; null when the file is missing. */
+	const FSlateBrush* OsdsLogoBrush()
+	{
+		static TSharedPtr<FSlateDynamicImageBrush> Brush;
+		static bool bTried = false;
+		if (!bTried)
+		{
+			bTried = true;
+			const FString Path = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), TEXT("data"), TEXT("brand"), TEXT("osds-lockup-horizontal-white.png")));
+			if (IFileManager::Get().FileExists(*Path)) Brush = MakeShared<FSlateDynamicImageBrush>(FName(*Path), FVector2D(170.0, 170.0 * 415.0 / 1200.0));
+		}
+		return Brush.Get();
+	}
 }
 
 TSharedRef<SWidget> SSimCruisePauseMenu::BuildTabs()
