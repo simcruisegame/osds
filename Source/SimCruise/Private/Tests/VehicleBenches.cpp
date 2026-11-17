@@ -828,6 +828,7 @@ namespace
 		double T = 0.0;
 		int32 LastGear = -1, LastDirection = 0;
 		double LastShiftT = -100.0;
+		double LimiterRunS = 0.0;
 		std::atomic<bool> bDone{ false };
 		FSimCruiseShiftDriveResult Result;
 
@@ -861,7 +862,17 @@ namespace
 				LastShiftT = T;
 			}
 			LastGear = Gear;
-			if (C.Controls.Throttle > 0.9 && Sim.State.EngineRpm >= Sim.GetCar().FuelCutSpeedRpm * 0.99) Result.LimiterSeconds += Dt;
+			if (C.Controls.Throttle > 0.9 && Sim.State.EngineRpm >= Sim.GetCar().FuelCutSpeedRpm * 0.99)
+			{
+				Result.LimiterSeconds += Dt;
+				Result.LimiterAt += FString::Printf(TEXT("%s%.2f"), Result.LimiterAt.IsEmpty() ? TEXT("") : TEXT(","), T);
+				LimiterRunS += Dt;
+				Result.LimiterLongestS = FMath::Max(Result.LimiterLongestS, LimiterRunS);
+			}
+			else
+			{
+				LimiterRunS = 0.0;
+			}
 			// In gear, clutch home (no shift running) and rolling: the engine turns with the road.
 			const FSimCruiseCarDefinition& Car = Sim.GetCar();
 			// In 2nd and up (1st slips by design while pulling away), 1.2 s after a change.

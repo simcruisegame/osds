@@ -494,9 +494,14 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 				const int32 Index = FMath::Clamp(State.SelectedGear - 1, 0, FMath::Max(Car.ForwardGearRatios.Num() - 1, 0));
 				const double GearRatio = (State.SelectedGear == -1 ? Car.ReverseGearRatio : Car.ForwardGearRatios[Index]) * Car.FinalDriveRatio;
 				const double RoadRpm = FMath::Abs(DrivenOmega()) * GearRatio * 60.0 / Tau;
-				if (RoadRpm < Car.IdleSpeedRpm + 300.0)
+				// The bite follows the throttle, as a driver's launch revs do: the clutch held in at idle
+				// with no throttle (no stall), biting from about 2100 rpm at a third of the pedal; it is
+				// fully out once the road turns the engine at that speed.
+				const double LaunchRpm = FMath::Min(Car.IdleSpeedRpm + 400.0 + 2500.0 * Gas, Car.FuelCutSpeedRpm * 0.55);
+				if (RoadRpm < LaunchRpm + 100.0)
 				{
-					const double Hold = 1.0 - SmoothStep(Car.IdleSpeedRpm + 150.0, Car.IdleSpeedRpm + 1100.0, State.EngineRpm);
+					const double Hold = (1.0 - SmoothStep(LaunchRpm - 450.0, LaunchRpm + 250.0, State.EngineRpm))
+						* (1.0 - SmoothStep(LaunchRpm - 300.0, LaunchRpm + 100.0, RoadRpm));
 					AutoPedal = FMath::Max(AutoPedal, Hold);
 					ReleaseRate = FMath::Max(ReleaseRate, 4.0);
 				}
@@ -848,6 +853,8 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		{
 			NextGear = State.Gear + 1;
 		}
+		// Up one gear at a time (a kickdown may still drop two).
+		NextGear = FMath::Min(NextGear, State.Gear + 1);
 		const int32 Direction = NextGear > State.Gear ? 1 : NextGear < State.Gear ? -1 : 0;
 		// No change back the other way within 2 s of the last one (the Dragon's D5-D4-D2-D4 and
 		// 1-2-1-2 hunting as the pedal moved), unless the engine is at its limiter.

@@ -140,6 +140,10 @@ struct FSimCruiseShiftDriveResult
 	FString Trace;
 	/** Time on the fuel cut at full pedal, s (a gearbox that will not change up). */
 	double LimiterSeconds = 0.0;
+	/** The longest unbroken time on the fuel cut at full pedal, s. */
+	double LimiterLongestS = 0.0;
+	/** When it was on the fuel cut (s, one entry per step). */
+	FString LimiterAt;
 };
 
 FSimCruiseShiftDriveResult SimCruiseRunShiftDrive(const FSimCruiseCarDefinition& Car, double FixedStepS);
