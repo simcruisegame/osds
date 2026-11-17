@@ -10,6 +10,8 @@ class ASimCruiseWorldStreamer;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UProceduralMeshComponent;
+class UInstancedStaticMeshComponent;
+class UStaticMesh;
 
 /** One signalised junction: where it is and the two directions its phases serve. */
 struct FSimCruiseSignalJunction
@@ -87,6 +89,17 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> BaseMaterial;
+
+	/** CARLA's signal pole, its base and the mast arms of three reaches (CC-BY 4.0, Content/Carla): drawn
+	 *  instead of the boxes when the art is fetched (scripts/fetch-carla.ps1). [0] base, [1] pole, [2..4]
+	 *  arms of 3.9, 5.6 and 8.1 m. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UInstancedStaticMeshComponent>> CarlaParts;
+	bool bCarlaTried = false;
+	bool HasCarlaParts();
+public:
+	/** The CARLA meshes the signals use (for the cook list). */
+	static TArray<FString> CarlaMeshPaths();
 
 	TSet<FIntPoint> ShownTiles;
 	FIntPoint ShownOrigin = FIntPoint(MAX_int32, MAX_int32);

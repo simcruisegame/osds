@@ -66,12 +66,12 @@ Everything else, including stability control (ESC): [docs/controls.md](docs/cont
 
 | | |
 |---|---|
-| ![The 2001 Miata on Ocean Drive, Miami Beach](docs/images/release-2.0.4/01-miata-ocean-drive-chase.jpg) | ![From the Miata's seat on Ocean Drive](docs/images/release-2.0.4/02-miata-ocean-drive-cockpit.jpg) |
-| *Miata, Ocean Drive* | *Miata cockpit* |
-| ![The Corvette's cockpit on the Tail of the Dragon](docs/images/release-2.0.4/05-corvette-tail-of-the-dragon-cockpit.jpg) | ![The Miata on California 1 near Big Sur](docs/images/release-2.0.4/06-miata-big-sur-chase.jpg) |
-| *Corvette cockpit, Tail of the Dragon* | *Miata, Big Sur* |
-| ![The 1965 Mustang on Ocean Drive at night](docs/images/release-2.0.4/03-mustang-ocean-drive-night.jpg) | ![The Model 3 at a junction in Chicago's Loop](docs/images/release-2.0.4/07-model3-chicago-chase.jpg) |
-| *Mustang, Ocean Drive at night* | *Model 3, Chicago* |
+| ![The 2015 Mini Cooper S on a Nebraska county road, with roadside grass from the CARLA simulator](docs/images/release-2.1.0/01-mini-nebraska-roadside-chase.jpg) | ![The 1987 Camaro IROC-Z on California 1 near Big Sur](docs/images/release-2.1.0/04-camaro-big-sur-chase.jpg) |
+| *Mini Cooper S, Nebraska (new in 2.1)* | *Camaro IROC-Z, Big Sur (new in 2.1)* |
+| ![From the Mini's seat in Chicago's Loop](docs/images/release-2.1.0/03-mini-chicago-cockpit.jpg) | ![The Camaro IROC-Z on US 129, the Tail of the Dragon](docs/images/release-2.1.0/05-camaro-tail-of-the-dragon-chase.jpg) |
+| *Mini cockpit, Chicago* | *Camaro, Tail of the Dragon* |
+| ![From the 2001 Miata's seat on Ocean Drive, Miami Beach](docs/images/release-2.1.0/06-miata-ocean-drive-cockpit.jpg) | ![The 1965 Mustang on Ocean Drive at night](docs/images/release-2.1.0/07-mustang-ocean-drive-night.jpg) |
+| *Miata cockpit, Ocean Drive* | *Mustang, Ocean Drive at night* |
 
 More in [docs/images/](docs/images/).
 
@@ -115,7 +115,7 @@ Code: [MIT](LICENSE). Data, imagery, models and fonts keep their own licences: [
 - Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL), via [OpenFreeMap](https://openfreemap.org/) / [OpenMapTiles](https://openmaptiles.org/); search by [Photon](https://photon.komoot.io/); buildings also from [Overture Maps](https://overturemaps.org/) and the USACE National Structure Inventory.
 - Elevation, aerial photos and land cover: USGS (3DEP), USDA (NAIP), LANDFIRE, MRLC (NLCD), Mapzen, NASA, Copernicus Sentinel-2. Tree heights: [CHMv2](https://registry.opendata.aws/dataforgood-fb-forestsv2/) by Meta and WRI, 2026, imagery © 2016 Vantor ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), changed. Climate: Köppen-Geiger 1991-2020, Beck et al. (2023), CC BY 4.0. Weather: [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) and NOAA.
 - AI models: Stable Diffusion XL (textures), Real-ESRGAN, SatlasPretrain, Detectron2, run with ONNX Runtime ([details](CREDITS.md)).
-- Cars: Sketchfab models under CC BY 4.0, among them the Mazda MX-5 (NB) by [niev](https://sketchfab.com/niev), the 1965 Mustang by Kristian LaGrange and the Corvette C8 by Hari Prasath R. Textures: Poly Haven, Innerscene, OpenGameArt (CC0). Font: Overpass (SIL OFL 1.1).
+- Cars: Sketchfab models under CC BY 4.0, among them the Mazda MX-5 (NB) by [niev](https://sketchfab.com/niev), the 1965 Mustang by Kristian LaGrange, the Corvette C8 by Hari Prasath R and the 1985 Camaro IROC-Z by Tony; the Mini Cooper S is the [CARLA](https://carla.org/) Team's model. Signal poles, roadside plants and wall textures: CARLA simulator content (CC BY 4.0). Textures: Poly Haven, Innerscene, OpenGameArt (CC0). Font: Overpass (SIL OFL 1.1).
 - Built with [Unreal Engine](https://www.unrealengine.com/) and [Bun](https://bun.com/).
 
 OSDS was called SimCruise until 2.0.3; the code still uses that name inside (module, `-SimCruise...` options, `%LOCALAPPDATA%\SimCruise`), so old settings keep working.

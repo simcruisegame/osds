@@ -119,6 +119,15 @@ struct FSimCruisePalmInstance
 	uint8 Variant = 0;
 };
 
+/** A CARLA model placed by rule (SimCruiseCarlaCatalog entry), tile cm. */
+struct FSimCruisePropInstance
+{
+	int32 Entry = INDEX_NONE;
+	FVector LocationCm = FVector::ZeroVector;
+	float YawDeg = 0.f;
+	float Scale = 1.f;
+};
+
 /** A parked car: on the ground at a stall's centre (tile cm), facing the traffic beside it. */
 struct FSimCruiseParkedCar
 {
@@ -228,6 +237,9 @@ struct SIMCRUISE_API FSimCruiseTileBuild
 
 	/** Palms to instance on this tile. */
 	TArray<FSimCruisePalmInstance> PalmInstances;
+
+	/** CARLA models placed by rule: roadside grass and bushes, props (SimCruiseCarlaCatalog). */
+	TArray<FSimCruisePropInstance> PropInstances;
 
 	/** Parked cars in the painted stalls of parking lanes. */
 	TArray<FSimCruiseParkedCar> ParkedCars;

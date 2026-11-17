@@ -838,6 +838,84 @@ FSimCruiseSineDwellResult SimCruiseRunSineDwell(const FSimCruiseCarDefinition& C
 	return Driver->Result;
 }
 
+namespace
+{
+	struct FHandbrakeTurnDriver
+	{
+		double Dt = 1.0 / 360.0;
+		double TargetSpeed = 50.0 / 3.6;
+		int32 State = 0;
+		double T = 0.0;
+		double SpeedI = 0.0;
+		std::atomic<bool> bDone{ false };
+		FSimCruiseHandbrakeTurnResult Result;
+
+		void Step(FSimCruiseVehicleDriverContext& C)
+		{
+			C.Controls = FSimCruiseVehicleControls();
+			if (bDone) return;
+			T += Dt;
+			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
+			const FVector3d Right = C.Body.Rotation.RotateVector(FVector3d::UnitY());
+			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
+			C.Controls.bDirectRack = true;
+			C.Controls.RackAngleRad = 0.0;
+			switch (State)
+			{
+			case 0:
+				if (T >= 0.5)
+				{
+					C.Body.LinearVelocityMps = Forward * TargetSpeed;
+					C.bBodyStateChanged = true;
+					for (FSimCruiseWheelState& Wheel : C.Sim.State.Wheels) Wheel.AngularSpeedRadPerSecond = TargetSpeed / C.Sim.GetTireRadiusM();
+					const FSimCruiseCarDefinition& Car = C.Sim.GetCar();
+					C.Sim.State.Gear = FMath::Min(1, Car.ForwardGearRatios.Num() - 1);
+					C.Sim.State.EngineOmegaRadPerSecond = TargetSpeed / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[C.Sim.State.Gear] * Car.FinalDriveRatio;
+					C.Sim.State.EngineRpm = C.Sim.State.EngineOmegaRadPerSecond * 60.0 / Tau;
+					State = 1;
+					T = 0.0;
+				}
+				break;
+			case 1:
+				SpeedI = FMath::Clamp(SpeedI + (TargetSpeed - Speed) * Dt * 0.3, 0.0, 0.9);
+				C.Controls.Throttle = FMath::Clamp((TargetSpeed - Speed) * 0.65 + SpeedI, 0.0, 1.0);
+				if (T >= 2.0) { State = 2; T = 0.0; }
+				break;
+			case 2:
+			{
+				// Lift, turn in 8 deg (a left turn) and pull the handbrake for 0.8 s.
+				C.Controls.RackAngleRad = -FMath::DegreesToRadians(8.0) * FMath::Clamp(T / 0.2, 0.0, 1.0);
+				C.Controls.bHandbrake = T < 0.8;
+				const double Road = FMath::Max(C.Body.LinearVelocityMps.Size(), 0.5); // the car's speed over the ground, sliding or not
+				const double RL = FMath::Abs(C.Sim.State.Wheels[2].AngularSpeedRadPerSecond) * C.Sim.GetTireRadiusM();
+				const double RR = FMath::Abs(C.Sim.State.Wheels[3].AngularSpeedRadPerSecond) * C.Sim.GetTireRadiusM();
+				if (Result.RearLockS < 0.0 && T < 0.8 && (RL < 0.5 * Road || RR < 0.5 * Road)) Result.RearLockS = T;
+				Result.PeakYawDegS = FMath::Max(Result.PeakYawDegS, FMath::Abs(FMath::RadiansToDegrees(C.Body.AngularVelocityRadPerSecond.Z)));
+				Result.PeakBetaDeg = FMath::Max(Result.PeakBetaDeg, FMath::Abs(FMath::RadiansToDegrees(FMath::Atan2(C.Body.LinearVelocityMps.Dot(Right), Road))));
+				Result.bStalled |= C.Sim.State.bStalled;
+				if (T >= 2.5) { Result.bCompleted = true; bDone = true; }
+				break;
+			}
+			default: break;
+			}
+		}
+	};
+}
+
+FSimCruiseHandbrakeTurnResult SimCruiseRunHandbrakeTurn(const FSimCruiseCarDefinition& Car, double FixedStepS)
+{
+	TSharedRef<FHandbrakeTurnDriver> Driver = MakeShared<FHandbrakeTurnDriver>();
+	Driver->Dt = FixedStepS;
+	const FVector3d Ground(0.0, 0.0, 0.15);
+	FSimCruiseVehicleBenchWorld World(FixedStepS);
+	if (!World.IsValid() || World.SpawnVehicle(Car, Ground, [Driver](FSimCruiseVehicleDriverContext& C) { Driver->Step(C); }) == nullptr)
+	{
+		return Driver->Result;
+	}
+	World.RunUntil([&Driver]() { return Driver->bDone.load(); }, 30.0);
+	return Driver->Result;
+}
+
 FSimCruiseStepSteerResult SimCruiseRunStepSteer(const FSimCruiseCarDefinition& Car, double FixedStepS, double SpeedMps, double LateralG)
 {
 	TSharedRef<FStepSteerDriver> Driver = MakeShared<FStepSteerDriver>();

@@ -40,6 +40,8 @@ void SSimCruiseTuningMenu::Construct(const FArguments& InArgs)
 		{ LOCTEXT("Torque", "Engine torque"), &FSimCruiseTuning::TorquePct, 5.0, TEXT("% of stock"), 0 },
 		{ LOCTEXT("FinalDrive", "Final drive"), &FSimCruiseTuning::FinalDrive, 0.05, TEXT(":1"), 2 },
 		{ LOCTEXT("Steering", "Steering ratio"), &FSimCruiseTuning::SteeringRatio, 0.5, TEXT(":1"), 1 },
+		{ LOCTEXT("FrontTyre", "Front tyre pressure"), &FSimCruiseTuning::FrontTyrePsi, 1.0, TEXT("psi"), 0 },
+		{ LOCTEXT("RearTyre", "Rear tyre pressure"), &FSimCruiseTuning::RearTyrePsi, 1.0, TEXT("psi"), 0 },
 	};
 
 	using namespace SimCruiseUiStyle;

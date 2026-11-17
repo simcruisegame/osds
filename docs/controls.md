@@ -2,7 +2,7 @@
 
 You start in the 2001 Miata on Ocean Drive, Miami Beach, on a sunny morning. This start is built into the game, so it works without internet. The engine sound is on.
 
-**On this page:** [Buttons and keys](#buttons-and-keys) · [Gearbox](#gearbox) · [Stability control](#stability-control-esc) · [Pause menu and GPS](#pause-menu-and-gps) · [Go somewhere else](#go-somewhere-else) · [Menus on a controller](#menus-on-a-controller) · [Tune your car](#tune-your-car) · [Seat and view](#seat-and-view) · [Settings](#settings) · [Advanced](#advanced)
+**On this page:** [Buttons and keys](#buttons-and-keys) · [Gearbox](#gearbox) · [Handbrake](#handbrake) · [Stability control](#stability-control-esc) · [Pause menu and GPS](#pause-menu-and-gps) · [Go somewhere else](#go-somewhere-else) · [Menus on a controller](#menus-on-a-controller) · [Tune your car](#tune-your-car) · [Seat and view](#seat-and-view) · [Settings](#settings) · [Advanced](#advanced)
 
 ## Buttons and keys
 
@@ -53,13 +53,19 @@ Tips:
 - A shift that would over-rev the engine is refused.
 - Your choice is saved.
 
+## Handbrake
+
+- Hold H (B on the controller). It pulls in over about a tenth of a second, as a real lever does, and locks the rear wheels.
+- With the automatic clutch it presses the clutch for you, so the engine does not fight the locked wheels; stability control stands aside while you hold it. That is how a handbrake turn or the start of a drift works.
+- Cars with an electric parking brake (the Corvette and the Model 3) cannot do this: like the real cars, theirs brakes all four wheels gently instead.
+
 ## Stability control (ESC)
 
-- These cars have it, as they do in real life: Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey and CR-V.
+- These cars have it, as they do in real life: Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey, CR-V and the Mini Cooper S.
 - It is on by default.
 - When the car starts to slide, it brakes one wheel and eases the engine. The **ESC light flashes** on the HUD while it works.
 - To turn it off: Pause menu > Your car > Stability control. Then you catch slides yourself. Your choice is saved.
-- The 2001 Miata and the 1965 Mustang never had it.
+- The 2001 Miata, the 1965 Mustang and the 1987 Camaro IROC-Z never had it.
 
 ## Pause menu and GPS
 
@@ -145,6 +151,7 @@ Press F4 (D-pad right), or pick *Tune car...* on the Your car page. You can only
 | Engine torque | % |
 | Final drive | Gear ratio |
 | Steering ratio | Lower is quicker: the wheels turn further and faster |
+| Front and rear tyre pressure | psi, 18-40 (the door-sticker value is stock). Lower gives a softer, slower-reacting tyre and, past a point, less grip; higher a sharper, harder tyre that also loses grip when overdone |
 
 - Every setting stays in a safe range around the real car's.
 - The menu shows body roll (degrees per g of cornering), so you see the effect before you drive.

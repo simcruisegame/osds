@@ -171,6 +171,7 @@
  "target_70_0_ft": 148.0,
  "target_skidpad_g": 1.03,
  "sources": {
+   "parking_brake": "The C8 has an electric parking brake (a switch): at speed it brakes through the ABS/ESC unit, so it cannot do a handbrake turn.",
    "stability_control": "Standard GM StabiliTrak with Performance Traction Management (every US car from model year 2012 has ESC, FMVSS 126). The reference understeer gradient, 0.95 deg/g, is this car's own from the 80 km/h step-steer bench, as a maker calibrates the yaw-rate model to the car.",
   "calibration": "Car and Driver: 2.8 s to 60 mph and 149 ft from 70 mph (first test), 148 ft and 1.03 g (long-term 2021 Z51); 3647 lb measured; 40/60 weight split (Chevrolet). The 0-60 target is timed with Car and Driver's 1 ft rollout (target_0_60_rollout).",
   "engine": "495 hp at 6450 rpm, 470 lb-ft at 5150 rpm with the Z51 exhaust (Chevrolet); curve shape estimated.",
@@ -186,6 +187,7 @@
  ],
  "traction_control": true,
  "stability_control": true,
+ "parking_brake_type": "electric",
  "esc_understeer_deg_per_g": 0.95,
  "calibration_open": "Passing 50-70 mph 1.8 s against Car and Driver's 2.5 s (30-50: 1.6 s against 1.8 s): full-pedal kickdown goes to 2nd at 50 mph by the generic kickdown map (upshift point x 0.62), not the real car's unpublished shift map; refitted to the 2.5 s in v2.0.4. 0-60 mph 3.22 s with Car and Driver's 1 ft rollout (3.53 s from rest) against their 2.8 s. Launch control (3500 rpm) and the real TR-9080 ratios are modelled; the launch is limited by rear-tyre grip on the legacy tyre curve. The physics lane's TMeasy fit gives 3.31 s from rest (about 3.0 s with rollout).",
  "model_scene": "data/art/traffic/c8-790c40cc/scene.gltf",

@@ -43,6 +43,8 @@ public:
 		double LimiterRpm = DefaultLimiterRpm;
 		/** The intake's level in the cabin against outside: 0.5 for an engine ahead of the dash. */
 		double CabinInletGain = 0.5;
+		/** Overrun pops and crackle, 0..1: 0 for a stock exhaust (a stock NB Miata does not pop). */
+		double PopAmount = 1.0;
 	};
 
 	FSimCruiseInlineFourSynth();
@@ -74,4 +76,8 @@ private:
 	double NoiseLow = 0.0, NoiseSlow = 0.0, OutputLow = 0.0, Boom = 0.0, PulseGain = 1.0, Throttle = 0.0;
 	bool bFired = false;
 	double LimiterPhase = 0.0, CutGain = 1.0, OverrunAge = 0.0, PopEnv = 0.0, PopLow = 0.0;
+	/** Fixed exhaust resonances (RBJ band-pass, state x1 x2 y1 y2): the muffler body and the pipe's rasp. */
+	double BodyZ[4] = { 0.0, 0.0, 0.0, 0.0 }, RaspZ[4] = { 0.0, 0.0, 0.0, 0.0 };
+	/** Which cylinder fires (inline four): each a little different, the engine's half orders. */
+	int32 FireIndex = 0;
 };

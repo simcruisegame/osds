@@ -8,6 +8,7 @@
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "Misc/CommandLine.h"
+#include "Misc/CoreDelegates.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
@@ -96,6 +97,10 @@ bool FSimCruiseNeuralDetail::Initialize()
 		return bReady;
 	}
 	bTried = true;
+	// Quitting while a photograph is being enhanced crashed the game on its way out (2.1 release
+	// smoke test: the worker called into the image and inference modules as the engine unloaded
+	// them). Stop the worker first and give it a moment to finish the window it is on.
+	FCoreDelegates::OnPreExit.AddRaw(this, &FSimCruiseNeuralDetail::StopForExit);
 	const TCHAR* Cmd = FCommandLine::Get();
 	if (FParse::Param(Cmd, TEXT("SimCruiseNoNeural")))
 	{
@@ -203,6 +208,7 @@ bool FSimCruiseNeuralDetail::Upscale(const TArray<FColor>& In, int32 Width, int3
 	{
 		for (int32 CX = 0; CX < Width; CX += Core)
 		{
+			if (bStopping) return false;
 			const int32 SX = CX - Overlap, SY = CY - Overlap;
 			for (int32 Y = 0; Y < Window; ++Y)
 			{
@@ -323,7 +329,7 @@ bool FSimCruiseNeuralDetail::EnhanceAerial(const FString& SourcePath, TArray<FCo
 		return true;
 	}
 	FScopeLock Guard(&QueueLock);
-	if (!Queued.Contains(SourcePath))
+	if (!bStopping && !Queued.Contains(SourcePath))
 	{
 		Queued.Add(SourcePath);
 		Queue.Add(SourcePath);
@@ -336,6 +342,25 @@ bool FSimCruiseNeuralDetail::EnhanceAerial(const FString& SourcePath, TArray<FCo
 	return false;
 }
 
+void FSimCruiseNeuralDetail::StopForExit()
+{
+	bStopping = true;
+	const double Until = FPlatformTime::Seconds() + 20.0;
+	for (;;)
+	{
+		{
+			FScopeLock Guard(&QueueLock);
+			if (!bWorkerRunning) return;
+		}
+		if (FPlatformTime::Seconds() > Until)
+		{
+			UE_LOG(LogSimCruiseNeural, Warning, TEXT("AI detail engine: the worker did not stop within 20 s of quitting"));
+			return;
+		}
+		FPlatformProcess::Sleep(0.01f);
+	}
+}
+
 void FSimCruiseNeuralDetail::RunWorker()
 {
 	for (;;)
@@ -343,7 +368,7 @@ void FSimCruiseNeuralDetail::RunWorker()
 		FString Path;
 		{
 			FScopeLock Guard(&QueueLock);
-			if (Queue.IsEmpty())
+			if (Queue.IsEmpty() || bStopping)
 			{
 				bWorkerRunning = false;
 				return;
@@ -363,7 +388,7 @@ void FSimCruiseNeuralDetail::Process(const FString& SourcePath)
 	int32 W = 0, H = 0, OW = 0, OH = 0;
 	double Seconds = 0.0;
 	const double Start = FPlatformTime::Seconds();
-	if (!USimCruiseWorldResources::DecodeImageFile(SourcePath, In, W, H) || !Upscale(In, W, H, Out, OW, OH, Seconds))
+	if (bStopping || !USimCruiseWorldResources::DecodeImageFile(SourcePath, In, W, H) || !Upscale(In, W, H, Out, OW, OH, Seconds) || bStopping)
 	{
 		return;
 	}

@@ -108,6 +108,8 @@ public:
 	/** The tile's palms, one instanced component per shared palm mesh. */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UInstancedStaticMeshComponent>> PalmComponents;
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UInstancedStaticMeshComponent>> PropComponents;
 
 	/** The tile's parked cars (attached, so they move with the floating origin). */
 	/** The named places' lettering (FSimCruiseTileBuild::Signs). */

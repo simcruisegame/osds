@@ -1,0 +1,23 @@
+CARLA simulator content
+=======================
+
+OSDS uses art from the CARLA simulator's content repository
+(https://bitbucket.org/carla-simulator/carla-content, branch ue5-dev),
+by the CARLA Team (Computer Vision Center, Barcelona, and contributors),
+https://carla.org.
+
+Licence: Creative Commons Attribution 4.0 International (CC BY 4.0),
+https://creativecommons.org/licenses/by/4.0/
+
+What OSDS uses, and how it is changed:
+- Traffic-signal poles, bases and mast arms (Static/Pole), placed by OSDS's own rules at
+  signalised junctions found in OpenStreetMap; OSDS's own signal heads hang from them.
+- Roadside grass and bushes (Static/Vegetation), chosen per climate band and placed along
+  rural road edges by OSDS (data/carla/props.json).
+- Brick and concrete-weathering textures (Static/GenericMaterials/Facade), used as a
+  ratio over each wall's own colour in OSDS's building shader.
+- The Mini Cooper model (Static/Car/4Wheeled/MiniCooper), exported from Unreal to glTF
+  with baked materials; maker badges and tyre lettering painted out or removed.
+
+Only the models the game places are packaged. No brand names or logos are taken.
+Car names and brands are trademarks of their owners and are not licensed.

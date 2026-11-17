@@ -142,7 +142,8 @@ foreach ($Car in $Profiles.cars.PSObject.Properties) {
     $Credit = $Car.Value.credit
     if ($Credit -and -not $Seen.ContainsKey($Credit)) { $Seen[$Credit] = $true; $Credits += "- $Credit" }
 }
-$Credits += '', 'Map data (c) OpenStreetMap contributors (ODbL); imagery, textures and the rest: see DATA-SOURCES.md.'
+$Credits += '', 'Traffic-signal poles and arms, roadside grass and bushes, facade weathering and brick textures, and the Mini: CARLA simulator content by the CARLA Team (https://carla.org), CC BY 4.0, from bitbucket.org/carla-simulator/carla-content (licenses\CARLA.txt).'
+$Credits += 'Map data (c) OpenStreetMap contributors (ODbL); imagery, textures and the rest: see DATA-SOURCES.md.'
 $Credits += 'Made with Unreal(R) Engine. Unreal(R) is a trademark or registered trademark of Epic Games, Inc.'
 Set-Content -Path (Join-Path $Windows 'CREDITS.txt') -Value $Credits -Encoding utf8
 

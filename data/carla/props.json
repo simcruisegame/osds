@@ -1,0 +1,1282 @@
+{
+ "source": "CARLA simulator content (bitbucket.org/carla-simulator/carla-content, ue5-dev), CC-BY 4.0, CARLA Team; fetched by scripts/fetch-carla.ps1",
+ "made_by": "scripts/carla-catalog.py",
+ "entries": [
+  {
+   "key": "SM_Bush03_L_A",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_L_A.SM_Bush03_L_A",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_L_B",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_L_B.SM_Bush03_L_B",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_L_C",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_L_C.SM_Bush03_L_C",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_L_D",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_L_D.SM_Bush03_L_D",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_L_E",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_L_E.SM_Bush03_L_E",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_M_A",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_M_A.SM_Bush03_M_A",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_M_B",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_M_B.SM_Bush03_M_B",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_M_C",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_M_C.SM_Bush03_M_C",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_M_D",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_M_D.SM_Bush03_M_D",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_M_E",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_Bush03_M_E.SM_Bush03_M_E",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_WillowBush01",
+   "path": "/Game/Carla/Static/Vegetation/00_LegacyAssets/Bushes/SM_WillowBush01.SM_WillowBush01",
+   "kind": "bush",
+   "bands": [
+    "wet",
+    "north"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush01",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush01.SM_Bush01",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush02_A",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush02_A.SM_Bush02_A",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush02_B",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush02_B.SM_Bush02_B",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush02_C",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush02_C.SM_Bush02_C",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush02_D",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush02_D.SM_Bush02_D",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush02_E",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush02_E.SM_Bush02_E",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_A",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush03_A.SM_Bush03_A",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_B",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush03_B.SM_Bush03_B",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_C",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush03_C.SM_Bush03_C",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_D",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush03_D.SM_Bush03_D",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_E",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush03_E.SM_Bush03_E",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_F",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush03_F.SM_Bush03_F",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush03_G",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush03_G.SM_Bush03_G",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush04_A",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush04_A.SM_Bush04_A",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush04_B",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush04_B.SM_Bush04_B",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush04_C",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush04_C.SM_Bush04_C",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush04_D",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush04_D.SM_Bush04_D",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush04_E",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush04_E.SM_Bush04_E",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush05_A",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush05_A.SM_Bush05_A",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush05_B",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush05_B.SM_Bush05_B",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush05_C",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush05_C.SM_Bush05_C",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush06_A",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush06_A.SM_Bush06_A",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush06_B",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush06_B.SM_Bush06_B",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Bush06_C",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/SM_Bush06_C.SM_Bush06_C",
+   "kind": "bush",
+   "bands": [
+    "north",
+    "south",
+    "wet"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_BushOleander_01",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/Oleander/SM_BushOleander_01.SM_BushOleander_01",
+   "kind": "bush",
+   "bands": [
+    "south",
+    "tropic",
+    "dry"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_BushOleander_02",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/Oleander/SM_BushOleander_02.SM_BushOleander_02",
+   "kind": "bush",
+   "bands": [
+    "south",
+    "tropic",
+    "dry"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_BushOleander_03",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/Oleander/SM_BushOleander_03.SM_BushOleander_03",
+   "kind": "bush",
+   "bands": [
+    "south",
+    "tropic",
+    "dry"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_BushOleander_04",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/Oleander/SM_BushOleander_04.SM_BushOleander_04",
+   "kind": "bush",
+   "bands": [
+    "south",
+    "tropic",
+    "dry"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_BushOleander_05",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/Oleander/SM_BushOleander_05.SM_BushOleander_05",
+   "kind": "bush",
+   "bands": [
+    "south",
+    "tropic",
+    "dry"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_BushOleander_06",
+   "path": "/Game/Carla/Static/Vegetation/Bushes/Oleander/SM_BushOleander_06.SM_BushOleander_06",
+   "kind": "bush",
+   "bands": [
+    "south",
+    "tropic",
+    "dry"
+   ],
+   "cull_m": 150,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass01_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass01_A.SM_Grass01_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass01_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass01_B.SM_Grass01_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass01_C",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass01_C.SM_Grass01_C",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass02_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass02_A.SM_Grass02_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass02_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass02_B.SM_Grass02_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass02_C",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass02_C.SM_Grass02_C",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass03_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass03_A.SM_Grass03_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass03_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass03_B.SM_Grass03_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass04_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass04_A.SM_Grass04_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass04_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass04_B.SM_Grass04_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass04_C",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass04_C.SM_Grass04_C",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass04_D",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass04_D.SM_Grass04_D",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass05_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass05_A.SM_Grass05_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass05_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass05_B.SM_Grass05_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass05_C",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass05_C.SM_Grass05_C",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Grass05_D",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_Grass05_D.SM_Grass05_D",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster01_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster01_A.SM_GrassCluster01_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster01_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster01_B.SM_GrassCluster01_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster01_C",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster01_C.SM_GrassCluster01_C",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster01_D",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster01_D.SM_GrassCluster01_D",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster01_E",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster01_E.SM_GrassCluster01_E",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster02_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster02_A.SM_GrassCluster02_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster02_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster02_B.SM_GrassCluster02_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster02_C",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster02_C.SM_GrassCluster02_C",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster03_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster03_A.SM_GrassCluster03_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster03_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster03_B.SM_GrassCluster03_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster03_C",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster03_C.SM_GrassCluster03_C",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster03_D",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster03_D.SM_GrassCluster03_D",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster03_E",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster03_E.SM_GrassCluster03_E",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster03_F",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster03_F.SM_GrassCluster03_F",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster04_A",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster04_A.SM_GrassCluster04_A",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster04_B",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster04_B.SM_GrassCluster04_B",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster04_C",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster04_C.SM_GrassCluster04_C",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_GrassCluster04_D",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_GrassCluster04_D.SM_GrassCluster04_D",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "tropic"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_SmallGrassv2",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_SmallGrassv2.SM_SmallGrassv2",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "dry",
+    "tropic"
+   ],
+   "cull_m": 50,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_SmallGrassv3",
+   "path": "/Game/Carla/Static/Vegetation/Grass/SM_SmallGrassv3.SM_SmallGrassv3",
+   "kind": "grass",
+   "bands": [
+    "north",
+    "south",
+    "wet",
+    "dry",
+    "tropic"
+   ],
+   "cull_m": 50,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Rushes",
+   "path": "/Game/Carla/Static/Vegetation/PlantsAndFlowers/SM_Rushes.SM_Rushes",
+   "kind": "grass",
+   "bands": [
+    "wet",
+    "south"
+   ],
+   "cull_m": 60,
+   "shadow": false,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.1
+  },
+  {
+   "key": "SM_Phormium_01",
+   "path": "/Game/Carla/Static/Vegetation/PlantsAndFlowers/Phormium/SM_Phormium_01.SM_Phormium_01",
+   "kind": "bush",
+   "bands": [
+    "tropic",
+    "wet"
+   ],
+   "cull_m": 120,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Phormium_02",
+   "path": "/Game/Carla/Static/Vegetation/PlantsAndFlowers/Phormium/SM_Phormium_02.SM_Phormium_02",
+   "kind": "bush",
+   "bands": [
+    "tropic",
+    "wet"
+   ],
+   "cull_m": 120,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Phormium_03",
+   "path": "/Game/Carla/Static/Vegetation/PlantsAndFlowers/Phormium/SM_Phormium_03.SM_Phormium_03",
+   "kind": "bush",
+   "bands": [
+    "tropic",
+    "wet"
+   ],
+   "cull_m": 120,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Phormium_04",
+   "path": "/Game/Carla/Static/Vegetation/PlantsAndFlowers/Phormium/SM_Phormium_04.SM_Phormium_04",
+   "kind": "bush",
+   "bands": [
+    "tropic",
+    "wet"
+   ],
+   "cull_m": 120,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  },
+  {
+   "key": "SM_Phormium_05",
+   "path": "/Game/Carla/Static/Vegetation/PlantsAndFlowers/Phormium/SM_Phormium_05.SM_Phormium_05",
+   "kind": "bush",
+   "bands": [
+    "tropic",
+    "wet"
+   ],
+   "cull_m": 120,
+   "shadow": true,
+   "collide": false,
+   "min_scale": 0.8,
+   "max_scale": 1.2
+  }
+ ]
+}

@@ -218,20 +218,21 @@ CARS.append(derive({
         "estimates": "Weight split, centre of gravity, inertia (scaled), spring and bar rates (1.4/1.6 Hz), dampers, gearing, brakes, tyre grip (calibrated)."},
 }, 1.87, 1.68, 4.70, (1.4, 1.6), 38.0, 0.20))
 
-root = os.path.join(os.path.dirname(__file__), "..", "..", "data", "cars")
-for car in CARS:
-    if car["engine"] == "electric":
-        car.pop("torque_curve")
-        car["torque_curve"] = [[0, car["motor_peak_torque_nm"]], [car["motor_max_rpm"], 104]]
-    path = os.path.join(root, car["id"] + ".json")
-    # The tyre fit (scripts/fit-tyres.ps1) owns tyre_model and the tmeasy_* keys: keep what it wrote.
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as f:
-            old = json.load(f)
-        for key, value in old.items():
-            if key == "tyre_model" or key.startswith("tmeasy_"):
-                car[key] = value
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(car, f, indent=1, ensure_ascii=False)
-        f.write("\n")
-    print("wrote", car["id"])
+if __name__ == "__main__":
+    root = os.path.join(os.path.dirname(__file__), "..", "..", "data", "cars")
+    for car in CARS:
+        if car["engine"] == "electric":
+            car.pop("torque_curve")
+            car["torque_curve"] = [[0, car["motor_peak_torque_nm"]], [car["motor_max_rpm"], 104]]
+        path = os.path.join(root, car["id"] + ".json")
+        # The tyre fit (scripts/fit-tyres.ps1) owns tyre_model and the tmeasy_* keys: keep what it wrote.
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                old = json.load(f)
+            for key, value in old.items():
+                if key == "tyre_model" or key.startswith("tmeasy_"):
+                    car[key] = value
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(car, f, indent=1, ensure_ascii=False)
+            f.write("\n")
+        print("wrote", car["id"])

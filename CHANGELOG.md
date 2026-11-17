@@ -2,6 +2,20 @@
 
 The short version of each release, newest first. Every release has full notes in [docs/release/notes/](docs/release/notes/). OSDS was called SimCruise up to 2.0.3 and Sunday Driver up to 1.0.8 ([history](docs/history.md)).
 
+## 2.1.0 (2026-11-17)
+
+**Two new cars, a drift handbrake, and CARLA art.**
+
+- **New cars:** the **MINI Cooper S** (2015 F56, 6-speed manual, from the CARLA simulator's model) and the **1987 Camaro IROC-Z** (5.7 V8, automatic). Both calibrated against magazine tests.
+- **Handbrake you can drift with:** it ramps on, locks the rears and works the clutch for you. Electric parking brakes (Corvette, Model 3) can't, as in real life.
+- **Tyre pressure** per axle in the tuning menu (18-40 psi).
+- **The Miata sounds like a Miata:** real exhaust and intake resonances, louder with revs, no pops on a stock car.
+- **CARLA art:** traffic-signal poles and mast arms, roadside grass and bushes chosen per climate, brick and weathered concrete on buildings.
+- **Trees pick their species from the aerial photo;** no more pines in Phoenix.
+- Known issues: the Camaro has no traction control, as the real one did not: floor it and it spins (the test robot spun it on the Mackinac Bridge), so ease on; its model has no cabin (chase view from the seat); an occasional jolt at a map-tile border.
+
+[Full notes](docs/release/notes/2.1.0.md)
+
 ## 2.0.4 (2026-11-17)
 
 **Driving you can trust.**

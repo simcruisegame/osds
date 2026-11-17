@@ -1,0 +1,11 @@
+Model Information:
+* title:	1985 Chevrolet Camaro IROC-Z
+* source:	https://sketchfab.com/3d-models/1985-chevrolet-camaro-iroc-z-c6d20cc339f64cbfbde07f66f36ca8d0
+* author:	Tony (https://sketchfab.com/tonyferello)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "1985 Chevrolet Camaro IROC-Z" (https://sketchfab.com/3d-models/1985-chevrolet-camaro-iroc-z-c6d20cc339f64cbfbde07f66f36ca8d0) by Tony (https://sketchfab.com/tonyferello) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

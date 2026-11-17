@@ -44,6 +44,7 @@ struct FSimCruiseStartPose
  * confirms (the road surface is there, at the road's height).
  */
 struct FSimCruiseRibbon;
+class FSimCruiseRoadNetwork;
 
 namespace SimCruiseStartPick
 {
@@ -53,6 +54,10 @@ namespace SimCruiseStartPick
 	 *  so no start passed and the car was put on the lake beside the bridge. */
 	constexpr double ParallelCutM = 60.0;
 	SIMCRUISE_API TArray<uint8> JunctionCuts(const FSimCruiseRibbon& Ribbon);
+	/** As above, and a cut whose other carriageway runs alongside (its direction within about 30 deg of
+	 *  this one's, found just past this side's edge) is not a junction either: a divided road's two
+	 *  carriageways touching, broken into short runs by its cross streets (Ward Parkway, Kansas City). */
+	SIMCRUISE_API TArray<uint8> JunctionCuts(const FSimCruiseRoadNetwork& Roads, int32 RibbonIndex);
 	/** The road ahead the start wants (60 s of driving at about 13 m/s). */
 	constexpr double WantedAheadM = 800.0;
 	/** A start stays this far from any junction (along its road). */

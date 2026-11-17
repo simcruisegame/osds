@@ -126,6 +126,19 @@ struct FSimCruiseSineDwellResult
 
 FSimCruiseSineDwellResult SimCruiseRunSineDwell(const FSimCruiseCarDefinition& Car, double FixedStepS, bool bStabilityControl);
 
+/** A handbrake turn: straight at 50 km/h, the wheel turned 8 deg and the handbrake pulled for 0.8 s. */
+struct FSimCruiseHandbrakeTurnResult
+{
+	bool bCompleted = false;
+	/** Seconds from the pull until a rear wheel turns at under half the car's speed over the ground (that tyre slides: the inner one first, the outer one carries more load) (-1: never). */
+	double RearLockS = -1.0;
+	double PeakYawDegS = 0.0;
+	double PeakBetaDeg = 0.0;
+	bool bStalled = false;
+};
+
+FSimCruiseHandbrakeTurnResult SimCruiseRunHandbrakeTurn(const FSimCruiseCarDefinition& Car, double FixedStepS);
+
 /** Full throttle on a long flat pad, straight, until the speed stops rising: power against drag
  *  and rolling resistance (and the rev limit in top gear). */
 struct FSimCruiseTopSpeedResult

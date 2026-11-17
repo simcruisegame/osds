@@ -30,6 +30,7 @@
 #include "Presentation/SimCruiseCarPresentationComponent.h"
 #include "World/SimCruiseGeo.h"
 #include "World/SimCruiseWorldResources.h"
+#include "World/SimCruiseCarlaCatalog.h"
 
 namespace
 {
@@ -385,6 +386,42 @@ void ASimCruiseWorldTile::Install(const TSharedRef<FSimCruiseTileBuild>& InBuild
 			PalmComponents.Add(Palms);
 		}
 		InBuild->PalmInstances.Empty();
+	});
+
+	// CARLA models placed by rule: one instanced component per model on this tile, drawn to the
+	// model's own distance, shadows and collision as the catalogue says.
+	for (UInstancedStaticMeshComponent* Old : PropComponents)
+	{
+		if (Old) Old->DestroyComponent();
+	}
+	PropComponents.Reset();
+	if (!InBuild->PropInstances.IsEmpty())
+	PendingSteps.Add([this, InBuild]()
+	{
+		TMap<int32, TArray<FTransform>> ByEntry;
+		for (const FSimCruisePropInstance& P : InBuild->PropInstances)
+		{
+			ByEntry.FindOrAdd(P.Entry).Add(FTransform(FRotator(0.0, P.YawDeg, 0.0), P.LocationCm, FVector(P.Scale)));
+		}
+		const TArray<FSimCruiseCarlaEntry>& Catalogue = SimCruiseCarlaCatalog::Entries();
+		for (TPair<int32, TArray<FTransform>>& Pair : ByEntry)
+		{
+			UStaticMesh* PropMesh = SimCruiseCarlaCatalog::Mesh(Pair.Key);
+			if (!PropMesh || !Catalogue.IsValidIndex(Pair.Key)) continue;
+			const FSimCruiseCarlaEntry& E = Catalogue[Pair.Key];
+			UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(this);
+			C->SetMobility(EComponentMobility::Movable);
+			C->SetupAttachment(Mesh);
+			C->SetStaticMesh(PropMesh);
+			C->SetCollisionProfileName(E.bCollide ? UCollisionProfile::BlockAll_ProfileName : UCollisionProfile::NoCollision_ProfileName);
+			C->SetCastShadow(E.bShadow);
+			C->SetCullDistances(0, FMath::RoundToInt(E.CullM * 100.0));
+			C->RegisterComponent();
+			C->AddInstances(Pair.Value, false, false);
+			AddInstanceComponent(C);
+			PropComponents.Add(C);
+		}
+		InBuild->PropInstances.Empty();
 	});
 
 	if (Resources)

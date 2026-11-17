@@ -297,6 +297,30 @@ bool SimCruiseStartPick::OnCarriageway(const TArray<FSimCruiseStartTile>& Tiles,
 	return true;
 }
 
+TArray<uint8> SimCruiseStartPick::JunctionCuts(const FSimCruiseRoadNetwork& Roads, int32 RibbonIndex)
+{
+	const FSimCruiseRibbon& R = Roads.Ribbons[RibbonIndex];
+	TArray<uint8> Out = JunctionCuts(R);
+	for (int32 i = 0; i < R.St.Num(); ++i)
+	{
+		if (!Out[i]) continue;
+		bool bParallel = true;
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			if (!(R.Sides[Side].Cut.IsValidIndex(i) && R.Sides[Side].Cut[i])) continue;
+			const FSimCruiseRibbonStation& St = R.St[i];
+			const FVector2d Probe = St.C + St.R * (Side == 0 ? -1.0 : 1.0) * (St.HalfW + 1.0);
+			FSimCruiseRoadHit Hit;
+			const bool bAlongside = Roads.FindCarriageway(Probe, Hit, RibbonIndex) && Roads.Ribbons.IsValidIndex(Hit.Ribbon)
+				&& Roads.Ribbons[Hit.Ribbon].St.IsValidIndex(Hit.Station)
+				&& FMath::Abs(FVector2d::DotProduct(Roads.Ribbons[Hit.Ribbon].St[Hit.Station].T, St.T)) > 0.85;
+			bParallel = bParallel && bAlongside;
+		}
+		if (bParallel) Out[i] = 0;
+	}
+	return Out;
+}
+
 namespace
 {
 	/** Second pass only (no start passed with every side cut taken for a junction): a long side cut is a
@@ -333,7 +357,7 @@ TArray<FSimCruiseStartPose> SimCruiseStartPick::Candidates(const TArray<FSimCrui
 			NearJunction.Init(0, Ribbon.St.Num());
 			auto MarkNear = [&](double S) { for (int32 k = 0; k < Ribbon.St.Num(); ++k) if (FMath::Abs(Ribbon.St[k].S - S) < JunctionClearM) NearJunction[k] = 1; };
 			TArray<uint8> Cuts;
-			if (GParallelCutsAllowed) Cuts = SimCruiseStartPick::JunctionCuts(Ribbon);
+			if (GParallelCutsAllowed) Cuts = SimCruiseStartPick::JunctionCuts(B->Roads, r);
 			else
 			{
 				Cuts.Init(0, Ribbon.St.Num());

@@ -85,6 +85,11 @@ namespace
 	constexpr double EscCutFallPerS = 2.0;
 	constexpr double EscLightHoldS = 0.6;
 
+	// Handbrake: a hand pulls the lever up in about 0.15 s and lets it drop in 0.1 s, to the car's own
+	// parking-brake torque (parking_brake_nm: enough to lock the rear wheels for a handbrake turn).
+	constexpr double HandbrakeApplyS = 0.15;
+	constexpr double HandbrakeReleaseS = 0.1;
+
 	// Godot ran the driveline at 60 Hz with 6 substeps; the cars' launches were calibrated there.
 	constexpr double ClutchCalibrationSubstepS = 1.0 / 360.0;
 
@@ -184,6 +189,7 @@ void FSimCruiseVehicleSim::ResetState()
 	State.SteeringRad = 0.0;
 	State.SteeringInput = 0.0;
 	State.bServiceBrake = false;
+	State.HandbrakeAmount = 0.0;
 	State.EscReferenceYawRadPerS = 0.0;
 	State.EscOversteer = 0.0;
 	State.EscUndersteer = 0.0;
@@ -482,6 +488,12 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		double ReleaseRate = 2.8;
 		if (bAutoClutch && !IsElectric())
 		{
+			// A pulled handbrake at speed: the left foot goes down, as a driver's does for a handbrake
+			// turn, so the engine does not fight the locked rear wheels (or stall).
+			if (Controls.bHandbrake && FMath::Abs(Speed) > 2.0 && Car.ParkingBrakeType != TEXT("electric"))
+			{
+				Pedal = 1.0;
+			}
 			// The automatic clutch: a pedal of its own under the driver's, and the throttle while it shifts.
 			AutoPhaseTimeS += Dt;
 			double AutoPedal = 0.0;
@@ -951,7 +963,9 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		}
 		Wheel.SlipAngleRad = SlipAngle;
 		const int32 Axle = WheelIndex < 2 ? 0 : 1;
-		Row.Mu = SimCruiseDynamics::ComputeFrictionCoefficient(Car, Axle, Fz, Wheel.SurfaceGrip);
+		// The tyre's pressure moves its peak grip (MF-Tyre 6.1 pressure term), on every surface.
+		const double PressureGrip = SimCruiseDynamics::TyrePressureGripScale(AxleValue(Car.TyrePressurePsiByAxle, Axle, 32.0), AxleValue(Car.TyrePressureRefPsiByAxle, Axle, 32.0));
+		Row.Mu = SimCruiseDynamics::ComputeFrictionCoefficient(Car, Axle, Fz, Wheel.SurfaceGrip * PressureGrip);
 		Wheel.FrictionCoefficient = Row.Mu;
 		const double RoadLean = FMath::Asin(FMath::Clamp(Right.Dot(Row.Normal), -1.0, 1.0));
 		if (SimCruiseDynamics::UsesTmeasy(Car))
@@ -959,7 +973,7 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			// The slip force comes from the combined TMeasy curve in each substep; here only
 			// the camber thrust (the same term the legacy law adds).
 			Row.SlipY = FMath::Tan(FMath::Clamp(SlipAngle, -1.4, 1.4));
-			Row.GripScale = FMath::Max(Wheel.SurfaceGrip, 0.0) * AxleValue(Car.AxleGripMultiplier, Axle, 1.0);
+			Row.GripScale = FMath::Max(Wheel.SurfaceGrip, 0.0) * AxleValue(Car.AxleGripMultiplier, Axle, 1.0) * PressureGrip;
 			SimCruiseDynamics::FTmeasyCurve CurveX, CurveY;
 			SimCruiseDynamics::GetTmeasyCurves(Car, Fz, Row.GripScale, CurveX, CurveY);
 			Row.Mu = Fz > 1.0 ? CurveY.PeakForce / Fz : 0.0;
@@ -990,7 +1004,8 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		const double YawRate = Omega.Cross(Forward).Dot(Right);
 		State.EscYawRadPerS = YawRate;
 		const double Presence = SmoothStep(EscFadeInLowMps, EscFadeInHighMps, Speed);
-		const bool bEsc = Car.bStabilityControlEnabled && bStabilityControlSwitch && !State.bInReverse &&
+		const bool bHandbrakeTurn = State.HandbrakeAmount > 0.3 && Car.ParkingBrakeType != TEXT("electric");
+		const bool bEsc = Car.bStabilityControlEnabled && bStabilityControlSwitch && !State.bInReverse && !bHandbrakeTurn &&
 			Presence > 0.0 && MuCount >= 3 && !State.bRoofDown;
 		double Over = 0.0;
 		double Under = 0.0;
@@ -1072,7 +1087,17 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 	const bool bElectric = IsElectric();
 	const double Ds = Dt / Substeps;
 	const double SubstepWeight = 1.0 / Substeps;
-	const double ParkingBrakeNm = Controls.bHandbrake ? Car.ParkingBrakeTorqueNm : 0.0;
+	State.HandbrakeAmount = MoveToward(State.HandbrakeAmount, Controls.bHandbrake ? 1.0 : 0.0,
+		Dt / (Controls.bHandbrake ? HandbrakeApplyS : HandbrakeReleaseS));
+	// An electric parking brake at speed brakes all four wheels through ABS (and ESC), as the C8's and
+	// Model 3's do when the switch is held; parked (under 2 m/s) it holds the rears as a lever does.
+	const bool bElectricPark = Car.ParkingBrakeType == TEXT("electric") && FMath::Abs(Speed) > 2.0;
+	if (bElectricPark && State.HandbrakeAmount > 0.0)
+	{
+		BrakeAmount = FMath::Max(BrakeAmount, 0.6 * State.HandbrakeAmount);
+	}
+	const double ParkingBrakeNm = bElectricPark ? 0.0
+		: State.HandbrakeAmount * Car.ParkingBrakeTorqueNm;
 	double AxleSpeed = 0.0;
 
 	for (int32 Substep = 0; Substep < Substeps; ++Substep)
@@ -1225,6 +1250,12 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 				Torque *= 0.12;
 			}
 			if (!State.bManual && Throttle < 0.01 && Rpm < Car.IdleSpeedRpm + 200.0 && FMath::Abs(Speed) < 3.0)
+			{
+				ClutchLoad = 0.0;
+			}
+			// An automatic with the handbrake pulled at speed: the torque converter slips (the engine at idle
+			// cannot hold the locked rear wheels round), as the auto clutch opens in manual mode.
+			if (!State.bManual && State.HandbrakeAmount > 0.3 && FMath::Abs(Speed) > 2.0 && Car.ParkingBrakeType != TEXT("electric"))
 			{
 				ClutchLoad = 0.0;
 			}

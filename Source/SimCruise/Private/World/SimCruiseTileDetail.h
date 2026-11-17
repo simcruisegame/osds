@@ -108,6 +108,9 @@ namespace SimCruiseTileDetail
 
 	/** Street lights behind the curbs of public streets (Props), with their lamp points for the night light pool. */
 	SIMCRUISE_API void BuildStreetLights(const FContext& Context);
+	/** Roadside grass and bushes from the CARLA catalogue: both sides of the public roads, on vegetated
+	 *  ground (never a carriageway, water or paving), thicker in wet climates, sparse in dry ones. */
+	SIMCRUISE_API void BuildCarlaVerges(const FContext& Context);
 
 	/**
 	 * Promenades: a low stone seawall where a mapped footway runs along sand (the beach

@@ -38,6 +38,8 @@ FSimCruiseTuning FSimCruiseTuning::FromCar(const FSimCruiseCarDefinition& Car, d
 	}
 	T.FinalDrive = Car.FinalDriveRatio;
 	T.SteeringRatio = StockSteeringRatio;
+	T.FrontTyrePsi = Car.TyrePressurePsiByAxle.IsValidIndex(0) ? Car.TyrePressurePsiByAxle[0] : 32.0;
+	T.RearTyrePsi = Car.TyrePressurePsiByAxle.IsValidIndex(1) ? Car.TyrePressurePsiByAxle[1] : T.FrontTyrePsi;
 	return T;
 }
 
@@ -51,6 +53,8 @@ void FSimCruiseTuning::Clamp(const FSimCruiseTuning& Stock)
 	RearBarPct = FMath::Clamp(RearBarPct, 0.0, 300.0);
 	TorquePct = FMath::Clamp(TorquePct, 50.0, 150.0);
 	FinalDrive = FMath::Clamp(FinalDrive, Stock.FinalDrive * 0.75, Stock.FinalDrive * 1.25);
+	FrontTyrePsi = FMath::Clamp(FrontTyrePsi, 18.0, 40.0);
+	RearTyrePsi = FMath::Clamp(RearTyrePsi, 18.0, 40.0);
 	SteeringRatio = Stock.SteeringRatio > 0.0 ? FMath::Clamp(SteeringRatio, Stock.SteeringRatio * 0.6, Stock.SteeringRatio * 1.4) : 0.0;
 }
 
@@ -78,6 +82,7 @@ FSimCruiseCarDefinition FSimCruiseTuning::Apply(const FSimCruiseCarDefinition& R
 	// stock clutch would slip from about 124 % on the NB.
 	Car.ClutchCapacityNm *= FMath::Max(1.0, Car.EngineTorqueScale);
 	Car.FinalDriveRatio = FinalDrive;
+	Car.TyrePressurePsiByAxle = { FrontTyrePsi, RearTyrePsi };
 	// Ride height: the wheels hang from the mounts at the same static length, so moving the mounts
 	// up in the body lowers the body (and its centre of mass) by as much over the road. The body's
 	// collision box and centre of mass keep their places in the body.
@@ -132,6 +137,8 @@ bool FSimCruiseTuning::Load(const FString& CarId)
 	Json->TryGetNumberField(TEXT("torque_pct"), TorquePct);
 	Json->TryGetNumberField(TEXT("final_drive"), FinalDrive);
 	Json->TryGetNumberField(TEXT("steering_ratio"), SteeringRatio);
+	Json->TryGetNumberField(TEXT("front_tyre_psi"), FrontTyrePsi);
+	Json->TryGetNumberField(TEXT("rear_tyre_psi"), RearTyrePsi);
 	return true;
 }
 
@@ -147,6 +154,8 @@ bool FSimCruiseTuning::Save(const FString& CarId) const
 	Json->SetNumberField(TEXT("torque_pct"), TorquePct);
 	Json->SetNumberField(TEXT("final_drive"), FinalDrive);
 	Json->SetNumberField(TEXT("steering_ratio"), SteeringRatio);
+	Json->SetNumberField(TEXT("front_tyre_psi"), FrontTyrePsi);
+	Json->SetNumberField(TEXT("rear_tyre_psi"), RearTyrePsi);
 	FString Text;
 	FJsonSerializer::Serialize(Json, TJsonWriterFactory<>::Create(&Text));
 	const FString Path = PathFor(CarId);

@@ -26,6 +26,9 @@ struct SIMCRUISE_API FSimCruiseTuning
 	double TorquePct = 100.0;
 	/** Final drive ratio. */
 	double FinalDrive = 0.0;
+	/** Cold tyre pressure (psi), front and rear; the car's placard pressure is stock. */
+	double FrontTyrePsi = 32.0;
+	double RearTyrePsi = 32.0;
 	/** Steering ratio (steering-wheel turns per road-wheel turn, :1); 0 when the car has none. */
 	double SteeringRatio = 0.0;
 

@@ -9,6 +9,7 @@
 #include "World/SimCruiseGeo.h"
 #include "World/SimCruiseRoadNetwork.h"
 #include "World/SimCruiseTileData.h"
+#include "World/SimCruiseCarlaCatalog.h"
 #include "HAL/IConsoleManager.h"
 
 namespace
@@ -1734,6 +1735,62 @@ namespace SimCruiseTileDetail
 			B.PalmInstances.Add(Palm);
 			++B.Palms;
 		}
+	}
+
+	void BuildCarlaVerges(const FContext& X)
+	{
+		static IConsoleVariable* Verges = IConsoleManager::Get().RegisterConsoleVariable(TEXT("simcruise.World.CarlaVerges"), 1,
+			TEXT("1 (default): roadside grass and bushes from the CARLA art where it is fetched; 0: none."), ECVF_Default);
+		if (!Verges || Verges->GetInt() == 0) return;
+		const FString Band = SimCruiseCarlaCatalog::BandAt(X.LatDeg, X.LonDeg);
+		const TArray<int32> Grass = SimCruiseCarlaCatalog::Find(TEXT("grass"), Band);
+		const TArray<int32> Bushes = SimCruiseCarlaCatalog::Find(TEXT("bush"), Band);
+		if (Grass.IsEmpty() && Bushes.IsEmpty()) return;
+		// Clumps a metre of verge: lush in the wet and northern bands, thin in the desert.
+		const double Density = Band == TEXT("dry") ? 0.25 : Band == TEXT("tropic") ? 0.8 : Band == TEXT("south") ? 0.9 : 1.0;
+		const FSimCruiseRoadNetwork& Roads = X.B.Roads;
+		constexpr int32 MaxInstances = 9000;
+		for (int32 r = 0; r < Roads.Ribbons.Num(); ++r)
+		{
+			const FSimCruiseRibbon& R = Roads.Ribbons[r];
+			if (R.bService || R.St.Num() < 2) continue;
+			for (int32 k = 0; k + 1 < R.St.Num(); ++k)
+			{
+				const FSimCruiseRibbonStation& A = R.St[k];
+				const double Len = R.St[k + 1].S - A.S;
+				const int32 Count = FMath::Max(0, FMath::RoundToInt(Len * 2.0 * Density)); // both sides
+				for (int32 n = 0; n < Count && X.B.PropInstances.Num() < MaxInstances; ++n)
+				{
+					const uint32 H = Hash(GetTypeHash(X.Data.Id), static_cast<uint32>(r * 7919 + k * 131 + n));
+					const double Along = Unit(Hash(H, 1)) * Len;
+					const double SideSign = (n & 1) ? 1.0 : -1.0;
+					// Only rural edges grow a verge: a kerbed or built-up side has a sidewalk or a town
+					// edge there (grass sprouted from downtown Chicago's sidewalks without this).
+					const FSimCruiseRibbonSide& Side = R.Sides[SideSign > 0.0 ? 1 : 0];
+					if (!Side.Edge.IsValidIndex(k) || Side.Edge[k] != ESimCruiseRoadEdge::Rural) continue;
+					if (Side.Cut.IsValidIndex(k) && Side.Cut[k]) continue;
+					const bool bBush = !Bushes.IsEmpty() && Unit(Hash(H, 2)) < 0.07;
+					const double Out = A.HalfW + (bBush ? 2.5 + 6.0 * Unit(Hash(H, 3)) : 0.7 + 4.5 * Unit(Hash(H, 3)));
+					const FVector2d P = A.C + A.T * Along + A.R * (SideSign * Out);
+					if (P.X < 0.5 || P.Y < 0.5 || P.X > X.Side - 0.5 || P.Y > X.Side - 0.5) continue;
+					FSimCruiseRoadHit Hit;
+					if (Roads.FindCarriageway(P, Hit, INDEX_NONE, 0.5)) continue;
+					// Every verge but water, paths and buildings: rural roads cross fields with no mapped land cover.
+					if ((X.IsWater && X.IsWater(P)) || (X.IsPavedPath && X.IsPavedPath(P)) || IsInsideBuilding(X.Data, X.Side, P)) continue;
+					const TArray<int32>& Pool = bBush ? Bushes : Grass;
+					if (Pool.IsEmpty()) continue;
+					const int32 Entry = Pool[Hash(H, 4) % Pool.Num()];
+					const FSimCruiseCarlaEntry& E = SimCruiseCarlaCatalog::Entries()[Entry];
+					FSimCruisePropInstance I;
+					I.Entry = Entry;
+					I.LocationCm = FVector(P.X * 100.0, P.Y * 100.0, X.B.TerrainHeightAt(P) * 100.0 - 3.0);
+					I.YawDeg = static_cast<float>(360.0 * Unit(Hash(H, 5)));
+					I.Scale = static_cast<float>(FMath::Lerp(E.MinScale, E.MaxScale, Unit(Hash(H, 6))));
+					X.B.PropInstances.Add(I);
+				}
+			}
+		}
+		UE_LOG(LogTemp, Verbose, TEXT("CARLA verges: %d clumps (%s band)"), X.B.PropInstances.Num(), *Band);
 	}
 
 	void BuildStreetLights(const FContext& X)

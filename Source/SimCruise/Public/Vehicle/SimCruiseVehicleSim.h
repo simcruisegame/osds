@@ -153,6 +153,8 @@ struct FSimCruiseVehicleSimState
 	double EscLightS = 0.0;
 	/** Braking a wheel or cutting the engine this step (the light stays on EscLightHoldS longer). */
 	bool bEscActing = false;
+	/** How far the handbrake is applied (0-1): it builds over HandbrakeApplyS as a hand pulls a lever. */
+	double HandbrakeAmount = 0.0;
 	/** True while stability control brakes a wheel or cuts the engine. */
 	bool IsEscActive() const { return EscLightS > 0.0; }
 	bool bClutchSaturated = false;

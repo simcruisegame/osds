@@ -68,6 +68,11 @@ struct FSimCruiseCarDefinition
 	double TireLoadSensitivityFraction = 0.095;
 	double ReferenceCornerLoadN = 2557.0;
 	TArray<double> AxleGripMultiplier = {1.0, 1.0};
+	/** Cold tyre pressure (psi) per axle [front, rear] and the pressure the grip was measured at (the door
+	 *  placard, from the car file's tyre_pressure_psi). Tuning moves the first; the grip follows
+	 *  SimCruiseDynamics::TyrePressureGripScale. */
+	TArray<double> TyrePressurePsiByAxle = {32.0, 32.0};
+	TArray<double> TyrePressureRefPsiByAxle = {32.0, 32.0};
 	double MinimumFrictionCoefficient = 0.7;
 	double MaximumFrictionCoefficient = 1.16;
 	double SlipAngleStiffnessPerRad = 10.8;
@@ -155,6 +160,11 @@ struct FSimCruiseCarDefinition
 	double RearBrakeKneeFraction = 1.0;
 	double RearBrakeSlopeAboveKnee = 1.0;
 	double ParkingBrakeTorqueNm = 900.0;
+	/** "lever" (a cable to the rear brakes: locks the rears, the handbrake turn) or "electric" (the
+	 *  C8's and Model 3's switch: at speed it brakes all four wheels through ABS and ESC, no turn). */
+	FString ParkingBrakeType = TEXT("lever");
+	/** Overrun pops and crackle in the engine sound, 0..1 (0: a stock exhaust that does not pop). */
+	double ExhaustPopAmount = 1.0;
 
 	// Aerodynamic body drag, Cd multiplied by frontal area.
 	double DragAreaM2 = 0.65;

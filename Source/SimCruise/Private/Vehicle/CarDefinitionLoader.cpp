@@ -631,6 +631,10 @@ bool FSimCruiseCarDefinitionLoader::ParseJson(const FString& JsonText, const FSt
 	SIMCRUISE_READ_NUMBER("brake_rear_knee", RearBrakeKneeFraction);
 	SIMCRUISE_READ_NUMBER("brake_rear_slope", RearBrakeSlopeAboveKnee);
 	SIMCRUISE_READ_NUMBER("parking_brake_nm", ParkingBrakeTorqueNm);
+	SIMCRUISE_READ_STRING("parking_brake_type", ParkingBrakeType);
+	SIMCRUISE_READ_NUMBER("exhaust_pops", ExhaustPopAmount);
+	SIMCRUISE_READ_ARRAY("tyre_pressure_psi", TyrePressurePsiByAxle);
+	Candidate.TyrePressureRefPsiByAxle = Candidate.TyrePressurePsiByAxle;
 	SIMCRUISE_READ_NUMBER("drag_area_m2", DragAreaM2);
 
 	SIMCRUISE_READ_STRING("engine", EngineKind);

@@ -1,0 +1,214 @@
+{
+ "inertia": [
+  1690,
+  1780,
+  540
+ ],
+ "collision_box": [
+  1.727,
+  0.85,
+  3.62
+ ],
+ "collision_box_y": 0.73,
+ "mount_height_m": 0.4805,
+ "static_length_m": 0.17,
+ "unsprung_corner_kg": 36.0,
+ "wheel_rate_n_m": [
+  35900,
+  26100
+ ],
+ "reference_corner_load_n": 3096.4,
+ "max_contact_load_n": 17191,
+ "coil_lb_in": [
+  0.0,
+  0.0
+ ],
+ "lever_ratio": [
+  1.0,
+  1.0
+ ],
+ "bar_diameter_m": [
+  0.0,
+  0.0
+ ],
+ "damper": [
+  "ratio",
+  "ratio"
+ ],
+ "damper_dyno": [
+  [],
+  []
+ ],
+ "_comment": "2015 MINI Cooper S Hardtop 2-door (F56, US): 2.0 L B48 turbo four, 6-speed manual, front-wheel drive. Model: CARLA Team's Mini Cooper (carla-content, CC BY 4.0), exported from Unreal to glTF.",
+ "id": "mini15s",
+ "name": "Cooper S",
+ "make": "MINI",
+ "body": "hatchback",
+ "seats": 4,
+ "mass_kg": 1263.0,
+ "front_weight": 0.62,
+ "cg_height_m": 0.53,
+ "wheelbase_m": 2.495,
+ "track_front_m": 1.485,
+ "track_rear_m": 1.485,
+ "tire_width_m": 0.195,
+ "tire_aspect_ratio": 0.55,
+ "rim_in": 16.0,
+ "tyre_pressure_psi": [
+  35.0,
+  35.0
+ ],
+ "static_mu": 0.97,
+ "lateral_grip_scale": 1.0,
+ "load_sensitivity": 0.1,
+ "drag_area_m2": 0.65,
+ "tyre_model": "tmeasy",
+ "tmeasy_peak_mu_y": 1.07,
+ "tmeasy_slide_mu_y": 0.83,
+ "tmeasy_peak_mu_x": 0.92,
+ "tmeasy_slide_mu_x": 0.8,
+ "bar_rate_n_m": [
+  22000.0,
+  12000.0
+ ],
+ "damper_ratio_rebound": [
+  0.5,
+  0.5
+ ],
+ "damper_ratio_compression": [
+  0.3,
+  0.3
+ ],
+ "damper_knee_mps": [
+  0.12,
+  0.12
+ ],
+ "damper_knee_slope": [
+  0.45,
+  0.45
+ ],
+ "static_camber_deg": [
+  -0.5,
+  -1.5
+ ],
+ "camber_per_m": [
+  16.0,
+  18.0
+ ],
+ "caster_deg": 7.0,
+ "toe_per_wheel_deg": 0.05,
+ "steering_turns_lock_to_lock": 2.4,
+ "parking_rack_deg": 34.0,
+ "road_reference_deg": 31.0,
+ "brake_front_nm": 2200.0,
+ "brake_rear_nm": 800.0,
+ "parking_brake_nm": 900.0,
+ "parking_brake_type": "lever",
+ "abs_enabled": true,
+ "traction_control": true,
+ "stability_control": true,
+ "esc_understeer_deg_per_g": 2.2,
+ "engine": "combustion",
+ "aspiration": "turbo",
+ "torque_curve": [
+  [
+   800,
+   150
+  ],
+  [
+   1000,
+   205
+  ],
+  [
+   1250,
+   280
+  ],
+  [
+   2500,
+   280
+  ],
+  [
+   4750,
+   280
+  ],
+  [
+   5200,
+   259
+  ],
+  [
+   5600,
+   240
+  ],
+  [
+   6000,
+   224
+  ],
+  [
+   6500,
+   195
+  ]
+ ],
+ "torque_past_curve_nm": 170.0,
+ "engine_friction_nm": 13.0,
+ "engine_friction_per_rpm": 0.0057,
+ "engine_pumping_nm": 8.5,
+ "engine_pumping_per_rpm": 0.0009,
+ "idle_rpm": 750.0,
+ "idle_omega": 78.5,
+ "governor_rpm": 775.0,
+ "min_omega_auto": 78.0,
+ "max_omega": 691.2,
+ "fuel_cut_rpm": 6600.0,
+ "max_gear_rpm": 6500.0,
+ "engine_inertia": 0.15,
+ "exhaust_pops": 0.0,
+ "transmission": "manual",
+ "gears": [
+  3.923,
+  2.136,
+  1.393,
+  1.088,
+  0.892,
+  0.756
+ ],
+ "reverse_ratio": 3.55,
+ "final_drive": 3.588,
+ "driveline_efficiency": 0.9,
+ "shift_seconds": 0.2,
+ "upshift_rpm": 6450.0,
+ "downshift_rpm": 2000.0,
+ "clutch_stiffness": 12.0,
+ "clutch_capacity_nm": 420.0,
+ "clutch_back_nm": 400.0,
+ "launch_rpm": 1500.0,
+ "launch_rpm_per_throttle": 2000.0,
+ "layout": "fwd",
+ "front_diff_bias": 1.0,
+ "slip_ratio_falloff": 0.1,
+ "target_0_60_s": 6.6,
+ "target_70_0_ft": 172.0,
+ "target_skidpad_g": 0.91,
+ "model_scene": "data/art/traffic/minif56-carla/scene.gltf",
+ "model_rig": {
+  "fit": true
+ },
+ "driver_eye": [
+  -0.33,
+  1.16,
+  0.08
+ ],
+ "sources": {
+  "mass": "2,785 lb, 2015 Cooper S manual (KBB). Split 62/38 and CG 0.53 m are estimates.",
+  "engine": "MINI US: 189 hp at 4700-6000 rpm, 207 lb-ft at 1250-4750 rpm; overboost 221 lb-ft not modelled. Curve outside the plateau is an estimate.",
+  "gearing": "GS6-59SG ratios and 3.588 final drive from the NAM forum (secondary); 6th checked against an owner report of 2800 rpm at 75 mph. Reverse is an estimate.",
+  "brakes": "294 mm vented front, 259 mm solid rear (Brembo catalogue). Torques are estimates. Rear share 0.27 exceeds the ideal above 0.5 g; EBD in ABS/DSC holds the rear, as on the real car.",
+  "diff": "Open differential with brake-based EDLC (MINI). EDLC is not modelled; traction control stands in.",
+  "steering": "14.2:1 Servotronic EPS, 10.8 m circle (MINI media info); 2.4 turns from the forum (unverified).",
+  "aero": "Cd 0.31 x 2.09 m2 = 0.65 m2 (MINI media information 03/2015).",
+  "tyre_pressure": "35/35 psi for 195/55R16 run-flats (tirepressure.com, secondary).",
+  "calibration": "Car and Driver 2014 Cooper S Hardtop: 6.6 s, 172 ft, 0.91 g (Yahoo reprint; transmission not confirmed).",
+  "estimates": "Weight split, CG, inertia, springs, bars, dampers, alignment, brake torques, clutch, ESC gradient, tyre curve, driver eye.",
+  "research": "lab/cars/mini-research.md"
+ },
+ "target_0_60_rollout": true
+}

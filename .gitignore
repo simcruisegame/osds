@@ -53,3 +53,6 @@ desktop.ini
 !/Build/Windows/
 /Build/Windows/*
 !/Build/Windows/Application.ico
+
+# CARLA art (CC-BY 4.0), fetched by scripts/fetch-carla.ps1, not kept in git
+Content/Carla/

@@ -507,6 +507,9 @@ double ASimCruiseTrees::ConiferShare(double LatDeg, double LonDeg, double Elevat
 	// the south-east coastal plain loblolly and longleaf pine with hardwoods, the rest
 	// of the east mostly broadleaf.
 	if (LonDeg < -117.0 && LatDeg > 40.0) return 0.9;
+	// The low deserts (Phoenix, Tucson, Las Vegas) below the pinyon-juniper belt: mesquite, palo
+	// verde and ironwood, small broadleaf trees.
+	if (LonDeg < -102.0 && LonDeg > -118.5 && LatDeg < 37.5 && ElevationM < 1200.0) return 0.1;
 	if (LonDeg < -102.0) return ElevationM > 1500.0 ? 0.9 : 0.5;
 	if (LatDeg > 44.0) return 0.55;
 	if (LatDeg < 34.5 && LonDeg > -97.0) return 0.45;
@@ -948,7 +951,28 @@ void ASimCruiseTrees::Refresh()
 					continue;
 				}
 			}
-			const bool bPine = !bPalms && (H % 1000) < Conifers * 1000.0;
+			// The species from the aerial reading: the region gives the share of conifers, and each
+			// crown's own look moves its odds. Conifer crowns photograph darker than broadleaf ones
+			// (needles, deep self-shadowed crowns) and stand taller for their width, so a crown darker
+			// than the tile's median, or slender for its measured height, leans pine; a bright, wide
+			// crown leans broadleaf. Without a photograph or a measured shape, the share alone decides.
+			double PineShare = Conifers;
+			if (PineShare > 0.0 && PineShare < 1.0)
+			{
+				double Logit = FMath::Loge(FMath::Clamp(PineShare, 0.02, 0.98) / (1.0 - FMath::Clamp(PineShare, 0.02, 0.98)));
+				const FLinearColor& Look = Seen.IsValidIndex(RowIndex) ? Seen[RowIndex] : FLinearColor::Transparent;
+				if (Look.A > 0.f)
+				{
+					const double Luma = FMath::Max(0.2126 * Look.R + 0.7152 * Look.G + 0.0722 * Look.B, 0.05);
+					Logit -= 3.0 * FMath::Clamp(FMath::Loge(Luma), -1.0, 1.0);
+				}
+				if (Row.bShape && Fit.LongM > 0.5)
+				{
+					Logit += 1.5 * FMath::Clamp(FMath::Loge(Row.HeightM / FMath::Max(Fit.LongM, 1.0) / 1.6), -1.0, 1.0);
+				}
+				PineShare = 1.0 / (1.0 + FMath::Exp(-Logit));
+			}
+			const bool bPine = !bPalms && (H % 1000) < PineShare * 1000.0;
 			// A conifer's crown is narrower than the canopy peak's footprint suggests; a segmented
 			// crown is its own measured width (a conifer's mesh a little inside it).
 			const double Narrow = Row.bShape ? (bPine ? 0.85 : 1.0) : (bPine ? 0.75 : 1.0);

@@ -552,6 +552,7 @@ void ASimCruiseVehicle::UpdateEngineSound(const FSimCruiseVehicleTelemetry& Tele
 	In.bCabin = bInSeat;
 	// The limiter's stutter at this car's own fuel cut (NB 7250, Mustang 5000, C8 6600 rpm).
 	In.LimiterRpm = VehicleMovement->GetCarDefinition().FuelCutSpeedRpm - 25.0;
+	In.PopAmount = VehicleMovement->GetCarDefinition().ExhaustPopAmount;
 	// The intake's distance from the ear: a mid engine right behind the seats is louder inside.
 	if (const FSimCruiseCarPresentationProfile* Profile = CarModel ? CarModel->GetProfile() : nullptr)
 	{
