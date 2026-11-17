@@ -270,7 +270,7 @@ void ASimCruisePlayerController::PlayerTick(float DeltaTime)
 			for (const FPref& Pref : { FPref(TEXT("head_motion"), TEXT("simcruise.Camera.HeadMotion")), FPref(TEXT("rumble"), TEXT("simcruise.Rumble.Strength")),
 				FPref(TEXT("pad_steer_speed"), TEXT("simcruise.Pad.SteerSpeed")), FPref(TEXT("pad_steer_linearity"), TEXT("simcruise.Pad.SteerLinearity")),
 				FPref(TEXT("pad_steer_dead_zone"), TEXT("simcruise.Pad.SteerDeadZone")), FPref(TEXT("trigger_gamma"), TEXT("simcruise.TriggerGamma")),
-				FPref(TEXT("auto_clutch"), TEXT("simcruise.Gearbox.AutoClutch")) })
+				FPref(TEXT("auto_clutch"), TEXT("simcruise.Gearbox.AutoClutch")), FPref(TEXT("stability_control"), TEXT("simcruise.Assists.StabilityControl")) })
 			{
 				// Stored as hundredths (the throttle curve's 1.8 as 180).
 				const int32 Percent = SimCruisePreferences::GetInt(Pref.Key, -1, -1, 300);
@@ -692,6 +692,8 @@ FSimCruiseAtlasView ASimCruisePlayerController::AtlasView() const
 		FString::Printf(TEXT("Traffic · %s"), SimCruiseSettingValue(TEXT("simcruise.Traffic.Cars")) < 0.5f ? TEXT("Off")
 			: SimCruiseSettingValue(TEXT("simcruise.Traffic.Cars")) < 12.f ? TEXT("Light") : TEXT("Normal")),
 		FString::Printf(TEXT("Clutch · %s"), SimCruiseSettingValue(TEXT("simcruise.Gearbox.AutoClutch")) > 0.5f ? TEXT("Automatic") : TEXT("Yours (hold A)")),
+		FString::Printf(TEXT("Stability control · %s"), CarDef && !CarDef->bStabilityControlEnabled ? TEXT("Not on this car")
+			: SimCruiseSettingValue(TEXT("simcruise.Assists.StabilityControl")) > 0.5f ? TEXT("On") : TEXT("Off")),
 	};
 	return View;
 }
@@ -808,6 +810,7 @@ void ASimCruisePlayerController::ChangeSetting(int32 Index)
 	case 11: OpenTuning(); break;
 	case 12: OpenSeatMenu(); break;
 	case 14: Step(TEXT("simcruise.Gearbox.AutoClutch"), { 1.f, 0.f }, TEXT("auto_clutch")); break;
+	case 15: Step(TEXT("simcruise.Assists.StabilityControl"), { 1.f, 0.f }, TEXT("stability_control")); break;
 	case 13:
 	{
 		// Traffic off for the release (SimCruiseFeatures): the atlas hides the button; nothing changes.

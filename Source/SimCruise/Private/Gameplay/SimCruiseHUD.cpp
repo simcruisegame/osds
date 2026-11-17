@@ -129,6 +129,7 @@ void ASimCruiseHUD::SampleVehicle(float DeltaTimeS)
 	BrakingG = Setup.BrakingG;
 	CarName = Setup.DisplayName;
 	bAbs = Controller->IsAbsActive();
+	bEsc = Telemetry.bStabilityControlActive;
 
 	if (const APawn* Pawn = Controller->GetPawn())
 	{
@@ -397,6 +398,10 @@ void ASimCruiseHUD::DrawGlance(float Scale, float DeltaTimeS)
 	{
 		DrawTextAt(TEXT("ABS"), true, 10.f * Scale, NumberRight + 52.f * Scale, Y + 36.f * Scale, WithAlpha(Amber, Alpha));
 	}
+	if (bEsc && FMath::Frac((GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.0) * 4.0) < 0.5)
+	{
+		DrawTextAt(TEXT("ESC"), true, 10.f * Scale, NumberRight + (bAbs ? 80.f : 52.f) * Scale, Y + 36.f * Scale, WithAlpha(Amber, Alpha));
+	}
 	DrawRpmBar(X + 16.f * Scale, Y + H - 16.f * Scale, 168.f * Scale, 4.f * Scale, Alpha);
 	DrawGMeter(FVector2D(X + W - 52.f * Scale, Y + H * 0.5f), 40.f * Scale, Alpha);
 }
@@ -423,7 +428,7 @@ void ASimCruiseHUD::DrawFull(float Scale)
 	const FString Mode = bManual ? TEXT("Manual") : TEXT("Automatic");
 	const FString View = Camera ? ASimCruisePlayerCameraManager::ViewName(Camera->GetView()) : TEXT("");
 	DrawTextAt(CarName, true, 12.f * Scale, 600.f * Scale, Y + 22.f * Scale, Paper);
-	DrawTextAt(FString::Printf(TEXT("%s  ·  %s%s"), *Mode, *View, bAbs ? TEXT("  ·  ABS") : TEXT("")), false, 11.f * Scale, 600.f * Scale, Y + 48.f * Scale, Dim);
+	DrawTextAt(FString::Printf(TEXT("%s  ·  %s%s"), *Mode, *View, bAbs ? TEXT("  ·  ABS") : bEsc ? TEXT("  ·  ESC") : TEXT("")), false, 11.f * Scale, 600.f * Scale, Y + 48.f * Scale, Dim);
 
 	const bool bPad = Controller && Controller->IsUsingGamepad();
 	FString Hint = bPad ? TEXT("RT / LT  drive     Y  camera     R3  manual     View  recover     X  HUD")

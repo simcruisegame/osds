@@ -174,6 +174,8 @@ struct SIMCRUISE_API FSimCruiseVehicleTelemetry
 	/** Torque fraction traction control is removing (0..0.9). */
 	UPROPERTY(BlueprintReadOnly, Category = "SimCruise|Vehicle")
 	double TractionControlCut = 0.0;
+	/** Stability control is braking a wheel or cutting the engine (its dash light). */
+	bool bStabilityControlActive = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "SimCruise|Vehicle")
 	bool bAbsActive = false;

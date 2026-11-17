@@ -163,6 +163,8 @@
  "target_70_0_ft": 175.0,
  "target_skidpad_g": 0.82,
  "traction_control": true,
+ "stability_control": true,
+ "esc_understeer_deg_per_g": 2.0,
  "abs_enabled": true,
  "slip_ratio_falloff": 0.1,
  "model_scene": "data/art/traffic/crv25-91c66738/scene.gltf",
@@ -175,6 +177,7 @@
   0.05
  ],
  "sources": {
+   "stability_control": "Standard Honda VSA (every US car from model year 2012 has ESC, FMVSS 126). The reference understeer gradient, 2.0 deg/g, is this car's own from the 80 km/h step-steer bench, as a maker calibrates the yaw-rate model to the car.",
   "calibration": "Estimates: Car and Driver timed the 2023 CR-V Hybrid at 7.9 s to 60 mph and reported the 1.5 turbo as a few tenths slower (8.3 s used); 70-0 mph 175 ft and 0.82 g are typical of this class on 235/60R18 all-season tyres, not a test of this car.",
   "engine": "190 hp at 6000 rpm, 179 lb-ft from 1700 to 5000 rpm (Honda); curve shape estimated.",
   "gearing": "CVT as seven steps across its range; ratios and the 5.25 final drive are estimates.",

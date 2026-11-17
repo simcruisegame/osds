@@ -167,6 +167,8 @@
  "target_70_0_ft": 152.0,
  "target_skidpad_g": 0.87,
  "traction_control": true,
+ "stability_control": true,
+ "esc_understeer_deg_per_g": 2.9,
  "abs_enabled": true,
  "slip_ratio_falloff": 0.1,
  "model_scene": "data/art/traffic/grandcherokee13-74686a75/scene.gltf",
@@ -179,6 +181,7 @@
   0.0
  ],
  "sources": {
+   "stability_control": "Standard Chrysler ESC with electronic roll mitigation (every US car from model year 2012 has ESC, FMVSS 126). The reference understeer gradient, 2.9 deg/g, is this car's own from the 80 km/h step-steer bench, as a maker calibrates the yaw-rate model to the car.",
   "calibration": "Edmunds, 2012 SRT8: 5.0 s to 60 mph from rest (4.7 s with a 1 ft rollout, long-term car), 0.87 g, 112 ft from 60 mph; 5261 lb as tested. 70-0 mph 152 ft is the 60-0 figure scaled by speed squared (estimate). Chrysler quoted 4.8 s.",
   "engine": "470 hp at 6000 rpm, 465 lb-ft at 4300 rpm (SRT, 6.4 L HEMI); curve shape estimated.",
   "gearing": "W5A580 five-speed ratios and 3.70 axle (published for the 2012-2013 SRT8).",

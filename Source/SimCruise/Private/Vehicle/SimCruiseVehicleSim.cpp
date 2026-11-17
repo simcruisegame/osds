@@ -49,6 +49,42 @@ namespace
 	// braking turned at 1-4 deg/s on Tail of the Dragon).
 	constexpr double AbsFrontTargetOverPeak = 0.85;
 
+	// Stability control (ESC), after van Zanten (Bosch ESP, SAE 2000-01-1633): it compares the car's
+	// yaw rate with the one the steering asks for (a linear single-track model, held to what the tyres'
+	// grip allows at this speed) and the body's side slip with a limit; past dead bands that leave
+	// ordinary driving alone it brakes one wheel (the outer front against oversteer, the inner rear
+	// against understeer) and cuts engine torque. The numbers are ours, not a maker's calibration.
+	constexpr double EscFadeInLowMps = 3.0;          // active from about 11 km/h ...
+	constexpr double EscFadeInHighMps = 6.0;         // ... fully from about 22 km/h
+	constexpr double EscFrictionMargin = 1.1;        // the reference yaw rate stays within 1.1 mu g / v
+	constexpr double EscYawDeadbandRadPerS = 0.05;   // oversteer dead band: 0.05 rad/s ...
+	constexpr double EscYawDeadbandFraction = 0.15;  // ... plus 15 % of the reference
+	constexpr double EscUnderDeadbandRadPerS = 0.10; // understeer: wider, it must not drag in a normal bend
+	constexpr double EscUnderDeadbandFraction = 0.30;
+	constexpr double EscBetaLowSpeedDeg = 8.0;       // side-slip limit at the CG, 8 deg slow ...
+	constexpr double EscBetaHighSpeedDeg = 4.0;      // ... 4 deg at speed (ordinary cornering stays under 3)
+	constexpr double EscBetaGainPerS = 2.0;          // rad/s of yaw error per rad of side slip past the limit
+	constexpr double EscFilterS = 0.02;
+	// The reference follows the steering with part of the lag of a car's yaw response (step-steer t90
+	// about 0.2 s), so a quick turn-in is not read as understeer before the car has turned.
+	constexpr double EscReferenceLagS = 0.06;
+	// What counts as acting (and lights the lamp): a real brake pulse or a real engine cut.
+	constexpr double EscActingBrakeNm = 100.0;
+	constexpr double EscActingCut = 0.1;
+	constexpr double EscOverGainNmPerRadPerS = 4000.0;
+	constexpr double EscUnderGainNmPerRadPerS = 2500.0;
+	constexpr double EscFrontBrakeShare = 0.7;       // at most this share of a wheel's full brake
+	constexpr double EscRearBrakeShare = 0.5;
+	constexpr double EscBuildS = 0.2;                // pump pressure up from nothing to the cap
+	constexpr double EscReleaseS = 0.1;
+	constexpr double EscCutPerOverRadPerS = 3.0;
+	constexpr double EscCutPerUnderRadPerS = 1.5;
+	constexpr double EscCutMax = 0.9;
+	constexpr double EscRegenCutPerOverRadPerS = 10.0;
+	constexpr double EscCutRisePerS = 5.0;
+	constexpr double EscCutFallPerS = 2.0;
+	constexpr double EscLightHoldS = 0.6;
+
 	// Godot ran the driveline at 60 Hz with 6 substeps; the cars' launches were calibrated there.
 	constexpr double ClutchCalibrationSubstepS = 1.0 / 360.0;
 
@@ -148,6 +184,13 @@ void FSimCruiseVehicleSim::ResetState()
 	State.SteeringRad = 0.0;
 	State.SteeringInput = 0.0;
 	State.bServiceBrake = false;
+	State.EscReferenceYawRadPerS = 0.0;
+	State.EscOversteer = 0.0;
+	State.EscUndersteer = 0.0;
+	State.EscCut = 0.0;
+	State.EscRegenCut = 0.0;
+	State.EscLightS = 0.0;
+	for (double& Nm : State.EscBrakeNm) Nm = 0.0;
 	State.EngineRpm = Car.IdleSpeedRpm;
 	State.EngineOmegaRadPerSecond = State.EngineRpm * Tau / 60.0;
 }
@@ -344,7 +387,9 @@ double FSimCruiseVehicleSim::MotorTorqueNm(double Throttle, double Ratio, double
 	double Torque = Available * Throttle;
 	if (Throttle < 0.01 && FMath::Abs(SpeedMps) > 1.0)
 	{
-		Torque = -Car.ElectricRegenerativeTorqueNm * SmoothStep(1.0, 5.0, FMath::Abs(SpeedMps)) * FMath::Sign(MotorOmega);
+		// Stability control takes the regeneration off in a slide: it brakes the driven axle, and on a
+		// rear-drive car that keeps the tail out.
+		Torque = -Car.ElectricRegenerativeTorqueNm * SmoothStep(1.0, 5.0, FMath::Abs(SpeedMps)) * FMath::Sign(MotorOmega) * (1.0 - State.EscRegenCut);
 	}
 	State.EngineOmegaRadPerSecond = FMath::Abs(MotorOmega);
 	return Torque;
@@ -929,6 +974,87 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		}
 	}
 
+	// Stability control (see the Esc constants): once per step, from the body's motion and the rack.
+	{
+		double MuSum = 0.0;
+		int32 MuCount = 0;
+		for (int32 WheelIndex = 0; WheelIndex < 4; ++WheelIndex)
+		{
+			if (Rows[WheelIndex].bValid)
+			{
+				MuSum += State.Wheels[WheelIndex].FrictionCoefficient;
+				++MuCount;
+			}
+		}
+		// d(Forward)/dt = Omega x Forward: its share along Right is the yaw rate, + turning right.
+		const double YawRate = Omega.Cross(Forward).Dot(Right);
+		State.EscYawRadPerS = YawRate;
+		const double Presence = SmoothStep(EscFadeInLowMps, EscFadeInHighMps, Speed);
+		const bool bEsc = Car.bStabilityControlEnabled && bStabilityControlSwitch && !State.bInReverse &&
+			Presence > 0.0 && MuCount >= 3 && !State.bRoofDown;
+		double Over = 0.0;
+		double Under = 0.0;
+		double TurnSign = 0.0;
+		double RefSign = 0.0;
+		if (bEsc)
+		{
+			const double G = SimCruiseDynamics::GravityMps2;
+			const double K = SimCruiseUnits::ToRadians(Car.StabilityControlUndersteerDegPerG) / G;
+			const double FrictionYaw = EscFrictionMargin * (MuSum / MuCount) * G / Speed;
+			const double SteadyRef = FMath::Clamp(Speed * Steering / (Car.WheelbaseM + K * Speed * Speed), -FrictionYaw, FrictionYaw);
+			State.EscReferenceYawRadPerS += (SteadyRef - State.EscReferenceYawRadPerS) * (1.0 - FMath::Exp(-Dt / EscReferenceLagS));
+			const double RefYaw = State.EscReferenceYawRadPerS;
+			// Oversteer: the car turns further than the steering asks, or the other way to it (a slide the
+			// driver is already countersteering).
+			TurnSign = FMath::Abs(YawRate) > 0.02 ? FMath::Sign(YawRate) : 0.0;
+			const double Excess = TurnSign * (YawRate - RefYaw);
+			Over = FMath::Max(Excess - (EscYawDeadbandRadPerS + EscYawDeadbandFraction * FMath::Abs(RefYaw)), 0.0);
+			// Side slip at the CG with the tail out (turning right, the velocity points left of the nose).
+			const double Beta = FMath::Atan2(Velocity.Dot(Right), FMath::Max(Speed, 1.0));
+			const double BetaLimit = SimCruiseUnits::ToRadians(FMath::Lerp(EscBetaLowSpeedDeg, EscBetaHighSpeedDeg, SmoothStep(10.0, 30.0, Speed)));
+			Over += EscBetaGainPerS * FMath::Max(-TurnSign * Beta - BetaLimit, 0.0);
+			// Understeer: the car turns less than the steering asks (and the tyres could give).
+			RefSign = FMath::Abs(RefYaw) > 0.02 ? FMath::Sign(RefYaw) : 0.0;
+			const double Short = RefSign * (RefYaw - YawRate);
+			Under = Over > 0.0 ? 0.0 : FMath::Max(Short - (EscUnderDeadbandRadPerS + EscUnderDeadbandFraction * FMath::Abs(RefYaw)), 0.0);
+			Over *= Presence;
+			Under *= Presence;
+		}
+		else
+		{
+			State.EscReferenceYawRadPerS = 0.0;
+		}
+		const double Filter = 1.0 - FMath::Exp(-Dt / EscFilterS);
+		State.EscOversteer += (Over - State.EscOversteer) * Filter;
+		State.EscUndersteer += (Under - State.EscUndersteer) * Filter;
+		double Target[4] = { 0.0, 0.0, 0.0, 0.0 };
+		if (bEsc && TurnSign != 0.0 && State.EscOversteer > 1.0e-3)
+		{
+			// Brake the outer front: turning right, the left front (wheel 0).
+			Target[TurnSign > 0.0 ? 0 : 1] = FMath::Min(EscOverGainNmPerRadPerS * State.EscOversteer, EscFrontBrakeShare * Car.FrontBrakeTorqueNm);
+		}
+		if (bEsc && RefSign != 0.0 && State.EscUndersteer > 1.0e-3)
+		{
+			// Brake the inner rear: turning right, the right rear (wheel 3).
+			Target[RefSign > 0.0 ? 3 : 2] = FMath::Min(EscUnderGainNmPerRadPerS * State.EscUndersteer, EscRearBrakeShare * Car.RearBrakeTorqueNm);
+		}
+		bool bActing = false;
+		for (int32 WheelIndex = 0; WheelIndex < 4; ++WheelIndex)
+		{
+			const double Full = WheelIndex < 2 ? EscFrontBrakeShare * Car.FrontBrakeTorqueNm : EscRearBrakeShare * Car.RearBrakeTorqueNm;
+			double& Nm = State.EscBrakeNm[WheelIndex];
+			Nm = MoveToward(Nm, Target[WheelIndex], Dt * Full / (Target[WheelIndex] > Nm ? EscBuildS : EscReleaseS));
+			bActing |= Nm > EscActingBrakeNm;
+		}
+		const double CutTarget = bEsc ? FMath::Clamp(EscCutPerOverRadPerS * State.EscOversteer + EscCutPerUnderRadPerS * State.EscUndersteer, 0.0, EscCutMax) : 0.0;
+		State.EscCut = MoveToward(State.EscCut, CutTarget, Dt * (CutTarget > State.EscCut ? EscCutRisePerS : EscCutFallPerS));
+		bActing |= State.EscCut > EscActingCut;
+		// Regeneration off as soon as the car oversteers (a tenth of a rad/s past the dead band takes it all).
+		const double RegenTarget = bEsc ? FMath::Clamp(EscRegenCutPerOverRadPerS * State.EscOversteer, 0.0, 1.0) : 0.0;
+		State.EscRegenCut = MoveToward(State.EscRegenCut, RegenTarget, Dt * (RegenTarget > State.EscRegenCut ? EscCutRisePerS : EscCutFallPerS));
+		State.EscLightS = bActing ? EscLightHoldS : FMath::Max(0.0, State.EscLightS - Dt);
+	}
+
 	const bool bThrottleAid = Car.bTractionControlEnabled;
 	if (!bThrottleAid || Throttle <= 0.0)
 	{
@@ -994,6 +1120,11 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 					State.TcCut + (State.bClutchSaturated ? 0.0 : TcCutRateUp * Ds));
 			}
 			Throttle = PedalThrottle * (1.0 - State.TcCut);
+		}
+		// Stability control's engine cut, on top of traction control's.
+		if (State.EscCut > 0.0)
+		{
+			Throttle = PedalThrottle * (1.0 - (bThrottleAid && PedalThrottle > 0.0 ? State.TcCut : 0.0)) * (1.0 - State.EscCut);
 		}
 
 		double ClutchLoad = 0.0;
@@ -1140,6 +1271,9 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			FContactRow& Row = Rows[WheelIndex];
 			const double RearPedal = SimCruiseDynamics::RearBrakePedal(Car, BrakeAmount);
 			double BrakeNm = WheelIndex < 2 ? BrakeAmount * Car.FrontBrakeTorqueNm : RearPedal * Car.RearBrakeTorqueNm;
+			// Stability control's pump adds pressure at one wheel, up to that wheel's full brake; ABS
+			// below still keeps the wheel from locking.
+			BrakeNm = FMath::Min(BrakeNm + State.EscBrakeNm[WheelIndex], WheelIndex < 2 ? Car.FrontBrakeTorqueNm : Car.RearBrakeTorqueNm);
 			const double RowSpeed = Row.bValid ? Row.ForwardSpeed : 0.0;
 			// ABS: a per-wheel pressure modulator cycling each tyre about its peak slip.
 			if (Car.bAbsEnabled && BrakeNm > 0.0 && FMath::Abs(RowSpeed) > 1.5)

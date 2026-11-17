@@ -355,6 +355,7 @@ void ASimCruiseVehicle::ToDriveTelemetry(const FSimCruiseCarDefinition& Car, con
 	Out.bEngineStalled = In.bStalled;
 	Out.bElectric = Car.EngineKind == TEXT("electric");
 	Out.bServiceBrakeOn = In.bServiceBrake;
+	Out.bStabilityControlActive = In.bStabilityControlActive;
 	Out.RackAngleRad = FMath::DegreesToRadians(In.SteeringAngleDeg);
 	Out.EngineLoad = FMath::Clamp(In.SoundCombustion, 0.0, 1.0);
 	Out.RoadRoughness = 0.0;

@@ -235,6 +235,13 @@ struct FSimCruiseCarDefinition
 	bool bTractionControlEnabled = false;
 	double TractionControlTargetSlipRatio = 0.0;
 	double TractionControlIntegralGainPerSecond = 3.0;
+	/** Electronic stability control (ESC: Bosch ESP, GM StabiliTrak, Ford AdvanceTrac, Honda VSA), as the
+	 *  real car has it. Standard on every US car from model year 2012 (FMVSS 126); not on a 2001 Miata or
+	 *  a 1965 Mustang. */
+	bool bStabilityControlEnabled = false;
+	/** The linear understeer gradient the ESC's reference yaw rate uses (deg/g), as a maker calibrates it
+	 *  to the car: this car's own, measured on the 80 km/h step-steer bench. */
+	double StabilityControlUndersteerDegPerG = 1.5;
 
 	// Springs and anti-roll bars, indexed [front, rear].
 	TArray<double> CoilSpringRateLbfPerInByAxle = {168.0, 130.0};

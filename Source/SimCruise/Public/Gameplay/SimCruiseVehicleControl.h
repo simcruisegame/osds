@@ -89,6 +89,8 @@ struct FSimCruiseDriveTelemetry
 	bool bEngineStalled = false;
 	bool bElectric = false;
 	bool bServiceBrakeOn = false;
+	/** Stability control is acting (its dash light flashes). */
+	bool bStabilityControlActive = false;
 	/** Rack angle actually applied this tick, radians, positive right. */
 	double RackAngleRad = 0.0;
 	/** Throttle times combustion load, 0..1 (the faint engine buzz). */

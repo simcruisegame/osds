@@ -314,6 +314,8 @@ namespace
 		struct FSample { double T, Yaw, Beta, Speed; };
 		TArray<FSample> Samples;
 		bool bWrongGear = false;
+		/** The driver's stability control switch for every case. */
+		bool bEscSwitch = true;
 		/** Log the wheels every 0.1 s after the lift (SIMCRUISE_TURNTRACE=1). */
 		bool bTrace = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_TURNTRACE")) == TEXT("1");
 		std::atomic<bool> bDone{ false };
@@ -397,6 +399,18 @@ namespace
 				Begin(C);
 			}
 			T += Dt;
+			C.Sim.bStabilityControlSwitch = bEscSwitch;
+			if (State == 1 && T > 3.0 && CaseIndex < Cases.Num())
+			{
+				Cases[CaseIndex].EscPeakOver = FMath::Max(Cases[CaseIndex].EscPeakOver, C.Sim.State.EscOversteer);
+				Cases[CaseIndex].EscPeakUnder = FMath::Max(Cases[CaseIndex].EscPeakUnder, C.Sim.State.EscUndersteer);
+			}
+			if (C.Sim.State.IsEscActive())
+			{
+				// The circle from 3 s in (past the jolt of starting the car at speed on it), and after the lift.
+				if (State == 1 && T > 3.0) Cases[CaseIndex].EscCircleS += Dt;
+				else if (State == 2) Cases[CaseIndex].EscAfterS += Dt;
+			}
 			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
 			const FVector3d Right = C.Body.Rotation.RotateVector(FVector3d::UnitY());
 			const FVector3d Velocity = C.Body.LinearVelocityMps;
@@ -570,6 +584,10 @@ namespace
 				return;
 			}
 			T += Dt;
+			C.Sim.bStabilityControlSwitch = true;
+			if (C.Sim.State.IsEscActive() && T > 1.0) Result.EscActiveS += Dt;
+			Result.EscPeakOver = FMath::Max(Result.EscPeakOver, C.Sim.State.EscOversteer);
+			Result.EscPeakUnder = FMath::Max(Result.EscPeakUnder, C.Sim.State.EscUndersteer);
 			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
 			const FVector3d Right = C.Body.Rotation.RotateVector(FVector3d::UnitY());
 			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
@@ -675,6 +693,149 @@ namespace
 			bDone = true;
 		}
 	};
+}
+
+namespace
+{
+	struct FSineDwellDriver
+	{
+		static constexpr double FrequencyHz = 0.7;
+		static constexpr double DwellS = 0.5;
+		double Dt = 1.0 / 360.0;
+		double TargetSpeed = 80.0 / 3.6;
+		double AmplitudeRad = 0.1;
+		bool bEsc = true;
+		int32 State = 0;
+		double T = 0.0;
+		double SpeedI = 0.0;
+		FVector3d StartPosition = FVector3d::ZeroVector;
+		FVector3d StartLeft = FVector3d::ZeroVector;
+		struct FSample { double T, Yaw; };
+		TArray<FSample> Samples;
+		std::atomic<bool> bDone{ false };
+		FSimCruiseSineDwellResult Result;
+
+		double SteerEndS() const { return 1.0 / FrequencyHz + DwellS; }
+
+		double Rack(double Time) const
+		{
+			const double ToSecondPeak = 0.75 / FrequencyHz;
+			if (Time <= ToSecondPeak) return AmplitudeRad * FMath::Sin(Tau * FrequencyHz * Time);
+			if (Time <= ToSecondPeak + DwellS) return -AmplitudeRad;
+			if (Time <= SteerEndS()) return AmplitudeRad * FMath::Sin(Tau * FrequencyHz * (Time - DwellS));
+			return 0.0;
+		}
+
+		void Step(FSimCruiseVehicleDriverContext& C)
+		{
+			C.Controls = FSimCruiseVehicleControls();
+			if (bDone) return;
+			T += Dt;
+			C.Sim.bStabilityControlSwitch = bEsc;
+			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
+			const FVector3d Right = C.Body.Rotation.RotateVector(FVector3d::UnitY());
+			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
+			C.Controls.bDirectRack = true;
+			C.Controls.RackAngleRad = 0.0;
+			switch (State)
+			{
+			case 0:
+				if (T >= 0.5)
+				{
+					// A little over the test speed, in a gear under 3500 rpm; the coast brings it to 80 km/h.
+					const double Start = TargetSpeed + 0.5;
+					C.Body.LinearVelocityMps = Forward * Start;
+					C.bBodyStateChanged = true;
+					for (FSimCruiseWheelState& Wheel : C.Sim.State.Wheels) Wheel.AngularSpeedRadPerSecond = Start / C.Sim.GetTireRadiusM();
+					const FSimCruiseCarDefinition& Car = C.Sim.GetCar();
+					int32 Gear = Car.ForwardGearRatios.Num() - 1;
+					for (int32 G = 0; G < Car.ForwardGearRatios.Num(); ++G)
+					{
+						if (Start / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[G] * Car.FinalDriveRatio * 60.0 / Tau < 3500.0) { Gear = G; break; }
+					}
+					C.Sim.State.Gear = Gear;
+					C.Sim.State.EngineOmegaRadPerSecond = Start / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[Gear] * Car.FinalDriveRatio;
+					C.Sim.State.EngineRpm = C.Sim.State.EngineOmegaRadPerSecond * 60.0 / Tau;
+					State = 1;
+					T = 0.0;
+				}
+				break;
+			case 1:
+				// Straight, holding the speed; the throttle is released as the steering starts.
+				SpeedI = FMath::Clamp(SpeedI + (TargetSpeed + 0.5 - Speed) * Dt * 0.3, 0.0, 0.9);
+				C.Controls.Throttle = FMath::Clamp((TargetSpeed + 0.5 - Speed) * 0.65 + SpeedI, 0.0, 1.0);
+				if (T >= 2.0)
+				{
+					StartPosition = C.Body.PositionM;
+					StartLeft = -Right;
+					State = 2;
+					T = 0.0;
+				}
+				break;
+			case 2:
+			{
+				// Left first (a negative rack); Unreal's yaw rate is negative turning left.
+				C.Controls.RackAngleRad = -Rack(T);
+				const double Yaw = SimCruiseUnits::ToDegrees(C.Body.AngularVelocityRadPerSecond.Z);
+				Samples.Add({ T, Yaw });
+				const double Beta = SimCruiseUnits::ToDegrees(FMath::Atan2(C.Body.LinearVelocityMps.Dot(Right), FMath::Max(FMath::Abs(Speed), 0.5)));
+				Result.PeakBetaDeg = FMath::Max(Result.PeakBetaDeg, FMath::Abs(Beta));
+				if (C.Sim.State.IsEscActive()) Result.EscActiveS += Dt;
+				if (FMath::IsNearlyEqual(T, 1.07, Dt * 0.5) || (Result.LateralDisplacementM == 0.0 && T > 1.07))
+				{
+					Result.LateralDisplacementM = (C.Body.PositionM - StartPosition).Dot(StartLeft);
+				}
+				if (T >= SteerEndS() + 2.0)
+				{
+					Finish();
+					return;
+				}
+				break;
+			}
+			default:
+				break;
+			}
+		}
+
+		double YawAt(double Time) const
+		{
+			for (const FSample& S : Samples) if (S.T >= Time) return S.Yaw;
+			return Samples.Num() ? Samples.Last().Yaw : 0.0;
+		}
+
+		void Finish()
+		{
+			// The second lobe turns right: the peak of the positive yaw rate after the first quarter.
+			double Peak = 0.0;
+			for (const FSample& S : Samples) if (S.T > 0.25 / FrequencyHz) Peak = FMath::Max(Peak, S.Yaw);
+			Result.PeakYawDegS = Peak;
+			Result.Ratio1s = Peak > 1.0e-3 ? YawAt(SteerEndS() + 1.0) / Peak : 0.0;
+			Result.Ratio175s = Peak > 1.0e-3 ? YawAt(SteerEndS() + 1.75) / Peak : 0.0;
+			Result.AmplitudeDeg = SimCruiseUnits::ToDegrees(AmplitudeRad);
+			Result.bCompleted = true;
+			bDone = true;
+		}
+	};
+}
+
+FSimCruiseSineDwellResult SimCruiseRunSineDwell(const FSimCruiseCarDefinition& Car, double FixedStepS, bool bStabilityControl)
+{
+	TSharedRef<FSineDwellDriver> Driver = MakeShared<FSineDwellDriver>();
+	Driver->Dt = FixedStepS;
+	Driver->bEsc = bStabilityControl;
+	// The steer that gives 0.3 g at 80 km/h (bicycle model with the car's own understeer gradient), times
+	// 6.5, at most 270 deg of steering wheel (about 17 deg at the road wheels on a 16:1 rack).
+	const double Speed = Driver->TargetSpeed;
+	const double Steer03 = Car.WheelbaseM * 0.3 * Gravity / (Speed * Speed) + SimCruiseUnits::ToRadians(Car.StabilityControlUndersteerDegPerG * 0.3);
+	Driver->AmplitudeRad = FMath::Min(6.5 * Steer03, SimCruiseUnits::ToRadians(270.0 / 16.0));
+	const FVector3d Ground(0.0, 0.0, 0.15);
+	FSimCruiseVehicleBenchWorld World(FixedStepS);
+	if (!World.IsValid() || World.SpawnVehicle(Car, Ground, [Driver](FSimCruiseVehicleDriverContext& C) { Driver->Step(C); }) == nullptr)
+	{
+		return Driver->Result;
+	}
+	World.RunUntil([&Driver]() { return Driver->bDone.load(); }, 30.0);
+	return Driver->Result;
 }
 
 FSimCruiseStepSteerResult SimCruiseRunStepSteer(const FSimCruiseCarDefinition& Car, double FixedStepS, double SpeedMps, double LateralG)
@@ -948,10 +1109,11 @@ FSimCruiseCarTrackResult SimCruiseRunCarTrack(const FSimCruiseCarDefinition& Car
 }
 
 FSimCruiseLiftOffResult SimCruiseRunLiftOff(const FSimCruiseCarDefinition& Car, double FixedStepS,
-	const TArray<double>& LevelsG, double RadiusM)
+	const TArray<double>& LevelsG, double RadiusM, bool bStabilityControl)
 {
 	TSharedRef<FLiftOffDriver> Driver = MakeShared<FLiftOffDriver>();
 	Driver->Dt = FixedStepS;
+	Driver->bEscSwitch = bStabilityControl;
 	Driver->Radius = RadiusM;
 	Driver->MassKg = Car.MassKg;
 	Driver->BrakeSumNm = Car.FrontBrakeTorqueNm + Car.RearBrakeTorqueNm;
