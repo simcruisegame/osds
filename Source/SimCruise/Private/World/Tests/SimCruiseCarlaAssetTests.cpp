@@ -10,6 +10,10 @@
 #include "Materials/MaterialInterface.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Engine/Texture2D.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
 
 // The CARLA art (CC-BY 4.0, fetched by scripts/fetch-carla.ps1 into Content/Carla): every static mesh must
 // load with real materials (no slot falling back to the engine's default material because a parent
@@ -50,6 +54,23 @@ bool FSimCruiseCarlaAssetsTest::RunTest(const FString& Parameters)
 	FFileHelper::SaveStringArrayToFile(Lines, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("CarlaAssets.txt")));
 	AddInfo(FString::Printf(TEXT("CARLA meshes: %d complete, %d with missing materials (Saved/CarlaAssets.txt)"), Good, Bad));
 	UE_LOG(LogTemp, Display, TEXT("CARLAASSETS %d complete, %d missing"), Good, Bad);
+	// The facade albedo textures as PNG (Saved/CarlaTex), to choose and scale them by eye.
+	TArray<FAssetData> Textures;
+	Registry.GetAssetsByPath(TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures"), Textures, true);
+	IImageWrapperModule& Wrappers = FModuleManager::LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
+	for (const FAssetData& A : Textures)
+	{
+		if (!A.AssetName.ToString().EndsWith(TEXT("_d"))) continue;
+		UTexture2D* T = Cast<UTexture2D>(A.GetAsset());
+		if (!T || !T->Source.IsValid() || T->Source.GetFormat() != TSF_BGRA8) continue;
+		TArray64<uint8> Mip;
+		if (!T->Source.GetMipData(Mip, 0)) continue;
+		TSharedPtr<IImageWrapper> Png = Wrappers.CreateImageWrapper(EImageFormat::PNG);
+		if (Png->SetRaw(Mip.GetData(), Mip.Num(), T->Source.GetSizeX(), T->Source.GetSizeY(), ERGBFormat::BGRA, 8))
+		{
+			FFileHelper::SaveArrayToFile(Png->GetCompressed(), *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("CarlaTex"), A.AssetName.ToString() + TEXT(".png")));
+		}
+	}
 	return true;
 }
 

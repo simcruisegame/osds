@@ -625,6 +625,13 @@ if (wallMat > 0.5 && (kind < 0.5 || (kind > 10.5 && kind < 13.5)))
 		float jy = SC_JOINT(h, ch, jw, fpy);
 		float jx = SC_JOINT(u * cl, cl, jw, fpx);
 		built = lerp(unit, mortar, saturate(jx + jy - jx * jy));
+		if (wallMat < 1.5 && BrickOn > 0.5)
+		{
+			// Photographed brick (CARLA): its bricks and joints as a ratio over the wall's own colour,
+			// each building's wall shifted along the tile so neighbours do not match.
+			float3 tex = Brick.Sample(BrickSampler, float2(along + seed * 7.13, -h) / 2.031).rgb;
+			built = stucco * tex / max(BrickMean.rgb, 0.02);
+		}
 		rib.x = wallMat > 2.5 ? 1.0 : 0.0;
 	}
 	else if (wallMat < 2.5)
@@ -1069,6 +1076,17 @@ return col;
 			AddInput(Custom, TEXT("UV1"), TexCoord(Material, 1));
 			AddInput(Custom, TEXT("Lights"), ScalarParam(Material, TEXT("Lights"), 0.f));
 			AddInput(Custom, TEXT("CV"), AddExpression<UMaterialExpressionCameraVectorWS>(Material)); // the rooms behind the windows
+			{
+				// CARLA's photographed running-bond brick (CC-BY 4.0, Content/Carla, fetched by
+				// scripts/fetch-carla.ps1): 30 courses a tile, so 2.03 m at US modular coursing. Without
+				// the art the drawn coursing stays (BrickOn 0).
+				UTexture* Brick = LoadObject<UTexture>(nullptr, TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures/T_Brick_02_d.T_Brick_02_d"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+				AddInput(Custom, TEXT("Brick"), TextureParam(Material, TEXT("Brick"), Brick ? Brick : DefaultTexture));
+				AddInput(Custom, TEXT("BrickOn"), ScalarParam(Material, TEXT("BrickOn"), Brick ? 1.f : 0.f));
+				// The tile's mean colour, linear (sRGB 113.7, 71.0, 47.9): the texture only carries the
+				// bricks' and joints' variation; the wall keeps its own measured or mapped colour.
+				AddInput(Custom, TEXT("BrickMean"), VectorParam(Material, TEXT("BrickMean"), FLinearColor(FColor(114, 71, 48))));
+			}
 			Custom->RebuildOutputs();
 			Material->GetEditorOnlyData()->Metallic.Connect(3, Custom);
 			Material->GetEditorOnlyData()->EmissiveColor.Connect(4, Custom);
