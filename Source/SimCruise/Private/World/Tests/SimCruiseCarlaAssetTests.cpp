@@ -11,6 +11,8 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Engine/Texture2D.h"
+#include "World/SimCruiseCarlaCatalog.h"
+#include "World/SimCruiseSignals.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "Modules/ModuleManager.h"
@@ -28,10 +30,23 @@ bool FSimCruiseCarlaAssetsTest::RunTest(const FString& Parameters)
 		return true;
 	}
 	IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
-	Registry.ScanPathsSynchronous({ TEXT("/Game/Carla") }, true);
+	// The models the game places (the catalogue, data/carla/props.json, and the signal parts): loading
+	// all 21 GB of the fetched art took over 20 minutes.
+	TArray<FString> Wanted;
+	FString Text;
+	if (FFileHelper::LoadFileToString(Text, *FPaths::Combine(FPaths::ProjectDir(), TEXT("data"), TEXT("carla"), TEXT("candidates.txt"))))
+	{
+		Text.ParseIntoArrayLines(Wanted);
+	}
+	for (const FSimCruiseCarlaEntry& E : SimCruiseCarlaCatalog::Entries()) Wanted.AddUnique(E.Path);
+	for (const FString& P : ASimCruiseSignals::CarlaMeshPaths()) Wanted.AddUnique(P);
 	TArray<FAssetData> Meshes;
-	Registry.GetAssetsByPath(TEXT("/Game/Carla"), Meshes, true);
-	Meshes.RemoveAll([](const FAssetData& A) { return A.AssetClassPath != UStaticMesh::StaticClass()->GetClassPathName(); });
+	for (const FString& P : Wanted)
+	{
+		FAssetData A = Registry.GetAssetByObjectPath(FSoftObjectPath(P));
+		if (!A.IsValid()) { UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *P, nullptr, LOAD_NoWarn | LOAD_Quiet); if (M) A = FAssetData(M); }
+		if (A.IsValid()) Meshes.Add(A);
+	}
 	int32 Good = 0, Bad = 0;
 	TArray<FString> Lines;
 	for (const FAssetData& A : Meshes)
@@ -56,6 +71,7 @@ bool FSimCruiseCarlaAssetsTest::RunTest(const FString& Parameters)
 	UE_LOG(LogTemp, Display, TEXT("CARLAASSETS %d complete, %d missing"), Good, Bad);
 	// The facade albedo textures as PNG (Saved/CarlaTex), to choose and scale them by eye.
 	TArray<FAssetData> Textures;
+	Registry.ScanPathsSynchronous({ TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures") }, true);
 	Registry.GetAssetsByPath(TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures"), Textures, true);
 	IImageWrapperModule& Wrappers = FModuleManager::LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
 	for (const FAssetData& A : Textures)

@@ -14,6 +14,9 @@
 #include "World/SimCruiseSignals.h"
 #include "World/SimCruiseTrees.h"
 #include "World/SimCruiseWorldResources.h"
+#include "World/SimCruiseCarlaCatalog.h"
+#include "World/SimCruiseCookList.h"
+#include "Engine/StaticMesh.h"
 #include "Presentation/SimCruiseCarClock.h"
 #include "Presentation/SimCruiseCarMaterialLibrary.h"
 #include "Presentation/SimCruiseCarMirror.h"
@@ -62,6 +65,35 @@ int32 USimCruiseBuildWorldMaterialsCommandlet::Main(const FString& Params)
 			continue;
 		}
 		UE_LOG(LogSimCruiseMaterials, Display, TEXT("Saved %s"), *File);
+	}
+
+	// The CARLA models the game places, as one list of hard references (cooked with this folder).
+	{
+		const FString PackagePath = TEXT("/Game/World/Materials/DA_SimCruiseCarlaCookList");
+		UPackage* Package = CreatePackage(*PackagePath);
+		USimCruiseCookList* List = NewObject<USimCruiseCookList>(Package, TEXT("DA_SimCruiseCarlaCookList"), RF_Public | RF_Standalone);
+		TArray<FString> Paths;
+		for (const FSimCruiseCarlaEntry& E : SimCruiseCarlaCatalog::Entries()) Paths.Add(E.Path);
+		Paths.Append(ASimCruiseSignals::CarlaMeshPaths());
+		Paths.Add(TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures/T_Brick_02_d.T_Brick_02_d"));
+		for (const FString& Path : Paths)
+		{
+			if (UObject* Asset = LoadObject<UObject>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet)) List->Assets.Add(Asset);
+		}
+		Package->MarkPackageDirty();
+		const FString File = FPackageName::LongPackageNameToFilename(PackagePath, FPackageName::GetAssetPackageExtension());
+		FSavePackageArgs Args;
+		Args.TopLevelFlags = RF_Public | RF_Standalone;
+		Args.SaveFlags = SAVE_NoError;
+		if (UPackage::SavePackage(Package, List, *File, Args))
+		{
+			UE_LOG(LogSimCruiseMaterials, Display, TEXT("Saved %s (%d CARLA assets of %d)"), *File, List->Assets.Num(), Paths.Num());
+		}
+		else
+		{
+			UE_LOG(LogSimCruiseMaterials, Error, TEXT("Could not save %s"), *File);
+			++Failures;
+		}
 	}
 
 	// The car's: its three masters, the dashboard clock, the mirror glass and the low-beam

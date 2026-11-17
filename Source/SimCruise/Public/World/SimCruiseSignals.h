@@ -97,6 +97,9 @@ private:
 	TArray<TObjectPtr<UInstancedStaticMeshComponent>> CarlaParts;
 	bool bCarlaTried = false;
 	bool HasCarlaParts();
+public:
+	/** The CARLA meshes the signals use (for the cook list). */
+	static TArray<FString> CarlaMeshPaths();
 
 	TSet<FIntPoint> ShownTiles;
 	FIntPoint ShownOrigin = FIntPoint(MAX_int32, MAX_int32);

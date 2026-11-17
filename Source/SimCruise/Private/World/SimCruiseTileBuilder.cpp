@@ -1117,6 +1117,7 @@ namespace SimCruiseTileBuilder
 			SimCruiseTileDetail::BuildBuildings(Context);
 			SimCruiseTileDetail::BuildPalms(Context);
 			SimCruiseTileDetail::BuildStreetLights(Context);
+			SimCruiseTileDetail::BuildCarlaVerges(Context);
 			SimCruiseTileDetail::BuildPromenades(Context);
 			SimCruiseStreetFurniture::Build(Context);
 		}

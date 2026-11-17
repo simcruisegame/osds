@@ -596,6 +596,13 @@ float stain = dot(Texture2DSample(Grain, GrainSampler, float2(along * 0.11, h * 
 // Stains only darken (never lift a wall above its weathered-paint albedo).
 float3 stucco = VC.rgb * lerp(1.0, grain, 0.09) * lerp(1.0, min(stain, 1.0), 0.25);
 stucco *= lerp(0.78, 1.0, smoothstep(0.0, 1.2, h));
+// Photographed weathering (CARLA concrete) over the painted wall: render and stucco a little of it,
+// cast concrete (5) the whole of it, as a ratio over the wall's own colour.
+if (ConcreteOn > 0.5 && kind < 0.5 && (wallMat < 0.5 || (wallMat > 4.5 && wallMat < 5.5)))
+{
+	float3 weather = Concrete.Sample(ConcreteSampler, float2(along + seed * 5.31, -h) / 3.5).rgb / max(ConcreteMean.rgb, 0.02);
+	stucco *= lerp(1.0, weather, wallMat > 4.5 ? 1.0 : 0.45);
+}
 // What a wall is built of, drawn over its colour: brick coursing (US modular brick, 3 courses to
 // 8 in: 67.7 mm, 203 mm long with 9.5 mm joints, running bond), lap siding (127 mm exposure, the
 // shadow under each butt), concrete block (406 x 203 mm), ashlar stone, cast concrete panels with
@@ -1086,6 +1093,12 @@ return col;
 				// The tile's mean colour, linear (sRGB 113.7, 71.0, 47.9): the texture only carries the
 				// bricks' and joints' variation; the wall keeps its own measured or mapped colour.
 				AddInput(Custom, TEXT("BrickMean"), VectorParam(Material, TEXT("BrickMean"), FLinearColor(FColor(114, 71, 48))));
+				// CARLA's weathered concrete (T_Facade05, 4096 px, its stains about half a metre across):
+				// cast concrete walls take it in full, painted render and stucco a little of it.
+				UTexture* Concrete = LoadObject<UTexture>(nullptr, TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures/T_Facade05_d.T_Facade05_d"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+				AddInput(Custom, TEXT("Concrete"), TextureParam(Material, TEXT("Concrete"), Concrete ? Concrete : DefaultTexture));
+				AddInput(Custom, TEXT("ConcreteOn"), ScalarParam(Material, TEXT("ConcreteOn"), Concrete ? 1.f : 0.f));
+				AddInput(Custom, TEXT("ConcreteMean"), VectorParam(Material, TEXT("ConcreteMean"), FLinearColor(FColor(170, 163, 158))));
 			}
 			Custom->RebuildOutputs();
 			Material->GetEditorOnlyData()->Metallic.Connect(3, Custom);

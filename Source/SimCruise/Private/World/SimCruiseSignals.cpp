@@ -165,6 +165,13 @@ namespace
 	constexpr double CarlaArmPivotZM = 6.31 - 2.02;
 }
 
+TArray<FString> ASimCruiseSignals::CarlaMeshPaths()
+{
+	TArray<FString> Out;
+	for (const TCHAR* Path : CarlaSignalMeshes) Out.Add(Path);
+	return Out;
+}
+
 bool ASimCruiseSignals::HasCarlaParts()
 {
 	if (!bCarlaTried)
