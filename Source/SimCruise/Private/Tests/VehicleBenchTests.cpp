@@ -515,6 +515,35 @@ namespace
 	}
 }
 
+namespace
+{
+	// A lever handbrake turn at 50 km/h: a rear tyre slides (its wheel under half the road speed) within 0.3 s (the lever comes up in 0.15 s), the car rotates (over 30 deg/s) and
+	// the engine keeps running. A car with an electric parking brake brakes all four wheels instead: no
+	// rear lock, no rotation past 25 deg/s.
+	bool RunHandbrakeTurnTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, CarId, Car)) return false;
+		const FSimCruiseHandbrakeTurnResult R = SimCruiseRunHandbrakeTurn(Car, SimCruiseShippingFixedStepS);
+		if (!Test.TestTrue(TEXT("bench completed"), R.bCompleted)) return false;
+		const FString Line = FString::Printf(TEXT("HANDBRAKE %-11s %s  rear lock %.2f s  peak yaw %.1f deg/s  peak beta %.1f deg  %s"), CarId, *Car.ParkingBrakeType,
+			R.RearLockS, R.PeakYawDegS, R.PeakBetaDeg, R.bStalled ? TEXT("STALLED") : TEXT("engine running"));
+		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+		Test.AddInfo(Line);
+		if (Car.ParkingBrakeType == TEXT("electric"))
+		{
+			Test.TestTrue(TEXT("an electric parking brake does not lock the rears for a turn"), R.RearLockS < 0.0 || R.PeakYawDegS < 25.0);
+		}
+		else
+		{
+			Test.TestTrue(FString::Printf(TEXT("a rear tyre slides within 0.3 s (%.2f s)"), R.RearLockS), R.RearLockS >= 0.0 && R.RearLockS <= 0.3);
+			Test.TestTrue(FString::Printf(TEXT("the car rotates (peak yaw %.1f deg/s)"), R.PeakYawDegS), R.PeakYawDegS > 30.0);
+			Test.TestFalse(TEXT("the engine keeps running"), R.bStalled);
+		}
+		return true;
+	}
+}
+
 #define SIMCRUISE_VEHICLE_BENCH(Kind, CarIdent) \
 	IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicle##Kind##_##CarIdent, "SimCruise.Vehicle." #Kind "." #CarIdent, VehicleBenchFlags) \
 	bool FSimCruiseVehicle##Kind##_##CarIdent::RunTest(const FString& Parameters) { return Run##Kind##Test(*this, TEXT(#CarIdent)); }
@@ -553,6 +582,11 @@ SIMCRUISE_VEHICLE_BENCH(LiftOff, f150raptor18)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, grandcherokee13)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, odyssey18)
 SIMCRUISE_VEHICLE_BENCH(LiftOff, crv25)
+SIMCRUISE_VEHICLE_BENCH(HandbrakeTurn, nb2001)
+SIMCRUISE_VEHICLE_BENCH(HandbrakeTurn, nb2001_lowered)
+SIMCRUISE_VEHICLE_BENCH(HandbrakeTurn, mustang65)
+SIMCRUISE_VEHICLE_BENCH(HandbrakeTurn, meridian_z)
+SIMCRUISE_VEHICLE_BENCH(HandbrakeTurn, f150raptor18)
 SIMCRUISE_VEHICLE_BENCH(SineDwell, model3)
 SIMCRUISE_VEHICLE_BENCH(SineDwell, meridian_z)
 SIMCRUISE_VEHICLE_BENCH(SineDwell, f150raptor18)

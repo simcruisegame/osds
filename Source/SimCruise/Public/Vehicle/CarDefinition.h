@@ -155,6 +155,9 @@ struct FSimCruiseCarDefinition
 	double RearBrakeKneeFraction = 1.0;
 	double RearBrakeSlopeAboveKnee = 1.0;
 	double ParkingBrakeTorqueNm = 900.0;
+	/** "lever" (a cable to the rear brakes: locks the rears, the handbrake turn) or "electric" (the
+	 *  C8's and Model 3's switch: at speed it brakes all four wheels through ABS and ESC, no turn). */
+	FString ParkingBrakeType = TEXT("lever");
 
 	// Aerodynamic body drag, Cd multiplied by frontal area.
 	double DragAreaM2 = 0.65;
