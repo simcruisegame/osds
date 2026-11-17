@@ -8,6 +8,7 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
 #include "World/SimCruiseGeo.h"
+#include "World/SimCruiseRoadNetwork.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseTileData.h"
 #include "World/SimCruiseWorldSubsystem.h"
@@ -251,6 +252,158 @@ bool FSimCruiseSlopedSeamTest::RunTest(const FString& Parameters)
 	AddInfo(FString::Printf(TEXT("least clearance over the ground at a seam: %.3f m"), WorstClear));
 	TestTrue(FString::Printf(TEXT("the road clears the ground at the seams (%.3f m)"), WorstClear), WorstClear >= 0.04);
 	TestTrue(FString::Printf(TEXT("seam pins bend the grade by about 1 %% at most (%.4f)"), Worst), Worst < 0.02);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBridgeDeckProfileTest, "SimCruise.World.BridgeDeckProfile", SimCruiseSeamInstallTest::Flags)
+bool FSimCruiseBridgeDeckProfileTest::RunTest(const FString& Parameters)
+{
+	// The helper supplies the full-chain deck profile in `bridges`. A deck at 10 m over
+	// flat zero-metre ground must remain at that height even when this tile has no
+	// neighbouring seam contract yet.
+	const FString Json = TEXT("{\"id\":[100,100],\"grid\":1,\"h\":[0,0,0,0],\"roads\":[[\"primary\",0,\"test deck\",[[0,0.5],[1,0.5]],8,\"paved\",\"bridge\"]],\"bridges\":[[\"primary\",\"test deck\",[[0,0.5],[1,0.5]],8,[10,10],0,0]]}");
+	FSimCruiseTileData A;
+	FString Error;
+	if (!TestTrue(TEXT("bridge tile parses"), SimCruiseTileData::Parse(Json, A, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("the tile keeps the exported bridge profile"), A.Bridges.Num(), 1);
+	constexpr double Side = 200.0;
+	auto DeckHeightError = [](const FSimCruiseRoadNetwork& Roads)
+	{
+		double Worst = 0.0;
+		for (const FSimCruiseRibbon& Ribbon : Roads.Ribbons)
+		{
+			for (const FSimCruiseRibbonStation& Station : Ribbon.St)
+			{
+				if (Station.bBridge) Worst = FMath::Max(Worst, FMath::Abs(Station.HC - 10.0));
+			}
+		}
+		return Worst;
+	};
+	auto FindEnd = [](const FSimCruiseRoadNetwork& Roads, double X, FSimCruiseSeamEnd& OutEnd)
+	{
+		TArray<FSimCruiseSeamEnd> Ends;
+		Roads.CollectSeamEnds(Ends);
+		for (const FSimCruiseSeamEnd& End : Ends)
+		{
+			if (FMath::Abs(End.P.X - X) < 0.05) { OutEnd = End; return true; }
+		}
+		return false;
+	};
+	auto Translate = [](const FSimCruiseRoadNetwork& Roads, double DX)
+	{
+		TArray<FSimCruiseSeamEnd> Ends;
+		Roads.CollectSeamEnds(Ends);
+		for (FSimCruiseSeamEnd& End : Ends) End.P.X += DX;
+		return Ends;
+	};
+
+	FSimCruiseRoadNetwork FirstBuilt;
+	FirstBuilt.Build(A, Side);
+	TestEqual(TEXT("one bridge ribbon"), FirstBuilt.Ribbons.Num(), 1);
+	const double UncontractedError = DeckHeightError(FirstBuilt);
+	TestTrue(FString::Printf(TEXT("the uncontracted deck follows its authored profile (%.3f m error)"), UncontractedError), UncontractedError < 0.02);
+
+	FSimCruiseTileData B = A;
+	B.Id = FIntPoint(101, 100);
+	FSimCruiseRoadNetwork SecondBuilt;
+	SecondBuilt.Build(B, Side, Translate(FirstBuilt, -Side));
+	FSimCruiseSeamEnd FirstEast, SecondWest;
+	const bool bFirstEast = FindEnd(FirstBuilt, Side, FirstEast);
+	const bool bSecondWest = FindEnd(SecondBuilt, 0.0, SecondWest);
+	TestTrue(TEXT("the first bridge tile has an east seam"), bFirstEast);
+	TestTrue(TEXT("the later bridge tile has a west seam"), bSecondWest);
+	if (bFirstEast && bSecondWest) TestTrue(TEXT("a later tile agrees with the existing bridge seam"), FMath::Abs(FirstEast.HC - SecondWest.HC) < 0.01);
+	TestTrue(FString::Printf(TEXT("the later tile keeps the authored deck profile (%.3f m error)"), DeckHeightError(SecondBuilt)), DeckHeightError(SecondBuilt) < 0.02);
+
+	FSimCruiseRoadNetwork ReverseFirst;
+	ReverseFirst.Build(B, Side);
+	FSimCruiseRoadNetwork ReverseSecond;
+	A.Id = FIntPoint(100, 100);
+	ReverseSecond.Build(A, Side, Translate(ReverseFirst, Side));
+	FSimCruiseSeamEnd ReverseWest, ReverseEast;
+	const bool bReverseWest = FindEnd(ReverseFirst, 0.0, ReverseWest);
+	const bool bReverseEast = FindEnd(ReverseSecond, Side, ReverseEast);
+	TestTrue(TEXT("the reverse first tile has a west seam"), bReverseWest);
+	TestTrue(TEXT("the reverse second tile has an east seam"), bReverseEast);
+	TestTrue(FString::Printf(TEXT("the reverse build order keeps its deck profile (%.3f m error)"), DeckHeightError(ReverseFirst)), DeckHeightError(ReverseFirst) < 0.02);
+	if (bReverseWest && bReverseEast) TestTrue(TEXT("reverse build order meets at the same deck height"), FMath::Abs(ReverseWest.HC - ReverseEast.HC) < 0.01);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBridgeDeckSmoothTest, "SimCruise.World.BridgeDeckSmooth", SimCruiseSeamInstallTest::Flags)
+bool FSimCruiseBridgeDeckSmoothTest::RunTest(const FString& Parameters)
+{
+	// The owner's report: "the bridges go up and down, not flat across". A deck row whose station
+	// heights carry noise and one point dropped to the valley floor (a chain split at a ramp) must
+	// still give one smooth deck: a straight grade from end to end plus at most a crest, never a sag.
+	const FString Json = TEXT("{\"id\":[100,100],\"grid\":1,\"h\":[0,0,0,0],")
+		TEXT("\"roads\":[[\"primary\",0,\"wavy deck\",[[0,0.5],[1,0.5]],8,\"paved\",\"bridge\"]],")
+		TEXT("\"bridges\":[[\"primary\",\"wavy deck\",[[0,0.5],[0.1,0.5],[0.2,0.5],[0.3,0.5],[0.4,0.5],[0.5,0.5],[0.6,0.5],[0.7,0.5],[0.8,0.5],[0.9,0.5],[1,0.5]],8,")
+		TEXT("[10,10.6,9.4,11.5,6,11.2,10.5,12.3,10.9,11.9,12],0,0]]}");
+	FSimCruiseTileData Data;
+	FString Error;
+	if (!TestTrue(TEXT("wavy bridge tile parses"), SimCruiseTileData::Parse(Json, Data, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	FSimCruiseRoadNetwork Roads;
+	Roads.Build(Data, 200.0);
+	TArray<double> Z;
+	for (const FSimCruiseRibbon& Ribbon : Roads.Ribbons)
+	{
+		for (const FSimCruiseRibbonStation& Station : Ribbon.St) if (Station.bBridge) Z.Add(Station.HC);
+	}
+	if (!TestTrue(TEXT("the deck has stations"), Z.Num() > 10)) return false;
+	TestTrue(FString::Printf(TEXT("the deck starts at its first end (%.2f m)"), Z[0]), FMath::Abs(Z[0] - 10.0) < 0.1 || FMath::Abs(Z[0] - 12.0) < 0.1);
+	TestTrue(FString::Printf(TEXT("the deck ends at its other end (%.2f m)"), Z.Last()), FMath::Abs(Z.Last() - 10.0) < 0.1 || FMath::Abs(Z.Last() - 12.0) < 0.1);
+	double WorstSag = 0.0, Lowest = 1e9;
+	for (int32 i = 1; i + 1 < Z.Num(); ++i)
+	{
+		WorstSag = FMath::Max(WorstSag, Z[i + 1] - 2.0 * Z[i] + Z[i - 1]);
+		Lowest = FMath::Min(Lowest, Z[i]);
+	}
+	TestTrue(FString::Printf(TEXT("no sag anywhere on the deck (worst second difference %.4f m)"), WorstSag), WorstSag < 0.005);
+	TestTrue(FString::Printf(TEXT("the dropped point does not pull the deck down (lowest %.2f m)"), Lowest), Lowest > 9.9);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBridgeOverRoadTest, "SimCruise.World.BridgeOverRoad", SimCruiseSeamInstallTest::Flags)
+bool FSimCruiseBridgeOverRoadTest::RunTest(const FString& Parameters)
+{
+	// A street on a deck 6.5 m over a primary road: neither road joins the other. The junction join
+	// pulled a deck down to the road under it within 15 m (and lifted the road below to the deck).
+	const FString Json = TEXT("{\"id\":[100,100],\"grid\":1,\"h\":[0,0,0,0],")
+		TEXT("\"roads\":[[\"residential\",0,\"over\",[[0,0.5],[1,0.5]],7,\"paved\",\"bridge\"],")
+		TEXT("[\"primary\",0,\"under\",[[0.5,0],[0.5,1]],10,\"paved\",\"\"]],")
+		TEXT("\"bridges\":[[\"residential\",\"over\",[[0,0.5],[1,0.5]],7,[6.5,6.5],0,0]]}");
+	FSimCruiseTileData Data;
+	FString Error;
+	if (!TestTrue(TEXT("overpass tile parses"), SimCruiseTileData::Parse(Json, Data, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	FSimCruiseRoadNetwork Roads;
+	Roads.Build(Data, 200.0);
+	double DeckWorst = 0.0, UnderWorst = 0.0;
+	for (const FSimCruiseRibbon& Ribbon : Roads.Ribbons)
+	{
+		for (const FSimCruiseRibbonStation& Station : Ribbon.St)
+		{
+			for (int32 c = 0; c < 5; ++c)
+			{
+				if (Station.bBridge) DeckWorst = FMath::Max(DeckWorst, FMath::Abs(Station.Column(c) - 6.5));
+				else UnderWorst = FMath::Max(UnderWorst, FMath::Abs(Station.Column(c)));
+			}
+		}
+	}
+	TestTrue(FString::Printf(TEXT("the deck keeps its height over the road (worst %.2f m off)"), DeckWorst), DeckWorst < 0.25);
+	TestTrue(FString::Printf(TEXT("the road under keeps its own level (worst %.2f m off)"), UnderWorst), UnderWorst < 0.25);
 	return true;
 }
 

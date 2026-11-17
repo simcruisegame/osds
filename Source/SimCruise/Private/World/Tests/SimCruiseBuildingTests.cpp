@@ -33,6 +33,18 @@ bool FSimCruiseSignTextTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseRoofFormTest, "SimCruise.World.Buildings.RoofForm", SimCruiseBuildingTest::Flags)
+bool FSimCruiseRoofFormTest::RunTest(const FString& Parameters)
+{
+	using SimCruiseTileDetail::BuildingRoofFormFromFact;
+	using SimCruiseTileDetail::EBuildingRoofForm;
+	TestTrue(TEXT("mapped flat roofs stay flat"), BuildingRoofFormFromFact(FName(TEXT("roof:flat"))) == EBuildingRoofForm::Flat);
+	TestTrue(TEXT("mapped gables keep gable ends"), BuildingRoofFormFromFact(FName(TEXT("roof:gabled"))) == EBuildingRoofForm::Gabled);
+	TestTrue(TEXT("mapped hip roofs keep their hip"), BuildingRoofFormFromFact(FName(TEXT("roof:hipped"))) == EBuildingRoofForm::Hipped);
+	TestTrue(TEXT("unsupported facts retain the procedural fallback"), BuildingRoofFormFromFact(FName(TEXT("roof:mansard"))) == EBuildingRoofForm::Unspecified);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseWallMaterialTest, "SimCruise.World.Buildings.WallMaterial", SimCruiseBuildingTest::Flags)
 bool FSimCruiseWallMaterialTest::RunTest(const FString& Parameters)
 {

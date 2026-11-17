@@ -61,6 +61,8 @@ public:
 	ESimCruiseRumbleBackend GetRumbleBackend() const { return RumbleBackend; }
 
 	void ShowMessage(const FString& Text, float Seconds = 3.f);
+	/** The gearbox refused a shift: the pad buzzes twice. */
+	void NotifyShiftRefused() { Haptics.NotifyShiftRefused(); }
 
 	/** Scripted end-to-end check of the input routing, like Godot's
 	 *  checks/PadSteer.gd: injects stick, key and trigger events through the

@@ -128,6 +128,9 @@ private:
 	int32 Mph = 0;
 	int32 Gear = 0;
 	bool bManual = false;
+	/** The gear last drawn and when it last changed (real seconds), for the shift flash. */
+	int32 DrawnGear = MIN_int32;
+	double GearChangedAtS = -10.0;
 	bool bAbs = false;
 	double Rpm = 0.0;
 	double UpshiftRpm = 6700.0;

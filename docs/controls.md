@@ -12,7 +12,7 @@ The Unreal client starts in the 2001 roadster in Ocean Drive's lane, Miami Beach
 | Full brake (service brake) | Space | — |
 | Parking brake, rear wheels | H (hold) | B (hold) |
 | Automatic / manual gearbox | T | Right-stick click |
-| Clutch (manual mode) | Shift (hold) | A (hold) |
+| Clutch (manual mode, only with "your clutch") | Shift (hold) | A (hold) |
 | Shift up / shift down (manual mode) | E / Q | RB / LB |
 | Restart a stalled engine | I, with the clutch held | D-pad left, with the clutch held |
 | Camera: driver's seat, hood, near chase, far chase, scenic | C | Y |
@@ -52,7 +52,7 @@ The engine sound is on at the start.
 
 **Automatic gearbox.** It changes up early with a light pedal and holds each gear longer the deeper you press, kicks down when you floor it, never changes up while you brake and holds its gear through a corner.
 
-**Manual gearbox.** Press T (right-stick click) to take over the gearbox. Hold the clutch (Shift / A), tap E (RB) for first, add throttle and let the clutch out. Shifts need the clutch; the gearbox refuses a gear that would over-rev the engine, and a stalled engine restarts with I (D-pad left) while the clutch is held. On the pad the right thumb holds the clutch and the bumpers change gear like paddles (RB up, LB down), so you can brake with LT, hold the clutch and change down at the same time.
+**Manual gearbox.** Press T (right-stick click) to take over the gearbox. By default the clutch is automatic: tap E or RB to shift up and Q or LB to shift down, and the game presses the clutch, lifts the throttle, changes gear, blips the throttle on a downshift so the engine matches the lower gear, and lets the clutch out (about 0.3 s). Tap twice to drop two gears. At a crawl it holds the clutch in so the engine never stalls, and you pull away on the throttle alone. A gear that would over-rev the engine is refused. Pause menu > Gearbox cycles Automatic, Manual (automatic clutch) and Manual (your clutch): with your clutch, hold Shift (A) to shift, and a stalled engine restarts with I (D-pad left) while the clutch is held. The setting is remembered (`simcruise.Gearbox.AutoClutch`).
 
 **New pad layout in 2.0.0.** The clutch moved from LB to A, the parking brake from A to B, shift down from X to LB, the gearbox switch from B to the right-stick click, the engine restart from the right-stick click to D-pad left and the HUD from the left-stick click to X; the left-stick click does nothing (since 2.0.1: it changed the lens when pressed by accident while steering; the lens is F6 or the atlas's View setting). The reason: the clutch on LB used the same finger as the brake trigger, and hard steering pressed the left stick by accident.
 

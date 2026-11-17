@@ -1,6 +1,8 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/ScopeExit.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -95,20 +97,24 @@ bool FSimCruiseVehicleInterfaceTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("brake lamps on"), Telemetry().bServiceBrake || Telemetry().ForwardSpeedMps < 0.45);
 	Vehicle->SetBrake(0.0f);
 
-	// Manual gearbox: neutral at rest, clutch to select first, release to drive.
+	// Manual gearbox, the driver's own clutch (simcruise.Gearbox.AutoClutch 0): neutral at rest,
+	// clutch to select first, release to drive. The automatic clutch is tested after it.
+	IConsoleVariable* AutoClutch = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Gearbox.AutoClutch"));
+	const int32 AutoClutchWas = AutoClutch ? AutoClutch->GetInt() : 1;
+	if (AutoClutch) AutoClutch->Set(0, ECVF_SetByCode);
+	ON_SCOPE_EXIT { if (AutoClutch) AutoClutch->Set(AutoClutchWas, ECVF_SetByCode); };
 	Vehicle->ToggleManual();
 	WaitSim(0.5);
 	T = Telemetry();
 	TestTrue(TEXT("manual selected"), T.bManual);
 	TestEqual(TEXT("manual at rest is neutral"), T.GearText, FString(TEXT("N")));
 	Vehicle->ShiftUp();
-	WaitSim(0.1);
+	Bench.RunUntil([&Telemetry]() { return !Telemetry().LastGearMessage.IsEmpty(); }, 0.5);
 	TestEqual(TEXT("no gear without the clutch"), Telemetry().LastGearMessage, FString(TEXT("Hold the clutch to change gear")));
 	Vehicle->SetClutch(1.0f);
-	WaitSim(0.3);
 	Vehicle->ShiftUp();
-	WaitSim(0.1);
-	TestEqual(TEXT("first gear with the clutch down"), Telemetry().GearText, FString(TEXT("1")));
+	Bench.RunUntil([&Telemetry]() { return Telemetry().GearText == TEXT("1"); }, 0.5);
+	TestEqual(TEXT("same-frame clutch and shift reaches first"), Telemetry().GearText, FString(TEXT("1")));
 	Vehicle->SetThrottle(0.35f);
 	for (int32 Step = 0; Step <= 20; ++Step)
 	{
@@ -120,6 +126,34 @@ bool FSimCruiseVehicleInterfaceTest::RunTest(const FString& Parameters)
 	{ const FString Line = FString::Printf(TEXT("INTERFACE manual launch: %.1f m/s, %.0f rpm, stalled %d"), T.ForwardSpeedMps, T.EngineRpm, T.bStalled ? 1 : 0); UE_LOG(LogTemp, Display, TEXT("%s"), *Line); AddInfo(Line); }
 	TestFalse(TEXT("a gentle clutch release does not stall"), T.bStalled);
 	TestTrue(TEXT("the manual car drives off"), T.ForwardSpeedMps > 2.0);
+
+	// The automatic clutch (the default): stop in gear without stalling, RB alone selects first
+	// from neutral, and the throttle alone drives off.
+	if (AutoClutch) AutoClutch->Set(1, ECVF_SetByCode);
+	Vehicle->SetClutch(0.0f);
+	Vehicle->SetThrottle(0.0f);
+	Vehicle->SetBrake(1.0f);
+	Bench.RunUntil([&]() { return FMath::Abs(Telemetry().ForwardSpeedMps) < 0.05; }, 20.0);
+	WaitSim(1.0);
+	TestFalse(TEXT("auto clutch: braking to a stop in gear does not stall"), Telemetry().bStalled);
+	Vehicle->SetBrake(0.0f);
+	for (int32 Down = 0; Down < 6 && Telemetry().GearText != TEXT("N"); ++Down)
+	{
+		Vehicle->ShiftDown();
+		WaitSim(0.4);
+	}
+	TestEqual(TEXT("auto clutch: LB alone reaches neutral"), Telemetry().GearText, FString(TEXT("N")));
+	Vehicle->ShiftUp();
+	Bench.RunUntil([&Telemetry]() { return Telemetry().GearText == TEXT("1"); }, 1.0);
+	TestEqual(TEXT("auto clutch: RB alone selects first"), Telemetry().GearText, FString(TEXT("1")));
+	// Half the trigger (about 29 % throttle through the pedal curve), as a normal pull-away.
+	Vehicle->SetThrottle(0.5f);
+	WaitSim(3.0);
+	T = Telemetry();
+	{ const FString Line = FString::Printf(TEXT("INTERFACE auto-clutch launch: %.1f m/s, %.0f rpm, stalled %d"), T.ForwardSpeedMps, T.EngineRpm, T.bStalled ? 1 : 0); UE_LOG(LogTemp, Display, TEXT("%s"), *Line); AddInfo(Line); }
+	TestFalse(TEXT("auto clutch: pulling away does not stall"), T.bStalled);
+	TestTrue(TEXT("auto clutch: the throttle alone drives off"), T.ForwardSpeedMps > 2.0);
+	if (AutoClutch) AutoClutch->Set(0, ECVF_SetByCode);
 
 	// Handbrake holds the rear wheels at rest.
 	Vehicle->SetThrottle(0.0f);

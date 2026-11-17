@@ -10,6 +10,8 @@
 namespace
 {
 	constexpr double MergeM = 2.0;            // endpoint tolerance when chaining (road-grade.mjs MERGE)
+	constexpr double JoinLevelM = 3.0;        // roads more than this apart in height cross, they do not join
+	constexpr double JoinDeckLevelM = 1.0;    // a road off a bridge joins a deck only this close in height (a ramp deck 2.7 m over I-285 at Doraville tilted the motorway's edge up to it)
 	constexpr double SigmaM = 16.0;           // profile fit (road-grade.mjs SIGMA)
 	constexpr double TukeyScale = 3.5;
 	constexpr double FilletMaxM = 1.0;        // largest plan offset from a mapped vertex on gentle bends (edge-authority)
@@ -80,6 +82,78 @@ namespace
 		bool bReversed = false;
 		double Offset = 0.0;
 	};
+
+	bool BridgeDeckHeightAt(const FSimCruiseTileData& Tile, double Side, const FVector2d& P,
+		const FString& Class, const FString& Name, double& OutHeightM, int32* OutDeck = nullptr, int32 OnlyDeck = INDEX_NONE)
+	{
+		int32 BestDeck = INDEX_NONE;
+		const FVector2d UnitP = P / FMath::Max(Side, 1.0);
+		double BestDistanceSq = TNumericLimits<double>::Max();
+		double BestHeightM = 0.0;
+		double BestReachM = 0.0;
+		bool bBestNameMatch = false;
+		for (int32 DeckIndex = 0; DeckIndex < Tile.Bridges.Num(); ++DeckIndex)
+		{
+			const FSimCruiseBridgeDeck& Deck = Tile.Bridges[DeckIndex];
+			if (OnlyDeck != INDEX_NONE && DeckIndex != OnlyDeck) continue;
+			if ((OnlyDeck == INDEX_NONE && Deck.Class != Class) || Deck.Points.Num() < 2 || Deck.Points.Num() != Deck.HeightsM.Num()) continue;
+			const bool bNameMatch = !Name.IsEmpty() && !Deck.Name.IsEmpty() && Name == Deck.Name;
+			for (int32 i = 0; i + 1 < Deck.Points.Num(); ++i)
+			{
+				const FVector2d A = Deck.Points[i], D = Deck.Points[i + 1] - A;
+				const double LengthSq = D.SizeSquared();
+				if (LengthSq <= UE_DOUBLE_SMALL_NUMBER) continue;
+				const double T = FMath::Clamp(FVector2d::DotProduct(UnitP - A, D) / LengthSq, 0.0, 1.0);
+				const FVector2d Nearest = A + D * T;
+				const double DistanceSq = FVector2d::DistSquared(UnitP, Nearest) * Side * Side;
+				if (DistanceSq < BestDistanceSq - 1e-6 || (FMath::Abs(DistanceSq - BestDistanceSq) <= 1e-6 && bNameMatch && !bBestNameMatch))
+				{
+					BestDistanceSq = DistanceSq;
+					BestHeightM = FMath::Lerp(Deck.HeightsM[i], Deck.HeightsM[i + 1], T);
+					BestReachM = FMath::Max(3.0, 0.5 * Deck.WidthM + 1.0) * (OnlyDeck != INDEX_NONE ? 2.0 : 1.0);
+					bBestNameMatch = bNameMatch;
+					BestDeck = DeckIndex;
+				}
+			}
+		}
+		if (BestReachM <= 0.0 || BestDistanceSq > BestReachM * BestReachM) return false;
+		OutHeightM = BestHeightM;
+		if (OutDeck) *OutDeck = BestDeck;
+		return true;
+	}
+
+	/** One smooth deck over a bridge run: a straight grade between its two end heights plus, at most,
+	 *  one crest (never a sag), fitted to the exported per-station heights. A bridge deck is a straight
+	 *  grade or a crest vertical curve; the stations' own heights carry noise (a neighbouring deck's
+	 *  height, the elevation model's bumps, a chain split at a ramp that dropped one point to the valley
+	 *  floor), which made decks go up and down. Residuals are clipped to +-3 m so one wrong station
+	 *  cannot bend the deck; the crest is at most 6 % of the span. Ground that stands more than 1 m
+	 *  over the straight grade (a levee, a ridge the deck crosses) raises the crest to clear it. */
+	void FitSmoothDeck(const TArray<double>& S, TArray<double>& Deck, const TArray<double>& GroundZ, int32 First, int32 Last)
+	{
+		const double L = S[Last] - S[First];
+		if (Last <= First || L < 1.0) return;
+		const double ZA = Deck[First], ZB = Deck[Last];
+		double Num = 0.0, Den = 0.0, Clear = 0.0;
+		for (int32 j = First + 1; j < Last; ++j)
+		{
+			const double T = (S[j] - S[First]) / L;
+			const double Line = FMath::Lerp(ZA, ZB, T);
+			const double Basis = 4.0 * T * (1.0 - T);
+			Num += FMath::Clamp(Deck[j] - Line, -3.0, 3.0) * Basis;
+			Den += Basis * Basis;
+			if (Basis > 0.3 && GroundZ[j] + 0.5 - Line > 1.0)
+			{
+				Clear = FMath::Max(Clear, (GroundZ[j] + 0.5 - Line) / Basis);
+			}
+		}
+		const double Crest = FMath::Clamp(FMath::Max(Den > 0.0 ? Num / Den : 0.0, Clear), 0.0, 0.06 * L);
+		for (int32 j = First; j <= Last; ++j)
+		{
+			const double T = (S[j] - S[First]) / L;
+			Deck[j] = FMath::Lerp(ZA, ZB, T) + Crest * 4.0 * T * (1.0 - T);
+		}
+	}
 
 	struct FChainVertex
 	{
@@ -713,8 +787,12 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 
 			const int32 Count = FMath::Max(1, FMath::CeilToInt(SpanLength / SimCruiseRoadSection::StationStepM));
 			Ribbon.St.SetNum(Count + 1);
-			TArray<double> S, Zs, W, Ones, RawX, RawY;
+			TArray<double> S, Zs, W, Ones, RawX, RawY, BridgeDeckZ;
+			TArray<uint8> bHasBridgeDeckProfile;
 			S.SetNum(Count + 1); Zs.SetNum(Count + 1); W.SetNum(Count + 1); Ones.Init(1.0, Count + 1); RawX.SetNum(Count + 1); RawY.SetNum(Count + 1);
+			BridgeDeckZ.SetNumZeroed(Count + 1); bHasBridgeDeckProfile.Init(0, Count + 1);
+			TArray<int32> BridgeDeckRow; BridgeDeckRow.Init(INDEX_NONE, Count + 1);
+			TArray<double> GroundZ; GroundZ.SetNumZeroed(Count + 1);
 			TArray<FVector2d> RawT;
 			RawT.SetNum(Count + 1);
 			for (int32 k = 0; k <= Count; ++k)
@@ -766,7 +844,12 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 				St.HalfW = 0.5 * (SumL > 0.0 ? SumW / SumL : Pieces[Own->Piece].WidthM);
 				const int32 OneWay = Pieces[Own->Piece].OneWay;
 				St.Travel = static_cast<int8>(OneWay == 0 ? 0 : (Own->bReversed ? -OneWay : OneWay));
-				St.bBridge = Pieces[Own->Piece].bBridge;
+				const FPiece& OwnPiece = Pieces[Own->Piece];
+				St.bBridge = OwnPiece.bBridge;
+				if (St.bBridge && BridgeDeckHeightAt(Tile, Side, St.C, OwnPiece.Class, OwnPiece.Name, BridgeDeckZ[k], &BridgeDeckRow[k]))
+				{
+					bHasBridgeDeckProfile[k] = 1;
+				}
 			}
 			// A bridge spans the gap: its profile runs straight from abutment to abutment
 			// (BridgeDeck.gd), not down to the river or the valley floor the elevation model
@@ -777,17 +860,82 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 				if (!Ribbon.St[k].bBridge) continue;
 				int32 e = k;
 				while (e + 1 <= Count && Ribbon.St[e + 1].bBridge) ++e;
-				const int32 A = k - 1, B = e + 1;
-				if (A >= 0 || B <= Count)
+				int32 FirstProfile = INDEX_NONE, LastProfile = INDEX_NONE;
+				for (int32 j = k; j <= e; ++j)
 				{
-					const double ZA = A >= 0 ? Zs[A] : Zs[B];
-					const double ZB = B <= Count ? Zs[B] : Zs[A];
-					const double SA = A >= 0 ? S[A] : S[k], SB = B <= Count ? S[B] : S[e];
+					if (bHasBridgeDeckProfile[j])
+					{
+						if (FirstProfile == INDEX_NONE) FirstProfile = j;
+						LastProfile = j;
+					}
+				}
+				if (FirstProfile != INDEX_NONE)
+				{
+					// One bridge per run: the deck row most of the run's stations found. A station near
+					// another deck (a twin deck, a crossing deck of the same class) took that deck's
+					// height and spiked the profile.
+					TMap<int32, int32> RowVotes;
+					for (int32 j = k; j <= e; ++j) if (bHasBridgeDeckProfile[j]) ++RowVotes.FindOrAdd(BridgeDeckRow[j]);
+					int32 Row = INDEX_NONE, Votes = 0;
+					for (const TPair<int32, int32>& Vote : RowVotes) if (Vote.Value > Votes) { Row = Vote.Key; Votes = Vote.Value; }
+					FirstProfile = LastProfile = INDEX_NONE;
 					for (int32 j = k; j <= e; ++j)
 					{
-						const double T = SB > SA ? FMath::Clamp((S[j] - SA) / (SB - SA), 0.0, 1.0) : 0.0;
-						// Never below the ground under the deck (a bridge over a road or a rise).
-						Zs[j] = FMath::Max(FMath::Lerp(ZA, ZB, T), Zs[j] + 0.5);
+						bHasBridgeDeckProfile[j] = Row != INDEX_NONE && BridgeDeckHeightAt(Tile, Side, Ribbon.St[j].C, Pieces[0].Class, FString(), BridgeDeckZ[j], nullptr, Row) ? 1 : 0;
+						if (bHasBridgeDeckProfile[j]) { if (FirstProfile == INDEX_NONE) FirstProfile = j; LastProfile = j; }
+					}
+				}
+				if (FirstProfile != INDEX_NONE)
+				{
+					// Fill any station gaps from the authored full-chain profile. The deck
+					// profile is shared across tiles, so this remains stable at a tile edge.
+					for (int32 j = k; j <= e; ++j)
+					{
+						if (!bHasBridgeDeckProfile[j])
+						{
+							int32 Before = INDEX_NONE, After = INDEX_NONE;
+						for (int32 q = j - 1; q >= FirstProfile; --q) if (bHasBridgeDeckProfile[q]) { Before = q; break; }
+						for (int32 q = j + 1; q <= LastProfile; ++q) if (bHasBridgeDeckProfile[q]) { After = q; break; }
+							if (Before == INDEX_NONE) Before = After;
+							if (After == INDEX_NONE) After = Before;
+							if (Before != INDEX_NONE && After != INDEX_NONE)
+							{
+								const double T = S[After] > S[Before] ? (S[j] - S[Before]) / (S[After] - S[Before]) : 0.0;
+								BridgeDeckZ[j] = FMath::Lerp(BridgeDeckZ[Before], BridgeDeckZ[After], FMath::Clamp(T, 0.0, 1.0));
+								bHasBridgeDeckProfile[j] = 1;
+							}
+						}
+						GroundZ[j] = Tile.HeightAtUnit(Ribbon.St[j].C / Side);
+					}
+					if (FirstProfile < LastProfile)
+					{
+						FitSmoothDeck(S, BridgeDeckZ, GroundZ, FirstProfile, LastProfile);
+					}
+					for (int32 j = FirstProfile; j <= LastProfile; ++j) if (bHasBridgeDeckProfile[j]) Zs[j] = BridgeDeckZ[j];
+				}
+				else
+				{
+					const int32 A = k - 1, B = e + 1;
+					if (A >= 0 || B <= Count)
+					{
+						const double ZA = A >= 0 ? Zs[A] : Zs[B];
+						const double ZB = B <= Count ? Zs[B] : Zs[A];
+						const double SA = A >= 0 ? S[A] : S[k], SB = B <= Count ? S[B] : S[e];
+						// Older tile data has no authored deck profile: a straight deck between the
+						// approaches, lifted by one crest only where the ground stands clear of it (it
+						// was lifted station by station to 0.5 m over the elevation model, copying its
+						// bumps into the deck).
+						const int32 First = A >= 0 ? A : k, Last = B <= Count ? B : e;
+						TArray<double> Line; Line.SetNumZeroed(Count + 1);
+						TArray<double> Ground; Ground.SetNumZeroed(Count + 1);
+						for (int32 j = First; j <= Last; ++j)
+						{
+							const double T = SB > SA ? FMath::Clamp((S[j] - SA) / (SB - SA), 0.0, 1.0) : 0.0;
+							Line[j] = FMath::Lerp(ZA, ZB, T);
+							Ground[j] = Zs[j];
+						}
+						FitSmoothDeck(S, Line, Ground, First, Last);
+						for (int32 j = k; j <= e; ++j) Zs[j] = Line[j];
 					}
 				}
 				k = e;
@@ -806,6 +954,37 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 			{
 				const double Z = GaussianLinear(S, Zs, Robust, S[k], SigmaM);
 				Ribbon.St[k].Z = FMath::IsFinite(Z) ? Z : Zs[k];
+			}
+			// Smoothing makes approach grades gentle, but it must not flatten a measured bridge deck back
+			// toward the bare-earth elevation model. Where an approach meets a deck, the smoothed road and
+			// the deck differ by a little (the fit rounds the grade break): that step is faded out along the
+			// approach over 20 m, so the wheels meet no lip at the abutment.
+			{
+				constexpr double ApproachFadeM = 20.0;
+				TArray<double> Fade; Fade.Init(0.0, Count + 1);
+				TArray<double> FadeWeight; FadeWeight.Init(0.0, Count + 1);
+				for (int32 k = 0; k <= Count; ++k)
+				{
+					const bool bDeck = bHasBridgeDeckProfile[k] != 0;
+					const bool bStart = bDeck && (k == 0 || !bHasBridgeDeckProfile[k - 1]);
+					const bool bEnd = bDeck && (k == Count || !bHasBridgeDeckProfile[k + 1]);
+					if (!bStart && !bEnd) continue;
+					const double Step = BridgeDeckZ[k] - Ribbon.St[k].Z;
+					for (int32 j = 0; j <= Count; ++j)
+					{
+						if (bHasBridgeDeckProfile[j]) continue;
+						if ((bStart && j > k) || (bEnd && j < k)) continue;
+						const double D = FMath::Abs(S[j] - S[k]);
+						if (D >= ApproachFadeM) continue;
+						const double Wt = 1.0 - FMath::SmoothStep(0.0, ApproachFadeM, D);
+						if (Wt > FadeWeight[j]) { FadeWeight[j] = Wt; Fade[j] = Step * Wt; }
+					}
+				}
+				for (int32 k = 0; k <= Count; ++k)
+				{
+					if (bHasBridgeDeckProfile[k]) Ribbon.St[k].Z = BridgeDeckZ[k];
+					else Ribbon.St[k].Z += Fade[k];
+				}
 			}
 
 			// 4. Boundary pins: an end on the tile edge takes the neighbour's contract or
@@ -857,6 +1036,9 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 					OutSpan = FMath::Min(FMath::Max(PinSpanM, 150.0 * FMath::Abs(OutDelta)), FMath::Max(MaxSpan, PinSpanM * 0.5));
 					return;
 				}
+				// A bridge deck has its own authored chain profile. Pinning this end to
+				// bare earth below the span made it jump at seams and vary by build order.
+				if (St.bBridge) return;
 				// No contract: the neighbour may be building at the same time without one either, so
 				// the seam section must come out the same from both sides. It is pinned to a height
 				// that depends only on the shared ground under the seam (the centre that clears it
@@ -1208,12 +1390,12 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 				{
 					const FVector2d P = St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW);
 					FSimCruiseRoadHit Hit;
-					if (FindCarriageway(P, Hit, r))
+					if (FindCarriageway(P, Hit, r, 0.0, MIN_int32, St.Column(c), JoinLevelM, St.bBridge ? JoinLevelM : JoinDeckLevelM))
 					{
 						Snap[c][i] = Hit.Height; Snapped[c][i] = true;
 						Sum += Hit.Height - St.Column(c); ++Num;
 					}
-					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM))
+					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM, MIN_int32, St.Column(c), JoinLevelM, St.bBridge ? JoinLevelM : JoinDeckLevelM))
 					{
 						// Just outside the other carriageway: never above its edge, so this
 						// ribbon's quads cannot stand proud of the road it runs into.
@@ -1308,7 +1490,7 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 				for (const double L : { St.HalfW + 0.2, 0.5 * (St.HalfW + Outer), Outer })
 				{
 					FSimCruiseRoadHit Hit;
-					if (FindCarriageway(St.C + St.R * (Sign * L), Hit, r, Margin)) { bCut = true; break; }
+					if (FindCarriageway(St.C + St.R * (Sign * L), Hit, r, Margin, MIN_int32, H, JoinLevelM)) { bCut = true; break; }
 				}
 				Ribbon.Sides[s].Cut[i] = bCut ? 1 : 0;
 			}
@@ -1467,13 +1649,16 @@ bool FSimCruiseRoadNetwork::DeckUndersideAt(int32 RibbonIndex, int32 I) const
 	return DeckFaceClear(RibbonIndex, I, -1.0, 0.0) && DeckFaceClear(RibbonIndex, I, 0.0, 0.0) && DeckFaceClear(RibbonIndex, I, 1.0, 0.0);
 }
 
-bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon, double Margin, int32 MinRank) const
+bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon, double Margin, int32 MinRank,
+	double NearZ, double MaxDz, double MaxDzToDeck) const
 {
 	bool bFound = false;
+	const bool bLevel = FMath::IsFinite(NearZ) && FMath::IsFinite(MaxDz);
 	for (int32 i = 0; i < Pads.Num(); ++i)
 	{
 		const FSimCruiseRoadPad& Pad = Pads[i];
 		if (Pad.Rank < MinRank || !Pad.Contains(P, Margin)) continue;
+		if (bLevel && FMath::Abs(Pad.Height - NearZ) > MaxDz) continue;
 		if (!bFound || Pad.Height > OutHit.Height)
 		{
 			OutHit = FSimCruiseRoadHit();
@@ -1499,6 +1684,7 @@ bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHi
 		const double AlongTolerance = ((bFirst && Hit.T <= 0.0) || (bLast && Hit.T >= 1.0)) ? 0.01 : 1.2;
 		if (FMath::Abs(Hit.Along) > AlongTolerance) continue;
 		if (FMath::Abs(Hit.Lateral) > Hit.HalfW + Margin) continue;
+		if (bLevel && FMath::Abs(Hit.Height - NearZ) > (Ribbon.St.IsValidIndex(Hit.Station) && Ribbon.St[Hit.Station].bBridge ? FMath::Min(MaxDz, MaxDzToDeck) : MaxDz)) continue;
 		if (!bFound || Hit.Height > OutHit.Height)
 		{
 			OutHit = Hit;

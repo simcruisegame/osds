@@ -235,6 +235,51 @@ namespace SimCruiseTileData
 			}
 		}
 
+		const TArray<TSharedPtr<FJsonValue>>* Bridges = nullptr;
+		if (Root->TryGetArrayField(TEXT("bridges"), Bridges))
+		{
+			for (int32 r = 0; r < Bridges->Num(); ++r)
+			{
+				const TArray<TSharedPtr<FJsonValue>>* Row = nullptr;
+				if (!(*Bridges)[r]->TryGetArray(Row) || Row->Num() < 5)
+				{
+					OutError = FString::Printf(TEXT("tile.bridges[%d]: expected [class, name, points, width, heights, ...]"), r);
+					return false;
+				}
+				FSimCruiseBridgeDeck Bridge;
+				Bridge.Class = StringAt(*Row, 0);
+				Bridge.Name = StringAt(*Row, 1);
+				Bridge.WidthM = NumberAt(*Row, 3, 0.0);
+				Bridge.Layer = static_cast<int32>(NumberAt(*Row, 5, 0.0));
+				Bridge.OneWay = static_cast<int32>(NumberAt(*Row, 6, 0.0));
+				if (!ReadLine((*Row)[2], Bridge.Points))
+				{
+					OutError = FString::Printf(TEXT("tile.bridges[%d][2]: bad points"), r);
+					return false;
+				}
+				const TArray<TSharedPtr<FJsonValue>>* Heights = nullptr;
+				if (!(*Row)[4].IsValid() || !(*Row)[4]->TryGetArray(Heights) || Heights->Num() != Bridge.Points.Num())
+				{
+					OutError = FString::Printf(TEXT("tile.bridges[%d][4]: deck heights must match the bridge points"), r);
+					return false;
+				}
+				for (int32 k = 0; k < Heights->Num(); ++k)
+				{
+					double HeightM = 0.0;
+					if (!(*Heights)[k]->TryGetNumber(HeightM) || !FMath::IsFinite(HeightM) || FMath::Abs(HeightM) > 9000.0)
+					{
+						OutError = FString::Printf(TEXT("tile.bridges[%d][4][%d]: not a deck height"), r, k);
+						return false;
+					}
+					Bridge.HeightsM.Add(HeightM);
+				}
+				if (Bridge.Points.Num() >= 2 && Bridge.WidthM > 0.5)
+				{
+					Out.Bridges.Add(MoveTemp(Bridge));
+				}
+			}
+		}
+
 		const TArray<TSharedPtr<FJsonValue>>* Surface = nullptr;
 		if (Root->TryGetArrayField(TEXT("road_surface"), Surface))
 		{

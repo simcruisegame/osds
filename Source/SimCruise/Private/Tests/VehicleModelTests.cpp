@@ -530,9 +530,222 @@ bool FSimCruiseVehicleModelGearboxTest::RunTest(const FString& Parameters)
 	Sim.ChangeGear(1, 0.0);
 	TestEqual(TEXT("over-revving downshift refused"), Sim.ChangeGear(0, 0.0), FString());
 	Sim.SelectRatio(5);
-	TestEqual(TEXT("first refused at 40 m/s"), Sim.ChangeGear(-4, 40.0), FString(TEXT("Speed is too high for that gear")));
+	TestTrue(TEXT("first refused at 40 m/s, with the speed it takes"), Sim.ChangeGear(-4, 40.0).StartsWith(TEXT("Too fast for 1st: below ")));
 	Sim.SetManual(false, 20.0);
 	TestFalse(TEXT("automatic again"), Sim.State.bManual);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelManualShiftBufferTest, "SimCruise.Vehicle.Model.ManualShiftBuffer", VehicleTestFlags)
+bool FSimCruiseVehicleModelManualShiftBufferTest::RunTest(const FString& Parameters)
+{
+	FSimCruiseCarDefinition Car;
+	if (!SimCruiseLoadBenchCar(*this, TEXT("nb2001_lowered"), Car))
+	{
+		return false;
+	}
+
+	const FFlatRoad Road;
+	FSimCruiseBodyForces Forces;
+	FSimCruiseVehicleSim Clutched;
+	Clutched.Initialize(Car);
+	Clutched.SetManual(true, 0.0);
+	Clutched.QueueManualGearChange(1);
+	FSimCruiseVehicleControls Controls;
+	Controls.Clutch = 1.0;
+	for (int32 Step = 0; Step < 30 && Clutched.GetGearText() == TEXT("N"); ++Step)
+	{
+		Clutched.Step(1.0 / 360.0, 1, Controls, BodyAtRideHeight(Clutched, FVector3d::ZeroVector), Road, Forces);
+	}
+	TestEqual(TEXT("same-frame clutch and shift reaches first after the clutch ramps"), Clutched.GetGearText(), FString(TEXT("1")));
+	TestTrue(TEXT("successful buffered shift has no refusal"), Clutched.ConsumeGearChangeMessage().IsEmpty());
+
+	FSimCruiseVehicleSim Unclutched;
+	Unclutched.Initialize(Car);
+	Unclutched.SetManual(true, 0.0);
+	Unclutched.QueueManualGearChange(1);
+	Controls = FSimCruiseVehicleControls();
+	for (int32 Step = 0; Step < 60; ++Step)
+	{
+		Unclutched.Step(1.0 / 360.0, 1, Controls, BodyAtRideHeight(Unclutched, FVector3d::ZeroVector), Road, Forces);
+	}
+	TestEqual(TEXT("shift without clutch stays in neutral"), Unclutched.GetGearText(), FString(TEXT("N")));
+	TestEqual(TEXT("expired shift reports the clutch refusal"), Unclutched.ConsumeGearChangeMessage(), FString(TEXT("Hold the clutch to change gear")));
+	return true;
+}
+
+namespace
+{
+	/** The NB in manual with the automatic clutch, in a gear, rolling at a steady speed. */
+	bool SimCruiseAutoClutchCar(FAutomationTestBase& Test, FSimCruiseVehicleSim& Sim, int32 Gear, double SpeedMps, double Gas)
+	{
+		FSimCruiseCarDefinition Car;
+		if (!SimCruiseLoadBenchCar(Test, TEXT("nb2001_lowered"), Car))
+		{
+			return false;
+		}
+		Sim.Initialize(Car);
+		Sim.bAutoClutch = true;
+		Sim.SetManual(true, SpeedMps);
+		Sim.SelectRatio(Gear);
+		const FFlatRoad Road;
+		FSimCruiseBodyForces Forces;
+		FSimCruiseVehicleControls Controls;
+		Controls.Throttle = Gas;
+		for (int32 Step = 0; Step < 360; ++Step)
+		{
+			Sim.Step(1.0 / 360.0, 1, Controls, BodyAtRideHeight(Sim, FVector3d(SpeedMps, 0.0, 0.0)), Road, Forces);
+		}
+		return true;
+	}
+
+	void SimCruiseRollFor(FSimCruiseVehicleSim& Sim, double Seconds, double SpeedMps, double Gas, TFunctionRef<void(double)> Each)
+	{
+		const FFlatRoad Road;
+		FSimCruiseBodyForces Forces;
+		FSimCruiseVehicleControls Controls;
+		Controls.Throttle = Gas;
+		for (int32 Step = 0; Step < FMath::RoundToInt32(Seconds * 360.0); ++Step)
+		{
+			Sim.Step(1.0 / 360.0, 1, Controls, BodyAtRideHeight(Sim, FVector3d(SpeedMps, 0.0, 0.0)), Road, Forces);
+			Each((Step + 1) / 360.0);
+		}
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelAutoClutchUpshiftTest, "SimCruise.Vehicle.Model.AutoClutchUpshift", VehicleTestFlags)
+bool FSimCruiseVehicleModelAutoClutchUpshiftTest::RunTest(const FString& Parameters)
+{
+	FSimCruiseVehicleSim Sim;
+	if (!SimCruiseAutoClutchCar(*this, Sim, 2, 12.0, 0.4))
+	{
+		return false;
+	}
+	Sim.QueueManualGearChange(1);
+	double InThirdAtS = -1.0;
+	SimCruiseRollFor(Sim, 0.8, 12.0, 0.4, [&](double T) { if (InThirdAtS < 0.0 && Sim.GetGearText() == TEXT("3")) InThirdAtS = T; });
+	TestTrue(FString::Printf(TEXT("RB alone changes 2nd to 3rd within 0.15 s (%.3f s)"), InThirdAtS), InThirdAtS > 0.0 && InThirdAtS <= 0.15);
+	TestTrue(TEXT("no refusal"), Sim.ConsumeGearChangeMessage().IsEmpty());
+	TestTrue(FString::Printf(TEXT("the clutch is back out after the shift (%.2f)"), Sim.State.ClutchPedal), Sim.State.ClutchPedal < 0.05);
+	TestFalse(TEXT("the shift is over"), Sim.IsAutoShifting());
+	TestFalse(TEXT("no stall"), Sim.State.bStalled);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelAutoClutchDownshiftTest, "SimCruise.Vehicle.Model.AutoClutchDownshift", VehicleTestFlags)
+bool FSimCruiseVehicleModelAutoClutchDownshiftTest::RunTest(const FString& Parameters)
+{
+	// 4th at 20 m/s, two quick presses of LB: two gears down, and the blip brings the engine up to
+	// the road's speed in the new gear before the clutch bites.
+	FSimCruiseVehicleSim Sim;
+	if (!SimCruiseAutoClutchCar(*this, Sim, 4, 20.0, 0.0))
+	{
+		return false;
+	}
+	Sim.QueueManualGearChange(-1);
+	Sim.QueueManualGearChange(-1);
+	double WorstGapRpm = 0.0;
+	SimCruiseRollFor(Sim, 1.0, 20.0, 0.0, [&](double)
+	{
+		// While the clutch comes out (the pedal passing the bite), the engine is near the road's speed in gear.
+		if (Sim.GetGearText() == TEXT("2") && Sim.State.ClutchPedal < 0.5 && Sim.State.ClutchPedal > 0.15)
+		{
+			const FSimCruiseCarDefinition& Car = Sim.GetCar();
+			const double RoadRpm = FMath::Abs(Sim.DrivenOmega()) * Car.ForwardGearRatios[1] * Car.FinalDriveRatio * 60.0 / (2.0 * UE_DOUBLE_PI);
+			WorstGapRpm = FMath::Max(WorstGapRpm, FMath::Abs(RoadRpm - Sim.State.EngineRpm));
+		}
+	});
+	TestEqual(TEXT("two presses of LB drop two gears"), Sim.GetGearText(), FString(TEXT("2")));
+	TestTrue(TEXT("no refusal"), Sim.ConsumeGearChangeMessage().IsEmpty());
+	TestTrue(FString::Printf(TEXT("the blip matches the engine within 900 rpm as the clutch bites (%.0f rpm)"), WorstGapRpm), WorstGapRpm < 900.0);
+	TestFalse(TEXT("no stall"), Sim.State.bStalled);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelAutoClutchNoStallTest, "SimCruise.Vehicle.Model.AutoClutchNoStall", VehicleTestFlags)
+bool FSimCruiseVehicleModelAutoClutchNoStallTest::RunTest(const FString& Parameters)
+{
+	// Third gear at walking pace with no throttle: a driver's foot would press the clutch; so does the automatic one.
+	FSimCruiseVehicleSim Sim;
+	if (!SimCruiseAutoClutchCar(*this, Sim, 3, 0.5, 0.0))
+	{
+		return false;
+	}
+	SimCruiseRollFor(Sim, 2.0, 0.5, 0.0, [](double) {});
+	TestFalse(TEXT("3rd at 0.5 m/s does not stall"), Sim.State.bStalled);
+	TestTrue(FString::Printf(TEXT("the clutch is held in (%.2f)"), Sim.State.ClutchPedal), Sim.State.ClutchPedal > 0.6);
+
+	// Pulling away from a stop in 1st on the throttle alone.
+	FSimCruiseVehicleSim Away;
+	if (!SimCruiseAutoClutchCar(*this, Away, 1, 0.0, 0.0))
+	{
+		return false;
+	}
+	TestFalse(TEXT("1st at a standstill does not stall"), Away.State.bStalled);
+	// The car rolls under its own drive force (a point mass on the flat).
+	double MinClutch = 1.0, SpeedMps = 0.0;
+	{
+		const FFlatRoad Road;
+		FSimCruiseBodyForces Forces;
+		FSimCruiseVehicleControls Controls;
+		Controls.Throttle = 0.5;
+		for (int32 Step = 0; Step < 4 * 360; ++Step)
+		{
+			Away.Step(1.0 / 360.0, 1, Controls, BodyAtRideHeight(Away, FVector3d(SpeedMps, 0.0, 0.0)), Road, Forces);
+			SpeedMps = FMath::Max(0.0, SpeedMps + Forces.ForceN.X / Away.GetCar().MassKg / 360.0);
+			MinClutch = FMath::Min(MinClutch, Away.State.ClutchPedal);
+		}
+	}
+	TestTrue(FString::Printf(TEXT("half throttle pulls away in 1st (%.1f m/s after 4 s)"), SpeedMps), SpeedMps > 3.0);
+	TestTrue(FString::Printf(TEXT("the clutch comes fully out once moving (%.2f)"), MinClutch), MinClutch < 0.05);
+	TestFalse(TEXT("pulling away does not stall"), Away.State.bStalled);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelAutoClutchRefusalTest, "SimCruise.Vehicle.Model.AutoClutchRefusal", VehicleTestFlags)
+bool FSimCruiseVehicleModelAutoClutchRefusalTest::RunTest(const FString& Parameters)
+{
+	// 3rd at 30 m/s: 2nd would over-rev, so LB is refused and the clutch goes back out.
+	FSimCruiseVehicleSim Sim;
+	if (!SimCruiseAutoClutchCar(*this, Sim, 3, 30.0, 0.0))
+	{
+		return false;
+	}
+	Sim.QueueManualGearChange(-1);
+	FString Message;
+	SimCruiseRollFor(Sim, 0.8, 30.0, 0.0, [&](double) { const FString M = Sim.ConsumeGearChangeMessage(); if (!M.IsEmpty()) Message = M; });
+	TestTrue(FString::Printf(TEXT("over-rev refused with the speed 2nd takes (%s)"), *Message), Message.StartsWith(TEXT("Too fast for 2nd: below ")));
+	TestEqual(TEXT("the gear stays"), Sim.GetGearText(), FString(TEXT("3")));
+	TestTrue(FString::Printf(TEXT("the clutch is back out (%.2f)"), Sim.State.ClutchPedal), Sim.State.ClutchPedal < 0.05);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseVehicleModelAckermannContinuousTest, "SimCruise.Vehicle.Model.AckermannContinuous", VehicleTestFlags)
+bool FSimCruiseVehicleModelAckermannContinuousTest::RunTest(const FString& Parameters)
+{
+	// The front wheels follow the rack through straight ahead with no jump: the old Ackermann floor
+	// put both wheels 0.028 deg off straight for any rack off zero, so the car hunted about the tiny
+	// angle a road's crown asks for.
+	FSimCruiseCarDefinition Car;
+	if (!SimCruiseLoadBenchCar(*this, TEXT("nb2001_lowered"), Car))
+	{
+		return false;
+	}
+	Car.SteeringStiffnessNmPerDeg = 0.0;
+	const FFlatRoad Road;
+	for (const double RackRad : { 0.0, 1.0e-6, -1.0e-6, 1.0e-4, -1.0e-4, 1.0e-3, -1.0e-3, 0.05 })
+	{
+		FSimCruiseVehicleSim Sim;
+		Sim.Initialize(Car);
+		FSimCruiseVehicleControls Controls;
+		Controls.bDirectRack = true;
+		Controls.RackAngleRad = RackRad;
+		FSimCruiseBodyForces Forces;
+		Sim.Step(1.0 / 360.0, 1, Controls, BodyAtRideHeight(Sim, FVector3d::ZeroVector), Road, Forces);
+		const double Mean = 0.5 * (Sim.State.Wheels[0].SteerAngleRad + Sim.State.Wheels[1].SteerAngleRad);
+		const double Allowed = FMath::Max(1.0e-9, 0.02 * FMath::Abs(RackRad));
+		TestTrue(FString::Printf(TEXT("rack %.6f rad: the front wheels' mean is %.6f rad"), RackRad, Mean), FMath::Abs(Mean - RackRad) <= Allowed);
+	}
 	return true;
 }
 

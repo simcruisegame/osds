@@ -40,6 +40,18 @@ struct FSimCruiseSurfaceChain
 	TArray<FSimCruiseSurfaceStation> Stations;
 };
 
+/** helper `bridges` row: [class, name, points, width m, deck height per point, layer, oneway]. */
+struct FSimCruiseBridgeDeck
+{
+	FString Class;
+	FString Name;
+	TArray<FVector2d> Points;  // tile units, clipped to the tile
+	double WidthM = 0.0;
+	TArray<double> HeightsM;   // deck profile produced from the full bridge chain
+	int32 Layer = 0;
+	int32 OneWay = 0;
+};
+
 /** helper `pedestrian` row: [kind, width m, points]. */
 struct FSimCruisePathRow
 {
@@ -82,6 +94,7 @@ struct FSimCruiseTileData
 	FString HeightSource;              // e.g. "USGS 3DEP 1/3 arc-second"
 	bool bTriangleHeights = false;     // measured grids interpolate on their NE-SW triangles (WorldTile.base_height)
 	TArray<FSimCruiseRoadRow> Roads;
+	TArray<FSimCruiseBridgeDeck> Bridges;
 	TArray<FSimCruiseSurfaceChain> RoadSurface;
 	TArray<FSimCruisePathRow> Pedestrian;
 	TArray<FSimCruiseLandPolygon> Land;

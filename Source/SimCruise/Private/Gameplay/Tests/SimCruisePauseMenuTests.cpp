@@ -4,13 +4,43 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Dom/JsonObject.h"
+#include "Environment/SimCruiseGraphics.h"
 #include "Framework/Application/SlateApplication.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformMisc.h"
 #include "Gameplay/SimCruisePauseMenu.h"
+#include "Gameplay/SimCruisePreferences.h"
 #include "Gameplay/SimCruiseUiTheme.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Guid.h"
+#include "Misc/Paths.h"
+#include "Misc/ScopeExit.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 namespace SimCruisePauseMenuTest
 {
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter;
+
+	struct FScopedGraphicsPrefsDir
+	{
+		FString Before;
+		FString Dir;
+		FScopedGraphicsPrefsDir()
+		{
+			Before = FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_QA_PREFS_DIR"));
+			Dir = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Automation"),
+				TEXT("Graphics-") + FGuid::NewGuid().ToString(EGuidFormats::Digits)));
+			IFileManager::Get().MakeDirectory(*Dir, true);
+			FPlatformMisc::SetEnvironmentVar(TEXT("SIMCRUISE_QA_PREFS_DIR"), *Dir);
+		}
+		~FScopedGraphicsPrefsDir()
+		{
+			FPlatformMisc::SetEnvironmentVar(TEXT("SIMCRUISE_QA_PREFS_DIR"), *Before);
+			IFileManager::Get().DeleteDirectory(*Dir, false, true);
+		}
+	};
 
 	FReply Press(SWidget& Widget, const FKey& Key)
 	{
@@ -95,6 +125,88 @@ bool FSimCruisePauseMenuPadTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Menu closes"), Closed, 2);
 	Press(*Menu, EKeys::Escape);
 	TestEqual(TEXT("Esc closes"), Closed, 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseGraphicsSettingPadTest, "SimCruise.UI.GraphicsSettingPad", SimCruisePauseMenuTest::Flags)
+bool FSimCruiseGraphicsSettingPadTest::RunTest(const FString& Parameters)
+{
+	using SimCruisePauseMenuTest::Press;
+	if (!FSlateApplication::IsInitialized())
+	{
+		AddWarning(TEXT("No Slate application: the graphics setting test needs one"));
+		return true;
+	}
+	const TArray<SSimCruisePauseMenu::FRowInfo>& Settings = SSimCruisePauseMenu::Rows(3);
+	const int32 GraphicsIndex = Settings.IndexOfByPredicate([](const SSimCruisePauseMenu::FRowInfo& Row)
+	{
+		return Row.Title == TEXT("Graphics quality");
+	});
+	if (!TestTrue(TEXT("Settings has a Graphics quality choice"), GraphicsIndex != INDEX_NONE)) return false;
+
+	TArray<TPair<ESimCruiseMenuRow, int32>> Actions;
+	TSharedRef<SSimCruisePauseMenu> Menu = SNew(SSimCruisePauseMenu)
+		.GetState_Lambda([]() { return FSimCruiseMenuState(); })
+		.OnAction_Lambda([&Actions](ESimCruiseMenuRow Row, int32 Dir) { Actions.Add({ Row, Dir }); });
+	Menu->SetPage(3);
+	for (int32 i = 0; i < GraphicsIndex; ++i) Press(*Menu, EKeys::Gamepad_DPad_Down);
+	TestEqual(TEXT("D-pad reaches Graphics quality"), Settings[Menu->GetSelected()].Title, FString(TEXT("Graphics quality")));
+	const TArray<SimCruiseTheme::FHint> Hints = Menu->GetPadHints();
+	TestTrue(TEXT("Graphics quality explains the Y reset to Auto"), Hints.ContainsByPredicate([](const SimCruiseTheme::FHint& Hint)
+	{
+		return Hint.Glyph == TEXT("Y") && Hint.Text == TEXT("Reset to Auto");
+	}));
+	Press(*Menu, EKeys::Gamepad_DPad_Left);
+	Press(*Menu, EKeys::Gamepad_DPad_Right);
+	Press(*Menu, EKeys::Gamepad_FaceButton_Bottom);
+	Press(*Menu, EKeys::Gamepad_FaceButton_Top);
+	TestTrue(TEXT("left, right, A and Y reach the graphics choice and reset actions"),
+		Actions.Num() == 4 &&
+		Actions[0].Key == ESimCruiseMenuRow::Graphics && Actions[0].Value == -1 &&
+		Actions[1].Key == Actions[0].Key && Actions[1].Value == 1 &&
+		Actions[2].Key == Actions[0].Key && Actions[2].Value == 0 &&
+		Actions[3].Key == Actions[0].Key && Actions[3].Value == 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseGraphicsSettingChoiceTest, "SimCruise.UI.GraphicsSettingChoicePersistence", SimCruisePauseMenuTest::Flags)
+bool FSimCruiseGraphicsSettingChoiceTest::RunTest(const FString& Parameters)
+{
+	const SimCruisePauseMenuTest::FScopedGraphicsPrefsDir Prefs;
+	const ESimCruiseGraphicsPreset BeforePreset = FSimCruiseGraphics::Current();
+	ON_SCOPE_EXIT
+	{
+		FSimCruiseGraphics::Apply(BeforePreset);
+	};
+
+	TestEqual(TEXT("settings default to Auto"), FSimCruiseGraphics::SavedChoice(), ESimCruiseGraphicsChoice::Auto);
+	FSimCruiseGraphics::ChooseQuality(0);
+	TestEqual(TEXT("A advances Auto to Low"), FSimCruiseGraphics::SavedChoice(), ESimCruiseGraphicsChoice::Low);
+	FSimCruiseGraphics::ChooseQuality(-1);
+	TestEqual(TEXT("left wraps Low to Auto"), FSimCruiseGraphics::SavedChoice(), ESimCruiseGraphicsChoice::Auto);
+	FSimCruiseGraphics::ChooseQuality(1);
+	FSimCruiseGraphics::ChooseQuality(1);
+	FSimCruiseGraphics::ChooseQuality(1);
+	TestEqual(TEXT("right cycles to High"), FSimCruiseGraphics::SavedChoice(), ESimCruiseGraphicsChoice::High);
+	TestEqual(TEXT("the current choice is shown"), FSimCruiseGraphics::ChoiceDisplay(), FString(TEXT("High")));
+
+	FString SavedPrefs;
+	TestTrue(TEXT("the selected quality is persisted"), FFileHelper::LoadFileToString(SavedPrefs, *SimCruisePreferences::Path()));
+	TSharedPtr<FJsonObject> PrefsDoc;
+	const TSharedRef<TJsonReader<>> PrefsReader = TJsonReaderFactory<>::Create(SavedPrefs);
+	TestTrue(TEXT("the preference file is valid JSON"), FJsonSerializer::Deserialize(PrefsReader, PrefsDoc) && PrefsDoc.IsValid());
+	FString Quality;
+	TestTrue(TEXT("the preference file records High"), PrefsDoc.IsValid() && PrefsDoc->TryGetStringField(TEXT("graphics_quality"), Quality) && Quality == TEXT("high"));
+
+	FSimCruiseGraphics::ChooseQuality(2);
+	TestEqual(TEXT("Y resets the choice to Auto"), FSimCruiseGraphics::SavedChoice(), ESimCruiseGraphicsChoice::Auto);
+	TestTrue(TEXT("Auto shows the resolved current preset"), FSimCruiseGraphics::ChoiceDisplay().StartsWith(TEXT("Auto (")));
+	TestTrue(TEXT("the reset is persisted"), FFileHelper::LoadFileToString(SavedPrefs, *SimCruisePreferences::Path()));
+	PrefsDoc.Reset();
+	const TSharedRef<TJsonReader<>> ResetReader = TJsonReaderFactory<>::Create(SavedPrefs);
+	TestTrue(TEXT("the reset preference file is valid JSON"), FJsonSerializer::Deserialize(ResetReader, PrefsDoc) && PrefsDoc.IsValid());
+	Quality.Reset();
+	TestTrue(TEXT("the preference file records Auto"), PrefsDoc.IsValid() && PrefsDoc->TryGetStringField(TEXT("graphics_quality"), Quality) && Quality == TEXT("auto"));
 	return true;
 }
 

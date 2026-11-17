@@ -157,12 +157,14 @@ FSimCruiseEyePose FSimCruiseHeadModel::Update(const FTransform& Body, const FVec
 	// Braking (the seat belt pulling back, felt X negative) dips the gaze.
 	BrakePitch += (FMath::Clamp(-Felt.X / G, 0.0, 1.0) * BrakePitchDeg - BrakePitch) * Approach(Dt, 0.12);
 
-	// Gaze lead, positive right: lateral acceleration and the rack both point into the corner.
+	// Gaze lead, positive right: the eyes look into a corner, not into a lane correction. Below
+	// 0.15 g there is no lead, and it builds to full at 0.5 g over 0.8 s. The rack term and the
+	// 0.25 s filter turned the view with every small correction, more and sooner than the car
+	// turned, which invites over-correction on a straight.
 	const double ForwardSpeed = Telemetry.BodyVelocityMps.X;
-	const double HalfRange = 0.5 * SimCruiseShaping::AvailableSteeringRad(Setup, ForwardSpeed);
-	double Lead = FMath::Clamp(Felt.Y / (0.5 * G), -1.0, 1.0) + 0.5 * FMath::Clamp(Telemetry.RackAngleRad / FMath::Max(HalfRange, 0.01), -1.0, 1.0);
-	Lead = FMath::Clamp(Lead, -1.0, 1.0) * FMath::SmoothStep(3.0, 14.0, FMath::Abs(ForwardSpeed));
-	Gaze += (Lead * GazeLeadDeg - Gaze) * Approach(Dt, 0.25);
+	const double Ay = Felt.Y / G;
+	const double Lead = FMath::Sign(Ay) * FMath::Clamp((FMath::Abs(Ay) - 0.15) / 0.35, 0.0, 1.0) * FMath::SmoothStep(3.0, 14.0, FMath::Abs(ForwardSpeed));
+	Gaze += (Lead * GazeLeadDeg - Gaze) * Approach(Dt, 0.8);
 
 	// Road roughness from the suspension travel rate, high-passed so steady
 	// roll or dive does not shake the view.

@@ -195,6 +195,10 @@ public:
 	void SetManual(bool bEnabled, double BodySpeedMps);
 	/** Manual only: returns "" on success, or why the change was refused. */
 	FString ChangeGear(int32 GearStep, double ForwardSpeedMps);
+	/** Queue one manual shift so the clutch can finish its current input ramp. */
+	void QueueManualGearChange(int32 GearStep);
+	/** Return and clear the result of the most recently processed queued shift. */
+	FString ConsumeGearChangeMessage();
 	void StartEngine();
 	void SelectRatio(int32 Ratio);
 	FString GetGearText() const;
@@ -225,6 +229,15 @@ public:
 	/** Assisted steering (a person on keys or a stick); Direct for benches and real wheels. */
 	bool bSteeringAssist = true;
 
+	/** Manual gearbox with an automatic clutch (the pad player's default): a shift request presses the
+	 *  clutch, lifts the throttle, changes gear, blips the throttle on a downshift to match the engine
+	 *  to the lower gear, and lets the clutch out. At a crawl in gear it holds the clutch in so the engine
+	 *  does not stall, and slips it to pull away. The driver's own clutch (Controls.Clutch) still works on
+	 *  top. Off for benches; the movement component sets it from simcruise.Gearbox.AutoClutch. */
+	bool bAutoClutch = false;
+	/** True while the automatic clutch works through a shift. */
+	bool IsAutoShifting() const { return AutoPhase != 0; }
+
 	/** The air the car drives through: density (kg/m3; ISA sea level by default) and the wind
 	 *  at the car's height (m/s, world axes). Drag acts on the car's speed through the air. */
 	double AirDensityKgPerM3 = 1.225;
@@ -245,4 +258,15 @@ private:
 	double RoadReferenceRad = 0.0;
 	double LimitSlipSurplusRad = 0.0;
 	double KeyRackRateParkingRadPerSecond = 0.0;
+	int32 PendingManualGearStep = 0;
+	double PendingManualGearAgeS = 0.0;
+	FString GearChangeMessage;
+	// Automatic clutch: 0 idle, 1 pressing, 2 held (gear changed, blip), 3 letting out.
+	int32 AutoPhase = 0;
+	double AutoPhaseTimeS = 0.0;
+	double SinceGearStepS = 10.0;
+	bool bAutoBlip = false;
+	bool bAutoDownshift = false;
+	double AutoBlipTargetRpm = 0.0;
+	void ResetShiftQueue();
 };

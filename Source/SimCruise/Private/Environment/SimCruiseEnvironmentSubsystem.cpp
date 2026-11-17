@@ -125,6 +125,10 @@ namespace
 		{
 			return;
 		}
+		if (!bExplicit)
+		{
+			Choice = FSimCruiseGraphics::ChoiceName(FSimCruiseGraphics::SavedChoice());
+		}
 		ESimCruiseGraphicsPreset Preset = ESimCruiseGraphicsPreset::High;
 		if (Choice.Equals(TEXT("auto"), ESearchCase::IgnoreCase))
 		{

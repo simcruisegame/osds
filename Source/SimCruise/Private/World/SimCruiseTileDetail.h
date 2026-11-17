@@ -50,6 +50,10 @@ namespace SimCruiseTileDetail
 		const FSimCruiseAerialImage* Aerial = nullptr;
 	};
 
+	/** Roof shapes with reliable mapped support in the procedural building mesh. */
+	enum class EBuildingRoofForm : uint8 { Unspecified, Flat, Gabled, Hipped };
+	SIMCRUISE_API EBuildingRoofForm BuildingRoofFormFromFact(FName RoofFact);
+
 	/**
 	 * A roof's colour seen from above: the median of the photograph's pixels well inside the
 	 * footprint (half a pixel in from its outline, so walls and shadows at the edge stay out),

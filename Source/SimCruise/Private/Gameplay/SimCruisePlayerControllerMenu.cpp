@@ -7,6 +7,7 @@
 #include "Gameplay/SimCruisePlayerController.h"
 
 #include "Engine/World.h"
+#include "Environment/SimCruiseGraphics.h"
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Gameplay/SimCruiseAtlasUI.h"
@@ -27,6 +28,12 @@
 
 namespace
 {
+	bool MenuAutoClutchOn()
+	{
+		const IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(TEXT("simcruise.Gearbox.AutoClutch"));
+		return !Var || Var->GetInt() != 0;
+	}
+
 	/** The driving update's traffic switch (ChangeSetting 13) and seat menu (OpenSeatMenu) are on main. */
 	constexpr bool bTrafficSettingReady() { return true; }
 	constexpr bool bSeatMenuReady() { return true; }
@@ -242,6 +249,8 @@ FSimCruiseMenuState ASimCruisePlayerController::MenuState() const
 	const float Dead = MenuVar(TEXT("simcruise.Pad.SteerDeadZone"), 0.f);
 	Set(ESimCruiseMenuRow::StickDeadZone, FString::FromInt(FMath::RoundToInt(100.f * (0.12f + 0.88f * Dead))), TEXT("%"), Along(DeadLadder(), Dead), 0.f);
 	Set(ESimCruiseMenuRow::Trigger, AfterDot(10));
+	FSimCruiseMenuValue* Graphics = Set(ESimCruiseMenuRow::Graphics, FSimCruiseGraphics::ChoiceDisplay());
+	Graphics->Chosen = static_cast<int32>(FSimCruiseGraphics::SavedChoice());
 
 	if (const USimCruiseRouteSubsystem* Gps = USimCruiseRouteSubsystem::Get(GetWorld()); Gps && Gps->HasRoute())
 	{
@@ -293,7 +302,22 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 		else ShowMessage(TEXT("The traffic setting comes with the next driving update"), 3.f);
 		break;
 	case ESimCruiseMenuRow::Car: if (Mode) Mode->CycleCar(this); break;
-	case ESimCruiseMenuRow::Transmission: OnToggleTransmission(); break;
+	case ESimCruiseMenuRow::Transmission:
+		// Automatic -> Manual with the automatic clutch -> Manual with your clutch -> Automatic.
+		if (Telemetry.bManualTransmission && MenuAutoClutchOn())
+		{
+			ChangeSetting(14);
+			ShowMessage(TEXT("Manual · hold A (Shift) for the clutch, RB / LB (E / Q) to shift"), 4.f);
+		}
+		else
+		{
+			if (!Telemetry.bManualTransmission && !MenuAutoClutchOn())
+			{
+				ChangeSetting(14);
+			}
+			OnToggleTransmission();
+		}
+		break;
 	case ESimCruiseMenuRow::Lights: OnToggleLights(); break;
 	case ESimCruiseMenuRow::Tune:
 		if (FMath::Abs(Telemetry.BodyVelocityMps.X) > 1.0) ShowMessage(TEXT("Stop the car to tune it"), 2.f);
@@ -339,6 +363,7 @@ void ASimCruisePlayerController::MenuAction(ESimCruiseMenuRow Row, int32 Dir)
 	case ESimCruiseMenuRow::StickDeadZone: StepLadder(TEXT("simcruise.Pad.SteerDeadZone"), DeadLadder(), Dir, 0.f, TEXT("pad_steer_dead_zone"), 100.f); break;
 	case ESimCruiseMenuRow::StickResponse: ChangeSetting(8); break;
 	case ESimCruiseMenuRow::Trigger: ChangeSetting(10); break;
+	case ESimCruiseMenuRow::Graphics: FSimCruiseGraphics::ChooseQuality(Dir); break;
 	default: break;
 	}
 }

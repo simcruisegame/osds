@@ -96,7 +96,7 @@ const TArray<FRowInfo>& SSimCruisePauseMenu::Rows(int32 InPage)
 	static const TArray<FRowInfo> Drive = DriveWithTraffic.FilterByPredicate([](const FRowInfo& R) { return R.Row != ESimCruiseMenuRow::Traffic; });
 	static const TArray<FRowInfo> Car = {
 		Row(ESimCruiseMenuRow::Car, EKind::Value, EIcon::Car, TEXT("Car"), TEXT("Change the car you drive"), TEXT("Change to the next car. You keep your place on the road.")),
-		Row(ESimCruiseMenuRow::Transmission, EKind::Value, EIcon::Gearbox, TEXT("Gearbox"), TEXT("Automatic or manual"), TEXT("With the manual gearbox you use the clutch and shift the gears yourself.")),
+		Row(ESimCruiseMenuRow::Transmission, EKind::Value, EIcon::Gearbox, TEXT("Gearbox"), TEXT("Automatic, manual, or manual with your clutch"), TEXT("Manual: shift with RB and LB (E and Q); the game works the clutch and blips the throttle on a downshift. Manual with your clutch: hold A (Shift) to shift.")),
 		Row(ESimCruiseMenuRow::Tune, EKind::Action, EIcon::Wrench, TEXT("Tune car"), TEXT("Springs, dampers, brakes and steering"), TEXT("Change the setup of this car in workshop units. Stop the car first.")),
 		Row(ESimCruiseMenuRow::Lights, EKind::Value, EIcon::Lights, TEXT("Headlights"), TEXT("On, or on when it gets dark"), TEXT("Auto turns the headlights on at dusk.")),
 	};
@@ -117,6 +117,7 @@ const TArray<FRowInfo>& SSimCruisePauseMenu::Rows(int32 InPage)
 		Row(ESimCruiseMenuRow::StickResponse, EKind::Value, EIcon::Stick, TEXT("Stick response"), TEXT("Linear, between or fine centre"), TEXT("Fine centre gives small steering near the middle of the stick.")),
 		Row(ESimCruiseMenuRow::StickDeadZone, EKind::Slider, EIcon::Stick, TEXT("Stick dead zone"), TEXT(""), TEXT("How far the stick moves before the wheels turn.")),
 		Row(ESimCruiseMenuRow::Trigger, EKind::Value, EIcon::Trigger, TEXT("Throttle trigger"), TEXT("Linear to very progressive"), TEXT("Progressive gives fine throttle at the start of the trigger.")),
+		Row(ESimCruiseMenuRow::Graphics, EKind::Segmented, EIcon::Screen, TEXT("Graphics quality"), TEXT("Auto, Low, Medium, High or Ultra"), TEXT("Auto chooses a quality preset for this graphics card. Lower settings reduce the GPU load.")),
 	};
 	switch (InPage)
 	{
@@ -244,9 +245,13 @@ TSharedRef<SWidget> SSimCruisePauseMenu::BuildPage(int32 P)
 		}
 		else if (Info.Kind == EKind::Segmented)
 		{
+			TArray<FString> Options;
+			if (R == ESimCruiseMenuRow::SpeedUnits) Options = { TEXT("mph"), TEXT("km/h") };
+			else if (R == ESimCruiseMenuRow::Graphics) Options = { TEXT("Auto"), TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Ultra") };
+			else Options = { TEXT("Natural"), TEXT("True FOV"), TEXT("Wide") };
 			Widget = SNew(SSimCruiseSegmentedRow).Width(RowWidth).Focused(Focused).OnHover(Hover).OnClick(Click)
 				.Name(FText::FromString(Info.Title))
-				.Options(R == ESimCruiseMenuRow::SpeedUnits ? TArray<FString>{ TEXT("mph"), TEXT("km/h") } : TArray<FString>{ TEXT("Natural"), TEXT("True FOV"), TEXT("Wide") })
+				.Options(MoveTemp(Options))
 				.Chosen_Lambda([this, R]() { return ValueOf(R).Chosen; });
 		}
 		else
@@ -404,12 +409,18 @@ namespace
 		static const TArray<FHint> Set = { { TEXT("D-pad Left Right"), TEXT("Change"), TEXT("Left Right") }, { TEXT("A"), TEXT("Next value"), TEXT("Enter") }, { TEXT("Y"), TEXT("Back to stock"), TEXT("Y") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } };
 		return Set;
 	}
+	const TArray<FHint>& PauseGraphicsHints()
+	{
+		static const TArray<FHint> Set = { { TEXT("D-pad Left Right"), TEXT("Change"), TEXT("Left Right") }, { TEXT("A"), TEXT("Next value"), TEXT("Enter") }, { TEXT("Y"), TEXT("Reset to Auto"), TEXT("Y") }, { TEXT("B"), TEXT("Back to the drive"), TEXT("Esc") }, { TEXT("LB RB"), TEXT("Change page"), TEXT("Q E") } };
+		return Set;
+	}
 }
 
 TArray<FHint> SSimCruisePauseMenu::GetPadHints() const
 {
 	if (bTabs) return PauseHintSet(3);
 	const FRowInfo& Info = Rows(Page)[FMath::Clamp(Selected[Page], 0, Rows(Page).Num() - 1)];
+	if (Info.Row == ESimCruiseMenuRow::Graphics) return PauseGraphicsHints();
 	if (Info.Kind == EKind::Slider) return PauseSliderHints();
 	if (Info.Kind != EKind::Action) return PauseHintSet(2);
 	return Page == 0 && State.bRoute ? PauseHintSet(1) : PauseHintSet(0);
@@ -425,8 +436,10 @@ TSharedRef<SWidget> SSimCruisePauseMenu::BuildHints()
 		SNew(SWidgetSwitcher).WidgetIndex_Lambda([this]()
 		{
 			if (bTabs) return 3;
-			const EKind Kind = Rows(Page)[FMath::Clamp(Selected[Page], 0, Rows(Page).Num() - 1)].Kind;
+			const FRowInfo& Info = Rows(Page)[FMath::Clamp(Selected[Page], 0, Rows(Page).Num() - 1)];
+			const EKind Kind = Info.Kind;
 			if (Kind == EKind::Slider) return 4;
+			if (Info.Row == ESimCruiseMenuRow::Graphics) return 5;
 			if (Kind != EKind::Action) return 2;
 			return Page == 0 && State.bRoute ? 1 : 0;
 		})
@@ -436,6 +449,7 @@ TSharedRef<SWidget> SSimCruisePauseMenu::BuildHints()
 		// On the tab row.
 		+ SWidgetSwitcher::Slot()[Hints(PauseHintSet(3), bPad)]
 		+ SWidgetSwitcher::Slot()[Hints(PauseSliderHints(), bPad)]
+		+ SWidgetSwitcher::Slot()[Hints(PauseGraphicsHints(), bPad)]
 	];
 	return Box;
 }
@@ -533,8 +547,8 @@ void SSimCruisePauseMenu::Navigate(ENav Nav)
 		if (Page == 0 && State.bRoute) OnAction.ExecuteIfBound(ESimCruiseMenuRow::EndRoute, 0);
 		break;
 	case ENav::Y:
-		// Back to stock on a slider row.
-		if (Rows(Page)[Selected[Page]].Kind == EKind::Slider) Choose(2);
+		// Back to stock on a slider, or reset graphics quality to Auto.
+		if (Rows(Page)[Selected[Page]].Kind == EKind::Slider || Rows(Page)[Selected[Page]].Row == ESimCruiseMenuRow::Graphics) Choose(2);
 		break;
 	case ENav::Back:
 	case ENav::Menu:
