@@ -30,10 +30,32 @@ namespace
 
 	FVector2d World(const FSimCruiseStartTile& T, const FVector2d& LocalM) { return FVector2d(T.OriginCm.X, T.OriginCm.Y) / 100.0 + LocalM; }
 
-	bool IsCut(const FSimCruiseRibbon& R, int32 I)
+}
+
+TArray<uint8> SimCruiseStartPick::JunctionCuts(const FSimCruiseRibbon& R)
+{
+	TArray<uint8> Out;
+	Out.Init(0, R.St.Num());
+	for (int32 Side = 0; Side < 2; ++Side)
 	{
-		return (R.Sides[0].Cut.IsValidIndex(I) && R.Sides[0].Cut[I]) || (R.Sides[1].Cut.IsValidIndex(I) && R.Sides[1].Cut[I]);
+		const auto& Cut = R.Sides[Side].Cut;
+		for (int32 i = 0; i < R.St.Num(); )
+		{
+			if (!(Cut.IsValidIndex(i) && Cut[i])) { ++i; continue; }
+			int32 j = i;
+			while (j + 1 < R.St.Num() && Cut.IsValidIndex(j + 1) && Cut[j + 1]) ++j;
+			if (R.St[j].S - R.St[i].S <= ParallelCutM)
+			{
+				for (int32 k = i; k <= j; ++k) Out[k] = 1;
+			}
+			i = j + 1;
+		}
 	}
+	return Out;
+}
+
+namespace
+{
 
 	/** The station index whose S is nearest S. */
 	int32 StationAt(const FSimCruiseRibbon& R, double S)
@@ -275,6 +297,13 @@ bool SimCruiseStartPick::OnCarriageway(const TArray<FSimCruiseStartTile>& Tiles,
 	return true;
 }
 
+namespace
+{
+	/** Second pass only (no start passed with every side cut taken for a junction): a long side cut is a
+	 *  carriageway beside this one (JunctionCuts), not a junction. */
+	bool GParallelCutsAllowed = false;
+}
+
 TArray<FSimCruiseStartPose> SimCruiseStartPick::Candidates(const TArray<FSimCruiseStartTile>& Tiles, const FString& RoadName, const FVector& NearCm,
 	double RadiusM, double PreferredYawDeg, int32 MaxCandidates, FString* OutWhyNone)
 {
@@ -303,7 +332,17 @@ TArray<FSimCruiseStartPose> SimCruiseStartPick::Candidates(const TArray<FSimCrui
 			TArray<uint8> NearJunction;
 			NearJunction.Init(0, Ribbon.St.Num());
 			auto MarkNear = [&](double S) { for (int32 k = 0; k < Ribbon.St.Num(); ++k) if (FMath::Abs(Ribbon.St[k].S - S) < JunctionClearM) NearJunction[k] = 1; };
-			for (int32 j = 0; j < Ribbon.St.Num(); ++j) if (IsCut(Ribbon, j)) MarkNear(Ribbon.St[j].S);
+			TArray<uint8> Cuts;
+			if (GParallelCutsAllowed) Cuts = SimCruiseStartPick::JunctionCuts(Ribbon);
+			else
+			{
+				Cuts.Init(0, Ribbon.St.Num());
+				for (int32 j = 0; j < Ribbon.St.Num(); ++j)
+				{
+					Cuts[j] = (Ribbon.Sides[0].Cut.IsValidIndex(j) && Ribbon.Sides[0].Cut[j]) || (Ribbon.Sides[1].Cut.IsValidIndex(j) && Ribbon.Sides[1].Cut[j]) ? 1 : 0;
+				}
+			}
+			for (int32 j = 0; j < Ribbon.St.Num(); ++j) if (Cuts[j]) MarkNear(Ribbon.St[j].S);
 			for (const int32 End : { 0, Ribbon.St.Num() - 1 })
 			{
 				if ((End == 0 && Ribbon.bStartOnBoundary) || (End > 0 && Ribbon.bEndOnBoundary)) continue; // a tile seam, not a junction
@@ -372,6 +411,15 @@ TArray<FSimCruiseStartPose> SimCruiseStartPick::Candidates(const TArray<FSimCrui
 		}
 		if (!bClose) Distinct.Add(P);
 		if (Distinct.Num() >= MaxCandidates) break;
+	}
+	// None: once more, with a long side cut taken for a carriageway beside this one (a bridge's two
+	// one-way decks with no gap), not a junction.
+	if (Distinct.IsEmpty() && !GParallelCutsAllowed)
+	{
+		GParallelCutsAllowed = true;
+		TArray<FSimCruiseStartPose> Loose = Candidates(Tiles, RoadName, NearCm, RadiusM, PreferredYawDeg, MaxCandidates, nullptr);
+		GParallelCutsAllowed = false;
+		if (!Loose.IsEmpty()) return Loose;
 	}
 	if (OutWhyNone && Distinct.IsEmpty())
 	{

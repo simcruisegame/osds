@@ -559,7 +559,7 @@ export async function streamedTerrain(X,Y,tile,centerDEM,widths,readDEM,measured
  }
  summary.conditioned=summary.bench.vertices;
  const worldKey=(x,y)=>{const [wx,wy]=toWorld(x,y);return Math.round(wx*2e4)+'-'+Math.round(wy*2e4)};
- const bridges=await bridgeDecks(structures.filter(p=>p.bridge),terminals,sample,inside,{tx0,ty0,scale},memo,worldKey);
+ const bridges=await bridgeDecks(structures.filter(p=>p.bridge),terminals,sample,inside,{tx0,ty0,scale},memo,worldKey,4*scale);
  summary.bench.bridges=bridges.length;
  return {h,grid:FINE,road_grade:summary,bridges,road_surface:roadSurface(surfaceChains,{tx0,ty0,scale})};
 }
@@ -569,9 +569,9 @@ export async function streamedTerrain(X,Y,tile,centerDEM,widths,readDEM,measured
 // without an approach in reach takes the ground there; a bridge with neither
 // end known is left out. Rows: [class, name, points in tile units clipped to
 // the tile, width, deck height per point, layer].
-async function bridgeDecks(pieces,terminals,sample,inside,{tx0,ty0,scale},memo,worldKey){
+async function bridgeDecks(pieces,terminals,sample,inside,{tx0,ty0,scale},memo,worldKey,extent=Infinity){
  const rows=[];
- const endAt=await bridgeEndHeights(pieces,terminals,sample,inside,memo,worldKey);
+ const endAt=await bridgeEndHeights(pieces,terminals,sample,inside,memo,worldKey,extent);
  for(const parts of chainPieces(pieces)){
   const pts=[];
   for(const part of parts){
@@ -621,8 +621,27 @@ async function bridgeDecks(pieces,terminals,sample,inside,{tx0,ty0,scale},memo,w
 // through the deck, weighted by 1 / distance along the deck (on a straight deck
 // with a ramp at the middle that is the straight line between the abutments).
 // Before, a joint took the ground under it: the river or valley floor, a V.
-export async function bridgeEndHeights(pieces,terminals,sample,inside,memo,worldKey){
- const JOIN=3;
+export // A piece end on the edge of the vector tile (extent: the z14 tile's side) is where the map cut the
+// bridge, not an abutment: a long bridge (the 8 km Mackinac) is cut every 2 km, and those cuts took
+// the ground under them (the lake) as end heights, so the deck dipped to the water at each cut and a
+// car at 64 mph was thrown off. A cut end takes the height the tile on the other side already gave it
+// (remembered), else the nearest true end's height (a level deck), else 6 m over the ground there; the
+// first tile to build it remembers it, so both sides of the cut always meet.
+async function bridgeEndHeights(pieces,terminals,sample,inside,memo,worldKey,extent=Infinity){
+ const JOIN=3,SEAM_CLEARANCE=6;
+ // Vector tiles carry a buffer past their edge (about 1.5 %): a cut end lies on or just outside it.
+ const onCut=p=>Number.isFinite(extent)&&Math.min(p[0],p[1],extent-p[0],extent-p[1])<=extent*0.02;
+ // Where a cut piece crosses the tile's edge: the key both tiles share for the cut's height.
+ const crossing=(end,prev)=>{
+  for(const [axis,line] of [[0,0],[0,extent],[1,0],[1,extent]]){
+   const d0=prev[axis]-line,d1=end[axis]-line;
+   if(d0===d1||Math.sign(d0)===Math.sign(d1)&&Math.abs(d1)>extent*0.02)continue;
+   if(Math.abs(d1)>extent*0.02)continue;
+   const t=d0/(d0-d1);if(!(t>=0&&t<=1.5))continue;
+   const q=[prev[0]+(end[0]-prev[0])*t,prev[1]+(end[1]-prev[1])*t];q[axis]=line;return q;
+  }
+  return end;
+ };
  const nodes=[];
  const nodeOf=(p)=>{
   for(let i=0;i<nodes.length;i++)if(Math.hypot(nodes[i].x-p[0],nodes[i].y-p[1])<=JOIN)return i;
@@ -631,6 +650,8 @@ export async function bridgeEndHeights(pieces,terminals,sample,inside,memo,world
  for(const piece of pieces){
   const a=nodeOf(piece.pts[0]),b=nodeOf(piece.pts[piece.pts.length-1]);
   const s=arcLength(piece.pts),l=s[s.length-1];
+  const n=piece.pts.length;
+  if(n>=2){nodes[a].cutAt??=crossing(piece.pts[0],piece.pts[1]);nodes[b].cutAt??=crossing(piece.pts[n-1],piece.pts[n-2]);}
   if(a===b)continue;
   nodes[a].edges.push([b,l]);nodes[b].edges.push([a,l]);
  }
@@ -648,8 +669,36 @@ export async function bridgeEndHeights(pieces,terminals,sample,inside,memo,world
   try{const z=sample(p[0],p[1]);if(Number.isFinite(z))return Math.round(z*100)/100}catch{}
   return NaN;
  };
- const trueEnds=[];
- for(let i=0;i<nodes.length;i++)if(nodes[i].edges.length===1){nodes[i].z=await measure(nodes[i]);if(Number.isFinite(nodes[i].z))trueEnds.push(i)}
+ const trueEnds=[],cuts=[];
+ for(let i=0;i<nodes.length;i++)if(nodes[i].edges.length===1){
+  if(onCut([nodes[i].x,nodes[i].y])){cuts.push(i);continue}
+  nodes[i].z=await measure(nodes[i]);if(Number.isFinite(nodes[i].z))trueEnds.push(i);
+ }
+ // Distances along the deck (Dijkstra; bridge graphs are small).
+ const along=src=>{
+  const d=new Array(nodes.length).fill(Infinity);d[src]=0;
+  const done=new Array(nodes.length).fill(false);
+  for(;;){
+   let u=-1;for(let i=0;i<nodes.length;i++)if(!done[i]&&d[i]<Infinity&&(u<0||d[i]<d[u]))u=i;
+   if(u<0)break;done[u]=true;
+   for(const [v,l] of nodes[u].edges)if(d[u]+l<d[v])d[v]=d[u]+l;
+  }
+  return d;
+ };
+ for(const i of cuts){
+  const at=nodes[i].cutAt??[nodes[i].x,nodes[i].y];
+  const key=worldKey(Math.round(at[0]*100)/100,Math.round(at[1]*100)/100),known=memo?.get(key);
+  let z=Number.isFinite(known)?known:NaN;
+  if(!Number.isFinite(z)&&trueEnds.length){
+   const d=along(i);let best=-1;
+   for(const e of trueEnds)if(Number.isFinite(d[e])&&(best<0||d[e]<d[best]))best=e;
+   if(best>=0)z=nodes[best].z;
+  }
+  let ground=NaN;try{ground=sample(at[0],at[1])}catch{}
+  if(!Number.isFinite(z)&&Number.isFinite(ground))z=ground+SEAM_CLEARANCE;
+  if(Number.isFinite(z)&&Number.isFinite(ground))z=Math.max(z,ground+1);
+  if(Number.isFinite(z)){z=Math.round(z*100)/100;if(!Number.isFinite(known))memo?.set(key,z);nodes[i].z=z;trueEnds.push(i)}
+ }
  // Distances along the deck from each true end (Dijkstra; bridge graphs are small).
  const dist=trueEnds.map(src=>{
   const d=new Array(nodes.length).fill(Infinity);d[src]=0;

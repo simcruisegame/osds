@@ -94,7 +94,19 @@ $Defs = @{
     'chicago'        = @('-SimCruiseStart=41.8847,-87.6245')    # Michigan Avenue, the Loop
     'minnesota-north' = @('-SimCruiseStart=48.0519,-92.8310')   # US-53, Orr MN
     'south-texas'    = @('-SimCruiseStart=26.4815,-97.7831')    # US-77, Raymondville TX
+    # The QA list of hard places (2.0.4): each stresses a different system.
+    'lombard'        = @('-SimCruiseStart=37.8021,-122.4187')   # Lombard St, San Francisco: steep grade, road steps
+    'million-dollar' = @('-SimCruiseStart=37.99,-107.66')       # US-550 near Ouray CO: switchbacks along cliffs
+    'pikes-peak'     = @('-SimCruiseStart=38.8481613,-105.0533868') # Pikes Peak Highway (Photon), above the tree line: altitude, hairpins
+    'badwater'       = @('-SimCruiseStart=36.23,-116.77')       # Badwater Road CA: ground below sea level
+    'mackinac'       = @('-SimCruiseStart=45.817,-84.728')      # Mackinac Bridge MI: a long bridge over water
+    'seven-mile'     = @('-SimCruiseStart=24.706,-81.154')      # Seven Mile Bridge FL: a low bridge
+    'bay-bridge-tunnel' = @('-SimCruiseStart=37.03,-76.08')     # Chesapeake Bay Bridge-Tunnel VA
+    'glenwood'       = @('-SimCruiseStart=39.555,-107.245')     # I-70 Glenwood Canyon: stacked carriageways
+    'high-five'      = @('-SimCruiseStart=32.925,-96.764')      # High Five interchange, Dallas: levels
+    'us-50-nevada'   = @('-SimCruiseStart=39.3,-117.0')         # US-50 Nevada: long straight at speed
 }
+$HardPlaces = @('dragon', 'lombard', 'million-dollar', 'pikes-peak', 'badwater', 'mackinac', 'seven-mile', 'bay-bridge-tunnel', 'glenwood', 'high-five', 'us-50-nevada', 'nebraska')
 if ($Seed -lt 0) { $Seed = [int](Get-Date -Format 'yyyyMMdd') }
 # Ordinary US places: the world must work everywhere, not only on the hero roads.
 $PlacesFile = Join-Path $Root 'data\test-places.json'
@@ -122,6 +134,17 @@ foreach ($Road in $Roads) {
         $Draw = @($TestPlaces | Where-Object { $Keys[0..($Take - 1)] -contains $_.key })
         Write-Host "Random places (seed $Seed): $(($Draw | ForEach-Object { $_.key }) -join ', ')"
         $Expanded += @($Draw | ForEach-Object { $_.key })
+    } elseif ($Road -eq 'randomus') {
+        # Fresh random points across the US by place type (scripts\RandomPlaces.ps1 areas), not the fixed list.
+        . (Join-Path $PSScriptRoot 'RandomPlaces.ps1')
+        foreach ($P in @(Get-RandomUSPlaces -Count $RandomCount -Seed $Seed -Root $Root -AreasOnly)) {
+            $Key = "rand-$($P.Type)-$($P.Index)"
+            $Defs[$Key] = @("-SimCruiseStart=$($P.Lat),$($P.Lon)")
+            $PlaceUtc[$Key] = $Day.AddHours(12.0 - [double]$P.Lon / 15.0).ToString('yyyy-MM-ddTHH:mm:ssZ')
+            Write-Host "Random US place $Key at $($P.Lat),$($P.Lon)"
+            $Expanded += $Key
+        }
+    } elseif ($Road -eq 'hard') { $Expanded += $HardPlaces
     } else { $Expanded += $Road }
 }
 $Roads = $Expanded

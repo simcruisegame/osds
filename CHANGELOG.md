@@ -13,6 +13,9 @@ The short version of each release, newest first. Every release has full notes in
 - **Bridges are flat across**: one smooth deck from end to end, no dips, the same in every map tile; a road under a bridge is no longer pulled up to it.
 - **No ground poking through the road**: the Doraville test place went from 60 spots to 1 (a tile border), and the check now fails the build.
 - Hard launches change up instead of sitting on the limiter; the Corvette no longer skips from 1st to 3rd.
+- **Buildings from real data**: measured heights, what each building is (home, apartments, shop) and its storeys (Overture, the US National Structure Inventory), and the roof shape, wall colour and material mapped in OpenStreetMap. Window rows follow the real storeys.
+- The AI-sharpened aerial photo fades in instead of popping. Shadows are lifted the way real cameras do (dark forests and shaded streets were too dark).
+- **Bug hunt across the US**: the robot now drives random US places and 12 hard ones. Fixed what it found: no start on the Mackinac Bridge (the car was put in the lake), a building standing across the motorway there, bridge decks dipping at map-block cuts.
 - Roofs follow the map, gable ridges run along the house, sealed cracks on older asphalt.
 - Fixes: `main` builds again (a merge dropped a function); Graphics "Auto" no longer re-benchmarks.
 

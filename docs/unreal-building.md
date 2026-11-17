@@ -1,4 +1,19 @@
-# Building SimCruise with Unreal Engine
+# Building OSDS from source (Unreal Engine)
+
+## In short
+
+- This page is for developers: how to build, run, test and package OSDS from source on Windows.
+- You need **Unreal Engine 5.8.4**, **Visual Studio 2022 Build Tools** (17.14 or newer, C++ game workload, .NET Framework 4.8 SDK) and [Bun](https://bun.com/) for the map helper.
+- **Build:** run `Build.bat SimCruiseEditor Win64 Development` on `SimCruise.uproject` with `-WaitMutex` ([Build and launch](#build-and-launch)).
+- **Play from source:** start `UnrealEditor.exe SimCruise.uproject -game` ([Drive it](#drive-it)). It starts on the bundled Ocean Drive, Miami Beach, with no network.
+- **Test:** `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` runs every test headless; `-Tier fast` is under 2 minutes ([Automation tests](#automation-tests)).
+- **Package:** `scripts\package.ps1` makes a Windows build; `scripts\release.ps1` makes a full release with installer ([A Windows package](#a-windows-package)).
+- **Before you say it works:** drive it, capture it and look at the pictures ([How to test](#how-to-test)).
+- Paths such as `D:\simcruise` and `D:\sc\lane1` are the project's own PC; use your own checkout path.
+
+**On this page:** [Prerequisites](#windows-prerequisites) · [Build and launch](#build-and-launch) · [Several sessions on one PC](#several-claude-code-sessions-on-one-pc) · [A Windows package](#a-windows-package) · [Automation tests](#automation-tests) · [Drive the real place](#drive-the-real-place) · [Car turntable captures](#car-turntable-captures) · [Lighting lab](#lighting-lab-captures-and-frame-timing) · [Claude Code and the editor](#connecting-claude-code-to-the-editor-mcp) · [Drive it](#drive-it) · [How to test](#how-to-test) · [All tests](#all-tests-and-the-shell-self-test)
+
+## About the engine version
 
 The Unreal client is a native C++ project in `SimCruise.uproject`. The local engine install currently resolves to Unreal Engine 5.8.4, changelist 58902052 (`++UE5+Release-5.8`). The `.uproject` association is `5.8`; use the pinned 5.8.4 launcher build for this checkout.
 
@@ -20,7 +35,7 @@ From a Visual Studio Developer PowerShell or a shell with the compiler environme
 
 After the editor target builds, open `D:\simcruise\SimCruise.uproject` in Unreal Editor 5.8.4.
 
-## Several agents on one PC
+## Several Claude Code sessions on one PC
 
 Several Claude Code sessions can work on SimCruise at once on one PC. These rules keep them from breaking each other's builds and runs:
 
@@ -116,7 +131,7 @@ While any Unreal Editor with Live Coding is open (on any project of this engine 
 
 The `SimCruise` game target builds the same way (`Build.bat SimCruise Win64 Development ...`). The commandlet saves the eight world layers, the three car masters, the dashboard clock, the mirror glass and the low-beam light function (`SimCruise.SaveCarMaterials` in the editor still saves only the car masters).
 
-## Automation tests
+## Car presentation tests
 
 ```powershell
 & 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\simcruise\SimCruise.uproject' -ExecCmds="Automation RunTests SimCruise.Presentation;Quit" -unattended -nopause -nullrhi -nosplash -log -testexit="Automation Test Queue Empty"
@@ -133,7 +148,7 @@ Results are in `Saved/Logs/SimCruise.log`. Add `-SimCruiseRigDebug` to log every
 `-SimCruiseTurntable=all` takes every car in `Content/Vehicles/CarPresentation.json`; `-SimCruiseTurntableOut=DIR` changes the output folder (default `Saved/Screenshots/Turntable`); `-SimCruiseTurntableStay` keeps the game open afterwards. The first run of a car builds its meshes (the NB's Nanite body takes about 30 s once, then comes from the DDC). Each car gives 13 PNGs and a section of `report.txt`. In a running game the console command `SimCruise.Turntable [ids|all] [dir]` does the same. See [unreal-architecture.md](unreal-architecture.md) for how the cars are built.
 The `SimCruise` game target builds the same way (`Build.bat SimCruise Win64 Development …`). With the installed engine, Unreal Build Tool refuses to build while any editor has a Live Coding session open ("Unable to build while Live Coding is active"), even an editor on another checkout, because the Live Coding lock is named after the shared `UnrealEditor.exe`. A build of a separate checkout (a worktree) can pass `-NoHotReloadFromIDE` to skip that check; never use it on the checkout the open editor is running.
 
-## Tests
+## Running one test group
 
 Automation tests are named `SimCruise.<Area>.<Test>` and run headless:
 
@@ -156,7 +171,7 @@ The lighting lab ([unreal-architecture.md](unreal-architecture.md#lighting-lab))
 
 Frame timing per preset at 1080p (use `-fullscreen -ResX=1920 -ResY=1080`, vsync off, and nothing else using the GPU): replace the shot arguments with `-SimCruiseUtc=2025-04-24T17:19:00Z -SimCruiseLabPerf=low,medium,high,ultra -SimCruiseLabPerfSeconds=12` and add `r.VSync 0,t.MaxFPS 0` to `-ExecCmds`. Each window logs a `SimCruisePerf:` line and appends `Saved/Profiling/SimCruisePerf.csv`. For a pass-by-pass GPU breakdown run `r.ProfileGPU.ShowUI 0` and `ProfileGPU` (the lab accepts console commands after `#` in a shot, with `~` for spaces and `|` between commands); the tree is printed under `LogRHI`.
 
-## Unreal editor skill connection
+## Connecting Claude Code to the editor (MCP)
 
 The project enables Epic's `ModelContextProtocol` and `AllToolsets` editor plugins, so Claude Code can drive a running Unreal Editor through Epic's `unreal-engine-skills-for-claude-code` plugin. It is in the `claude-plugins-official` marketplace; install it with `/plugin install unreal-engine-skills-for-claude-code@claude-plugins-official`. Its start hook needs Git Bash on `PATH`. `.mcp.json` also lists `blender` ([blender-mcp](https://github.com/ahujasid/blender-mcp), started with `uvx blender-mcp`) for the Blender car pipeline in `authoring/cars/`; it needs `uv` and the blender-mcp add-on running in Blender, and Claude Code asks before it uses either server. `.mcp.json` points Claude Code at `http://127.0.0.1:8000/mcp`. To have the editor start the MCP server on launch, add this to your own `Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini` (per user, not in git). Otherwise, run `ModelContextProtocol.StartServer` in the editor console:
 
@@ -184,7 +199,7 @@ Build the `SimCruiseEditor` target, then:
 
 The game starts at the offline Miami Beach start: it builds the nine tiles around Ocean Drive from the bundled data (about 15 s, "Building Ocean Drive, Miami Beach · n of 9 tiles"), then puts you in the 2001 roadster in Ocean Drive's lane, in the driver's seat, in a morning sun: a drive starts at 10:00 local solar time at the place, today (owner decision, 11 November 2026). `-SimCruiseRealTime` follows your computer's clock instead (night included, with your own low beams). Leave out `-windowed -ResX=1600 -ResY=900` for full screen.
 
-Controls follow [controls.md](controls.md): on an Xbox pad, right trigger to accelerate, left trigger to brake, left stick to steer, Y camera, B manual gearbox, RB / X shift, View recover, L3 HUD; on the keyboard W/S/A/D, C camera, T manual, E/Q shift, R recover, F2 HUD, F6 lens, L lamps.
+Controls follow [controls.md](controls.md): on an Xbox pad, right trigger to accelerate, left trigger to brake, left stick to steer, Y camera, right-stick click manual gearbox, RB / LB shift, View recover, X HUD, Menu pause menu; on the keyboard W/S/A/D, C camera, T manual, E/Q shift, R recover, F2 HUD, F6 lens, L lamps.
 
 Options:
 
@@ -386,7 +401,7 @@ Signs cost (2026-11-12, this laptop, Ultra 1920x1080, Ocean Drive start, 159 sig
 
 Night captures: the same command with `-SimCruiseUtc=2026-11-12T01:30:00Z` (20:30 in Miami Beach).
 
-## Tests
+## All tests and the shell self-test
 
 Automation tests are named `SimCruise.<Area>.<Test>`. `scripts\check.ps1` builds and runs them all and exits 0 or 1 (see CONTRIBUTING.md); by hand, headless:
 

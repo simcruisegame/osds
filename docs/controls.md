@@ -1,79 +1,244 @@
 # Playing OSDS
 
-The Unreal client starts in the 2001 roadster in Ocean Drive's lane, Miami Beach, in a morning sun (the bundled start: no network needed). The keys and buttons are one table in `Source/SimCruise/Private/Gameplay/SimCruiseInputConfig.cpp`, checked by the `SimCruise.Gameplay.Input` tests.
+You start in the 2001 Miata on Ocean Drive, Miami Beach, on a sunny morning. This start is built into the game, so it works without internet. The engine sound is on.
 
-## Controls
+**On this page:** [Buttons and keys](#buttons-and-keys) · [Gearbox](#gearbox) · [Stability control](#stability-control-esc) · [Pause menu and GPS](#pause-menu-and-gps) · [Go somewhere else](#go-somewhere-else) · [Menus on a controller](#menus-on-a-controller) · [Tune your car](#tune-your-car) · [Seat and view](#seat-and-view) · [Settings](#settings) · [Advanced](#advanced)
+
+## Buttons and keys
 
 | Action | Keyboard | Xbox controller |
 |---|---|---|
-| Accelerate | W or Up | Right trigger |
-| Brake, then reverse once stopped (below about 1 mph; a trigger pressed too lightly to brake coasts) | S or Down | Left trigger |
+| Accelerate | W or Up | Right trigger (RT) |
+| Brake; reverse once stopped (below about 1 mph) | S or Down | Left trigger (LT) |
 | Steer | A / D or Left / Right | Left stick |
-| Full brake (service brake) | Space | — |
-| Parking brake, rear wheels | H (hold) | B (hold) |
-| Automatic / manual gearbox | T | Right-stick click |
-| Clutch (manual mode, only with "your clutch") | Shift (hold) | A (hold) |
-| Shift up / shift down (manual mode) | E / Q | RB / LB |
+| Full brake | Space | — |
+| Parking brake (rear wheels) | H (hold) | B (hold) |
+| Switch automatic / manual gearbox | T | Right-stick click |
+| Shift up / down (manual) | E / Q | RB / LB |
+| Clutch (only with "your clutch") | Shift (hold) | A (hold) |
 | Restart a stalled engine | I, with the clutch held | D-pad left, with the clutch held |
-| Camera: driver's seat, hood, near chase, far chase, scenic | C | Y |
-| Look around (seat and hood views) | | Right stick |
-| Hide or show the driving HUD | F2 | X |
+| Change camera: seat, hood, near chase, far chase, scenic | C | Y |
+| Look around (seat and hood views) | — | Right stick |
+| Hide or show the HUD | F2 | X |
 | Frame time and stats | F3 | — |
-| Driver lens: natural (the default), true FOV, wide | F6 | Menu, RB to Seat & view, Lens, D-pad left / right |
-| Head lamps on / off | L | — |
-| Recover to the nearest road | R | View |
-| Sound on / off (engine, tyres, road, wind) | M | — |
-| Pause menu (Drive, Your car, Seat & view, Settings) | Tab | Menu |
-| Menu pages | Q / E | LB / RB |
-| Find a place | / | Where to? in the pause menu |
-| Tune the car (standing still) | F4 | D-pad Right |
+| Driver lens: natural, true field of view, wide | F6 | Seat & view page: Lens (or View in the road atlas) |
+| Headlights on / off | L | — |
+| Back on the nearest road | R | View |
+| Sound on / off | M | — |
+| Pause menu | Tab | Menu |
+| Next / previous menu page | E / Q | RB / LB |
+| Find a place ("Where to?") | / | Where to? in the pause menu |
+| Tune the car (standing still) | F4 | D-pad right |
 
-**Tuning.** Press D-pad Right (F4), or open the menu and pick *Tune car...* in the *Your car* row; while moving the game waits, and a setup saved on the move goes on when the car next stops. Up/Down (D-pad or stick) chooses a row, Left/Right changes it, X resets the row, Y pressed twice puts the whole car back as it left the factory, A (Enter) saves the setup for this car and applies it, and B (Esc, F4) cancels. The rows are front and rear spring rates (lb/in), damping (% of stock), ride height (mm), front and rear anti-roll bars (% of stock, 0 disconnects one), engine torque (%), final drive and steering ratio (a lower ratio is quicker: the stick turns the wheels further and faster). Each stays inside a safe range around the real car's. Under the rows the menu shows the body roll in degrees per g of cornering, so you see what springs and bars do before you drive. The setup is saved per car and comes back next time you drive that car.
+Tips:
 
-The engine sound is on at the start.
+- A brake trigger pressed very lightly does not brake; the car coasts.
+- The left-stick click does nothing. This is on purpose: hard steering pressed it by accident.
 
-**Pause menu and GPS.** Tab (Menu) opens the pause menu. Up and down (D-pad, stick, arrows) choose a row, A (Enter) chooses it, left and right change a value, Y puts a slider back to stock, LB and RB (Q and E) change the page, B (Esc) goes back to the drive. On the Drive page: Where to?, Plan a route, Famous roads and the road atlas; X ends a route. In Plan a route the left stick (arrows, drag) moves the map under the cross, A (Enter, a click) adds a stop, X (Delete) removes the stop under the cross or the last one, LT and RT (- and +, the wheel) zoom, Y starts the route and B goes back. While you follow a route the turn sign is at the top, magenta chevrons are on the road ahead and the round map shows the course (in the driver's seat the map is at the top left); leave the route for more than 30 m for 3 s and the GPS finds a new one from where you are.
+## Gearbox
 
-**Menus with an Xbox controller.** Every button and row on every menu works with the pad alone. The pad's place always has a white border, so you can see where you are.
+**Automatic** (the default):
 
-- **Pause menu.** Menu opens and closes it. Up and down move between rows. Up from the first row goes to the page tabs at the top (Drive, Your car, Seat & view, Settings): left and right move along them, and A or Down opens that page. LB and RB change the page from anywhere. A new page always starts on its first row. On a slider or a choice row, D-pad left and right change it; Y puts a slider back to stock. B goes back to the drive.
-- **Back one step.** B on a screen you opened from the menu (Where to?, Plan a route, Famous roads, Road atlas, Tune car, Seat & view) takes you back to the menu, on the row you came from. Menu closes everything and goes back to the drive.
-- **Where to?** The D-pad moves between the search box, Search, Surprise me, the places and Back to drive; A chooses. On the search box, press A for the pad keyboard: the D-pad (or the stick) moves over the keys, A types the key, B deletes the letter before the cursor, X types a space, Y or Menu searches, and LB and RB move the cursor. B on an empty box closes the keyboard.
-- **Road atlas.** D-pad left or right moves from the map onto the buttons at the top (zoom, Recenter, Drive here, Back to drive, Find a place, Surprise me, the car, the gearbox and every setting). Then the D-pad moves between the buttons, A presses one, and B goes back to the map. On the map, B goes back.
-- **Tune car and Seat & view.** Up and down choose a row, left and right change it (the stick too: one push is one step), X resets the row, Y resets all, A saves, B (or Menu) cancels.
-- **Quit.** The last row of the Drive page, *Quit the game*, asks first: *Keep driving* (where the pad starts) or *Quit to the desktop*. A chooses, B goes back.
-- Every screen's button hints come from the same list as its key handling, and a test (`SimCruise.UI.PadHintsMatch`) presses each hinted button to check it does what it says.
-- The left stick works like the D-pad in the menus: one push is one step, and holding it repeats. A mouse resting on the menu does not move your place; moving the mouse does.
-- The button hints at the bottom of every screen follow what you used last: press any pad button and they show the pad's buttons (A, B, LB RB); press a key or move the mouse and they show the keyboard's keys.
+- Shifts up early when you press lightly, later when you press harder.
+- Shifts down when you floor it.
+- Never shifts up while you brake, and holds its gear through a corner.
 
-**Speed in mph or km/h.** Open the pause menu, go to the Settings page and choose *Speed units*: mph or km/h. The HUD shows your speed in those units, and the GPS shows distances in miles and feet, or in kilometres and metres. The choice is saved; mph is the default. The HUD's speed is the car's real speed along the road, rounded to a whole number (0 when you stand still, never below 0). Next to the rev bar the HUD shows the engine's speed in rpm, to the nearest 50; with the engine running at a stop it shows the idle speed (about 850 rpm in the Miata). Developers: `simcruise.Hud.Units 1` sets km/h, `0` mph.
+**Manual.** Press T (or click the right stick) to switch. You choose the clutch in Pause menu > Gearbox:
 
-**Go somewhere else.** Press / for "Where to?": type a street, a town, a landmark or `latitude, longitude` and press Enter, or pick a preset, or press Surprise me (Y on the pad) for a random US road. Choose Road atlas in the pause menu (Tab, Menu) for the road atlas: move the map with the left stick, the mouse or the arrow keys, zoom with the D-pad, the wheel or +/−, click to pin a spot, and press Enter (A) or Drive here to go to the pin or the map centre. In the atlas, X finds a place, Y recentres, RB changes the car and LB the gearbox, and the buttons in its top bar set the sound, the HUD level, head motion (100, 50 or 0 %) and rumble strength (100, 60, 30 or 0 %), all remembered; Esc, Tab or B goes back to the drive. The game pauses while either is open.
+| Mode | How it works |
+|---|---|
+| Manual, automatic clutch (the default manual) | Tap E / RB to shift up, Q / LB to shift down. The game works the clutch and throttle for you and blips the throttle on a downshift (about 0.3 s). Tap twice to drop two gears. At a crawl it holds the clutch in, so the engine never stalls. |
+| Manual, your clutch | Hold Shift (A) while you shift. If the engine stalls, hold the clutch and press I (D-pad left). |
 
-**Automatic gearbox.** It changes up early with a light pedal and holds each gear longer the deeper you press, kicks down when you floor it, never changes up while you brake and holds its gear through a corner.
+- A shift that would over-rev the engine is refused.
+- Your choice is saved.
 
-**Manual gearbox.** Press T (right-stick click) to take over the gearbox. By default the clutch is automatic: tap E or RB to shift up and Q or LB to shift down, and the game presses the clutch, lifts the throttle, changes gear, blips the throttle on a downshift so the engine matches the lower gear, and lets the clutch out (about 0.3 s). Tap twice to drop two gears. At a crawl it holds the clutch in so the engine never stalls, and you pull away on the throttle alone. A gear that would over-rev the engine is refused. Pause menu > Gearbox cycles Automatic, Manual (automatic clutch) and Manual (your clutch): with your clutch, hold Shift (A) to shift, and a stalled engine restarts with I (D-pad left) while the clutch is held. The setting is remembered (`simcruise.Gearbox.AutoClutch`).
+## Stability control (ESC)
 
-**Stability control.** The cars that have it in real life (the Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey and CR-V) start with it on, as the real car does: when the car starts to slide it brakes one wheel and eases the engine, and the ESC light flashes on the HUD. Pause menu > Your car > Stability control turns it off (you catch the slides yourself); it is remembered (`simcruise.Assists.StabilityControl`). The 2001 Miata and the 1965 Mustang never had it.
+- These cars have it, as they do in real life: Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey and CR-V.
+- It is on by default.
+- When the car starts to slide, it brakes one wheel and eases the engine. The **ESC light flashes** on the HUD while it works.
+- To turn it off: Pause menu > Your car > Stability control. Then you catch slides yourself. Your choice is saved.
+- The 2001 Miata and the 1965 Mustang never had it.
 
-**New pad layout in 2.0.0.** The clutch moved from LB to A, the parking brake from A to B, shift down from X to LB, the gearbox switch from B to the right-stick click, the engine restart from the right-stick click to D-pad left and the HUD from the left-stick click to X; the left-stick click does nothing (since 2.0.1: it changed the lens when pressed by accident while steering; the lens is F6 or the atlas's View setting). The reason: the clutch on LB used the same finger as the brake trigger, and hard steering pressed the left stick by accident.
+## Pause menu and GPS
 
-**Traffic.** In 2.0.3 there are no other cars on the road and no aircraft in the sky, so the menus have no Traffic setting. The code stays in the game behind two switches, `sc.Feature.Traffic` and `sc.Feature.Aircraft` (0 is off, the default). With `sc.Feature.Traffic 1` the Drive page and the road atlas's Settings row have the Traffic setting again: Normal (about 20 cars around you), Light (8) or Off, and it is remembered.
+Press Tab (Menu on the controller). The pages are Drive, Your car, Seat & view and Settings.
 
-**The round map.** Settings page, *Map*: *With route* (the default) shows the round map only while the GPS has a route; *Always* shows it all the time. The choice is saved. In the driver's seat the map is smaller (75 %) and sits in the top-left corner, over the windscreen pillar and the sky, so it never covers the gauges, the clock, the centre screen or the rear-view mirror. In the other views it is in the bottom-right corner.
+| To do this | Keyboard | Controller |
+|---|---|---|
+| Choose a row | Up / Down | D-pad or stick up / down |
+| Pick it | Enter | A |
+| Change a value | Left / Right | D-pad left / right |
+| Put a slider back to stock | — | Y |
+| Change page | Q / E | LB / RB |
+| Back to the drive | Esc | B |
 
-**Seat & view.** Parked, open the menu and pick *Seat & view...* in the *Your car* row (D-pad to it, A). Seat height (up to 10 cm either way), seat fore-aft (15 cm), view tilt (8° up or down) and the view angle (Auto follows the lens; 30-75° tall) change the live picture behind the panel, held on the brakes; A saves them for this car, B puts the seat back. The view also widens slightly with speed (6 % by 130 km/h).
+**Drive page:** Where to?, Plan a route, Famous roads, Road atlas and Quit the game. X ends a route.
 
-**True field of view.** The driver's seat starts on the natural lens (45° tall, 74° across a 16:9 screen). F6 changes it to the true field of view and to wide; on the pad open the road atlas (Menu), move with the D-pad to "View" and press A. With the true field of view the game shows the world at the angle your screen really covers at your eye, as if the screen were a window: a 15.6" 16:9 laptop at 60 cm spans 32° across (2·atan(width / 2·distance)). Set your screen's diagonal and your eye's distance on the road atlas (Tab: Screen, Eye to screen), or with `simcruise.Lens.ScreenInches` and `simcruise.Lens.ViewDistanceCm`. View · Wide (67° tall) shows more of the cabin for tight streets. The eye sits at each car's real driver's head position; the chase view keeps its wider angle.
+**Plan a route:**
 
-**Night.** Your eye adapts to the road your low beams light (about 0.5 cd/m², what real lamp-lit asphalt measures), and the beams reach 250 m.
+| To do this | Keyboard / mouse | Controller |
+|---|---|---|
+| Move the map under the cross | Arrows or drag | Left stick |
+| Add a stop | Enter or click | A |
+| Remove the stop under the cross (or the last one) | Delete | X |
+| Zoom | - and +, or the wheel | LT and RT |
+| Start the route | — | Y |
+| Go back | Esc | B |
 
-**A USB steering wheel.** Plug in a racing wheel with a Windows GameInput driver (Logitech G920/G923, Thrustmaster and Fanatec wheels with Xbox support) before starting the game; the HUD names it. The rim turns the car's front wheels 1:1 at the car's real steering ratio (Miata 15:1, Mustang 21.7:1, Corvette 15.7:1) over the wheel's own rotation, with none of the pad's speed shaping. Throttle, brake and clutch pedals map directly, the paddles (or a sequential shifter) change gear, and the handbrake lever holds the rear wheels. Force feedback is the tyres' aligning torque through the steering ratio, as the real column carries it: heavy as the front tyres build grip, going light as they pass their peak and slide. A light centring spring and the column's damping sit under it. `simcruise.Wheel.Force 0..1` (default 0.6) sets the strength, `simcruise.Wheel.MaxTorqueNm` (default 2.5) sets your wheel's peak torque, and `simcruise.Wheel.ForceSign -1` flips a wheel that pushes the wrong way. Not yet tested on a physical wheel; wheels with only a DirectInput driver (the PlayStation G29) are not read yet.
+**Following a route:**
 
-**Steering on a pad.** Steering and pedal shaping (speed-sensitive range, filtering) shape your input but never the physics: the rack takes the shaped angle as given. Holding the stick toward a slide opens extra opposite lock (up to the slide angle plus 5 degrees) for catching it. The pad rumbles from tyre slip, the ABS pulse and road texture (`simcruise.Rumble.Strength` in the console); with Windows GameInput the trigger motors carry wheelspin (RT) and locking or ABS (LT).
+- The next turn is shown at the top of the screen.
+- Magenta arrows on the road show the way.
+- A round map shows the course.
+- Leave the route by more than 30 m for 3 seconds, and the GPS plans a new one from where you are.
 
-**The right trigger is a pedal curve.** A trigger has about 1 cm of travel, a real accelerator about 6 cm, so a linear trigger made every light press a large throttle opening. The pedal now follows the trigger to the power 1.8: half the trigger is 29 % throttle, three quarters is 60 %, the full trigger is still full throttle. In a tight turn in 1st or 2nd gear, full throttle spins the inside rear wheel and steps the tail out, as it does in the real car; part throttle pulls the car round. `simcruise.TriggerGamma` sets the curve (1 = linear, up to 3). The brake trigger has a gentler curve (trigger to the power 1.4, `simcruise.BrakeTriggerGamma`): half a squeeze is about 38 % of the brake, a full squeeze all of it.
+**Quit:** the last row of the Drive page asks first: *Keep driving* or *Quit to the desktop*.
 
-**Your own stick and trigger settings.** The road atlas has a Controls row, and each choice is saved: *Stick steering speed* (60-150 % of the researched hand speed, `simcruise.Pad.SteerSpeed`), *Stick response* (fine centre, the default, where the stick's middle is for lane corrections; between; or linear, `simcruise.Pad.SteerLinearity`), *Stick dead zone* (12 %, the fixed one, up to 25 %; the rest of the travel still reaches full lock, `simcruise.Pad.SteerDeadZone` is the extra) and *Throttle trigger* (linear 1.0, gentle 1.4, progressive 1.8, the default, or very progressive 2.4). On a pad, D-pad Left/Right moves onto the atlas's buttons (the one you are on is amber with a white border), the D-pad moves between them, A changes the setting and B goes back to the map. The car's own steering ratio is in the tuning menu.
+## Go somewhere else
 
-**Time of day.** A drive starts at 10:00 local solar time at the place. `-SimCruiseRealTime` follows your computer's clock instead and `-SimCruiseUtc=2026-11-12T01:30:00Z` fixes a moment; more launch options are in [unreal-building.md](unreal-building.md#drive-it).
+**Where to?** Press /. Then:
+
+- Type a street, a town, a landmark, or `latitude, longitude`, and press Enter.
+- Or pick a preset.
+- Or press Surprise me (Y on the controller) for a random US road.
+
+**Road atlas** (Drive page > Road atlas): a map of the US.
+
+| To do this | Keyboard / mouse | Controller |
+|---|---|---|
+| Move the map | Arrows or mouse | Left stick |
+| Zoom | + / − or the wheel | D-pad |
+| Pin a spot | Click | — |
+| Drive to the pin (or the map centre) | Enter, or Drive here | A |
+| Find a place | — | X |
+| Recentre | — | Y |
+| Change car / gearbox | — | RB / LB |
+| Back to the drive | Esc or Tab | B |
+
+The atlas's top bar also sets sound, HUD level, head motion (100, 50 or 0 %) and rumble (100, 60, 30 or 0 %). All are saved. The game pauses while Where to? or the atlas is open.
+
+## Menus on a controller
+
+Every menu works with the controller alone. A white border shows where you are.
+
+- **Page tabs:** press Up on the first row to reach the tabs. Left / right move along them; A or Down opens a page. A new page starts on its first row.
+- **Back one step:** B on a screen you opened from the menu takes you back to the row you came from. Menu closes everything.
+- **Left stick:** works like the D-pad. One push is one step; hold it to repeat.
+- **Mouse:** a resting mouse does not move your place; moving it does.
+- **Button hints** at the bottom show the controller's buttons or the keyboard's keys, whichever you used last.
+- **Where to?** The D-pad moves between the search box, Search, Surprise me, the places and Back to drive; A chooses.
+- **Where to? keyboard:** press A on the search box. Then the D-pad or stick moves over the keys, A types, B deletes, X types a space, LB / RB move the cursor, and Y or Menu searches. B on an empty box closes it.
+- **Road atlas buttons:** D-pad left or right moves from the map to the buttons at the top (zoom, Recenter, Drive here, Back to drive, Find a place, Surprise me, the car, the gearbox and every setting). The D-pad moves between them, A presses one, B goes back to the map. The selected button is amber with a white border. On the map, B goes back.
+
+## Tune your car
+
+Press F4 (D-pad right), or pick *Tune car...* on the Your car page. You can only change the setup when the car stands still. A setup saved while moving goes on when the car next stops.
+
+| Setting | What it changes |
+|---|---|
+| Front and rear springs | Spring rate, lb/in |
+| Damping | % of stock |
+| Ride height | mm |
+| Front and rear anti-roll bars | % of stock (0 disconnects one) |
+| Engine torque | % |
+| Final drive | Gear ratio |
+| Steering ratio | Lower is quicker: the wheels turn further and faster |
+
+- Every setting stays in a safe range around the real car's.
+- The menu shows body roll (degrees per g of cornering), so you see the effect before you drive.
+- Buttons: Up / Down choose a row, Left / Right change it, X resets the row, Y twice resets the whole car to factory, A (Enter) saves and applies, B (Esc, F4) cancels.
+- The setup is saved for each car.
+
+## Seat and view
+
+**Seat & view** (Your car page, while parked):
+
+- Seat height: up to 10 cm up or down.
+- Seat forward / back: 15 cm.
+- View tilt: 8° up or down.
+- View angle: Auto (follows the lens), or 30-75° tall.
+- You see the change live. Left / right change a row (one stick push is one step), X resets the row, Y resets all, A saves it for this car, B (or Menu) puts the seat back.
+- The view widens a little with speed (6 % at 130 km/h).
+
+**Lens** (F6, or View in the road atlas):
+
+| Lens | What you see |
+|---|---|
+| Natural (default) | 45° tall, 74° across a 16:9 screen |
+| True field of view | The world at the real angle your screen covers from your eye, like a window |
+| Wide | 67° tall; more of the cabin, for tight streets |
+
+- For the true field of view, set your screen size and eye distance in the road atlas (Screen, Eye to screen). Example: a 15.6" laptop at 60 cm covers 32° across.
+- Your eye sits at the real driver's head position in each car. The chase view keeps its wider angle.
+
+## Settings
+
+- **Speed units** (Settings page): mph (default) or km/h. The GPS uses miles and feet, or kilometres and metres. The HUD speed is rounded to a whole number and is 0 when you stand still. Engine speed shows to the nearest 50 rpm (idle is about 850 rpm in the Miata).
+- **Map** (Settings page): *With route* (default) shows the round map only during a route; *Always* shows it all the time. In the driver's seat it is smaller (75 %) and sits top left, so it never covers the gauges or mirrors. In other views it is bottom right.
+- **Controls** (road atlas, all saved):
+  - Stick steering speed: 60-150 %.
+  - Stick response: fine centre (default), between, or linear.
+  - Stick dead zone: 12 % (default) up to 25 %. The rest of the stick still reaches full lock.
+  - Throttle trigger: linear 1.0, gentle 1.4, progressive 1.8 (default) or very progressive 2.4.
+- **Night:** the picture adjusts to the road your low beams light. The beams reach 250 m.
+- **Time of day:** a drive starts at 10:00 local sun time at the place.
+
+## A USB steering wheel
+
+- Plug it in before you start the game. It needs a Windows GameInput driver (for example Logitech G920/G923, or Thrustmaster and Fanatec wheels with Xbox support). The HUD shows its name.
+- The wheel turns the car's front wheels at the car's real steering ratio (Miata 15:1, Mustang 21.7:1, Corvette 15.7:1).
+- Pedals work directly. Paddles or a sequential shifter change gear. A handbrake lever holds the rear wheels.
+- Force feedback comes from the front tyres: heavy as they grip, light as they slide. A light centring spring and damping sit under it.
+- Not yet tested on a real wheel. Wheels with only a DirectInput driver (such as the PlayStation G29) do not work yet.
+
+## Advanced
+
+### How the controller input is shaped
+
+- Steering and pedal shaping change your input only, never the car's physics.
+- Hold the stick toward a slide to get extra opposite lock (up to the slide angle plus 5°).
+- The right trigger follows a curve, because a trigger moves about 1 cm and a real pedal about 6 cm. Half trigger is 29 % throttle, three quarters is 60 %, full is full. In a tight turn in 1st or 2nd, full throttle spins the inside rear wheel and steps the tail out, as in the real car; part throttle pulls the car round.
+- The brake trigger has a gentler curve: half a squeeze is about 38 % brake.
+- The controller rumbles from tyre slip, ABS and the road. With Windows GameInput, the trigger motors carry wheelspin (RT) and wheel lock or ABS (LT).
+
+### Console variables and launch options
+
+| Setting | What it does |
+|---|---|
+| `simcruise.Hud.Units` | 1 = km/h, 0 = mph |
+| `simcruise.Gearbox.AutoClutch` | Automatic clutch in manual mode |
+| `simcruise.Assists.StabilityControl` | Stability control on / off |
+| `simcruise.Lens.ScreenInches`, `simcruise.Lens.ViewDistanceCm` | Screen size and eye distance for the true field of view |
+| `simcruise.Wheel.Force` | Wheel force strength, 0 to 1 (default 0.6) |
+| `simcruise.Wheel.MaxTorqueNm` | Your wheel's peak torque (default 2.5) |
+| `simcruise.Wheel.ForceSign -1` | Flips a wheel that pushes the wrong way |
+| `simcruise.Rumble.Strength` | Rumble strength |
+| `simcruise.TriggerGamma` | Throttle trigger curve: 1 = linear, up to 3 (default 1.8) |
+| `simcruise.BrakeTriggerGamma` | Brake trigger curve (default 1.4) |
+| `simcruise.Pad.SteerSpeed` | Stick steering speed |
+| `simcruise.Pad.SteerLinearity` | Stick response |
+| `simcruise.Pad.SteerDeadZone` | Extra stick dead zone on top of the fixed 12 % |
+| `sc.Feature.Traffic`, `sc.Feature.Aircraft` | Moving traffic and aircraft (0 = off, the default) |
+| `-SimCruiseRealTime` | Launch option: follow your computer's clock |
+| `-SimCruiseUtc=2026-11-12T01:30:00Z` | Launch option: fix a moment in time |
+
+More launch options: [unreal-building.md](unreal-building.md#drive-it).
+
+### Traffic
+
+Since 2.0.3 there are no other moving cars and no aircraft, so the menus have no Traffic setting. The code is still in the game. With `sc.Feature.Traffic 1`, the Drive page and the road atlas get the Traffic setting back: Normal (about 20 cars), Light (8) or Off. It is saved.
+
+### The true field of view formula
+
+The angle across is 2·atan(screen width / (2 · eye distance)).
+
+### Controller layout changes in 2.0.0
+
+The clutch moved from LB to A, the parking brake from A to B, shift down from X to LB, the gearbox switch from B to the right-stick click, the engine restart from the right-stick click to D-pad left, and the HUD from the left-stick click to X. Why: the clutch on LB used the same finger as the brake trigger, and hard steering pressed the left stick by accident. Since 2.0.1 the left-stick click does nothing (it used to change the lens).
+
+### For developers
+
+- All keys and buttons are one table in `Source/SimCruise/Private/Gameplay/SimCruiseInputConfig.cpp`, checked by the `SimCruise.Gameplay.Input` tests.
+- Each screen's button hints come from the same list as its key handling. The test `SimCruise.UI.PadHintsMatch` presses each hinted button to check it does what it says.

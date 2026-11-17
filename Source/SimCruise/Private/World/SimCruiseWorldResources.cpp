@@ -245,6 +245,9 @@ float2 m = LP.xy * 0.01 + Anchor.xy;
 float4 mask = saturate(Texture2DSample(Mask, MaskSampler, uv));
 mask.rgb = pow(mask.rgb, 1.0 / 2.2); // stored as an sRGB texture; alpha is linear
 float3 photo = Texture2DSample(Aerial, AerialSampler, (Cell.xy + uv) * 0.25).rgb;
+// A sharper photograph from the AI detail engine fades in over the old one (AerialBlend 0 -> 1 over
+// 1.5 s), so the ground never changes in one frame; at 1 the old photograph is not sampled.
+if (AerialBlend < 0.999) photo = lerp(Texture2DSample(AerialPrev, AerialPrevSampler, (Cell.xy + uv) * 0.25).rgb, photo, saturate(AerialBlend));
 float3 g1 = Texture2DSample(Grass, GrassSampler, m / sc.QP(2.3)).rgb / max(GrassMean.rgb, 0.001);
 float3 g2 = Texture2DSample(Grass, GrassSampler, m / sc.QP(9.7) + 0.31).rgb / max(GrassMean.rgb, 0.001);
 // Two scales at an irrational ratio and a rotation, so the 512 px photograph never reads as a grid.
@@ -1017,6 +1020,8 @@ return col;
 			AddInput(Custom, TEXT("SnowCover"), ScalarParam(Material, TEXT("SnowCover"), 0.f));
 			AddInput(Custom, TEXT("Mask"), TextureParam(Material, TEXT("Mask"), DefaultTexture));
 			AddInput(Custom, TEXT("Aerial"), TextureParam(Material, TEXT("Aerial"), DefaultTexture));
+			AddInput(Custom, TEXT("AerialPrev"), TextureParam(Material, TEXT("AerialPrev"), DefaultTexture));
+			AddInput(Custom, TEXT("AerialBlend"), ScalarParam(Material, TEXT("AerialBlend"), 1.f));
 			AddInput(Custom, TEXT("Grass"), TextureParam(Material, TEXT("Grass"), DefaultTexture));
 			AddInput(Custom, TEXT("Sand"), TextureParam(Material, TEXT("Sand"), DefaultTexture));
 			AddInput(Custom, TEXT("Grain"), TextureParam(Material, TEXT("Grain"), DefaultTexture));

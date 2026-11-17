@@ -140,6 +140,9 @@ namespace SimCruisePreflightRules
 		{
 			R.Add(FString::Printf(TEXT("spin-rear-slip-%.0fdeg-backwards-%.1fs%s"), S.PeakRearSlipDeg, S.ReversedSeconds, S.bForcedSpin ? TEXT("-forced") : TEXT("")));
 		}
+		if (S.AirborneSeconds > MaxAirborneSeconds) R.Add(FString::Printf(TEXT("wheels-off-the-ground-%.1fs"), S.AirborneSeconds));
+		if (S.FlippedSeconds > MaxFlippedSeconds) R.Add(FString::Printf(TEXT("car-on-its-side-%.1fs"), S.FlippedSeconds));
+		if (S.EscStraightLongestS > MaxEscStraightS) R.Add(FString::Printf(TEXT("esc-on-a-straight-road-%.1fs"), S.EscStraightLongestS));
 		if (S.OffRibbonSeconds > MaxOffRibbonSeconds) R.Add(FString::Printf(TEXT("ran-off-%.1fm-past-the-edge-for-%.1fs"), S.MaxOffRibbonM, S.OffRibbonSeconds));
 		if (S.TimedFrames >= MinTimedFrames && S.FrameP95Ms > MaxFrameP95Ms) R.Add(FString::Printf(TEXT("slow-frames-p95-%.0fms"), S.FrameP95Ms));
 		if (S.TimedFrames >= MinTimedFrames && S.Hitches > MaxHitches) R.Add(FString::Printf(TEXT("hitches-%d-over-100ms"), S.Hitches));
@@ -995,6 +998,25 @@ void ASimCruisePreflight::MeasureTick(ASimCruisePlayerController* Player, float 
 		bHasDriven = bHasDriven || V.X > 5.0;
 		ReverseNow = bHasDriven && V.X < -2.0 ? ReverseNow + DeltaSeconds : 0.f;
 		Stats.ReversedSeconds = FMath::Max(Stats.ReversedSeconds, ReverseNow);
+		// Falls and flips: wheels off the ground at speed, the body past 60 deg of roll or pitch.
+		AirborneNow = (V.X > 5.0 && T.WheelContactCount < 3) ? AirborneNow + DeltaSeconds : 0.f;
+		Stats.AirborneSeconds = FMath::Max(Stats.AirborneSeconds, AirborneNow);
+		const FRotator Attitude = Pawn->GetActorRotation();
+		FlippedNow = (FMath::Abs(Attitude.Roll) > 60.f || FMath::Abs(Attitude.Pitch) > 60.f) ? FlippedNow + DeltaSeconds : 0.f;
+		Stats.FlippedSeconds = FMath::Max(Stats.FlippedSeconds, FlippedNow);
+		// Stability control: how often it acts, and whether it acts on a straight road.
+		if (T.bStabilityControlActive) Stats.EscSeconds += DeltaSeconds;
+		const bool bStraight = V.X > 15.0 && FMath::Abs(T.SteeringInput) < 0.05;
+		if (bStraight && T.bStabilityControlActing && EscStraightNow == 0.f)
+		{
+			UE_LOG(LogSimCruisePreflight, Display, TEXT("Pre-flight: stability control on a straight road at %.0f m: %.1f m/s, yaw %.3f rad/s, reference %.3f, oversteer %.3f, understeer %.3f, side slip %.1f deg, steering %.3f, wheels %d"),
+				PathM, V.X, T.EscYawRadPerS, T.EscReferenceYawRadPerS, T.EscOversteer, T.EscUndersteer,
+				FMath::RadiansToDegrees(FMath::Atan2(V.Y, FMath::Max(V.X, 1.0))), T.SteeringInput, T.WheelContactCount);
+		}
+		// Acting now (a brake pulse or a cut), not the lamp's hold after a catch in the bend before.
+		EscStraightNow = (bStraight && T.bStabilityControlActing) ? EscStraightNow + DeltaSeconds : 0.f;
+		if (bStraight && T.bStabilityControlActing) Stats.EscStraightSeconds += DeltaSeconds;
+		Stats.EscStraightLongestS = FMath::Max(Stats.EscStraightLongestS, EscStraightNow);
 	}
 
 	// A run-off: how far the car's centre is past the paved edge of the ribbon it drives along
@@ -1391,6 +1413,7 @@ void ASimCruisePreflight::Finish()
 		TEXT("  \"junction_hold_asked_s\": %.1f, \"junction_hold_s\": %.1f, \"junction_cross\": \"%s\", \"frames\": %d,\n")
 		TEXT("  \"peak_rear_slip_deg\": %.1f, \"peak_yaw_dps\": %.1f, \"backwards_seconds\": %.2f, \"forced_spin\": %s,\n")
 		TEXT("  \"max_past_edge_m\": %.2f, \"past_edge_seconds\": %.2f,\n")
+		TEXT("  \"airborne_seconds\": %.2f, \"flipped_seconds\": %.2f, \"esc_seconds\": %.2f, \"esc_straight_seconds\": %.2f, \"esc_straight_longest_s\": %.2f,\n")
 		TEXT("  \"timed_frames\": %d, \"frame_p95_ms\": %.1f, \"frames_over_50ms\": %d, \"hitches_over_100ms\": %d,\n")
 		TEXT("  \"reasons\": \"%s\"\n}\n"),
 		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place.ReplaceCharWithEscapedChar(),
@@ -1403,6 +1426,7 @@ void ASimCruisePreflight::Finish()
 		Stats.JunctionHoldAskedS, Stats.JunctionHoldS, *JunctionCrossName.ReplaceCharWithEscapedChar(), Stats.Frames,
 		Stats.PeakRearSlipDeg, Stats.PeakYawDps, Stats.ReversedSeconds, B(Stats.bForcedSpin),
 		Stats.MaxOffRibbonM, Stats.OffRibbonSeconds,
+		Stats.AirborneSeconds, Stats.FlippedSeconds, Stats.EscSeconds, Stats.EscStraightSeconds, Stats.EscStraightLongestS,
 		Stats.TimedFrames, Stats.FrameP95Ms, Stats.SlowFrames, Stats.Hitches,
 		bPass ? TEXT("ok") : *Reasons);
 	FFileHelper::SaveStringToFile(Json, *FPaths::Combine(OutputDir, TEXT("preflight.json")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);

@@ -35,7 +35,7 @@
 - **Download** the setup from [Releases](https://github.com/simcruisegame/simcruise/releases/latest), install, play. Windows 10/11, DirectX 12 GPU with 6 GB, 16 GB RAM, internet ([details](docs/install.md)).
 - **Drive anywhere:** press `/` and type a US place. Tab (Menu on the pad) opens the pause menu: GPS route, famous roads, car, view, settings.
 - **No account, no keys, no telemetry.** Only free public data, cached on your disk.
-- **Early days.** It is a driving simulator, not a racing game. No moving traffic for now. [Known issues](#known-issues).
+- **Early days.** It is a driving simulator, not a racing game. No moving traffic for now. See [known issues](#known-issues).
 
 ## Famous roads
 
@@ -54,13 +54,13 @@ Pause menu > **Famous roads**, and the GPS takes you along:
 |---|---|---|
 | Throttle / brake | W / S | Right / left trigger |
 | Steer | A / D | Left stick |
-| Shift up / down (manual) | E / Q | RB / LB |
+| Shift up / down (manual; automatic clutch by default) | E / Q | RB / LB |
 | Automatic / manual | T | Right-stick click |
 | Camera | C | Y |
 | Back on the road | R | View |
 | Pause menu | Tab | Menu |
 
-Everything else: [docs/controls.md](docs/controls.md).
+Everything else, including stability control (ESC): [docs/controls.md](docs/controls.md).
 
 ## Screenshots
 
@@ -75,8 +75,9 @@ More in [docs/images/](docs/images/).
 
 ## Known issues
 
-- Some motorway bridges meet the road below at the same level instead of passing over it.
-- Small lips (6-12 cm) where some driveways and ramps join a road; ground over a lane edge at a few hundred spots.
+- Small lips (6-12 cm) where some driveways and ramps join a road.
+- Very long bridges (the 8 km Mackinac Bridge) can still throw the car at a map-tile border.
+- Stacked motorway interchanges (the High Five in Dallas) may show steps between levels.
 - In direct sun, dark jagged shadow marks can show on the Miata's dash behind the steering wheel.
 - Full list per release: [CHANGELOG.md](CHANGELOG.md).
 
@@ -101,7 +102,9 @@ Tests: `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` (add `-Filte
 
 ## Docs
 
-[How it works](docs/technical-deep-dive.md) · [Architecture](docs/unreal-architecture.md) · [Cars](docs/cars.md) · [Controls](docs/controls.md) · [Data sources](docs/data-sources.md) · [Roadmap](docs/roadmap.md) · [Install](docs/install.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
+For players: [Installing and PC needs](docs/install.md) · [Controls and menus](docs/controls.md) · [The cars](docs/cars.md) · [What's next (roadmap)](docs/roadmap.md)
+
+For developers: [How the game works](docs/technical-deep-dive.md) · [How the code is organised](docs/unreal-architecture.md) · [Building from source](docs/unreal-building.md) · [Where the data comes from](docs/data-sources.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## License and credits
 

@@ -151,6 +151,8 @@ struct FSimCruiseVehicleSimState
 	/** The share of an electric car's coasting regeneration it takes away in a slide (0-1). */
 	double EscRegenCut = 0.0;
 	double EscLightS = 0.0;
+	/** Braking a wheel or cutting the engine this step (the light stays on EscLightHoldS longer). */
+	bool bEscActing = false;
 	/** True while stability control brakes a wheel or cuts the engine. */
 	bool IsEscActive() const { return EscLightS > 0.0; }
 	bool bClutchSaturated = false;

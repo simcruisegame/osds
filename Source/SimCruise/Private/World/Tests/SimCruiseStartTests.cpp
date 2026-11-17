@@ -12,6 +12,7 @@
 #include "World/SimCruiseGeo.h"
 #include "World/SimCruiseRegionalTerrain.h"
 #include "World/SimCruiseRoadCheck.h"
+#include "World/SimCruiseRoadNetwork.h"
 #include "World/SimCruiseStartPick.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseTileData.h"
@@ -1543,3 +1544,28 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
+// A short side cut is a junction; a side cut along a long run is a carriageway beside this one with no gap
+// (the Mackinac Bridge's two one-way decks), not a junction: the car must be able to start there.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseStartJunctionCutsTest, "SimCruise.World.Start.JunctionCuts", SimCruiseStartTest::Flags)
+bool FSimCruiseStartJunctionCutsTest::RunTest(const FString& Parameters)
+{
+	FSimCruiseRibbon Ribbon;
+	const int32 N = 101; // a station every 5 m over 500 m
+	for (int32 i = 0; i < N; ++i)
+	{
+		FSimCruiseRibbonStation St;
+		St.S = 5.0 * i;
+		Ribbon.St.Add(St);
+	}
+	Ribbon.Sides[0].Cut.Init(0, N);
+	Ribbon.Sides[1].Cut.Init(0, N);
+	for (int32 i = 20; i <= 23; ++i) Ribbon.Sides[0].Cut[i] = 1;   // a side road 15 m wide at 100-115 m
+	for (int32 i = 40; i <= 90; ++i) Ribbon.Sides[1].Cut[i] = 1;   // the other deck along 200-450 m
+	const TArray<uint8> Cuts = SimCruiseStartPick::JunctionCuts(Ribbon);
+	TestEqual(TEXT("one flag per station"), Cuts.Num(), N);
+	TestTrue(TEXT("the side road is a junction"), Cuts[20] && Cuts[23]);
+	TestFalse(TEXT("the parallel deck is not a junction"), Cuts[40] || Cuts[65] || Cuts[90]);
+	TestFalse(TEXT("plain road is not a junction"), Cuts[5] != 0);
+	return true;
+}

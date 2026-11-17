@@ -650,6 +650,15 @@ namespace SimCruiseTileDetail
 				const double Raw = Data.Buildings[b].HeightM;
 				HeightOf[b] = Raw;
 				if (!IsUnknownHeight(Raw) || Rings[b].Num() < 3 || Data.Buildings[b].MinHeightM > 0.5) continue;
+				// Storeys known (the National Structure Inventory, OSM building:levels) and no measured
+				// height: storeys x a typical storey (3.0 m for a house, 3.3 m else) plus a parapet.
+				if (Data.Buildings[b].Stories > 0)
+				{
+					const FString& U = Data.Buildings[b].Use;
+					const bool bHome = U == TEXT("single_family") || U == TEXT("duplex") || U == TEXT("house") || U == TEXT("detached");
+					HeightOf[b] = Data.Buildings[b].Stories * (bHome ? 3.0 : 3.3) + (bHome ? 0.0 : 0.6);
+					continue;
+				}
 				TArray<double> Known;
 				for (int32 o = 0; o < Rings.Num(); ++o)
 				{
@@ -683,12 +692,28 @@ namespace SimCruiseTileDetail
 			const double Sign = Area >= 0.0 ? 1.0 : -1.0;
 			const FSimCruiseBuildingPlan* PlanOf = bGraph ? Plan.Find(b) : nullptr;
 			// A house keeps to two storeys when its height was a guess.
-			const double Guess = (IsUnknownHeight(Row.HeightM) && PlanOf && PlanOf->P(TEXT("recipe:house")) >= 0.5f) ? FMath::Min(HeightOf[b], 7.5) : HeightOf[b];
+			const double Guess = (IsUnknownHeight(Row.HeightM) && Row.Stories == 0 && PlanOf && PlanOf->P(TEXT("recipe:house")) >= 0.5f) ? FMath::Min(HeightOf[b], 7.5) : HeightOf[b];
 			const double Height = FMath::Clamp(Guess, 2.8, 650.0);
 			const double Top = Ground + Height;
 			const bool bFloating = Row.MinHeightM > 0.5;
 			const double Bottom = bFloating ? Ground + Row.MinHeightM : Ground - 0.3;
 			if (Top <= Bottom + 0.5) continue;
+			// Nothing built in a public road's driving space: a footprint whose middle is on a carriageway
+			// whose surface lies inside the building's height, with less than 4.5 m to drive under. The
+			// Mackinac Bridge's tower is mapped as a building outline across both decks: the game stood a
+			// solid 160 m block in the motorway and the test car drove into it at 64 mph. A building under
+			// a viaduct (the deck above its roof) or a skyway (4.5 m clear) is left alone.
+			{
+				FVector2d Mid = FVector2d::ZeroVector;
+				for (const FVector2d& P : Footprint) Mid += P;
+				Mid /= FMath::Max(Footprint.Num(), 1);
+				FSimCruiseRoadHit RoadHit;
+				if (Roads.FindCarriageway(Mid, RoadHit) && Roads.Ribbons.IsValidIndex(RoadHit.Ribbon) && !Roads.Ribbons[RoadHit.Ribbon].bService
+					&& RoadHit.Height > Bottom - 0.5 && RoadHit.Height < Top && Bottom < RoadHit.Height + 4.5)
+				{
+					continue;
+				}
+			}
 
 			const uint32 H = Hash(GetTypeHash(Data.Id), static_cast<uint32>(b));
 			FWriter W{ Mesh, static_cast<float>(Unit(Hash(H, 7))) };
@@ -712,19 +737,31 @@ namespace SimCruiseTileDetail
 			auto Recipe = [BP](const TCHAR* Key) { return BP && BP->P(Key) >= 0.5f; };
 			auto ChanceOf = [BP](const TCHAR* Detail, double Default) { return BP ? static_cast<double>(BP->P(Detail, static_cast<float>(Default))) : Default; };
 			const bool bPlain = !bDeco && !bTower && !bFloating;
-			const bool bHouse = bPlain && Height <= 14.0 && Recipe(TEXT("recipe:house"));
+			// The building's own use (OSM building=*, else the National Structure Inventory's class) beats
+			// the area's recipe: a mapped home is a house, a mapped shop or apartment block is not.
+			const bool bUseHome = Row.Use == TEXT("single_family") || Row.Use == TEXT("duplex") || Row.Use == TEXT("house") || Row.Use == TEXT("detached")
+				|| Row.Use == TEXT("semidetached_house") || Row.Use == TEXT("bungalow");
+			const bool bUseOther = Row.Use == TEXT("multi_family") || Row.Use == TEXT("nonresidential") || Row.Use == TEXT("apartments") || Row.Use == TEXT("commercial")
+				|| Row.Use == TEXT("retail") || Row.Use == TEXT("industrial") || Row.Use == TEXT("office");
+			const bool bHouse = bPlain && Height <= 14.0 && (bUseHome || (Recipe(TEXT("recipe:house")) && !bUseOther));
 			const bool bMainStreet = bPlain && !bHouse && Recipe(TEXT("recipe:main_street"));
 			const bool bDowntown = bPlain && !bHouse && !bMainStreet && Height >= 20.0 && (Recipe(TEXT("recipe:downtown")) || (!BP && Height > 45.0));
 			// A measured roof:shape wins over the region's house recipe. Use the existing
 			// procedural mix only where the mapped record gives no supported roof form.
-			const EBuildingRoofForm RoofForm = BP ? BuildingRoofFormFromFact(BP->Facts.Strongest(TEXT("roof"))) : EBuildingRoofForm::Unspecified;
+			// The roof the building's own OSM record gives (through Overture) first, then the graph's.
+			const EBuildingRoofForm RoofForm = Row.RoofShape == TEXT("gabled") ? EBuildingRoofForm::Gabled : Row.RoofShape == TEXT("flat") ? EBuildingRoofForm::Flat
+				: BP ? BuildingRoofFormFromFact(BP->Facts.Strongest(TEXT("roof"))) : EBuildingRoofForm::Unspecified;
 			const bool bPitched = bHouse && (RoofForm == EBuildingRoofForm::Gabled || RoofForm == EBuildingRoofForm::Hipped
 				|| (RoofForm == EBuildingRoofForm::Unspecified && Unit(Hash(H, 25)) < ChanceOf(TEXT("detail:pitched_roof"), 0.85)));
 			const bool bCurtain = bDowntown && Unit(Hash(H, 26)) < ChanceOf(TEXT("detail:curtain_wall"), 0.6);
 			const bool bCornice = bMainStreet && Unit(Hash(H, 27)) < ChanceOf(TEXT("detail:cornice"), 0.8);
 			// Main Street's commercial blocks of 1880-1930 have tall storeys (a 4.5-5 m shop storey,
 			// 3.8-4.2 m above): 12 m is three storeys there, not four.
-			const double FloorH = bDeco ? 3.1 : bHouse ? 3.0 : bDowntown ? 3.8 : bMainStreet ? 4.2 : 3.2;
+			const double RuleFloorH = bDeco ? 3.1 : bHouse ? 3.0 : bDowntown ? 3.8 : bMainStreet ? 4.2 : 3.2;
+			// Storeys known: the window rows follow them (the wall's height over its storeys), within what
+			// storeys are (2.6 m to a 5.5 m warehouse floor); the rule's storey where they would not fit.
+			const double DataFloorH = Row.Stories > 0 ? Height / Row.Stories : 0.0;
+			const double FloorH = (DataFloorH >= 2.6 && DataFloorH <= 5.5) ? DataFloorH : RuleFloorH;
 			const double Parapet = bPitched ? 0.0 : bDeco ? (Height > 5.0 ? 0.9 : 0.4) : (bTower ? 1.1 : bMainStreet ? 0.9 : 0.5);
 			FLinearColor Wall = bDeco ? Pick(DecoWalls(), H) : (bTower ? Pick(TowerWalls(), H) : Pick(GenericWalls(), H));
 			// A colour mapped on the building wins; else the region's palette for ordinary buildings
@@ -733,8 +770,18 @@ namespace SimCruiseTileDetail
 			// albedo: a white wall the camera puts at 0.85-0.9 linear is paint of about 0.65-0.7.
 			// Scale it as the Lummus Park comparison did (photo 191 vs game 210 at 0.88), so a
 			// measured white sits under the cap with room for wear, not on it.
+			// A colour mapped on the building's own OSM record ("#rrggbb", through Overture), after a photo's.
+			bool bMappedColour = false;
 			if (BP && BP->bColourFromData) Wall = BP->Wall * 0.78f;
 			else if (BP && BP->bHasColour && !bDeco && !bTower) Wall = BP->Wall;
+			else if (Row.WallColour.StartsWith(TEXT("#")) && !bDeco && !bTower)
+			{
+				const FString Hex = Row.WallColour.Len() == 4
+					? FString::Printf(TEXT("%c%c%c%c%c%c"), Row.WallColour[1], Row.WallColour[1], Row.WallColour[2], Row.WallColour[2], Row.WallColour[3], Row.WallColour[3])
+					: Row.WallColour.Mid(1);
+				Wall = FLinearColor(FColor::FromHex(Hex));
+				bMappedColour = true;
+			}
 			// What the walls are built of: the mapped material, else the region's and the building
 			// type's rules. A building whose colour no data gives takes its material's colours.
 			int32 WallMat = SimCruiseWallMaterial::Render;
@@ -750,10 +797,11 @@ namespace SimCruiseTileDetail
 					In.bBefore1945 = BP->Facts.Has(TEXT("era:before_1945"));
 					In.bAfter1975 = BP->Facts.Has(TEXT("era:after_1975"));
 				}
+				if (In.MaterialFact.IsNone() && !Row.WallMaterial.IsEmpty()) In.MaterialFact = FName(*(TEXT("material:") + Row.WallMaterial));
 				In.bHouse = bHouse; In.bMainStreet = bMainStreet; In.bDowntown = bDowntown; In.bCurtain = bCurtain; In.bDeco = bDeco; In.bTower = bTower || bFloating;
 				In.Hash = Hash(H, 41);
 				WallMat = WallMaterialFor(In);
-				if (WallMat != SimCruiseWallMaterial::Render && !(BP && BP->bHasColour)) Wall = Pick(MaterialWalls(WallMat), Hash(H, 42));
+				if (WallMat != SimCruiseWallMaterial::Render && !(BP && BP->bHasColour) && !bMappedColour) Wall = Pick(MaterialWalls(WallMat), Hash(H, 42));
 			}
 			// Main Street's two- and three-storey blocks are mostly brick (the generic palette's last four).
 			else if (bMainStreet && !(BP && BP->bHasColour) && Unit(Hash(H, 24)) < 0.6) Wall = GenericWalls()[12 + Hash(H, 28) % 4];

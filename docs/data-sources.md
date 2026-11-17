@@ -1,6 +1,25 @@
 # Data sources and licences
 
-The credit for every maker, with links, is in [CREDITS.md](../CREDITS.md). The MIT license in [LICENSE](../LICENSE) covers the original game code, shaders, the helper's JavaScript, the authoring tools and the tests. Everything geographic or photographic keeps its own terms, recorded per source in [`licenses/`](../licenses/) (start with `licenses/Road Atlas.txt`) and summarised in [Credits.txt](../Credits.txt). The rule for bundling is simple: ODbL and ShareAlike data is fetched at runtime and cached on the player's machine, never redistributed in the MIT repository, except the small bundled offline-start tiles under `data/tiles/` (the Miami Beach start) and `data/observed/`, which are derivative databases (ODbL) as `licenses/Road Atlas.txt` records.
+## In short
+
+- This page lists every outside source of data OSDS uses (maps, elevation, photos, buildings, weather, AI models, car models, fonts) and the licence of each. It is for anyone who wants to know where the world comes from, or who adds a new source.
+- All sources are free and need no account or key.
+- Most data is downloaded while you play and cached on your PC. Only a small set is shipped with the game, such as the Ocean Drive, Miami Beach start.
+- The game's own code is MIT licensed. Map, photo and model data keep their own licences.
+- OpenStreetMap data (ODbL) is never stored in the repository, except the small offline start tiles.
+- Some sources are off in a normal drive to protect volunteer servers (for example Overpass and Wikidata need `-SimCruiseLive`).
+- Credits for every maker, with links: [CREDITS.md](../CREDITS.md).
+
+**On this page:** [Licences and the bundling rule](#licences-and-the-bundling-rule) · [Every source](#every-source) · [Files that are not MIT](#files-that-are-not-mit)
+
+## Licences and the bundling rule
+
+- The credit for every maker, with links, is in [CREDITS.md](../CREDITS.md).
+- The MIT license in [LICENSE](../LICENSE) covers the original game code, shaders, the helper's JavaScript, the authoring tools and the tests.
+- Everything geographic or photographic keeps its own terms, recorded per source in [`licenses/`](../licenses/) (start with `licenses/Road Atlas.txt`) and summarised in [Credits.txt](../Credits.txt).
+- The rule for bundling: ODbL and ShareAlike data is fetched at runtime and cached on the player's machine, never redistributed in the MIT repository. The exceptions are the small bundled offline-start tiles under `data/tiles/` (the Miami Beach start) and `data/observed/`, which are derivative databases (ODbL) as `licenses/Road Atlas.txt` records.
+
+## Every source
 
 The table lists what the map helper (`helper/atlas.mjs`, shipped as `tools/atlas.exe`) can fetch; the Unreal client does not use every layer yet (see [unreal-migration-ledger.md](unreal-migration-ledger.md)).
 
@@ -16,7 +35,7 @@ The table lists what the map helper (`helper/atlas.mjs`, shipped as `tools/atlas
 | Tree canopy heights | WRI/Meta High Resolution Canopy Height Maps v2 (CHMv2); the helper reads one 512-pixel block per zoom-16 cell straight from the public AWS bucket `dataforgood-fb-data` (`forests/v2/global/dinov3_global_chm_v2_ml3/`, no account), one request at a time, cached 365 days; crowns are segmented from it (`canopy --segment`) | CC BY 4.0 | At runtime |
 | Forest type, shrub cover | USGS/USDA LANDFIRE EVT; MRLC NLCD and RCMAP; USDA Rangeland Analysis Platform | US public domain | At runtime |
 | City street trees | City of Lincoln NE and City of Cambridge MA inventories | City open-data terms; PDDL 1.0 (Cambridge) | At runtime |
-| Building heights, roofs, extra footprints | Overture Maps buildings (OSM, Microsoft ML, Esri Community Maps); Esri's OSM North America replica | ODbL 1.0; CC BY 4.0 for Esri entries | At runtime |
+| Building heights, storey counts, roofs, extra footprints; mapped roof shape, roof and wall colour and material (OpenStreetMap tags carried by Overture), used since 2.0.4 through the helper command `buildings` | Overture Maps buildings (OSM, Microsoft ML, Esri Community Maps); Esri's OSM North America replica | ODbL 1.0; CC BY 4.0 for Esri entries | At runtime |
 | Building use, construction type, foundation and storeys (`occtype`, `bldgtype`, `found_type`, `found_ht`, `num_story`, `med_yr_blt`) | US Army Corps of Engineers National Structure Inventory, the public NSI base layer through its API (`nsi.sec.usace.army.mil/nsiapi/structures`), one request per z16 district inside mapped footprints | US public domain: a work of the US federal government (17 U.S.C. 105). The public version "is releasable to the general public" because it leaves out the fields derived from licensed parcel data (USACE NSI technical documentation); those restricted fields (`yrbuilt`, `p_extwall`, `p_construc`, `basement`, `naics`, `empnum`, `apn`) are never asked for. USACE states no other licence; its code repository is MIT. NSI "is not intended for legal or regulatory determinations" (NSI FAQ), and the game uses it only to pick how a building looks | At runtime (only the public fields are kept, cached on the player's computer); USACE's API guide advises downloading and keeping a local copy, and nothing in its terms forbids storing or redistributing the public data, so later data packs may hold NSI points or block-group aggregates with the credit and the accuracy caution |
 | Measured roofs and road camber | USGS 3DEP lidar point clouds (EPT on AWS); Miami-Dade County lidar | US public domain; CC0 (Miami-Dade) | At runtime; 15 Miami roofs bundled |
 | Aerial photographs without sun shadows | The bundled USGS aerial photographs with their sun shadows lifted using NOAA Miami-Dade 2021 lidar (`lab/unbake-sun`) | US public domain | Bundled: `data/tiles/aerial/unbaked/` (24 Miami Beach tiles) |
@@ -42,5 +61,7 @@ The table lists what the map helper (`helper/atlas.mjs`, shipped as `tools/atlas
 | Scan eye: land cover from the aerial photo | SimCruise aerial student (our layers, MIT) with the first two stages of Satlas Aerial_SwinB_SI (Allen Institute for AI) | Our layers MIT; the Satlas stages ODC-BY 1.0 (credit to Ai2). Trained on USGS aerial photos (public domain), OpenStreetMap labels (ODbL: the weights are a Produced Work, credited "© OpenStreetMap contributors"), WRI/Meta canopy height v2 (CC BY 4.0), ESA WorldCover 2021 (CC BY 4.0), and the teacher eye's answers (Satlas whole backbone, ODC-BY, from an ImageNet start, as its makers state) | `data/ai/scan-eye-student.onnx`, shipped from v2.0.3; runs on the player's CPU, on by default (`-SimCruiseScanEye=none` turns it off; in 2.0.3 its classes reach the picture only with `-SimCruiseScan`); results cached in `Saved/Scan/eyes` on the player's computer, never published |
 | Street photographs | KartaView, Panoramax (thumbnails and credits only) | CC BY-SA 4.0 | At runtime, optional |
 | Cars, ground textures, fonts | The cars are Sketchfab models listed in `licenses/Traffic models.txt` (the 1999-2005 Miata by Nieve5677, the Mustang, Corvette, Model 3, F-150, Grand Cherokee, Odyssey, CR-V, Tahoe, Accord); Poly Haven Asphalt Floor, Grass Ground and Sandy Gravel 02; Unreal Engine's Roboto font; the [Overpass](https://github.com/RedHatOfficial/Overpass) font (Delve Withrington, Red Hat) for the menus and the HUD | CC BY 4.0; CC0; Apache 2.0; SIL OFL 1.1 (Overpass) | Bundled in `data/art/`; the font with the engine |
+
+## Files that are not MIT
 
 Paths in this repository that are not MIT: `data/tiles/` and `data/observed/` (ODbL derivative databases), `data/art/traffic/` (each model under its own CC BY 4.0 credit), `data/art/ground/` (CC0). A packaged build carries `LICENSE.txt`, this file as `DATA-SOURCES.md` and a `CREDITS.txt` listing every model's credit. The map helper's third-party code (Bun, Martini, GeoTIFF.js, proj4js, earcut, fast-png, pbf, laz-perf, h5wasm) has its license texts in `licenses/`. Unreal Engine is used under the Unreal Engine EULA.

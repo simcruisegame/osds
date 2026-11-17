@@ -127,6 +127,11 @@ namespace
 		T.BrakeAmount = St.BrakeAmount;
 		T.TractionControlCut = St.TcCut;
 		T.bStabilityControlActive = St.IsEscActive();
+		T.bStabilityControlActing = St.bEscActing;
+		T.EscYawRadPerS = St.EscYawRadPerS;
+		T.EscReferenceYawRadPerS = St.EscReferenceYawRadPerS;
+		T.EscOversteer = St.EscOversteer;
+		T.EscUndersteer = St.EscUndersteer;
 		T.WheelContactCount = St.WheelContactCount;
 		T.SoundThrottle = St.SoundThrottle;
 		T.SoundCombustion = St.SoundCombustion;

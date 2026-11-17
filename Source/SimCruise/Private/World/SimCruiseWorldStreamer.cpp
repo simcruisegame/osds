@@ -5,6 +5,7 @@
 #include "Engine/CollisionProfile.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "HAL/IConsoleManager.h"
 
 #include "Live/SimCruiseAerialEye.h"
 #include "Live/SimCruiseNeuralDetail.h"
@@ -28,6 +29,10 @@
 #include "World/SimCruiseWorldTile.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSimCruiseWorld, Log, All);
+
+static TAutoConsoleVariable<int32> CVarBuildingFacts(
+	TEXT("simcruise.World.BuildingFacts"), 1,
+	TEXT("1 (default): each tile's buildings take measured heights, use, storeys and mapped finishes from the helper (Overture, USACE NSI); 0: the tile's rows only."));
 
 ASimCruiseWorldStreamer::ASimCruiseWorldStreamer()
 {
@@ -236,10 +241,10 @@ bool ASimCruiseWorldStreamer::FindRoadPoseFacing(const FString& RoadName, const 
 			// parked along its far side).
 			TArray<uint8> NearJunction;
 			NearJunction.Init(0, Ribbon.St.Num());
+			const TArray<uint8> Cuts = SimCruiseStartPick::JunctionCuts(Ribbon);
 			for (int32 j = 0; j < Ribbon.St.Num(); ++j)
 			{
-				const bool bCut = (Ribbon.Sides[0].Cut.IsValidIndex(j) && Ribbon.Sides[0].Cut[j]) || (Ribbon.Sides[1].Cut.IsValidIndex(j) && Ribbon.Sides[1].Cut[j]);
-				if (!bCut) continue;
+				if (!Cuts[j]) continue;
 				for (int32 k = 0; k < Ribbon.St.Num(); ++k)
 				{
 					if (FMath::Abs(Ribbon.St[k].S - Ribbon.St[j].S) < 15.0) NearJunction[k] = 1;
@@ -327,6 +332,23 @@ void ASimCruiseWorldStreamer::Launch(const FSimCruiseTileJobTicket& Ticket)
 				if (IFileManager::Get().FileExists(*Cached)) Known = Cached;
 			}
 			Photo = SimCruiseAerialCache::Load(Data.AerialKey, Known);
+		}
+		// The buildings' measured heights, use, storeys and mapped finishes (helper `buildings`: Overture,
+		// the USACE National Structure Inventory). The helper caches the reply a week per tile; a first
+		// visit waits at most a few seconds (on this worker, never the game thread), then builds without.
+		if (Client.IsValid() && Client->GetConfig().IsConfigured() && Data.Buildings.Num() > 0 && CVarBuildingFacts.GetValueOnAnyThread() != 0)
+		{
+			FSimCruiseAtlasRequest Request;
+			Request.Command = TEXT("buildings");
+			Request.Args = { FString::FromInt(Data.Id.X), FString::FromInt(Data.Id.Y) };
+			Request.TimeoutSeconds = 12.0;
+			const FSimCruiseAtlasResult Facts = FSimCruiseAtlasClient::RunBlocking(Client->GetConfig(), Request, &Box->bClosed);
+			if (Facts.IsOk() && Facts.Json.IsValid() && Facts.Json->Type == EJson::Object)
+			{
+				const FSimCruiseBuildingFactsCount Count = SimCruiseTileData::ApplyBuildingFacts(Data, Facts.Json->AsObject());
+				UE_LOG(LogSimCruiseWorld, Log, TEXT("Tile %s buildings: %d measured heights, %d uses, %d mapped finishes (of %d)"),
+					*SimCruiseTileName(Data.Id), Count.Heights, Count.Uses, Count.Finishes, Data.Buildings.Num());
+			}
 		}
 		Result->Build = SimCruiseTileBuilder::Build(Data, TileSizeM, Contracts, Photo.Get());
 		Result->AerialKey = Data.AerialKey;

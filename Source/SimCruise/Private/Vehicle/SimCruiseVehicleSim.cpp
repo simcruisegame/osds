@@ -1053,6 +1053,7 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		const double RegenTarget = bEsc ? FMath::Clamp(EscRegenCutPerOverRadPerS * State.EscOversteer, 0.0, 1.0) : 0.0;
 		State.EscRegenCut = MoveToward(State.EscRegenCut, RegenTarget, Dt * (RegenTarget > State.EscRegenCut ? EscCutRisePerS : EscCutFallPerS));
 		State.EscLightS = bActing ? EscLightHoldS : FMath::Max(0.0, State.EscLightS - Dt);
+		State.bEscActing = bActing;
 	}
 
 	const bool bThrottleAid = Car.bTractionControlEnabled;

@@ -38,6 +38,10 @@ $script:RandomUSAreas = [ordered]@{
     'suburb'     = @(@(33.85, 34.1, -84.6, -84.15), @(32.95, 33.2, -96.95, -96.6), @(41.75, 42.0, -88.2, -87.95))
     'small-town' = @(@(40.0, 40.6, -83.5, -82.5), @(44.0, 44.6, -73.0, -72.4), @(29.9, 30.4, -99.2, -98.5))
     'city'       = @(@(40.70, 40.80, -74.02, -73.93), @(41.86, 41.92, -87.65, -87.61), @(37.74, 37.80, -122.47, -122.39))
+    # Bridges and causeways, gravel roads, mountain switchbacks: the hardest road geometry.
+    'bridge'     = @(@(24.62, 24.76, -81.40, -80.90), @(45.78, 45.86, -84.76, -84.70), @(29.95, 30.30, -90.15, -90.05))
+    'gravel'     = @(@(40.40, 40.80, -96.90, -96.40), @(43.80, 44.40, -103.80, -103.20), @(46.60, 47.20, -100.50, -99.80))
+    'switchback' = @(@(37.90, 38.05, -107.72, -107.62), @(38.80, 38.92, -105.10, -105.00), @(35.45, 35.52, -83.98, -83.90))
 }
 
 <#
@@ -45,10 +49,12 @@ $script:RandomUSAreas = [ordered]@{
   draw from it, one place type at a time; else the types in a seeded order (each once before any
   repeats), an area of that type and a point in it.
 #>
-function Get-RandomUSPlaces([int]$Count, [int]$Seed, [string]$Root = (Split-Path -Parent $PSScriptRoot)) {
+function Get-RandomUSPlaces([int]$Count, [int]$Seed, [string]$Root = (Split-Path -Parent $PSScriptRoot), [switch]$AreasOnly) {
     $Rng = New-Object System.Random($Seed)
-    # The team's place list first, with the same seeded draw as preflight.ps1 -Roads random.
-    $Draw = @(Get-TestPlaceDraw -Root $Root -Seed $Seed -Count $Count)
+    # The team's place list first, with the same seeded draw as preflight.ps1 -Roads random;
+    # -AreasOnly skips it and draws fresh points in the areas below (preflight.ps1 -Roads randomus).
+    $Draw = @()
+    if (-not $AreasOnly) { $Draw = @(Get-TestPlaceDraw -Root $Root -Seed $Seed -Count $Count) }
     if ($Draw.Count) {
         $I = 0
         return @($Draw | ForEach-Object { [pscustomobject]@{ Index = $I++; Type = $_.kind; Lat = [double]$_.lat; Lon = [double]$_.lon; Key = $_.key; Street = ''; Utc = $_.Utc } })

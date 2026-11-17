@@ -1,6 +1,9 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "World/SimCruiseGeo.h"
 #include "World/SimCruiseTileBuilder.h"
 #include "World/SimCruiseTileData.h"
@@ -193,3 +196,50 @@ bool FSimCruiseOceanDriveSignsTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
+// The helper's `buildings` reply (measured heights, use and storeys, mapped finishes) lands on the rows it
+// names by index and centre, and on no other: a record with a wrong centre or base height is dropped.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseBuildingFactsTest, "SimCruise.World.Buildings.Facts", SimCruiseBuildingTest::Flags)
+bool FSimCruiseBuildingFactsTest::RunTest(const FString& Parameters)
+{
+	FSimCruiseTileData Data;
+	Data.Id = FIntPoint(100, 200);
+	for (int32 i = 0; i < 3; ++i)
+	{
+		FSimCruiseBuildingRow Row;
+		Row.Ring = { FVector2d(0.1 * i, 0.1), FVector2d(0.1 * i + 0.05, 0.1), FVector2d(0.1 * i + 0.05, 0.15) };
+		Row.HeightM = 5.0;
+		Row.Centre = FVector2d(0.1 * i + 0.03, 0.12);
+		Data.Buildings.Add(Row);
+	}
+	const FString Json = TEXT("{\"id\":[100,200],\"status\":\"available\",")
+		TEXT("\"updates\":[{\"baseIndex\":0,\"center\":[0.03,0.12],\"baseHeightM\":5,\"heightM\":11.4},")
+		TEXT("{\"baseIndex\":1,\"center\":[0.5,0.5],\"baseHeightM\":5,\"heightM\":30},")
+		TEXT("{\"baseIndex\":2,\"center\":[0.23,0.12],\"baseHeightM\":9,\"heightM\":30}],")
+		TEXT("\"uses\":[{\"baseIndex\":1,\"center\":[0.13,0.12],\"use\":\"single_family\",\"stories\":2},{\"baseIndex\":2,\"center\":[0.23,0.12],\"use\":\"castle\",\"stories\":9}],")
+		TEXT("\"finishes\":[{\"baseIndex\":1,\"center\":[0.13,0.12],\"style\":{\"shape\":\"gabled\",\"wall_material\":\"brick\",\"wall_color\":\"#aa5533\",\"roof_height\":2.5}}]}");
+	TSharedPtr<FJsonObject> Reply;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
+	if (!TestTrue(TEXT("reply parses"), FJsonSerializer::Deserialize(Reader, Reply) && Reply.IsValid())) return false;
+
+	const FSimCruiseBuildingFactsCount Count = SimCruiseTileData::ApplyBuildingFacts(Data, Reply);
+	TestEqual(TEXT("one height lands (wrong centre and wrong base height are dropped)"), Count.Heights, 1);
+	TestEqual(TEXT("measured height"), Data.Buildings[0].HeightM, 11.4);
+	TestTrue(TEXT("flagged measured"), Data.Buildings[0].bHeightMeasured);
+	TestEqual(TEXT("row 1 keeps its height (the update named another centre)"), Data.Buildings[1].HeightM, 5.0);
+	TestEqual(TEXT("row 2 keeps its height (the base height did not match)"), Data.Buildings[2].HeightM, 5.0);
+	TestEqual(TEXT("one use lands (an unknown class is dropped)"), Count.Uses, 1);
+	TestEqual(TEXT("use"), Data.Buildings[1].Use, FString(TEXT("single_family")));
+	TestEqual(TEXT("storeys"), Data.Buildings[1].Stories, 2);
+	TestEqual(TEXT("unknown use leaves the storeys"), Data.Buildings[2].Stories, 0);
+	TestEqual(TEXT("finish"), Count.Finishes, 1);
+	TestEqual(TEXT("roof shape"), Data.Buildings[1].RoofShape, FString(TEXT("gabled")));
+	TestEqual(TEXT("wall material"), Data.Buildings[1].WallMaterial, FString(TEXT("brick")));
+	TestEqual(TEXT("wall colour"), Data.Buildings[1].WallColour, FString(TEXT("#aa5533")));
+	TestEqual(TEXT("roof height"), Data.Buildings[1].RoofHeightM, 2.5);
+
+	FSimCruiseTileData Other = Data;
+	Other.Id = FIntPoint(101, 200);
+	TestEqual(TEXT("a reply for another tile changes nothing"), SimCruiseTileData::ApplyBuildingFacts(Other, Reply).Heights, 0);
+	return true;
+}

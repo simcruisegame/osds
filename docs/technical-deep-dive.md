@@ -1,8 +1,17 @@
-# Technical deep dive (version 2.0.3)
+# How OSDS works: technical deep dive (version 2.0.3)
 
-This document tells how every working part of OSDS operates, and how the parts connect. It is for people who want to read, change or check the code. It describes the code of the 2.0.3 release candidate. Where a part is in the code but is not on in a normal drive, this document says so.
+## In short
 
-For a short overview, read [technical-overview.md](technical-overview.md). For the detail of each Unreal subsystem, read [unreal-architecture.md](unreal-architecture.md). For the build and test commands, read [unreal-building.md](unreal-building.md).
+- This page explains how every working part of OSDS works and how the parts connect. It is for people who want to read, change or check the code.
+- It describes the 2.0.3 release. Changes in 2.0.4 so far are noted where they matter; the full list is in the [changelog](../CHANGELOG.md).
+- OSDS is **two programs**: the game (`SimCruise.exe`, C++ on Unreal Engine 5.8) and the map helper (`tools/atlas.exe`, JavaScript compiled with Bun).
+- The **map helper** downloads free public map, elevation, aerial-photo and building data, fits the roads to the ground, and keeps a disk cache. The game asks it for one tile at a time. There is no server.
+- The **world** is built around the car from map tiles about 0.5 km across (a 3 × 3 ring), loaded ahead of the car at speed.
+- The **car physics** is OSDS's own model, run at a fixed 360 Hz and checked against real road tests. Unreal's Chaos engine only provides the car body and collisions.
+- **Sound** is made entirely by code. There are no sample files.
+- About 200 automated tests check the parts. Where a part is in the code but off in a normal drive, this page says so.
+
+Related pages: a short overview in [technical-overview.md](technical-overview.md), each Unreal subsystem in detail in [unreal-architecture.md](unreal-architecture.md), build and test commands in [unreal-building.md](unreal-building.md).
 
 ## Contents
 
@@ -317,6 +326,11 @@ New in 2.0.3:
 
 Night: lit windows and neon come from the plan. Far towers keep their windows.
 
+New in 2.0.4:
+
+- After a tile is built, the game asks the helper's `buildings` command for that tile. It returns measured heights, building use and storey counts from Overture Maps and the USACE National Structure Inventory, and mapped roof shape, wall colour and material from OpenStreetMap (via Overture).
+- Supported mapped roof shapes (flat, gabled, hipped) are used instead of a guess. Gable ridges run along the long side of the house.
+
 ## 8. Trees and vegetation
 
 `World/SimCruiseTrees`:
@@ -391,6 +405,8 @@ The physics is OSDS's own vehicle model, not Unreal's Chaos Vehicle plugin. Chao
 - The car data is in `data/cars/*.json`, with the source of each number. `Vehicle/CarDefinitionLoader` reads it strictly. The player's car is the lowered 2001 Miata (`nb2001_lowered`); the other player cars are the 1965 Mustang 289 (`mustang65`) and the Corvette Stingray C8 Z51 (`meridian_z`).
 - `Vehicle/SimCruiseTuning` changes a copy of the car data (springs, dampers, ride height, anti-roll bars, torque, final drive, steering ratio) inside a safe range, and saves it for each car.
 - `Vehicle/SimCruiseSteeringGeometry` gives the hand-wheel angle from the rack angle with the real ratio on centre and the real turns lock to lock.
+- New in 2.0.4: stability control (ESC) on the cars that have it in real life (Corvette, Model 3, F-150 Raptor, Grand Cherokee, Odyssey, CR-V). When the car starts to slide it brakes one wheel and eases the engine, and the ESC light flashes on the HUD. It is on by default; Pause menu > Your car > Stability control turns it off. The 2001 Miata and 1965 Mustang never had it. Details: [2.0.4 notes](release/notes/2.0.4-dev.md).
+- New in 2.0.4: the manual gearbox has an automatic clutch by default. A tap on RB / LB (E / Q) shifts; the game works the clutch and blips the throttle on a downshift. The player's own clutch is still an option ([controls.md](controls.md#gearbox)).
 
 The benches (`SimCruise.Vehicle.*`) hold each car to its published 0-60 mph, 70-0 mph, skidpad, top speed and passing times, check static loads and lift-off stability, prove convergence from 60 to 720 Hz, and repeat whole runs bit for bit. Car data and calibration: [cars.md](cars.md).
 
