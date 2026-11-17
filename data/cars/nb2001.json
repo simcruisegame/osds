@@ -41,6 +41,7 @@
  "camber_thrust": 0.48,
  "longitudinal_stiffness": 12.0,
  "relaxation_m": 0.35,
+ "tyre_pressure_psi": [26.0, 26.0],
  "tyre_model": "tmeasy",
  "tmeasy_peak_mu_x": 1.1,
  "tmeasy_slide_mu_x": 0.91,
@@ -255,6 +256,7 @@
  "target_70_0_ft": 173.0,
  "target_skidpad_g": 0.89,
  "sources": {
+   "tyre_pressure": "26 psi front and rear cold, the NB door placard for both factory tyre sizes (tirepressure.com 2001 Mazda Miata, secondary); the grip was calibrated at it. Tuning moves it 18-40 psi.",
   "brake_proportioning": "The non-ABS NA/NB Miata has a rear brake proportioning valve; knee at 30 % pedal and 0.5 slope above it keep the rear share of braking at or under the rear load share from 0.15 to 0.8 g in a straight line (fronts lock first; BRAKESPLIT lines) and the car in line braking in a 0.5 g bend within the friction circle (ISO 7975 bench) (the dynamic front load share at 0.95 g is about 0.70, the brake torque split 0.64). Full-pedal capacity 1600 N m front, 700 rear per wheel (rear share 0.30 below the knee: caliper piston areas about 54 mm front to 35 mm rear on rotors of about the same size, estimate): a panic stop reaches about 80 bar line pressure (estimate), and the full pedal must be able to lock the fronts, as on the non-ABS car; the old 1150/650 could not reach the grip of 1.0 g tyres once the valve cut the rear.",
   "engine_friction": "Motoring friction 12 N m + 0.005 N m/rpm (27 N m at 3000 rpm, 42 at 6000): a 1.8 L four's friction mean effective pressure of about 1.9 bar at 3000 rpm (estimate from typical SI-engine FMEP), which sets the engine braking on a lift. Full-throttle torque is the published curve either way.",
   "roll_centre": "Roll centres 45 mm front and 90 mm rear above the ground at the stock ride height: the commonly quoted figures for the NA/NB double wishbones (about 1.7 and 3.5 in), estimates rather than a measurement of this car. A lowered car moves them; the tuning menu's ride height does not move them yet.",

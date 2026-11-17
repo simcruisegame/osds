@@ -97,6 +97,13 @@ namespace SimCruiseDynamics
 		return Car.TyreModel == TEXT("tmeasy");
 	}
 
+	double TyrePressureGripScale(double Psi, double RefPsi)
+	{
+		if (!(Psi > 0.0) || !(RefPsi > 0.0)) return 1.0;
+		const double Dpi = (Psi - RefPsi) / RefPsi;
+		return FMath::Clamp(1.0 - 0.1677 * Dpi + 0.2811 * Dpi * Dpi, 0.85, 1.10);
+	}
+
 	void GetTmeasyCurves(const FSimCruiseCarDefinition& Car, double NormalLoadN, double GripScale,
 		FTmeasyCurve& OutX, FTmeasyCurve& OutY)
 	{

@@ -963,7 +963,9 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 		}
 		Wheel.SlipAngleRad = SlipAngle;
 		const int32 Axle = WheelIndex < 2 ? 0 : 1;
-		Row.Mu = SimCruiseDynamics::ComputeFrictionCoefficient(Car, Axle, Fz, Wheel.SurfaceGrip);
+		// The tyre's pressure moves its peak grip (MF-Tyre 6.1 pressure term), on every surface.
+		const double PressureGrip = SimCruiseDynamics::TyrePressureGripScale(AxleValue(Car.TyrePressurePsiByAxle, Axle, 32.0), AxleValue(Car.TyrePressureRefPsiByAxle, Axle, 32.0));
+		Row.Mu = SimCruiseDynamics::ComputeFrictionCoefficient(Car, Axle, Fz, Wheel.SurfaceGrip * PressureGrip);
 		Wheel.FrictionCoefficient = Row.Mu;
 		const double RoadLean = FMath::Asin(FMath::Clamp(Right.Dot(Row.Normal), -1.0, 1.0));
 		if (SimCruiseDynamics::UsesTmeasy(Car))
@@ -971,7 +973,7 @@ void FSimCruiseVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FSimCru
 			// The slip force comes from the combined TMeasy curve in each substep; here only
 			// the camber thrust (the same term the legacy law adds).
 			Row.SlipY = FMath::Tan(FMath::Clamp(SlipAngle, -1.4, 1.4));
-			Row.GripScale = FMath::Max(Wheel.SurfaceGrip, 0.0) * AxleValue(Car.AxleGripMultiplier, Axle, 1.0);
+			Row.GripScale = FMath::Max(Wheel.SurfaceGrip, 0.0) * AxleValue(Car.AxleGripMultiplier, Axle, 1.0) * PressureGrip;
 			SimCruiseDynamics::FTmeasyCurve CurveX, CurveY;
 			SimCruiseDynamics::GetTmeasyCurves(Car, Fz, Row.GripScale, CurveX, CurveY);
 			Row.Mu = Fz > 1.0 ? CurveY.PeakForce / Fz : 0.0;

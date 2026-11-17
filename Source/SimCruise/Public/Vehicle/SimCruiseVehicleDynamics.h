@@ -113,6 +113,12 @@ namespace SimCruiseDynamics
 		double& InOutRollingSlipAngleRad);
 
 	/** Load-sensitive peak friction times surface and axle grip. */
+	/** Peak grip at a tyre pressure against the pressure it was measured at: MF-Tyre 6.1's pressure term,
+	 *  mu x (1 + PPY3 dpi + PPY4 dpi^2), dpi = (p - p0) / p0, with the TNO example tyre's PPY3 -0.1677 and
+	 *  PPY4 0.2811 (Besselink, Schmeitz and Pacejka, VSD 48, 2010; one passenger tyre's values). Lower
+	 *  pressure, a longer contact patch, a little more grip; held to 0.85-1.10. */
+	SIMCRUISE_API double TyrePressureGripScale(double Psi, double RefPsi);
+
 	double ComputeFrictionCoefficient(
 		const FSimCruiseCarDefinition& Car,
 		int32 AxleIndex,

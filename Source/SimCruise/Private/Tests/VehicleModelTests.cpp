@@ -830,4 +830,29 @@ bool FSimCruiseVehicleModelShiftMapTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+// Tyre pressure: grip follows MF-Tyre 6.1's pressure term around the placard pressure; tuning keeps it
+// in 18-40 psi and the tuned car carries it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseTyrePressureTest, "SimCruise.Vehicle.Model.TyrePressure", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FSimCruiseTyrePressureTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("at the placard pressure, the measured grip"), SimCruiseDynamics::TyrePressureGripScale(26.0, 26.0), 1.0);
+	TestTrue(TEXT("lower pressure grips a little more"), SimCruiseDynamics::TyrePressureGripScale(20.0, 26.0) > 1.03);
+	TestTrue(TEXT("higher pressure grips a little less"), SimCruiseDynamics::TyrePressureGripScale(32.0, 26.0) < 0.99);
+	TestTrue(TEXT("never far from the measured grip"), SimCruiseDynamics::TyrePressureGripScale(5.0, 26.0) <= 1.10 && SimCruiseDynamics::TyrePressureGripScale(80.0, 26.0) >= 0.85);
+	FSimCruiseCarDefinition Car;
+	Car.TyrePressurePsiByAxle = { 26.0, 26.0 };
+	Car.TyrePressureRefPsiByAxle = { 26.0, 26.0 };
+	const FSimCruiseTuning Stock = FSimCruiseTuning::FromCar(Car, 15.0);
+	TestEqual(TEXT("stock is the placard"), Stock.FrontTyrePsi, 26.0);
+	FSimCruiseTuning T = Stock;
+	T.FrontTyrePsi = 50.0; T.RearTyrePsi = 22.0;
+	T.Clamp(Stock);
+	TestEqual(TEXT("held to 40 psi"), T.FrontTyrePsi, 40.0);
+	const FSimCruiseCarDefinition Tuned = T.Apply(Car, Stock);
+	TestEqual(TEXT("the tuned car carries the rear pressure"), Tuned.TyrePressurePsiByAxle[1], 22.0);
+	TestEqual(TEXT("and keeps the placard as the reference"), Tuned.TyrePressureRefPsiByAxle[1], 26.0);
+	return true;
+}
+
 #endif
