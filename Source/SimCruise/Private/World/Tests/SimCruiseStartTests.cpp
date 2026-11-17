@@ -1532,6 +1532,13 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 	}
 	AddInfo(FString::Printf(TEXT("TERRAIN-OVER-ROAD all: %d places, %d points, %d of them over 1 m, %d on a tile seam"), Places, Faults, Big, OnSeam));
 	TestTrue(TEXT("recorded places checked"), Places >= 1);
+	// A ratchet gate from 2.0.4 (16 November 2026): on the recorded Doraville place the bridge fit, the
+	// deck-level joins and the cap past closed road ends took it from 60 points (worst 0.86 m) to 1, a
+	// motorway's end on a tile seam (0.54 m; seam ground must stay what both tiles share). Never more
+	// points per place than that, none over 1 m, and none off a seam.
+	TestTrue(FString::Printf(TEXT("ground over the road: %d points per place at most (%d points on %d places)"), 1, Faults, Places), Faults <= Places);
+	TestTrue(FString::Printf(TEXT("ground over the road: none over 1 m (%d)"), Big), Big == 0);
+	TestTrue(FString::Printf(TEXT("ground over the road: all on tile seams (%d of %d)"), OnSeam, Faults), OnSeam == Faults);
 	return true;
 }
 

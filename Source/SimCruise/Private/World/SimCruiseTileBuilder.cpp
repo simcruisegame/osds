@@ -796,6 +796,13 @@ namespace SimCruiseTileBuilder
 						if (FMath::Abs(Hit.Lateral) <= Hit.HalfW) RoadCap = FMath::Min(RoadCap, Hit.Height - UnderDepthM);
 						else if (FMath::Abs(Hit.Lateral) <= Hit.HalfW + EdgeReach) EdgeCap = FMath::Min(EdgeCap, Hit.Height - UnderDepthM);
 					}
+					else if ((bFirst || bLast) && Along > 0.0 && Along <= EdgeReach && FMath::Abs(Hit.Lateral) <= Hit.HalfW + EdgeReach)
+					{
+						// Just past a road's closed end (a driveway, a service road): the ground cell whose
+						// triangle reaches back over the end is held at the end's height too (0.27 m of
+						// ground over a service road's end at Doraville).
+						EdgeCap = FMath::Min(EdgeCap, Hit.Height - UnderDepthM);
+					}
 				}
 			}
 

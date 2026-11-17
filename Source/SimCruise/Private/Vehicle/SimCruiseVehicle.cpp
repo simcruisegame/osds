@@ -494,12 +494,18 @@ void ASimCruiseVehicle::Tick(float DeltaSeconds)
 	FSimCruiseVehicleTelemetry Telemetry;
 	VehicleMovement->CopyTelemetry(Telemetry);
 	UpdateEngineSound(Telemetry, bInSeat, DeltaSeconds);
-	if (!Telemetry.LastGearMessage.IsEmpty() && Telemetry.LastGearMessage != LastShownGearMessage)
+	if (Telemetry.LastGearMessage.IsEmpty())
+	{
+		// A new shift request clears the message, so the same refusal again is shown again.
+		LastShownGearMessage.Reset();
+	}
+	else if (Telemetry.LastGearMessage != LastShownGearMessage)
 	{
 		LastShownGearMessage = Telemetry.LastGearMessage;
 		if (ASimCruisePlayerController* Player = Cast<ASimCruisePlayerController>(GetController()))
 		{
-			Player->ShowMessage(Telemetry.LastGearMessage, 2.f);
+			Player->ShowMessage(Telemetry.LastGearMessage, 2.5f);
+			Player->NotifyShiftRefused();
 		}
 	}
 }

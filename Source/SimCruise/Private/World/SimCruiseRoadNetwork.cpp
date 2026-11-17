@@ -11,6 +11,7 @@ namespace
 {
 	constexpr double MergeM = 2.0;            // endpoint tolerance when chaining (road-grade.mjs MERGE)
 	constexpr double JoinLevelM = 3.0;        // roads more than this apart in height cross, they do not join
+	constexpr double JoinDeckLevelM = 1.0;    // a road off a bridge joins a deck only this close in height (a ramp deck 2.7 m over I-285 at Doraville tilted the motorway's edge up to it)
 	constexpr double SigmaM = 16.0;           // profile fit (road-grade.mjs SIGMA)
 	constexpr double TukeyScale = 3.5;
 	constexpr double FilletMaxM = 1.0;        // largest plan offset from a mapped vertex on gentle bends (edge-authority)
@@ -1389,12 +1390,12 @@ void FSimCruiseRoadNetwork::Build(const FSimCruiseTileData& Tile, double InTileS
 				{
 					const FVector2d P = St.C + St.R * (FSimCruiseRibbonStation::ColumnOffset(c) * St.HalfW);
 					FSimCruiseRoadHit Hit;
-					if (FindCarriageway(P, Hit, r, 0.0, MIN_int32, St.Column(c), JoinLevelM))
+					if (FindCarriageway(P, Hit, r, 0.0, MIN_int32, St.Column(c), JoinLevelM, St.bBridge ? JoinLevelM : JoinDeckLevelM))
 					{
 						Snap[c][i] = Hit.Height; Snapped[c][i] = true;
 						Sum += Hit.Height - St.Column(c); ++Num;
 					}
-					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM, MIN_int32, St.Column(c), JoinLevelM))
+					else if (FindCarriageway(P, Hit, r, JoinEdgeMarginM, MIN_int32, St.Column(c), JoinLevelM, St.bBridge ? JoinLevelM : JoinDeckLevelM))
 					{
 						// Just outside the other carriageway: never above its edge, so this
 						// ribbon's quads cannot stand proud of the road it runs into.
@@ -1649,7 +1650,7 @@ bool FSimCruiseRoadNetwork::DeckUndersideAt(int32 RibbonIndex, int32 I) const
 }
 
 bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon, double Margin, int32 MinRank,
-	double NearZ, double MaxDz) const
+	double NearZ, double MaxDz, double MaxDzToDeck) const
 {
 	bool bFound = false;
 	const bool bLevel = FMath::IsFinite(NearZ) && FMath::IsFinite(MaxDz);
@@ -1683,7 +1684,7 @@ bool FSimCruiseRoadNetwork::FindCarriageway(const FVector2d& P, FSimCruiseRoadHi
 		const double AlongTolerance = ((bFirst && Hit.T <= 0.0) || (bLast && Hit.T >= 1.0)) ? 0.01 : 1.2;
 		if (FMath::Abs(Hit.Along) > AlongTolerance) continue;
 		if (FMath::Abs(Hit.Lateral) > Hit.HalfW + Margin) continue;
-		if (bLevel && FMath::Abs(Hit.Height - NearZ) > MaxDz) continue;
+		if (bLevel && FMath::Abs(Hit.Height - NearZ) > (Ribbon.St.IsValidIndex(Hit.Station) && Ribbon.St[Hit.Station].bBridge ? FMath::Min(MaxDz, MaxDzToDeck) : MaxDz)) continue;
 		if (!bFound || Hit.Height > OutHit.Height)
 		{
 			OutHit = Hit;

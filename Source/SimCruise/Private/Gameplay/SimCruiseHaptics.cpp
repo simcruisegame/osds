@@ -135,6 +135,18 @@ FSimCruiseRumble FSimCruiseHapticsModel::Sample(const FSimCruiseDriveTelemetry& 
 	double SpinSlip = 0.0;   // driven wheels turning faster than the road
 	double LockSlip = 0.0;   // any wheel turning slower under braking
 	bAbsActive = false;
+	// A manual shift is felt: a 45 ms tick (up on the high motor, down on the low one); a refused
+	// shift two 40 ms buzzes 80 ms apart, so a missed gear is noticed without looking at the HUD.
+	SinceShiftS += DeltaTimeS;
+	SinceRefusedS += DeltaTimeS;
+	if (LastGear != MIN_int32 && Telemetry.Gear != LastGear && Telemetry.bManualTransmission)
+	{
+		SinceShiftS = 0.0;
+		ShiftDirection = Telemetry.Gear > LastGear ? 1 : -1;
+	}
+	LastGear = Telemetry.Gear;
+	const double ShiftCue = SinceShiftS < 0.045 ? 0.35 : 0.0;
+	const double RefusedCue = (SinceRefusedS < 0.04 || (SinceRefusedS >= 0.12 && SinceRefusedS < 0.16)) ? 0.45 : 0.0;
 	// Loose ground is in the surface textures now (gravel, grass).
 	const double Loose = 0.0;
 	// The surface under the wheels on the ground (SurfaceOf), and kerb strikes by side.
@@ -215,6 +227,12 @@ FSimCruiseRumble FSimCruiseHapticsModel::Sample(const FSimCruiseDriveTelemetry& 
 	// The surface, and a kerb on its side: the left wheels on the left (low) motor, the right on the right (high) one.
 	Out.LowFrequency = static_cast<float>(FMath::Clamp(Out.LowFrequency + TexLow + KerbPulse(SinceKerb[0] - DeltaTimeS), 0.0, 1.0));
 	Out.HighFrequency = static_cast<float>(FMath::Clamp(Out.HighFrequency + TexHigh + KerbPulse(SinceKerb[1] - DeltaTimeS), 0.0, 1.0));
+
+	// The gearbox's own cues on top.
+	if (ShiftDirection > 0) Out.HighFrequency = static_cast<float>(FMath::Max<double>(Out.HighFrequency, ShiftCue));
+	else Out.LowFrequency = static_cast<float>(FMath::Max<double>(Out.LowFrequency, ShiftCue));
+	Out.LowFrequency = static_cast<float>(FMath::Max<double>(Out.LowFrequency, RefusedCue));
+	Out.HighFrequency = static_cast<float>(FMath::Max<double>(Out.HighFrequency, RefusedCue));
 
 	// Impulse triggers: the pedal under the foot that is losing the tyre.
 	if (Throttle > 0.05)

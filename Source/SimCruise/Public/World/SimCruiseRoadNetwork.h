@@ -237,9 +237,9 @@ public:
 	 */
 	/** The highest carriageway (ribbon or junction pad) under P. With NearZ and MaxDz set, only a
 	 *  surface within MaxDz of NearZ counts: a deck over the road, or the road under a deck, is not
-	 *  the same road level. */
+	 *  the same road level; MaxDzToDeck is the limit when the surface found is a bridge deck. */
 	bool FindCarriageway(const FVector2d& P, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon = INDEX_NONE, double Margin = 0.0, int32 MinRank = MIN_int32,
-		double NearZ = TNumericLimits<double>::Max(), double MaxDz = TNumericLimits<double>::Max()) const;
+		double NearZ = TNumericLimits<double>::Max(), double MaxDz = TNumericLimits<double>::Max(), double MaxDzToDeck = TNumericLimits<double>::Max()) const;
 
 	/** Nearest ribbon station segment to P within Reach (any lateral), for terrain conditioning and placement. */
 	bool FindNearest(const FVector2d& P, double Reach, FSimCruiseRoadHit& OutHit, int32 ExcludeRibbon = INDEX_NONE) const;

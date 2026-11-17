@@ -353,7 +353,16 @@ void FSimCruiseDriveHud::DrawSpeed(ASimCruiseHUD& Hud, float Alpha)
 	const int32 Speed = TestSpeed >= 0 ? TestSpeed : Hud.Readout.Speed;
 	TextAt(FString::FromInt(Speed), EWeight::Black, 132.f, NumberRight, NumberY, White(), 2, true);
 	const float SideX = NumberRight + P(18.f);
-	TextAt(SimCruiseHudRules::GearText(Hud.Gear, Hud.bManual), EWeight::ExtraBold, 56.f, SideX, CardY + P(26.f), Amber());
+	// A manual shift flashes the gear: 30 % larger and white, back to amber over 0.25 s.
+	const double NowS = Hud.GetWorld() ? Hud.GetWorld()->GetRealTimeSeconds() : 0.0;
+	if (Hud.Gear != Hud.DrawnGear)
+	{
+		if (Hud.DrawnGear != MIN_int32 && Hud.bManual) Hud.GearChangedAtS = NowS;
+		Hud.DrawnGear = Hud.Gear;
+	}
+	const float GearFlash = static_cast<float>(FMath::Clamp(1.0 - (NowS - Hud.GearChangedAtS) / 0.25, 0.0, 1.0));
+	TextAt(SimCruiseHudRules::GearText(Hud.Gear, Hud.bManual), EWeight::ExtraBold, 56.f * (1.f + 0.3f * GearFlash), SideX,
+		CardY + P(26.f) - P(10.f) * GearFlash, FMath::Lerp(Amber(), White(), GearFlash));
 	TextAt(SimCruiseSpeedUnits::Label(Hud.Readout.Units), EWeight::Bold, 26.f, SideX + P(2.f), CardY + P(94.f), A(Mist(), Alpha));
 	if (Hud.bAbs)
 	{

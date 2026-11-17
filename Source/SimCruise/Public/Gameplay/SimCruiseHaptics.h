@@ -150,6 +150,8 @@ public:
 	void Quiet();
 
 	bool IsAbsActive() const { return bAbsActive; }
+	/** A shift was refused (the gearbox's message): two short buzzes on the next samples. */
+	void NotifyShiftRefused() { SinceRefusedS = 0.0; }
 	/** Normalised slip per tyre from the last sample. */
 	double GetWheelSlip(int32 Index) const { return Slip[FMath::Clamp(Index, 0, 3)]; }
 
@@ -163,4 +165,9 @@ private:
 	bool bOnKerb[4] = {false, false, false, false};
 	bool bHasLastTravel = false;
 	double SinceKerb[2] = {1e9, 1e9};
+	/** Manual shifts: the last gear seen, time since the last change and its direction, time since a refusal. */
+	int32 LastGear = MIN_int32;
+	double SinceShiftS = 1e9;
+	int32 ShiftDirection = 0;
+	double SinceRefusedS = 1e9;
 };

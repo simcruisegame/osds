@@ -204,7 +204,11 @@ FString FSimCruiseVehicleSim::ChangeGear(int32 GearStep, double ForwardSpeedMps)
 	if (Proposed > 0 && FMath::Abs(ForwardSpeedMps) / TireRadiusM * Car.ForwardGearRatios[Proposed - 1] *
 		Car.FinalDriveRatio * 60.0 / Tau > Car.MaximumGearSpeedRpm)
 	{
-		return TEXT("Speed is too high for that gear");
+		// Say the speed the gear can take, so the driver knows how far to slow.
+		const double MaxMps = Car.MaximumGearSpeedRpm * Tau / 60.0 / (Car.ForwardGearRatios[Proposed - 1] * Car.FinalDriveRatio) * TireRadiusM;
+		static const TCHAR* Ordinals[] = { TEXT("1st"), TEXT("2nd"), TEXT("3rd"), TEXT("4th"), TEXT("5th"), TEXT("6th"), TEXT("7th"), TEXT("8th"), TEXT("9th"), TEXT("10th") };
+		return FString::Printf(TEXT("Too fast for %s: below %.0f mph (%.0f km/h)"), Ordinals[FMath::Clamp(Proposed - 1, 0, 9)],
+			FMath::FloorToDouble(MaxMps * 2.23694), FMath::FloorToDouble(MaxMps * 3.6));
 	}
 	SelectRatio(Proposed);
 	return FString();

@@ -571,6 +571,7 @@ export async function streamedTerrain(X,Y,tile,centerDEM,widths,readDEM,measured
 // the tile, width, deck height per point, layer].
 async function bridgeDecks(pieces,terminals,sample,inside,{tx0,ty0,scale},memo,worldKey){
  const rows=[];
+ const endAt=await bridgeEndHeights(pieces,terminals,sample,inside,memo,worldKey);
  for(const parts of chainPieces(pieces)){
   const pts=[];
   for(const part of parts){
@@ -582,21 +583,7 @@ async function bridgeDecks(pieces,terminals,sample,inside,{tx0,ty0,scale},memo,w
   if(pts.length<2)continue;
   const s=arcLength(pts),length=s[s.length-1];
   if(length<2)continue;
-  // An end measured here (its approach profile has data) is remembered in the
-  // cache, so a tile too far from that end to measure it uses the same height.
-  const endHeight=async(p)=>{
-   let best=null;
-   for(const t of terminals){const d=Math.hypot(t.x-p[0],t.y-p[1]);if(d<=3&&(!best||d<best.d))best={d,t}}
-   const key=worldKey(p[0],p[1]);
-   if(best){
-    const z=Math.round(profileAtHeight(best.t.profile,best.t.station)*100)/100;
-    if(Number.isFinite(z)&&inside(p[0],p[1])){memo?.set(key,z);return z}
-   }
-   const known=memo?.get(key);
-   if(Number.isFinite(known))return known;
-   return inside(p[0],p[1])?sample(p[0],p[1]):NaN;
-  };
-  let za=await endHeight(pts[0]),zb=await endHeight(pts[pts.length-1]);
+  let za=await endAt(pts[0]),zb=await endAt(pts[pts.length-1]);
   if(!Number.isFinite(za)&&!Number.isFinite(zb))continue;
   if(!Number.isFinite(za))za=zb;
   if(!Number.isFinite(zb))zb=za;
@@ -621,6 +608,72 @@ async function bridgeDecks(pieces,terminals,sample,inside,{tx0,ty0,scale},memo,w
  }
  return rows;
 }
+// Deck end heights that do not depend on which tile is built first.
+//
+// A true end (an abutment: a bridge piece end that no other bridge piece meets)
+// takes the bench height of the approach road it meets when this tile measures
+// it, and remembers it in the cache; a tile that cannot measure it uses the
+// remembered height, else the elevation model at the end (the mosaic reaches
+// about one tile past this one), never the other end's height (that made the
+// deck flat in the first tile built and sloped in the next, a kink at the seam).
+// A joint inside the bridge (a ramp joining on the deck, where the bridge is cut
+// into chains) is not an end: it takes the heights of the true ends reached
+// through the deck, weighted by 1 / distance along the deck (on a straight deck
+// with a ramp at the middle that is the straight line between the abutments).
+// Before, a joint took the ground under it: the river or valley floor, a V.
+export async function bridgeEndHeights(pieces,terminals,sample,inside,memo,worldKey){
+ const JOIN=3;
+ const nodes=[];
+ const nodeOf=(p)=>{
+  for(let i=0;i<nodes.length;i++)if(Math.hypot(nodes[i].x-p[0],nodes[i].y-p[1])<=JOIN)return i;
+  nodes.push({x:p[0],y:p[1],edges:[]});return nodes.length-1;
+ };
+ for(const piece of pieces){
+  const a=nodeOf(piece.pts[0]),b=nodeOf(piece.pts[piece.pts.length-1]);
+  const s=arcLength(piece.pts),l=s[s.length-1];
+  if(a===b)continue;
+  nodes[a].edges.push([b,l]);nodes[b].edges.push([a,l]);
+ }
+ const measure=async(n)=>{
+  const p=[n.x,n.y];
+  let best=null;
+  for(const t of terminals){const d=Math.hypot(t.x-p[0],t.y-p[1]);if(d<=JOIN&&(!best||d<best.d))best={d,t}}
+  const key=worldKey(p[0],p[1]);
+  if(best&&inside(p[0],p[1])){
+   const z=Math.round(profileAtHeight(best.t.profile,best.t.station)*100)/100;
+   if(Number.isFinite(z)){memo?.set(key,z);return z}
+  }
+  const known=memo?.get(key);
+  if(Number.isFinite(known))return known;
+  try{const z=sample(p[0],p[1]);if(Number.isFinite(z))return Math.round(z*100)/100}catch{}
+  return NaN;
+ };
+ const trueEnds=[];
+ for(let i=0;i<nodes.length;i++)if(nodes[i].edges.length===1){nodes[i].z=await measure(nodes[i]);if(Number.isFinite(nodes[i].z))trueEnds.push(i)}
+ // Distances along the deck from each true end (Dijkstra; bridge graphs are small).
+ const dist=trueEnds.map(src=>{
+  const d=new Array(nodes.length).fill(Infinity);d[src]=0;
+  const done=new Array(nodes.length).fill(false);
+  for(;;){
+   let u=-1;for(let i=0;i<nodes.length;i++)if(!done[i]&&d[i]<Infinity&&(u<0||d[i]<d[u]))u=i;
+   if(u<0)break;done[u]=true;
+   for(const [v,l] of nodes[u].edges)if(d[u]+l<d[v])d[v]=d[u]+l;
+  }
+  return d;
+ });
+ for(let i=0;i<nodes.length;i++){
+  if(nodes[i].edges.length===1)continue;
+  let w=0,sum=0;
+  trueEnds.forEach((e,k)=>{const d=dist[k][i];if(Number.isFinite(d)&&d>0.01){w+=1/d;sum+=nodes[e].z/d}});
+  nodes[i].z=w>0?Math.round(sum/w*100)/100:NaN;
+ }
+ return async(p)=>{
+  let best=-1,bd=Infinity;
+  for(let i=0;i<nodes.length;i++){const d=Math.hypot(nodes[i].x-p[0],nodes[i].y-p[1]);if(d<bd){bd=d;best=i}}
+  return best>=0&&bd<=JOIN?nodes[best].z:NaN;
+ };
+}
+
 function profileAtHeight(profile,s){return gaussianLinear(profile.S,profile.Z,profile.W,s)+fixAt(profile,s)}
 
 // Superelevation run-out where banked roads meet. Two banked chains whose

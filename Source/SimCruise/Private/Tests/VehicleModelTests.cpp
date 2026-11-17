@@ -530,7 +530,7 @@ bool FSimCruiseVehicleModelGearboxTest::RunTest(const FString& Parameters)
 	Sim.ChangeGear(1, 0.0);
 	TestEqual(TEXT("over-revving downshift refused"), Sim.ChangeGear(0, 0.0), FString());
 	Sim.SelectRatio(5);
-	TestEqual(TEXT("first refused at 40 m/s"), Sim.ChangeGear(-4, 40.0), FString(TEXT("Speed is too high for that gear")));
+	TestTrue(TEXT("first refused at 40 m/s, with the speed it takes"), Sim.ChangeGear(-4, 40.0).StartsWith(TEXT("Too fast for 1st: below ")));
 	Sim.SetManual(false, 20.0);
 	TestFalse(TEXT("automatic again"), Sim.State.bManual);
 	return true;
@@ -714,7 +714,7 @@ bool FSimCruiseVehicleModelAutoClutchRefusalTest::RunTest(const FString& Paramet
 	Sim.QueueManualGearChange(-1);
 	FString Message;
 	SimCruiseRollFor(Sim, 0.8, 30.0, 0.0, [&](double) { const FString M = Sim.ConsumeGearChangeMessage(); if (!M.IsEmpty()) Message = M; });
-	TestEqual(TEXT("over-rev refused"), Message, FString(TEXT("Speed is too high for that gear")));
+	TestTrue(FString::Printf(TEXT("over-rev refused with the speed 2nd takes (%s)"), *Message), Message.StartsWith(TEXT("Too fast for 2nd: below ")));
 	TestEqual(TEXT("the gear stays"), Sim.GetGearText(), FString(TEXT("3")));
 	TestTrue(FString::Printf(TEXT("the clutch is back out (%.2f)"), Sim.State.ClutchPedal), Sim.State.ClutchPedal < 0.05);
 	return true;

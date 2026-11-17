@@ -8,7 +8,9 @@ The short version of each release, newest first. Every release has full notes in
 
 - **The car holds its lane.** The front wheels can point dead straight now (they were always 0.03° off, so the car hunted), small road lips no longer push the tyres sideways, and the driver's view stops swinging with every correction.
 - **Manual with an automatic clutch** (new default): tap RB/LB to shift; the game does the clutch and blips the throttle on downshifts. No stalls. Your own clutch is still an option.
-- **Bridges are flat across**: one smooth deck from end to end, no dips; a road under a bridge is no longer pulled up to it.
+- **You feel and see each shift**: a rumble tick and a gear flash; a refused shift buzzes twice and tells you the speed that gear can take.
+- **Bridges are flat across**: one smooth deck from end to end, no dips, the same in every map tile; a road under a bridge is no longer pulled up to it.
+- **No ground poking through the road**: the Doraville test place went from 60 spots to 1 (a tile border), and the check now fails the build.
 - Hard launches change up instead of sitting on the limiter; the Corvette no longer skips from 1st to 3rd.
 - Roofs follow the map, gable ridges run along the house, sealed cracks on older asphalt.
 - Fixes: `main` builds again (a merge dropped a function); Graphics "Auto" no longer re-benchmarks.
