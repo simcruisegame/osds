@@ -121,9 +121,16 @@ The car physics are calibrated against published road tests (Car and Driver, Mot
 | Foliage | [paramecij's vegetation base texture pack](https://opengameart.org/content/paramecijs-vegetation-base-texture-pack), OpenGameArt | CC0 |
 | Fine-detail kit | Made with Stable Diffusion XL (see [AI models](#ai-models)) | Ours, made under CreativeML Open RAIL++-M |
 
-## Street furniture (CARLA)
+## CARLA art (street furniture, roadside plants, facade textures, the Mini)
 
-Traffic-signal poles, bases and mast arms (and, as they are added, signs, signal heads, street lights and facade textures) come from the [CARLA simulator](https://carla.org/)'s content, by the CARLA Team (Computer Vision Center, Barcelona, and contributors), under the [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/) licence. Source: `bitbucket.org/carla-simulator/carla-content`, branch `ue5-dev`; fetched into `Content/Carla/` by `scripts/fetch-carla.ps1` (not kept in this repository); the licence text is copied to `Content/Carla/LICENSE.txt`. Changed: placed by OSDS's own rules at the signalised junctions it finds on OpenStreetMap roads; our own signal heads and lamps hang from the CARLA arms. No brand names or logos are taken.
+From the [CARLA simulator](https://carla.org/)'s content, by the CARLA Team (Computer Vision Center, Barcelona, and contributors), under the [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/) licence. Source: `bitbucket.org/carla-simulator/carla-content`, branch `ue5-dev`; fetched into `Content/Carla/` by `scripts/fetch-carla.ps1` (not kept in this repository); the licence text is copied to `Content/Carla/LICENSE.txt`, and the packaged game carries `licenses/CARLA.txt` and a line in its `CREDITS.txt`. What is used and how it is changed:
+
+- **Traffic-signal poles, bases and mast arms:** placed by OSDS's own rules at the signalised junctions it finds on OpenStreetMap roads; our own signal heads and lamps hang from the CARLA arms.
+- **Roadside grass and bushes:** 83 models chosen per climate band (`data/carla/props.json`, made by `scripts/carla-catalog.py`) and placed along rural road edges.
+- **Brick and concrete-weathering textures:** used as a ratio over each wall's own colour in the building shader.
+- **The Mini Cooper model:** exported from Unreal to glTF with baked materials; badges and tyre lettering painted out or removed (`scripts/simcruise-cars/debadge_carla_mini.py`).
+
+Only the models the game places are packaged. No brand names or logos are taken.
 
 ## Fonts
 
