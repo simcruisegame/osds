@@ -1,6 +1,8 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
 #include "Audio/SimCruiseInlineFourSynth.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -111,7 +113,9 @@ bool FSimCruiseInlineFourTest::RunTest(const FString& Parameters)
 		PortErrors.Sort();
 		const double Median = 0.5 * (Errors[4] + Errors[5]), PortMedian = 0.5 * (PortErrors[4] + PortErrors[5]);
 		AddInfo(FString::Printf(TEXT("idle cabin orders 1-10 (dB):%s; median error: %.2f dB against the Godot voice, %.2f dB against the recorded interior"), *Line, PortMedian, Median));
-		TestTrue(TEXT("idle cabin harmonics within 2 dB (median) of the Godot voice"), PortMedian < 2.0);
+		// 2.1: the voice is judged against the real car, not the Godot voice: no further from the
+		// recorded NB interior than the Godot voice was (3.54 dB median).
+		TestTrue(FString::Printf(TEXT("idle cabin harmonics within 3.6 dB (median) of the recorded NB interior (%.2f dB)"), Median), Median < 3.6);
 	}
 
 	// The cabin rolls the exhaust off; outside it is brighter.
@@ -239,6 +243,43 @@ bool FSimCruiseEngineLimiterTest::RunTest(const FString& Parameters)
 	const double Limited = Dips(5000.0), Clean = Dips(7250.0);
 	AddInfo(FString::Printf(TEXT("LIMITER quietest 10 ms window / mean: %.2f over a 5000 rpm limiter, %.2f under a 7250 rpm one"), Limited, Clean));
 	TestTrue(TEXT("over its own limiter the engine stutters (deeper dips than under it)"), Limited < Clean * 0.8);
+	return true;
+}
+
+// A full-throttle sweep 1500 -> 7000 rpm, then a lift and the limiter, outside and in the cabin, written
+// to Saved/Audio/i4-<view>.wav for spectrogram checks; fails if more than 0.5 % of samples clip.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSimCruiseInlineFourSweepTest, "SimCruise.Audio.InlineFourSweep", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FSimCruiseInlineFourSweepTest::RunTest(const FString& Parameters)
+{
+	for (const bool bCabin : { false, true })
+	{
+		FSimCruiseInlineFourSynth Synth;
+		const int32 SweepRate = FSimCruiseInlineFourSynth::SampleRate, Block = 256;
+		TArray<float> All;
+		const double Seconds = 10.0;
+		for (int32 n = 0; n < static_cast<int32>(Seconds * SweepRate / Block); ++n)
+		{
+			const double T = static_cast<double>(n * Block) / SweepRate;
+			FSimCruiseInlineFourSynth::FInputs In;
+			In.bCabin = bCabin;
+			In.PopAmount = 0.0;
+			In.LimiterRpm = 7200.0;
+			if (T < 7.0) { In.Rpm = 1500.0 + (7000.0 - 1500.0) * T / 7.0; In.Pedal = 1.0; In.Combustion = 0.9; In.ShaftLoad = 0.8; }
+			else if (T < 8.5) { In.Rpm = 7000.0 - 2500.0 * (T - 7.0) / 1.5; In.Pedal = 0.0; In.Combustion = 0.0; In.ShaftLoad = -0.4; }
+			else { In.Rpm = 7300.0; In.Pedal = 1.0; In.Combustion = 0.9; In.ShaftLoad = 0.1; }
+			const int32 At = All.AddUninitialized(Block);
+			Synth.Render(All.GetData() + At, Block, In);
+		}
+		int32 Clipped = 0;
+		TArray<uint8> Wav;
+		auto U32 = [&Wav](uint32 V) { for (int32 b = 0; b < 4; ++b) Wav.Add((V >> (8 * b)) & 255); };
+		auto U16 = [&Wav](uint16 V) { Wav.Add(V & 255); Wav.Add(V >> 8); };
+		Wav.Append((const uint8*)"RIFF", 4); U32(36 + All.Num() * 2); Wav.Append((const uint8*)"WAVEfmt ", 8);
+		U32(16); U16(1); U16(1); U32(SweepRate); U32(SweepRate * 2); U16(2); U16(16); Wav.Append((const uint8*)"data", 4); U32(All.Num() * 2);
+		for (const float S : All) { if (FMath::Abs(S) >= 0.93f) ++Clipped; U16(static_cast<uint16>(static_cast<int16>(FMath::Clamp(S, -1.f, 1.f) * 32000.f))); }
+		FFileHelper::SaveArrayToFile(Wav, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Audio"), bCabin ? TEXT("i4-cabin.wav") : TEXT("i4-outside.wav")));
+		TestTrue(FString::Printf(TEXT("%s: clipped %.2f %% of samples"), bCabin ? TEXT("cabin") : TEXT("outside"), 100.0 * Clipped / All.Num()), Clipped <= All.Num() / 200);
+	}
 	return true;
 }
 #endif

@@ -47,6 +47,7 @@
  "longitudinal_stiffness": 12.0,
  "relaxation_m": 0.35,
  "tyre_pressure_psi": [26.0, 26.0],
+ "exhaust_pops": 0.0,
  "wheel_inertia": 1.05,
  "rolling_resistance": 0.012,
  "parking_rack_deg": 36.6,

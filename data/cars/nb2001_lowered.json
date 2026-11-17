@@ -42,6 +42,7 @@
  "longitudinal_stiffness": 12.0,
  "relaxation_m": 0.35,
  "tyre_pressure_psi": [26.0, 26.0],
+ "exhaust_pops": 0.0,
  "tyre_model": "tmeasy",
  "tmeasy_peak_mu_x": 1.072,
  "tmeasy_slide_mu_x": 0.8576,

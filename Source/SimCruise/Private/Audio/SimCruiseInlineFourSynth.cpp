@@ -89,7 +89,7 @@ void FSimCruiseInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& 
 	const double TargetOverrun = FMath::Clamp(-In.ShaftLoad, 0.0, 1.0) * SmoothStep(1150.0, 2300.0, Rpm) * (1.0 - TargetCharge);
 	const double TargetGain = In.bStalled ? 0.0 : 1.0;
 	const double Smoothing = 1.0 - FMath::Exp(-1.0 / (SampleRate * .025));
-	const double Filter = In.bCabin ? .20 : .52;
+	const double Filter = In.bCabin ? .25 : .52;
 	const double BoomLevel = In.bCabin ? .45 : 0.0;
 	const double ExhaustPresence = In.bCabin ? 1.0 : 1.12;
 	// The powertrain cuts torque over the limiter; with the pedal still down the sound
@@ -100,7 +100,29 @@ void FSimCruiseInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& 
 	if (TargetOverrun > .25 && Rpm > PopRpm) OverrunAge += static_cast<double>(Frames) / SampleRate;
 	else OverrunAge = 0.0;
 	double PopChance = 0.0;
-	if (OverrunAge > 0.0) PopChance = .10 * TargetOverrun * SmoothStep(PopRpm, 4200.0, Rpm) * FMath::Exp(-OverrunAge / 1.2);
+	if (OverrunAge > 0.0) PopChance = .10 * FMath::Clamp(In.PopAmount, 0.0, 1.0) * TargetOverrun * SmoothStep(PopRpm, 4200.0, Rpm) * FMath::Exp(-OverrunAge / 1.2);
+	// Fixed resonances: the exhaust's pulses ring the muffler body (about 180 Hz) and the pipe's rasp
+	// (about 1.9 kHz) at their own frequencies while the firing orders sweep through them, as a real car
+	// does (the tables alone moved the whole timbre with rpm, like a recording sped up). RBJ band-pass.
+	auto BandPass = [](double F, double Q, double* C)
+	{
+		const double W = 2.0 * UE_DOUBLE_PI * F / SampleRate, A = FMath::Sin(W) / (2.0 * Q), N = 1.0 + A;
+		C[0] = A / N; C[1] = -A / N; C[2] = -2.0 * FMath::Cos(W) / N; C[3] = (1.0 - A) / N;
+	};
+	double BodyC[4], RaspC[4];
+	BandPass(180.0, 1.5, BodyC);
+	BandPass(1900.0, 1.2, RaspC);
+	auto Ring = [](double X, const double* C, double* Z)
+	{
+		const double Y = C[0] * X + C[1] * Z[1] - C[2] * Z[2] - C[3] * Z[3];
+		Z[1] = Z[0]; Z[0] = X; Z[3] = Z[2]; Z[2] = Y;
+		return Y;
+	};
+	// Louder as the engine revs (about +7 dB from 2000 to 7000 rpm; it was nearly flat), quieter at idle.
+	const double EngineRpm = FMath::Max(TargetHz * (bV8 ? 120.0 : 30.0), 1.0);
+	const double RevGain = FMath::Clamp(FMath::Pow(EngineRpm / 5000.0, 0.6), 0.5, 1.15);
+	// The four cylinders each a little different (fixed): the half orders of a real inline four.
+	static constexpr double CylinderGain[4] = { 1.00, 0.94, 1.04, 0.97 };
 	const double PopLevel = In.bCabin ? .30 : .55;
 	const double PopDecay = FMath::Exp(-1.0 / (SampleRate * .012));
 	for (int32 I = 0; I < Frames; ++I)
@@ -117,6 +139,8 @@ void FSimCruiseInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& 
 			Phase -= Size;
 			// A small zero-mean cycle-to-cycle variation, strongest under light load.
 			PulseGain = 1.0 + (static_cast<double>(RandomState) / 1073741824.0 - 1.0) * (.035 - .018 * Charge);
+			FireIndex = (FireIndex + 1) & 3;
+			if (!bV8) PulseGain *= CylinderGain[FireIndex];
 			if (PopChance > 0.0 && static_cast<double>(RandomState) / 2147483647.0 < PopChance)
 			{
 				PopEnv = PopLevel * (.6 + .4 * static_cast<double>(RandomState & 1023) / 1023.0);
@@ -156,11 +180,14 @@ void FSimCruiseInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& 
 		const double Speed = FMath::Clamp(FiringHz / SpeedHz, 0.0, 1.0);
 		const double Pulse = FMath::Lerp(Quiet, Loaded, Charge) * PulseGain * CutGain;
 		const double ExhaustLevel = (.17 + .34 * Charge + .14 * Pull + .08 * Speed - .045 * Overrun) * ExhaustPresence;
-		const double InletLevel = (.02 + .42 * Throttle * Charge) * (In.bCabin ? FMath::Clamp(In.CabinInletGain, 0.0, 1.0) : 1.0) * CutGain;
+		const double InletLevel = RevGain * (.02 + .42 * Throttle * Charge) * (In.bCabin ? FMath::Clamp(In.CabinInletGain, 0.0, 1.0) : 1.0) * CutGain;
 		const double Airflow = (.036 + .13 * Charge + .08 * Overrun) * (.55 + Speed) + .05 * (1.0 - CutGain);
 		PopEnv *= PopDecay;
 		PopLow += .35 * (White * PopEnv - PopLow);
-		const double Exhaust = Pulse * ExhaustLevel;
+		const double Dry = Pulse * ExhaustLevel * RevGain;
+		// The resonances ring with the exhaust's energy: faint at idle (a real NB's idling cabin is the
+		// firing order alone), full under load.
+		const double Exhaust = .6 * Dry + .6 * (.15 + .85 * Charge) * Ring(Dry, BodyC, BodyZ) + (.05 + .35 * Charge) * Ring(Dry, RaspC, RaspZ);
 		Boom += .034 * (Exhaust - Boom);
 		const double Pressure = Exhaust + Boom * BoomLevel + Air * InletLevel + Breath * Airflow + PopLow;
 		OutputLow += Filter * (Pressure - OutputLow);

@@ -163,6 +163,8 @@ struct FSimCruiseCarDefinition
 	/** "lever" (a cable to the rear brakes: locks the rears, the handbrake turn) or "electric" (the
 	 *  C8's and Model 3's switch: at speed it brakes all four wheels through ABS and ESC, no turn). */
 	FString ParkingBrakeType = TEXT("lever");
+	/** Overrun pops and crackle in the engine sound, 0..1 (0: a stock exhaust that does not pop). */
+	double ExhaustPopAmount = 1.0;
 
 	// Aerodynamic body drag, Cd multiplied by frontal area.
 	double DragAreaM2 = 0.65;
