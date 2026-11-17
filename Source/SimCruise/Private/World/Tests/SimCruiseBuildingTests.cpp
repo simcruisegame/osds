@@ -195,7 +195,6 @@ bool FSimCruiseOceanDriveSignsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif
 
 // The helper's `buildings` reply (measured heights, use and storeys, mapped finishes) lands on the rows it
 // names by index and centre, and on no other: a record with a wrong centre or base height is dropped.
@@ -243,3 +242,5 @@ bool FSimCruiseBuildingFactsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a reply for another tile changes nothing"), SimCruiseTileData::ApplyBuildingFacts(Other, Reply).Heights, 0);
 	return true;
 }
+
+#endif

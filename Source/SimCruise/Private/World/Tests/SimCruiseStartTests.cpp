@@ -1543,7 +1543,6 @@ bool FSimCruiseTerrainNeverOverRoadTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif
 
 // A short side cut is a junction; a side cut along a long run is a carriageway beside this one with no gap
 // (the Mackinac Bridge's two one-way decks), not a junction: the car must be able to start there.
@@ -1569,3 +1568,5 @@ bool FSimCruiseStartJunctionCutsTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("plain road is not a junction"), Cuts[5] != 0);
 	return true;
 }
+
+#endif
