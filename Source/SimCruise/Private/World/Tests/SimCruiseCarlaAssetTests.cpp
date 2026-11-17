@@ -32,9 +32,13 @@ bool FSimCruiseCarlaAssetsTest::RunTest(const FString& Parameters)
 	IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
 	// The models the game places (the catalogue, data/carla/props.json, and the signal parts): loading
 	// all 21 GB of the fetched art took over 20 minutes.
+	// By default only what ships (the catalogue and the signal parts, about 90 meshes). The full
+	// sweep of data/carla/candidates.txt (over 1100 meshes, an hour or more on a cold cache) and the
+	// facade texture export run only with SIMCRUISE_CARLA_SWEEP=1, when the catalogue is remade.
+	const bool bSweep = !FPlatformMisc::GetEnvironmentVariable(TEXT("SIMCRUISE_CARLA_SWEEP")).IsEmpty();
 	TArray<FString> Wanted;
 	FString Text;
-	if (FFileHelper::LoadFileToString(Text, *FPaths::Combine(FPaths::ProjectDir(), TEXT("data"), TEXT("carla"), TEXT("candidates.txt"))))
+	if (bSweep && FFileHelper::LoadFileToString(Text, *FPaths::Combine(FPaths::ProjectDir(), TEXT("data"), TEXT("carla"), TEXT("candidates.txt"))))
 	{
 		Text.ParseIntoArrayLines(Wanted);
 	}
@@ -66,9 +70,11 @@ bool FSimCruiseCarlaAssetsTest::RunTest(const FString& Parameters)
 			Size.X, Size.Y, Size.Z, Box.Min.X / 100.0, Box.Min.Y / 100.0, Box.Min.Z / 100.0, Box.Max.X / 100.0, Box.Max.Y / 100.0, Box.Max.Z / 100.0, *FString::Join(Missing, TEXT(", "))));
 		(Missing.IsEmpty() ? Good : Bad)++;
 	}
-	FFileHelper::SaveStringArrayToFile(Lines, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("CarlaAssets.txt")));
+	FFileHelper::SaveStringArrayToFile(Lines, *FPaths::Combine(FPaths::ProjectSavedDir(), bSweep ? TEXT("CarlaAssets.txt") : TEXT("CarlaAssetsShipped.txt")));
 	AddInfo(FString::Printf(TEXT("CARLA meshes: %d complete, %d with missing materials (Saved/CarlaAssets.txt)"), Good, Bad));
 	UE_LOG(LogTemp, Display, TEXT("CARLAASSETS %d complete, %d missing"), Good, Bad);
+	TestEqual(TEXT("every CARLA mesh the game places loads with its materials"), Bad, 0);
+	if (!bSweep) return true;
 	// The facade albedo textures as PNG (Saved/CarlaTex), to choose and scale them by eye.
 	TArray<FAssetData> Textures;
 	Registry.ScanPathsSynchronous({ TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures") }, true);
