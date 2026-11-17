@@ -27,6 +27,14 @@ BOXES = {
 }
 
 
+# Areas recoloured to match the real car (base colour only): the F56's dash top is black soft-touch
+# plastic; the CARLA atlas paints it, and some cabin trim, light grey.
+RECOLOUR = {
+    "MI_MiniCooper_Details02": [((612, 880, 686, 975), (36, 36, 38)), ((818, 286, 910, 454), (40, 40, 42))],
+    "MI_MiniCooper_Details01": [((660, 0, 812, 70), (40, 40, 42))],
+}
+
+
 def border_colour(px, box):
     x0, y0, x1, y1 = box
     ring = [px[x, y0] for x in range(x0, x1)] + [px[x, y1 - 1] for x in range(x0, x1)] + \
@@ -48,6 +56,13 @@ def main(folder):
                     q = px[x, y]
                     if flat or sum(abs(q[i] - c[i]) for i in range(3)) > 40:
                         px[x, y] = c
+        for box, colour in RECOLOUR.get(mat, []):
+            for y in range(box[1], box[3]):
+                for x in range(box[0], box[2]):
+                    q = px[x, y]
+                    # Keep the texture's shading: scale each pixel down to the target's level.
+                    level = max(sum(q) / 3.0, 1.0)
+                    px[x, y] = tuple(min(255, int(colour[i] * (0.75 + 0.5 * level / 160.0))) for i in range(3))
         im.save(p)
         try:
             n = Image.open(f"{folder}/{mat}_Normal.png").convert("RGB")
@@ -58,6 +73,18 @@ def main(folder):
                     for x in range(box[0], box[2]):
                         npx[x, y] = (128, 128, 255)
             n.save(f"{folder}/{mat}_Normal.png")
+        except FileNotFoundError:
+            pass
+        # The recoloured cabin trim is matte plastic: the bake gave it mirror-gloss metal
+        # (roughness 14, metallic 242 of 255), so the dash reflected the sky.
+        try:
+            r = Image.open(f"{folder}/{mat}_MetallicRoughness.png").convert("RGB")
+            rpx = r.load()
+            for box, _ in RECOLOUR.get(mat, []):
+                for y in range(box[1], box[3]):
+                    for x in range(box[0], box[2]):
+                        rpx[x, y] = (rpx[x, y][0], 200, 0)
+            r.save(f"{folder}/{mat}_MetallicRoughness.png")
         except FileNotFoundError:
             pass
         # Lettering moulded into the tyre also shows in the roughness: flatten the flat boxes there.

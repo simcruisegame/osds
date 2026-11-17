@@ -42,7 +42,7 @@ mini = {
     "layout": "fwd", "front_diff_bias": 1.0, "slip_ratio_falloff": 0.1,
     "target_0_60_s": 6.6, "target_70_0_ft": 172.0, "target_skidpad_g": 0.91,
     "model_scene": "data/art/traffic/minif56-carla/scene.gltf", "model_rig": {"fit": True},
-    "driver_eye": [-0.33, 1.18, 0.06],
+    "driver_eye": [-0.33, 1.16, 0.08],
     "sources": {
         "mass": "2,785 lb, 2015 Cooper S manual (KBB). Split 62/38 and CG 0.53 m are estimates.",
         "engine": "MINI US: 189 hp at 4700-6000 rpm, 207 lb-ft at 1250-4750 rpm; overboost 221 lb-ft not modelled. Curve outside the plateau is an estimate.",
