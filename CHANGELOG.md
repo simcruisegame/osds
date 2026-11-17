@@ -12,7 +12,7 @@ The short version of each release, newest first. Every release has full notes in
 - **The Miata sounds like a Miata:** real exhaust and intake resonances, louder with revs, no pops on a stock car.
 - **CARLA art:** traffic-signal poles and mast arms, roadside grass and bushes chosen per climate, brick and weathered concrete on buildings.
 - **Trees pick their species from the aerial photo;** no more pines in Phoenix.
-- Known issues: the Camaro's bench launch spins its tyres (ease on the throttle); the Camaro model has no cabin (chase view from the seat).
+- Known issues: the Camaro has no traction control, as the real one did not: floor it and it spins (the test robot spun it on the Mackinac Bridge), so ease on; its model has no cabin (chase view from the seat); an occasional jolt at a map-tile border.
 
 [Full notes](docs/release/notes/2.1.0.md)
 
