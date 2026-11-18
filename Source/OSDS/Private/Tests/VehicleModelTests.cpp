@@ -240,13 +240,14 @@ bool FOsdsVehicleModelTuningTest::RunTest(const FString& Parameters)
 	Stiff.FrontSpringLbIn *= 2.0;
 	Stiff.RearSpringLbIn *= 2.0;
 	Stiff.FrontBarPct = 200.0;
-	Stiff.RideHeightMm = -30.0;
-	Stiff.TorquePct = 120.0;
+	Stiff.FrontRideHeightMm = Stiff.RearRideHeightMm = -30.0;
+	Stiff.PeakTorqueLbFt *= 1.2;
+	Stiff.PeakPowerHp *= 1.2;
 	Stiff.Clamp(Stock);
 	const FOsdsCarDefinition Tuned = Stiff.Apply(Car, Stock);
 	TestTrue(TEXT("stiffer springs and bar roll less"), FOsdsTuning::RollGradientDegPerG(Tuned) < RealRoll);
 	FOsdsTuning Lower = Stock;
-	Lower.RideHeightMm = -30.0;
+	Lower.FrontRideHeightMm = Lower.RearRideHeightMm = -30.0;
 	TestTrue(TEXT("a lower body (lower centre of mass) rolls less"), FOsdsTuning::RollGradientDegPerG(Lower.Apply(Car, Stock)) < RealRoll);
 	// The body stands where the suspension holds its static length: mount over the road at
 	// R + static length, the body centre (mount height - box centre) under it.
@@ -260,10 +261,10 @@ bool FOsdsVehicleModelTuningTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("torque scaled"), OsdsDynamics::SampleEngineTorqueNm(Tuned, 5500.0), 1.2 * OsdsDynamics::SampleEngineTorqueNm(Car, 5500.0), 1.0e-6);
 	// Safe limits.
 	FOsdsTuning Wild = Stock;
-	Wild.RideHeightMm = -500.0;
+	Wild.FrontRideHeightMm = Wild.RearRideHeightMm = -500.0;
 	Wild.FinalDrive = 99.0;
 	Wild.Clamp(Stock);
-	TestEqual(TEXT("ride height clamped to -60 mm"), Wild.RideHeightMm, -60.0);
+	TestEqual(TEXT("ride height clamped to -60 mm"), Wild.FrontRideHeightMm, -60.0);
 	TestEqual(TEXT("final drive clamped to +25 %"), Wild.FinalDrive, Stock.FinalDrive * 1.25, 1.0e-9);
 	return true;
 }

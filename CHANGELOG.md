@@ -2,9 +2,15 @@
 
 The short version of each release, newest first. Every release has full notes in [docs/release/notes/](docs/release/notes/). OSDS was called SimCruise up to 2.0.3 and Sunday Driver up to 1.0.8 ([history](docs/history.md)).
 
-## 2.2.0 (unreleased)
+## 2.2.0 (in progress)
 
-- **Engine sound:** every car now has its own engine layout: an inline four, a 60-degree V6 (Odyssey, Raptor) or a cross-plane V8 with its own exhaust tone (Mustang, Corvette, Camaro, Grand Cherokee). There is a turbo with spool, whoosh and blow-off (Mini, CR-V, Raptor), and the Model 3's motor whine. Recorded engine loops play when a car has them, and you can [record your own car](docs/recording-your-car.md). Settings has Master, Engine and World volume.
+**Tune your car: power and chassis.**
+
+- **Horsepower and torque:** peak torque (lb-ft) and peak power (hp) with the curve on screen, rev limit, final drive and every gear ratio.
+- **Chassis:** front and rear springs, bump and rebound damping front and rear, anti-roll bars, front and rear ride height, camber, toe and caster where the real car has the adjustment, brake bias and force, limited-slip lock on power and coast, tyre pressures, stability and traction control levels (On, Sport, Off).
+- **See the effect first:** the menu shows the torque and power curves, an estimated 0-60 and top speed, and body roll per g before you drive. Six pages, LB / RB; all on the pad; saved per car.
+
+[Full notes](docs/release/notes/2.2.0.md)
 
 ## 2.1.1 (2026-11-18)
 

@@ -142,21 +142,36 @@ Every menu works with the controller alone. A white border shows where you are.
 
 Press F4 (D-pad right), or pick *Tune car...* on the Your car page. You can only change the setup when the car stands still. A setup saved while moving goes on when the car next stops.
 
-| Setting | What it changes |
-|---|---|
-| Front and rear springs | Spring rate, lb/in |
-| Damping | % of stock |
-| Ride height | mm |
-| Front and rear anti-roll bars | % of stock (0 disconnects one) |
-| Engine torque | % |
-| Final drive | Gear ratio |
-| Steering ratio | Lower is quicker: the wheels turn further and faster |
-| Front and rear tyre pressure | psi, 18-40 (the door-sticker value is stock). Lower gives a softer, slower-reacting tyre and, past a point, less grip; higher a sharper, harder tyre that also loses grip when overdone |
+The menu has six pages; LB / RB (Q / E) change page. A row shows only if the real car has that part or adjustment (no diff lock on an open differential, no rear camber on a live axle, no stability control on a 2001 Miata).
 
-- Every setting stays in a safe range around the real car's.
-- The menu shows body roll (degrees per g of cornering), so you see the effect before you drive.
-- Buttons: Up / Down choose a row, Left / Right change it, X resets the row, Y twice resets the whole car to factory, A (Enter) saves and applies, B (Esc, F4) cancels.
-- The setup is saved for each car.
+| Page | Setting | What it changes | Range |
+|---|---|---|---|
+| Engine | Peak torque | lb-ft; the whole torque curve scales with it (power goes along) | 60-140 % of stock |
+| Engine | Peak power | hp; shapes the curve above the torque peak (a cam and tune's top end) | 60-150 % of stock |
+| Engine | Rev limit | rpm where the fuel cut sits; the automatic changes up as far below it as before | 1500 down, 500 up |
+| Gearbox | Final drive | :1; higher is shorter (quicker, lower top speed) | ±25 % |
+| Gearbox | Gear 1, 2, ... | each gear's ratio | ±20 %, each gear taller than the one before |
+| Springs and dampers | Front and rear springs | lb/in | 50-400 % |
+| Springs and dampers | Front and rear bump, rebound | damper force in compression and extension, % of stock | 50-250 % |
+| Springs and dampers | Front and rear anti-roll bars | % of stock (0 disconnects one) | 0-300 % |
+| Springs and dampers | Front and rear ride height | mm; lowering lowers the centre of mass | -60 to +30, ends within 40 mm of each other |
+| Alignment | Front and rear camber | degrees (negative: top of the tyre in) | 3 more negative, 1 less |
+| Alignment | Front and rear toe | degrees per wheel, + is toe-in | ±0.5 |
+| Alignment | Caster | degrees | ±2 |
+| Alignment | Steering ratio | lower is quicker: the wheels turn further and faster | 60-140 % |
+| Brakes and differential | Brake bias | front share of the brake torque, % | ±12 points |
+| Brakes and differential | Brake force | % of stock (pads and master cylinder) | 70-130 % |
+| Brakes and differential | Diff lock, power and coast | limited-slip torque bias ratio, 1 is open | 1-5:1, coast no more than power |
+| Tyres and aids | Front and rear tyre pressure | psi (the door sticker is stock). Lower gives a softer, slower-reacting tyre and, past a point, less grip; higher a sharper, harder tyre that also loses grip when overdone | 18-40 |
+| Tyres and aids | Stability control | On (the maker's setting), Sport (lets the car slide about twice as far first), Off | cars that have it |
+| Tyres and aids | Traction control | On, Sport (more wheelspin allowed), Off | cars that have it |
+
+Camber, rear toe and caster appear only where the real car has the adjustment (`data/tuning/adjustable.json`; front toe always). Diff preload comes when the clutch-type limited-slip model lands.
+
+- Every setting stays in a safe range around the real car's. Changed rows have a star.
+- Beside the rows you see the effect before you drive: the torque (amber) and power (lime) curves over rpm with the real car's in grey, peak torque and power and where they are, an estimated 0-60 mph (the change applied to the real car's published time), an estimated top speed, and body roll in degrees per g of cornering.
+- Buttons: LB / RB change page, Up / Down choose a row, Left / Right change it, X resets the row, Y twice resets the whole car to factory, A (Enter) saves and applies, B (Esc, F4) cancels.
+- The setup is saved for each car. Setups saved by 2.1 (one damping and one ride height) load into the new front and rear rows.
 
 ## Seat and view
 

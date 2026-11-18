@@ -112,9 +112,10 @@ bool AOsdsVehicle::ApplyTuning(const FOsdsTuning& InTuning, bool bSave)
 		CarModel->SetTunedSteeringRatio(Tuning.SteeringRatio);
 	}
 	const bool bSaved = !bSave || Tuning.Save(RealCar.Id);
-	UE_LOG(LogTemp, Display, TEXT("OSDS tuning %s: springs %.0f/%.0f lb/in, damping %.0f %%, ride %+.0f mm, bars %.0f/%.0f %%, torque %.0f %%, final drive %.2f, steering %.1f:1, roll %.2f deg/g"),
-		*RealCar.Id, Tuning.FrontSpringLbIn, Tuning.RearSpringLbIn, Tuning.DampingPct, Tuning.RideHeightMm, Tuning.FrontBarPct, Tuning.RearBarPct,
-		Tuning.TorquePct, Tuning.FinalDrive, Tuning.SteeringRatio, FOsdsTuning::RollGradientDegPerG(Tuned));
+	UE_LOG(LogTemp, Display, TEXT("OSDS tuning %s: %.0f lb-ft, %.0f hp, limit %.0f rpm, final drive %.2f, springs %.0f/%.0f lb/in, dampers %.0f/%.0f/%.0f/%.0f %%, bars %.0f/%.0f %%, ride %+.0f/%+.0f mm, brakes %.0f %% front x%.0f %%, roll %.2f deg/g"),
+		*RealCar.Id, Tuning.PeakTorqueLbFt, Tuning.PeakPowerHp, Tuning.RevLimitRpm, Tuning.FinalDrive, Tuning.FrontSpringLbIn, Tuning.RearSpringLbIn,
+		Tuning.FrontBumpPct, Tuning.FrontReboundPct, Tuning.RearBumpPct, Tuning.RearReboundPct, Tuning.FrontBarPct, Tuning.RearBarPct,
+		Tuning.FrontRideHeightMm, Tuning.RearRideHeightMm, Tuning.BrakeBiasFrontPct, Tuning.BrakeForcePct, FOsdsTuning::RollGradientDegPerG(Tuned));
 	return bSaved;
 }
 

@@ -690,10 +690,9 @@ bool FOsdsPadHintsMatchTest::RunTest(const FString& Parameters)
 		TSharedRef<SOsdsTuningMenu> T = SNew(SOsdsTuningMenu).OnClose_Lambda([Closed]() { ++*Closed; });
 		FMade M;
 		M.Widget = T;
-		M.State = [T, Closed]() { return FString::Printf(TEXT("row %d setup %08x confirm %d result %d closed %d"), T->GetSelected(), FCrc::MemCrc32(&T->GetWorking(), sizeof(FOsdsTuning)), T->IsConfirmingReset() ? 1 : 0, static_cast<int32>(T->GetResult()), *Closed); };
+		M.State = [T, Closed]() { return FString::Printf(TEXT("page %d row %d setup %08x confirm %d result %d closed %d"), T->GetPage(), T->GetSelected(), FCrc::MemCrc32(&T->GetWorking(), sizeof(FOsdsTuning)), T->IsConfirmingReset() ? 1 : 0, static_cast<int32>(T->GetResult()), *Closed); };
 		M.Hints = []() { return SOsdsTuningMenu::GetPadHints(); };
-		// A changed row (so X has something to reset).
-		// The damping row (it has a range with no car), changed so X has something to reset.
+		// The rev limit row, changed so X has something to reset.
 		M.Prepare = [T](FPadScreen&) { T->Select(2); T->Nudge(1); };
 		return M;
 	});
@@ -808,26 +807,36 @@ bool FOsdsPadWalkAllTest::RunTest(const FString& Parameters)
 	// ------------------------------------------------------------------ Tune car and Seat & view: every row, D-pad and stick
 	{
 		TSharedRef<SOsdsTuningMenu> Tune = SNew(SOsdsTuningMenu);
-		// A real car's numbers (an NB Miata's, about), so every row has a range to move in.
-		FOsdsTuning Stock;
-		Stock.FrontSpringLbIn = 280.0; Stock.RearSpringLbIn = 190.0; Stock.FinalDrive = 4.1; Stock.SteeringRatio = 15.0;
-		Tune->SetSetup(Stock, Stock);
+		// With no car the menu tunes the default car (a 1999 NB): every row has its real range.
 		FPadScreen Pad(Tune);
-		TSet<int32> Rows;
-		for (int32 i = 0; i < 40 && !Rows.Contains(Tune->GetSelected()); ++i)
+		int32 Walked = 0;
+		for (int32 PageIndex = 0; PageIndex < Tune->NumPages(); ++PageIndex)
 		{
-			Rows.Add(Tune->GetSelected());
-			const uint32 Before = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FOsdsTuning));
-			Pad.Press(EKeys::Gamepad_DPad_Right);
-			const uint32 Up = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FOsdsTuning));
-			Pad.Press(EKeys::Gamepad_DPad_Left);
-			Pad.Press(EKeys::Gamepad_DPad_Left);
-			const uint32 Down = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FOsdsTuning));
-			TestTrue(FString::Printf(TEXT("Tune car: row %d changes with the D-pad"), Tune->GetSelected()), Up != Before || Down != Before);
-			Pad.Press(EKeys::Gamepad_DPad_Down);
+			TestEqual(TEXT("Tune car: RB pages through in order"), Tune->GetPage(), PageIndex);
+			TSet<int32> Rows;
+			for (int32 i = 0; i < 40 && !Rows.Contains(Tune->GetSelected()); ++i)
+			{
+				Rows.Add(Tune->GetSelected());
+				const uint32 Before = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FOsdsTuning));
+				Pad.Press(EKeys::Gamepad_DPad_Right);
+				const uint32 Up = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FOsdsTuning));
+				Pad.Press(EKeys::Gamepad_DPad_Left);
+				Pad.Press(EKeys::Gamepad_DPad_Left);
+				const uint32 Down = FCrc::MemCrc32(&Tune->GetWorking(), sizeof(FOsdsTuning));
+				TestTrue(FString::Printf(TEXT("Tune car: page %d row %s changes with the D-pad"), PageIndex, *Tune->GetSelectedRowName()), Up != Before || Down != Before);
+				// Y-less reset of this one row: X puts it back as the real car's.
+				Pad.Press(EKeys::Gamepad_FaceButton_Left);
+				Pad.Press(EKeys::Gamepad_DPad_Down);
+			}
+			TestTrue(TEXT("Tune car: the D-pad comes round to the page's first row"), Tune->GetSelected() == 0 && Rows.Num() == Tune->NumRows());
+			Walked += Rows.Num();
+			Pad.Press(EKeys::Gamepad_RightShoulder);
 		}
-		AddInfo(FString::Printf(TEXT("Tune car: %d rows walked with the D-pad"), Rows.Num()));
-		TestTrue(TEXT("Tune car: the D-pad comes round to the first row"), Tune->GetSelected() == 0 && Rows.Num() >= 8);
+		AddInfo(FString::Printf(TEXT("Tune car: %d rows on %d pages walked with the pad"), Walked, Tune->NumPages()));
+		TestTrue(TEXT("Tune car: RB comes round to the first page"), Tune->GetPage() == 0 && Tune->NumPages() == 6 && Walked >= 25);
+		Pad.Press(EKeys::Gamepad_LeftShoulder);
+		TestEqual(TEXT("Tune car: LB goes back a page (round to the last)"), Tune->GetPage(), Tune->NumPages() - 1);
+		Pad.Press(EKeys::Gamepad_RightShoulder);
 		Pad.Stick(EKeys::Gamepad_LeftY, -1.f);
 		TestEqual(TEXT("Tune car: one stick push down is one row"), Tune->GetSelected(), 1);
 		Pad.Hold(EKeys::Gamepad_LeftY, -1.f);

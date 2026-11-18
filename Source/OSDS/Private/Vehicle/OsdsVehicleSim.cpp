@@ -131,10 +131,13 @@ void FOsdsVehicleSim::Initialize(const FOsdsCarDefinition& InCar)
 	ReferenceOriginLocalM = FVector3d(0.0, 0.0, -Car.CollisionShapeCenterYM);
 	const double HalfWheelbase = Car.WheelbaseM * 0.5;
 	const double MountZ = Car.SuspensionMountHeightM - Car.CollisionShapeCenterYM;
-	MountsLocalM[0] = FVector3d(HalfWheelbase, -Car.FrontTrackM * 0.5, MountZ);
-	MountsLocalM[1] = FVector3d(HalfWheelbase, Car.FrontTrackM * 0.5, MountZ);
-	MountsLocalM[2] = FVector3d(-HalfWheelbase, -Car.RearTrackM * 0.5, MountZ);
-	MountsLocalM[3] = FVector3d(-HalfWheelbase, Car.RearTrackM * 0.5, MountZ);
+	// Tuning's front/rear ride height moves each axle's mounts (SuspensionMountOffsetMByAxle, 0 stock).
+	const double MountZFront = MountZ + AxleValue(Car.SuspensionMountOffsetMByAxle, 0);
+	const double MountZRear = MountZ + AxleValue(Car.SuspensionMountOffsetMByAxle, 1);
+	MountsLocalM[0] = FVector3d(HalfWheelbase, -Car.FrontTrackM * 0.5, MountZFront);
+	MountsLocalM[1] = FVector3d(HalfWheelbase, Car.FrontTrackM * 0.5, MountZFront);
+	MountsLocalM[2] = FVector3d(-HalfWheelbase, -Car.RearTrackM * 0.5, MountZRear);
+	MountsLocalM[3] = FVector3d(-HalfWheelbase, Car.RearTrackM * 0.5, MountZRear);
 	CenterOfMassLocalM = FVector3d((Car.FrontWeightFraction - 0.5) * Car.WheelbaseM, 0.0,
 		Car.CenterOfGravityHeightM - Car.CollisionShapeCenterYM);
 
@@ -758,7 +761,8 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 				const bool bInner = (WheelIndex == 1 && Steering > 0.0) || (WheelIndex == 0 && Steering < 0.0);
 				Angle = FMath::Sign(Steering) * (bInner ? InnerAngle : OuterAngle);
 			}
-			Angle -= Side * ToeRad;
+			// Tuning may set toe per axle (ToeAngleDegByAxle); else the car file's one toe for all four.
+			Angle -= Side * (Car.ToeAngleDegByAxle.Num() == 2 ? OsdsUnits::ToRadians(Car.ToeAngleDegByAxle[Axle]) : ToeRad);
 			const double CamberDeg = AxleValue(Car.StaticCamberDegByAxle, Axle) -
 				(Car.StaticSuspensionLengthM - Length) * AxleValue(Car.CamberGainDegPerMByAxle, Axle);
 			double Inclination = Side * OsdsUnits::ToRadians(CamberDeg);
@@ -1014,6 +1018,8 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 		if (bEsc)
 		{
 			const double G = OsdsDynamics::GravityMps2;
+			// Tuning's ESC level widens the dead bands (Sport); 1 is the maker's calibration.
+			const double EscBand = FMath::Max(Car.StabilityControlDeadbandScale, 0.1);
 			const double K = OsdsUnits::ToRadians(Car.StabilityControlUndersteerDegPerG) / G;
 			const double FrictionYaw = EscFrictionMargin * (MuSum / MuCount) * G / Speed;
 			const double SteadyRef = FMath::Clamp(Speed * Steering / (Car.WheelbaseM + K * Speed * Speed), -FrictionYaw, FrictionYaw);
@@ -1023,15 +1029,15 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 			// driver is already countersteering).
 			TurnSign = FMath::Abs(YawRate) > 0.02 ? FMath::Sign(YawRate) : 0.0;
 			const double Excess = TurnSign * (YawRate - RefYaw);
-			Over = FMath::Max(Excess - (EscYawDeadbandRadPerS + EscYawDeadbandFraction * FMath::Abs(RefYaw)), 0.0);
+			Over = FMath::Max(Excess - EscBand * (EscYawDeadbandRadPerS + EscYawDeadbandFraction * FMath::Abs(RefYaw)), 0.0);
 			// Side slip at the CG with the tail out (turning right, the velocity points left of the nose).
 			const double Beta = FMath::Atan2(Velocity.Dot(Right), FMath::Max(Speed, 1.0));
-			const double BetaLimit = OsdsUnits::ToRadians(FMath::Lerp(EscBetaLowSpeedDeg, EscBetaHighSpeedDeg, SmoothStep(10.0, 30.0, Speed)));
+			const double BetaLimit = EscBand * OsdsUnits::ToRadians(FMath::Lerp(EscBetaLowSpeedDeg, EscBetaHighSpeedDeg, SmoothStep(10.0, 30.0, Speed)));
 			Over += EscBetaGainPerS * FMath::Max(-TurnSign * Beta - BetaLimit, 0.0);
 			// Understeer: the car turns less than the steering asks (and the tyres could give).
 			RefSign = FMath::Abs(RefYaw) > 0.02 ? FMath::Sign(RefYaw) : 0.0;
 			const double Short = RefSign * (RefYaw - YawRate);
-			Under = Over > 0.0 ? 0.0 : FMath::Max(Short - (EscUnderDeadbandRadPerS + EscUnderDeadbandFraction * FMath::Abs(RefYaw)), 0.0);
+			Under = Over > 0.0 ? 0.0 : FMath::Max(Short - EscBand * (EscUnderDeadbandRadPerS + EscUnderDeadbandFraction * FMath::Abs(RefYaw)), 0.0);
 			Over *= Presence;
 			Under *= Presence;
 		}
