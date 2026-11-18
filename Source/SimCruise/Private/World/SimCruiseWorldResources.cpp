@@ -492,6 +492,56 @@ Roughness = saturate(0.80 + 0.10 * (1.0 - a) + 0.05 * VC.r);
 	#undef SC_VN
 	#undef SC_TH
 }
+// CARLA road decals, stamped by rule on a world-space grid so they hold still and need no
+// placement data: each 6 m cell may carry one stamp (alligator cracking, a crack-sealing patch, a
+// stain, or a long crack), turned and offset by the cell's hash, more of them on older stretches
+// (macro2, as the tar snakes) and none on the gravel edge. A stamp stays inside its cell.
+if (RoadDecalsOn > 0.5)
+{
+	float decRough = 0.0;
+	float2 cell = floor(m / 6.0);
+	uint hh = (uint(int(cell.x)) * 73856093u) ^ (uint(int(cell.y)) * 19349663u);
+	hh = hh * 1274126177u; hh ^= hh >> 13; hh *= 2654435761u;
+	float r0 = float(hh & 1023u) / 1023.0, r1 = float((hh >> 10) & 1023u) / 1023.0, r2 = float((hh >> 20) & 1023u) / 1023.0;
+	float older = saturate((macro2 - 0.9) * 4.0);
+	float chance = lerp(0.35, 0.75, older) * (1.0 - VC.r);
+	if (r0 < chance)
+	{
+		float ang = r1 * 6.2831853;
+		float2 cs = float2(cos(ang), sin(ang));
+		float2 c = (cell + 0.5 + (float2(r1, r2) - 0.5) * 0.25) * 6.0;
+		float2 d = m - c;
+		float2 q = float2(dot(d, cs), dot(d, float2(-cs.y, cs.x)));
+		float kind = frac(r0 * 7.31 + r2 * 3.17);
+		float size = kind < 0.35 ? 3.2 : (kind < 0.6 ? 4.6 : (kind < 0.85 ? 2.6 : 4.2));
+		float2 duv = q / size + 0.5;
+		if (all(duv > 0.0) && all(duv < 1.0))
+		{
+			float edge = saturate(min(min(duv.x, 1.0 - duv.x), min(duv.y, 1.0 - duv.y)) * 12.0);
+			if (kind < 0.35)
+			{
+				float k = Texture2DSample(DecAlligator, DecAlligatorSampler, duv).r * edge * lerp(0.75, 1.0, older);
+				col *= lerp(1.0, 0.35, k); decRough = max(decRough, 0.1 * k);
+			}
+			else if (kind < 0.6)
+			{
+				float k = Texture2DSample(DecSeal, DecSealSampler, float2(duv.x * 0.2 + 0.4, duv.y)).r * edge;
+				col = lerp(col, Tint.rgb * 0.25, k); decRough = min(decRough, -0.25 * k);
+			}
+			else if (kind < 0.85)
+			{
+				float k = Texture2DSample(DecStain, DecStainSampler, duv).r * edge;
+				col *= lerp(1.0, 0.55, k); decRough = min(decRough, -0.18 * k);
+			}
+			else
+			{
+				float k = Texture2DSample(DecCrack, DecCrackSampler, duv).r * edge;
+				col *= lerp(1.0, 0.3, k); decRough = max(decRough, 0.08 * k);
+			}
+		}
+	}
+	Roughness = saturate(Roughness + decRough);
+}
 float3 g = float3(-(ax - a), -(ay - a), 0.0) * Bump;
 // The AI detail kit (DetailKitCode): aggregate and cracks up close; the gravel edge is soil.
 {
@@ -1059,6 +1109,25 @@ return col;
 			AddInput(Custom, TEXT("Tint"), VectorParam(Material, TEXT("Tint"), FLinearColor(0.085f, 0.083f, 0.08f)));
 			AddInput(Custom, TEXT("Bump"), ScalarParam(Material, TEXT("Bump"), 0.25f));
 			AddInput(Custom, TEXT("Wet"), ScalarParam(Material, TEXT("Wet"), 0.f));
+			{
+				// CARLA's road decal masks (CC-BY 4.0, Static/FX/Decals/Road): alligator cracking, crack
+				// sealing, a stain and a single long crack, stamped along every road by rule in
+				// AsphaltCode. Without the art the stamps are off (RoadDecalsOn 0).
+				const TCHAR* Paths[4] = {
+					TEXT("/Game/Carla/Static/FX/Decals/Road/Cracks/Textures/T_cracks01_msk.T_cracks01_msk"),
+					TEXT("/Game/Carla/Static/FX/Decals/Road/TarSnakes/Textures/T_tarsnakeBig01_msk.T_tarsnakeBig01_msk"),
+					TEXT("/Game/Carla/Static/FX/Decals/Road/RoadDirt/Textures/T_DecRoad01_msk.T_DecRoad01_msk"),
+					TEXT("/Game/Carla/Static/FX/Decals/Road/Cracks/Textures/T_DecRodCrack02_msk.T_DecRodCrack02_msk") };
+				const TCHAR* Names[4] = { TEXT("DecAlligator"), TEXT("DecSeal"), TEXT("DecStain"), TEXT("DecCrack") };
+				bool bAll = true;
+				for (int32 i = 0; i < 4; ++i)
+				{
+					UTexture* T = LoadObject<UTexture>(nullptr, Paths[i], nullptr, LOAD_NoWarn | LOAD_Quiet);
+					bAll &= T != nullptr;
+					AddInput(Custom, Names[i], TextureParam(Material, Names[i], T ? T : DefaultTexture));
+				}
+				AddInput(Custom, TEXT("RoadDecalsOn"), ScalarParam(Material, TEXT("RoadDecalsOn"), bAll ? 1.f : 0.f));
+			}
 			break;
 		case ESimCruiseTileLayer::Concrete:
 			Custom->Code = FString(SeamCode) + ConcreteCode;
