@@ -118,4 +118,4 @@ Code: [MIT](LICENSE). Data, imagery, models and fonts keep their own licences: [
 - Cars: Sketchfab models under CC BY 4.0, among them the Mazda MX-5 (NB) by [niev](https://sketchfab.com/niev), the 1965 Mustang by Kristian LaGrange, the Corvette C8 by Hari Prasath R and the 1985 Camaro IROC-Z by Tony; the Mini Cooper S is the [CARLA](https://carla.org/) Team's model. Signal poles, roadside plants and wall textures: CARLA simulator content (CC BY 4.0). Textures: Poly Haven, Innerscene, OpenGameArt (CC0). Font: Overpass (SIL OFL 1.1).
 - Built with [Unreal Engine](https://www.unrealengine.com/) and [Bun](https://bun.com/).
 
-OSDS was called SimCruise until 2.0.3; the code still uses that name inside (module, `-SimCruise...` options, `%LOCALAPPDATA%\SimCruise`), so old settings keep working.
+OSDS was called SimCruise until 2.0.3, and the code kept that name inside until 2.1.1; from 2.1.2 everything is OSDS, and the game moves old settings and the map cache from `%LOCALAPPDATA%\SimCruise` to `%LOCALAPPDATA%\OSDS` on its first start.
