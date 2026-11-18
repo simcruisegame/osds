@@ -938,7 +938,23 @@ if (rPane > 0.0)
 Roughness = rough;
 Metal = metal;
 Emis = emis;
-Nrm = normalize(VN);
+// No wall is a perfect plane (owner, 2.1.1: "things are never perfectly square"): render and
+// stucco undulate a few millimetres over a metre or two, cast concrete a little, masonry less, and
+// a raking light shows it. A tilt of up to about 1.5 degrees from two crossed slow waves along and
+// up the wall, phased by the building's seed; walls only, gone where the wall is under a pixel.
+{
+	float3 nrm = normalize(VN);
+	if (kind < 0.5 && vertical > 0.5)
+	{
+		float3 tA = normalize(float3(-nrm.y, nrm.x, 0.0) + 1e-5);
+		float amp = (wallMat < 0.5 ? 0.026 : (wallMat > 4.5 && wallMat < 5.5 ? 0.016 : 0.008)) * saturate(1.0 - max(fwidth(along), fwidth(h)) / 0.5);
+		float ph = seed * 61.0;
+		float da = cos(along * 1.9 + ph) * sin(h * 0.8 + ph * 0.7) + 0.45 * cos(along * 4.3 + h * 2.9 + ph * 1.3);
+		float dh = sin(along * 1.9 + ph) * cos(h * 0.8 + ph * 0.7) + 0.45 * cos(along * 3.1 - h * 3.7 + ph * 2.1);
+		nrm = normalize(nrm + tA * (amp * da) + float3(0.0, 0.0, 1.0) * (amp * dh));
+	}
+	Nrm = nrm;
+}
 return max(col, 0.0);
 )HLSL");
 
