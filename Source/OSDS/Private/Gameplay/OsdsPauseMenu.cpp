@@ -8,6 +8,7 @@
 #include "Widgets/Layout/SBackgroundBlur.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
@@ -94,6 +95,7 @@ const TArray<FRowInfo>& SOsdsPauseMenu::Rows(int32 InPage)
 		Row(EOsdsMenuRow::WhereTo, EKind::Action, EIcon::Search, TEXT("Where to?"), TEXT("Find a place, then go there or make it your stop"), TEXT("Type a place or an address. Go there now, or let the GPS take you there.")),
 		Row(EOsdsMenuRow::PlanRoute, EKind::Action, EIcon::Route, TEXT("Plan a route"), TEXT("Put stops on the map"), TEXT("Move the cross over the map and add stops. The GPS finds the roads between them.")),
 		Row(EOsdsMenuRow::FamousRoads, EKind::Action, EIcon::Star, TEXT("Famous roads"), TEXT("Great drives with the route ready"), TEXT("Go to the start of a famous road. The route to its end starts when you arrive.")),
+		Row(EOsdsMenuRow::RaceTracks, EKind::Action, EIcon::Flag, TEXT("Race tracks"), TEXT("Ovals and road courses across the US"), TEXT("Start on the start/finish straight of a real race track, facing the way the races run.")),
 		Row(EOsdsMenuRow::Traffic, EKind::Value, EIcon::Traffic, TEXT("Traffic"), TEXT("Other cars on the road"), TEXT("How many other cars drive near you.")),
 		Row(EOsdsMenuRow::Atlas, EKind::Action, EIcon::Map, TEXT("Road atlas"), TEXT("Jump to any place on the map"), TEXT("The full map. Pin a place and drive there now.")),
 		Row(EOsdsMenuRow::Quit, EKind::Action, EIcon::Back, TEXT("Quit the game"), TEXT("Back to the desktop"), TEXT("You are asked first. Your settings are already saved.")),
@@ -656,9 +658,14 @@ void SOsdsListMenu::Construct(const FArguments& InArgs)
 			+ SVerticalBox::Slot().AutoHeight()[Text(InArgs._Title, EWeight::ExtraBold, 44.f, White())]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0, 6, 0, 0)[Text(InArgs._Help, EWeight::Regular, 23.f, Mist())]
 		]
-		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(70.f, 190.f, 0.f, 0.f)
+		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Fill).Padding(70.f, 190.f, 0.f, 150.f)
 		[
-			Column
+			SAssignNew(Scroll, SScrollBox).ScrollBarVisibility(EVisibility::Collapsed)
+			+ SScrollBox::Slot()[Column]
+		]
+		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(96.f, 0.f, 0.f, 104.f)
+		[
+			Text(InArgs._Footer, EWeight::Regular, 18.f, Mist())
 		]
 		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(96.f, 0.f, 0.f, 52.f)
 		[
@@ -711,7 +718,9 @@ void SOsdsListMenu::SyncFocus()
 {
 	if (bSyncing) return;
 	TGuardValue<bool> Guard(bSyncing, true);
-	bFocusDirty = !FocusPad(GetRowWidget(Selected));
+	const TSharedPtr<SWidget> Row = GetRowWidget(Selected);
+	if (Scroll.IsValid() && Row.IsValid()) Scroll->ScrollDescendantIntoView(Row, false, EDescendantScrollDestination::IntoView, 14.f);
+	bFocusDirty = !FocusPad(Row);
 }
 
 FReply SOsdsListMenu::OnFocusReceived(const FGeometry& MyGeometry, const FFocusEvent& InFocusEvent)

@@ -20,7 +20,7 @@
    ],
    "width_m": 18.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Daytona_International_Speedway"
    ],
    "note": "Turns 31°, tri-oval 18°, back straightaway 3°",
@@ -260,7 +260,7 @@
    ],
    "width_m": 18.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Talladega_Superspeedway"
    ],
    "note": "Turns 33°, tri-oval 16.5°, straights 2°",
@@ -496,7 +496,7 @@
    ],
    "width_m": 15.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Richmond_Raceway"
    ],
    "note": "Turns 14°, frontstretch 8°, backstretch 2°",
@@ -644,10 +644,11 @@
    ],
    "width_m": 15.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Bristol_Motor_Speedway"
    ],
    "note": "Turns 24-28° (26° used), straights 4-8° (6° used)",
+   "surface": "concrete",
    "bank_turn_deg": 26,
    "bank_front_deg": 6,
    "bank_back_deg": 6,
@@ -776,7 +777,7 @@
    ],
    "width_m": 15.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Martinsville_Speedway"
    ],
    "note": "Turns 12°, straights 0°",
@@ -896,7 +897,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Charlotte_Motor_Speedway"
    ],
    "note": "Turns 24°, straights 5°",
@@ -1088,7 +1089,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Darlington_Raceway"
    ],
    "note": "Turns 1-2 25°, turns 3-4 23° (24° used), straights 6°",
@@ -1260,7 +1261,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Indianapolis_Motor_Speedway"
    ],
    "note": "Turns 9.2°, straights 0°",
@@ -1468,7 +1469,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Phoenix_Raceway"
    ],
    "note": "Turns 1-2 9°, turns 3-4 11° (10° used), frontstretch 9°, backstretch 3°",
@@ -1640,7 +1641,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Las_Vegas_Motor_Speedway"
    ],
    "note": "Turns 20°, straights 9°",
@@ -1832,7 +1833,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Texas_Motor_Speedway"
    ],
    "note": "Turns 1-2 20°, turns 3-4 24° (22° used), straights 5°",
@@ -2012,7 +2013,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Kansas_Speedway"
    ],
    "note": "Turns 17-20° (18.5° used), frontstretch 10°, backstretch 5°",
@@ -2228,7 +2229,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Michigan_International_Speedway"
    ],
    "note": "Turns 18°, frontstretch 12°, backstretch 5°",
@@ -2464,7 +2465,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Pocono_Raceway"
    ],
    "note": "Turn 1 14°, turn 2 8°, turn 3 6° (9° used for all three)",
@@ -2656,10 +2657,11 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Dover_Motor_Speedway"
    ],
    "note": "Turns 24°, straights 9°",
+   "surface": "concrete",
    "bank_turn_deg": 24,
    "bank_front_deg": 9,
    "bank_back_deg": 9,
@@ -2840,7 +2842,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Nashville_Superspeedway"
    ],
    "note": "Turns 14°, frontstretch 9°, backstretch 6°",
@@ -3028,7 +3030,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Atlanta_Motor_Speedway"
    ],
    "note": "Turns 28°, straights 5° (since the 2022 rebuild)",
@@ -3228,7 +3230,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Homestead%E2%80%93Miami_Speedway"
    ],
    "note": "Turns 18-20° (19° used), straights 4°",
@@ -3412,7 +3414,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Chicagoland_Speedway"
    ],
    "note": "Turns 18°, frontstretch 11°, backstretch 5°",
@@ -3552,7 +3554,7 @@
    ],
    "width_m": 15.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Iowa_Speedway"
    ],
    "note": "Turns 12-14° (13° used), frontstretch 10°, backstretch 4°",
@@ -3720,7 +3722,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Gateway_Motorsports_Park"
    ],
    "note": "Turns 1-2 11°, turns 3-4 9° (10° used); straights not published (3° assumed)",
@@ -3880,7 +3882,7 @@
    ],
    "width_m": 16.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/New_Hampshire_Motor_Speedway"
    ],
    "note": "Turns 2-7° progressive (4.5° used), straights 1°",
@@ -4048,7 +4050,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Watkins_Glen_International"
    ],
    "note": "Full course with the Boot"
@@ -4071,7 +4073,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Sonoma_Raceway"
    ],
    "note": "The road course as mapped"
@@ -4094,7 +4096,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Circuit_of_the_Americas"
    ],
    "note": "Grand Prix circuit, counter-clockwise"
@@ -4117,7 +4119,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Road_America"
    ],
    "note": ""
@@ -4140,7 +4142,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Charlotte_Motor_Speedway"
    ],
    "note": "Oval turns 24°, oval straights 5°, infield flat; starts on the oval frontstretch",
@@ -4315,6 +4317,214 @@
    ]
   },
   {
+   "id": "indianapolisrc",
+   "name": "Indianapolis Motor Speedway road course",
+   "place": "Speedway, Indiana",
+   "kind": "road",
+   "length_mi": 2.439,
+   "mapped_mi": 2.519,
+   "start": [
+    39.795149,
+    -86.238893
+   ],
+   "bearing": 179.3,
+   "centre": [
+    39.795016,
+    -86.234643
+   ],
+   "width_m": 13.0,
+   "sources": [
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
+    "https://en.wikipedia.org/wiki/Indianapolis_Motor_Speedway"
+   ],
+   "note": "The main straight and turn 1 of the oval, then the infield; oval turns 9.2°, infield flat",
+   "bank_turn_deg": 9.2,
+   "bank_front_deg": 0,
+   "bank_back_deg": 0,
+   "loop": [
+    [
+     39.788139,
+     -86.233167
+    ],
+    [
+     39.788208,
+     -86.232582
+    ],
+    [
+     39.788331,
+     -86.232135
+    ],
+    [
+     39.788431,
+     -86.231875
+    ],
+    [
+     39.788601,
+     -86.231554
+    ],
+    [
+     39.788878,
+     -86.231154
+    ],
+    [
+     39.789085,
+     -86.230916
+    ],
+    [
+     39.789407,
+     -86.230647
+    ],
+    [
+     39.789854,
+     -86.230425
+    ],
+    [
+     39.79009,
+     -86.230354
+    ],
+    [
+     39.790343,
+     -86.230328
+    ],
+    [
+     39.791285,
+     -86.230329
+    ],
+    [
+     39.799538,
+     -86.230482
+    ],
+    [
+     39.800051,
+     -86.230538
+    ],
+    [
+     39.800355,
+     -86.230645
+    ],
+    [
+     39.800717,
+     -86.230855
+    ],
+    [
+     39.801043,
+     -86.231148
+    ],
+    [
+     39.801273,
+     -86.231423
+    ],
+    [
+     39.801564,
+     -86.231893
+    ],
+    [
+     39.801715,
+     -86.232232
+    ],
+    [
+     39.801819,
+     -86.232571
+    ],
+    [
+     39.801885,
+     -86.23294
+    ],
+    [
+     39.801918,
+     -86.233534
+    ],
+    [
+     39.801898,
+     -86.236109
+    ],
+    [
+     39.801838,
+     -86.236666
+    ],
+    [
+     39.80173,
+     -86.23707
+    ],
+    [
+     39.801497,
+     -86.23764
+    ],
+    [
+     39.801206,
+     -86.238092
+    ],
+    [
+     39.800996,
+     -86.238323
+    ],
+    [
+     39.800733,
+     -86.238548
+    ],
+    [
+     39.800546,
+     -86.238673
+    ],
+    [
+     39.800202,
+     -86.238842
+    ],
+    [
+     39.799855,
+     -86.238935
+    ],
+    [
+     39.798924,
+     -86.238953
+    ],
+    [
+     39.790729,
+     -86.238823
+    ],
+    [
+     39.790017,
+     -86.238757
+    ],
+    [
+     39.789757,
+     -86.238682
+    ],
+    [
+     39.789447,
+     -86.238531
+    ],
+    [
+     39.788969,
+     -86.238119
+    ],
+    [
+     39.788702,
+     -86.237791
+    ],
+    [
+     39.788397,
+     -86.237235
+    ],
+    [
+     39.788235,
+     -86.236774
+    ],
+    [
+     39.788143,
+     -86.236296
+    ],
+    [
+     39.78812,
+     -86.23603
+    ],
+    [
+     39.788139,
+     -86.233167
+    ]
+   ]
+  },
+  {
    "id": "lagunaseca",
    "name": "Laguna Seca Raceway",
    "place": "Monterey, California",
@@ -4332,7 +4542,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Laguna_Seca"
    ],
    "note": "Counter-clockwise, the Corkscrew"
@@ -4355,7 +4565,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Road_Atlanta"
    ],
    "note": ""
@@ -4378,7 +4588,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Sebring_International_Raceway"
    ],
    "note": "Old airfield concrete in places"
@@ -4401,7 +4611,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Lime_Rock_Park"
    ],
    "note": ""
@@ -4424,7 +4634,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Virginia_International_Raceway"
    ],
    "note": "Full course"
@@ -4447,7 +4657,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Mid-Ohio_Sports_Car_Course"
    ],
    "note": ""
@@ -4470,7 +4680,7 @@
    ],
    "width_m": 13.0,
    "sources": [
-    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-17",
+    "OpenStreetMap highway=raceway ways (ODbL), fetched 2026-11-18",
     "https://en.wikipedia.org/wiki/Barber_Motorsports_Park"
    ],
    "note": ""

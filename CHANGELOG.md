@@ -2,6 +2,16 @@
 
 The short version of each release, newest first. Every release has full notes in [docs/release/notes/](docs/release/notes/). OSDS was called SimCruise up to 2.0.3 and Sunday Driver up to 1.0.8 ([history](docs/history.md)).
 
+## 2.2 (in progress)
+
+**Race tracks** (the race-tracks team):
+
+- **Race tracks in the pause menu:** 22 oval tracks and 14 road courses across the US, from Daytona, Talladega, Bristol and Richmond to Watkins Glen, Road America, Laguna Seca and COTA. Choose one and you start on its start/finish straight, facing the way the races run, with no traffic.
+- **Real tracks from the map:** the racing surface is OpenStreetMap's raceway, its loop length checked against each track's published length.
+- **Banking as published:** Daytona 31° in the turns and 18° in the tri-oval, Talladega 33°, Bristol 26°, Dover 24° and the rest, raised on the outside and eased between turns and straights.
+- **Walls, fences and lines:** SAFER barriers and catch fences on the ovals, a pit wall, the double yellow line at the bottom of the banking, the start/finish line, and red and white kerbs on road-course corners.
+- Sources, figures and what is not modelled yet: [docs/tracks.md](docs/tracks.md). OSDS is not affiliated with or endorsed by any track or racing series.
+
 ## 2.1.1 (2026-11-18)
 
 **Real ray-traced light, road wear and rounded corners.**

@@ -317,6 +317,8 @@ double AOsdsPreflight::DistanceToStopLine(const FCursor& Here, FString& OutCross
 {
 	if (!Here.IsValid() || !Lines[Here.Line].Ribbon) return -1.0;
 	const FOsdsRibbon& Own = *Lines[Here.Line].Ribbon;
+	// A race track has no stop lines: the robot laps it.
+	if (Own.bTrack) return -1.0;
 	FCursor C = Here;
 	constexpr double StepM = 2.0;
 	for (int32 Step = 0; Step <= 30; ++Step)
@@ -328,7 +330,7 @@ double AOsdsPreflight::DistanceToStopLine(const FCursor& Here, FString& OutCross
 		for (int32 L = 0; L < Lines.Num(); ++L)
 		{
 			const FLine& Other = Lines[L];
-			if (L == Here.Line || !Other.Ribbon) continue;
+			if (L == Here.Line || !Other.Ribbon || Other.Ribbon->bTrack) continue;
 			if (!Own.Name.IsEmpty() && Other.Ribbon->Name == Own.Name) continue;
 			if (!OsdsLanes::ApproachStops(Own.Rank, Own.bMajor, Other.Ribbon->Rank)) continue;
 			for (int32 I = 0; I + 1 < Other.P.Num(); ++I)
@@ -514,9 +516,12 @@ bool AOsdsPreflight::Walk(FCursor& C, double DistanceCm) const
 		const FVector2d Heading = TangentAt(C);
 		FCursor Next;
 		double BestDot = -0.2;
+		// On a race track the robot laps the racing surface: never into the pit lane, onto an access road or off the track.
+		const bool bOnTrack = Lines[C.Line].Ribbon && Lines[C.Line].Ribbon->bTrack;
+		auto Skip = [&](int32 L) { return bOnTrack && (!Lines[L].Ribbon || !Lines[L].Ribbon->bTrack || Lines[L].Ribbon->bPit); };
 		for (int32 L = 0; L < Lines.Num(); ++L)
 		{
-			if (L == C.Line) continue;
+			if (L == C.Line || Skip(L)) continue;
 			const TArray<FVector2d>& Q = Lines[L].P;
 			if (FVector2d::Distance(Q[0], End) < 300.0)
 			{
@@ -538,7 +543,7 @@ bool AOsdsPreflight::Walk(FCursor& C, double DistanceCm) const
 			double BestSide = 0.64;
 			for (int32 L = 0; L < Lines.Num(); ++L)
 			{
-				if (L == C.Line) continue;
+				if (L == C.Line || Skip(L)) continue;
 				const TArray<FVector2d>& Q = Lines[L].P;
 				for (int32 J = 0; J + 1 < Q.Num(); ++J)
 				{

@@ -47,6 +47,7 @@ TRACKS = [
     ('cota', 'Circuit of the Americas', 'Austin, Texas', 'road', 3.426, None, 'Circuit_of_the_Americas', 'Grand Prix circuit, counter-clockwise', (30.1340, -97.6360)),
     ('roadamerica', 'Road America', 'Elkhart Lake, Wisconsin', 'road', 4.048, None, 'Road_America', '', (43.7980, -87.9960)),
     ('charlotteroval', 'Charlotte Motor Speedway Roval', 'Concord, North Carolina', 'road', 2.32, (24, 5, 5), 'Charlotte_Motor_Speedway', 'Oval turns 24°, oval straights 5°, infield flat; starts on the oval frontstretch', (35.3520, -80.6830)),
+    ('indianapolisrc', 'Indianapolis Motor Speedway road course', 'Speedway, Indiana', 'road', 2.439, (9.2, 0, 0), 'Indianapolis_Motor_Speedway', 'The main straight and turn 1 of the oval, then the infield; oval turns 9.2°, infield flat', (39.7950, -86.2348)),
     ('lagunaseca', 'Laguna Seca Raceway', 'Monterey, California', 'road', 2.238, None, 'Laguna_Seca', 'Counter-clockwise, the Corkscrew', (36.5840, -121.7530)),
     ('roadatlanta', 'Road Atlanta', 'Braselton, Georgia', 'road', 2.54, None, 'Road_Atlanta', '', (34.1470, -83.8150)),
     ('sebring', 'Sebring International Raceway', 'Sebring, Florida', 'road', 3.741, None, 'Sebring_International_Raceway', 'Old airfield concrete in places', (27.4560, -81.3480)),
@@ -63,6 +64,8 @@ STREETS = [
 ]
 # Raceway lines that are not an oval's own racing surface (matched per ';'-separated name part).
 NOT_OVAL = re.compile(r"road course|roval|chicane|pit|flat track|dirt|kart|small oval|1/4|1/3|1/5|half mile|bullring|legends|lil'|drag|horseshoe|le mans|route 66|thunder valley|grand prix|warmup|escape|corner|allison|exotics|the strip|access|ten tenths", re.I)
+# Concrete racing surfaces (each track's Wikipedia infobox): Bristol since 1992, Dover since 1995.
+CONCRETE = {'bristol', 'dover'}
 OVERPASS = 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
 
 
@@ -151,12 +154,15 @@ def main():
     os.makedirs(cache, exist_ok=True)
     out = []
     for tid, name, place, kind, miles, bank, wiki, note, (lat, lon) in TRACKS:
-        key = 'charlotte' if tid == 'charlotteroval' else tid
-        # The Roval's start and banked loop are the oval's: it uses the oval's frontstretch and turns.
-        a = analyse(fetch(cache, key, lat, lon), lat, lon, oval=kind == 'oval' or tid == 'charlotteroval')
+        key = {'charlotteroval': 'charlotte', 'indianapolisrc': 'indianapolis'}.get(tid, tid)
+        # A road course on an oval (the Roval, Indianapolis's) starts on the oval's frontstretch and
+        # keeps the oval's banked loop where it runs on it.
+        a = analyse(fetch(cache, key, lat, lon), lat, lon, oval=kind == 'oval' or key != tid)
         e = dict(id=tid, name=name, place=place, kind=kind, length_mi=miles, mapped_mi=a['mapped_mi'], start=a['start'], bearing=a['bearing'],
                  centre=a['centre'], width_m=width_m(kind, miles, tid),
                  sources=['OpenStreetMap highway=raceway ways (ODbL), fetched ' + time.strftime('%Y-%m-%d'), WIKI + wiki], note=note)
+        if tid in CONCRETE:
+            e['surface'] = 'concrete'
         if bank:
             e.update(bank_turn_deg=bank[0], bank_front_deg=bank[1], bank_back_deg=bank[2], loop=a['loop'])
         out.append(e)

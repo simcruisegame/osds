@@ -80,7 +80,9 @@ Press Tab (Menu on the controller). The pages are Drive, Your car, Seat & view a
 | Change page | Q / E | LB / RB |
 | Back to the drive | Esc | B |
 
-**Drive page:** Where to?, Plan a route, Famous roads, Road atlas and Quit the game. X ends a route.
+**Drive page:** Where to?, Plan a route, Famous roads, Race tracks, Road atlas and Quit the game. X ends a route.
+
+**Race tracks:** choose **Oval tracks** or **Road courses** (A), then a track (D-pad or left stick up and down, A); B goes back a step. Long lists scroll with the selection. The car starts on the track's start/finish straight, facing the racing direction ([docs/tracks.md](tracks.md)). `-OsdsTrack=<id>` on the command line starts there too.
 
 **Plan a route:**
 

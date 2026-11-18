@@ -48,6 +48,10 @@ Pause menu > **Famous roads**, and the GPS takes you along:
 | Monument Valley, US 163 (UT) | 6.2 mi |
 | Ocean Drive, Miami Beach (works offline) | 1.3 mi |
 
+## Race tracks
+
+Pause menu > **Race tracks**: 22 ovals (every oval on the top US stock-car schedule, plus Chicagoland, Gateway and more) and 14 road courses (Watkins Glen, Road America, Laguna Seca, Sebring, Road Atlanta, VIR, COTA, Mid-Ohio, Barber, Lime Rock, Sonoma, the Charlotte Roval, the Indianapolis road course, the Long Beach streets). You start on the start/finish straight, facing the way the races run, on the track as OpenStreetMap maps it, banked as published (Daytona 31°, Talladega 33°, Bristol 26°), with walls and catch fences on the ovals and kerbs on the road courses. The list, figures and sources are in [docs/tracks.md](docs/tracks.md). OSDS is not affiliated with or endorsed by any track or racing series.
+
 ## Controls
 
 | Action | Keyboard | Xbox controller |

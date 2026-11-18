@@ -138,6 +138,8 @@ double OsdsTrafficModel::SpeedLimitMps(const FString& Class)
 	if (Class == TEXT("tertiary")) return 13.4;
 	if (Class == TEXT("living_street")) return 6.7;
 	if (Class == TEXT("service")) return 4.5;
+	// A race track has no limit; the drive robot's own speed for a lap (its curve speeds slow it).
+	if (Class == TEXT("raceway")) return 40.0;
 	return 11.2;
 }
 
@@ -358,7 +360,7 @@ bool AOsdsTraffic::ChooseAt(AOsdsTrafficCar& Car, double DecisionS, bool bAtEnd)
 			{
 				if (TileId == Car.Tile && Seg.Key == Car.Ribbon) continue;
 				const FOsdsRibbon& Other = Build->Roads.Ribbons[Seg.Key];
-				if (Other.bService || Other.Class == TEXT("service") || !Other.St.IsValidIndex(Seg.Value + 1) || CrossesAtGradeCached(TileId, Build->Roads.Ribbons, Seg.Key)) continue;
+				if (Other.bService || Other.bTrack || Other.Class == TEXT("service") || !Other.St.IsValidIndex(Seg.Value + 1) || CrossesAtGradeCached(TileId, Build->Roads.Ribbons, Seg.Key)) continue;
 				const FVector2d A = Other.St[Seg.Value].C, B = Other.St[Seg.Value + 1].C;
 				const double Len2 = FMath::Max((B - A).SizeSquared(), 1e-9);
 				const double Tt = FMath::Clamp(FVector2d::DotProduct(Local - A, B - A) / Len2, 0.0, 1.0);
@@ -876,7 +878,7 @@ bool AOsdsTraffic::Spawn(const FVector& FocusCm, const FVector& PlayerFwd, const
 		if (Build->Roads.Ribbons.IsEmpty()) continue;
 		const int32 RibbonIndex = NextRandom(Random) % Build->Roads.Ribbons.Num();
 		const FOsdsRibbon& R = Build->Roads.Ribbons[RibbonIndex];
-		if (R.bService || R.Class == TEXT("service") || R.St.Num() < 2 || R.Length() < 40.0 || CrossesAtGradeCached(TileId, Build->Roads.Ribbons, RibbonIndex)) continue;
+		if (R.bService || R.bTrack || R.Class == TEXT("service") || R.St.Num() < 2 || R.Length() < 40.0 || CrossesAtGradeCached(TileId, Build->Roads.Ribbons, RibbonIndex)) continue;
 		const double S = R.St[0].S + 10.0 + Unit(Random) * (R.Length() - 20.0);
 		const int32 Travel = R.St[R.St.Num() / 2].Travel;
 		const int32 Dir = Travel != 0 ? Travel : (Unit(Random) < 0.5 ? 1 : -1);

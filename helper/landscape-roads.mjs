@@ -6,7 +6,7 @@ import {gunzipSync} from 'node:zlib';
 import {encode} from 'fast-png';
 import {vectorTile} from './vector-tile.mjs';
 
-const WIDTHS={motorway:19,trunk:16,primary:12,secondary:11,tertiary:10};
+const WIDTHS={motorway:19,trunk:16,primary:12,secondary:11,tertiary:10,raceway:12};
 const EDGE=2048;
 export function middleRoadMask(cache,x,y,u0,v0,metresPerWorld) {
  const span=13000/metresPerWorld, scale=EDGE/span;

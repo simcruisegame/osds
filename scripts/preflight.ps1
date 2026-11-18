@@ -105,6 +105,7 @@ $Defs = @{
     'glenwood'       = @('-OsdsStart=39.555,-107.245')     # I-70 Glenwood Canyon: stacked carriageways
     'high-five'      = @('-OsdsStart=32.925,-96.764')      # High Five interchange, Dallas: levels
     'us-50-nevada'   = @('-OsdsStart=39.3,-117.0')         # US-50 Nevada: long straight at speed
+    # and track-<id> for every race track (below).
 }
 $HardPlaces = @('dragon', 'lombard', 'million-dollar', 'pikes-peak', 'badwater', 'mackinac', 'seven-mile', 'bay-bridge-tunnel', 'glenwood', 'high-five', 'us-50-nevada', 'nebraska')
 if ($Seed -lt 0) { $Seed = [int](Get-Date -Format 'yyyyMMdd') }
@@ -120,6 +121,16 @@ $Day = ([datetime]::Parse($Utc, [Globalization.CultureInfo]::InvariantCulture, [
 foreach ($P in $TestPlaces) {
     $Defs[$P.key] = @("-OsdsStart=$($P.lat),$($P.lon)")
     $PlaceUtc[$P.key] = $Day.AddHours(12.0 - [double]$P.lon / 15.0).ToString('yyyy-MM-ddTHH:mm:ssZ')
+}
+# Race tracks (data	racks	racks.json): track-<id> starts on the track's start/finish line and the
+# robot laps its racing surface (track-daytona, track-bristol, track-watkinsglen, ...).
+$TracksFile = Join-Path $Root 'data	racks	racks.json'
+if (Test-Path $TracksFile) {
+    foreach ($T in @((Get-Content $TracksFile -Raw -Encoding utf8 | ConvertFrom-Json).tracks)) {
+        if ($T.kind -eq 'street') { continue }
+        $Defs["track-$($T.id)"] = @("-OsdsTrack=$($T.id)")
+        $PlaceUtc["track-$($T.id)"] = $Day.AddHours(12.0 - [double]$T.start[1] / 15.0).ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
 }
 $Defs['pool'] = @('-OsdsRandomStart', "-OsdsStartSeed=$Seed")
 $Expanded = @()

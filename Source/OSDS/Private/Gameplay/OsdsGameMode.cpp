@@ -2,6 +2,7 @@
 
 #include "Gameplay/OsdsGameMode.h"
 
+#include "World/OsdsTracks.h"
 #include "Engine/World.h"
 #include "Environment/OsdsEnvironment.h"
 #include "Environment/OsdsEnvironmentSubsystem.h"
@@ -199,6 +200,19 @@ void AOsdsGameMode::BeginWorldDrive()
 			bStartLaunch = true;
 			Mode = TEXT("random");
 		}
+	}
+	// A race track by its id in data/tracks/tracks.json (-OsdsTrack=daytona): its start/finish line,
+	// facing the racing direction, as the pause menu's Race tracks list starts it.
+	FString TrackId;
+	if (FParse::Value(Cmd, TEXT("OsdsTrack="), TrackId))
+	{
+		const FOsdsTrack* Track = OsdsTracks::All().FindByPredicate([&](const FOsdsTrack& T) { return T.Id.Equals(TrackId, ESearchCase::IgnoreCase); });
+		if (Track)
+		{
+			First = OsdsTracks::ToPlace(*Track);
+			Mode = TEXT("track");
+		}
+		else UE_LOG(LogOsdsDrive, Warning, TEXT("No race track '%s' in %s"), *TrackId, *OsdsTracks::DataPath());
 	}
 	FString Road;
 	if (FParse::Value(Cmd, TEXT("OsdsStartRoad="), Road))
