@@ -1,10 +1,10 @@
 # Real-world detail: a working plan (November 2026)
 
-SimCruise already builds the drivable US from public data. This note asks what "real" means for a game like this, where the remaining realism will come from, and how to pay for it on an ordinary laptop. The baseline is a 2020 gaming laptop: RTX 2070 Super Max-Q (8 GB, Turing), i9-10885H, 1080p, Godot 4.7.2 Mobile renderer on Vulkan. Each section separates what has **shipped** from what is **next**. Licence findings are as of 10 November 2026; check them again before baking any data.
+OSDS already builds the drivable US from public data. This note asks what "real" means for a game like this, where the remaining realism will come from, and how to pay for it on an ordinary laptop. The baseline is a 2020 gaming laptop: RTX 2070 Super Max-Q (8 GB, Turing), i9-10885H, 1080p, Godot 4.7.2 Mobile renderer on Vulkan. Each section separates what has **shipped** from what is **next**. Licence findings are as of 10 November 2026; check them again before baking any data.
 
 ## 1. What is a game, and where does the compute go?
 
-In a frame of SimCruise on the bundled Miami Beach start (High preset, windowed, `checks/QualityBench.gd`):
+In a frame of OSDS on the bundled Miami Beach start (High preset, windowed, `checks/QualityBench.gd`):
 
 | | ms per frame |
 |---|---|

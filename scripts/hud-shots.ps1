@@ -5,9 +5,9 @@
 
 .DESCRIPTION
   For each car it starts one game (editor binaries, -game, the bundled Ocean Drive start,
-  offline, off screen, the GPU test lock) with -SimCruiseHudShots. From the driver's seat the
+  offline, off screen, the GPU test lock) with -OsdsHudShots. From the driver's seat the
   game takes: the HUD with the round map on Always and no route, the HUD with a route, and the
-  speed readout showing 0, 60 and 120 (simcruise.Hud.TestSpeed; the car stands still). It
+  speed readout showing 0, 60 and 120 (osds.Hud.TestSpeed; the car stands still). It
   changes no saved setting and quits itself. Then this script crops the speed readout of each
   speed shot and enlarges it 2x (nearest neighbour, so every pixel shows): speed-<car>-<n>-crop2x.png.
 
@@ -35,7 +35,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ReviewLib.ps1')
 Add-Type -AssemblyName System.Drawing
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
 $Cars = @($Cars | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
@@ -68,10 +68,10 @@ foreach ($Car in $Cars) {
     $RunDir = Join-Path $OutRoot "hudshots-$Car"
     New-Item -ItemType Directory -Force $RunDir | Out-Null
     $Log = Join-Path $RunDir 'game.log'
-    $GameArgs = @("`"$Project`"", '-game', '-SimCruiseWorld', '-SimCruiseBundledStart', '-SimCruiseNoLive', '-SimCruiseNoNeural', "-SimCruiseGraphics=$Graphics",
-        '-SimCruiseUtc=2026-11-12T17:00:00Z', "-SimCruiseCar=$Car", "`"-SimCruiseHudShots=$RunDir`"",
+    $GameArgs = @("`"$Project`"", '-game', '-OsdsWorld', '-OsdsBundledStart', '-OsdsNoLive', '-OsdsNoNeural', "-OsdsGraphics=$Graphics",
+        '-OsdsUtc=2026-11-12T17:00:00Z', "-OsdsCar=$Car", "`"-OsdsHudShots=$RunDir`"",
         # Traffic off (2.0.3 has none): sc.Feature.Traffic where it exists, and no cars either way.
-        '-DPCVars=simcruise.Traffic.Cars=0,sc.Feature.Traffic=0,sc.Feature.Aircraft=0',
+        '-DPCVars=osds.Traffic.Cars=0,sc.Feature.Traffic=0,sc.Feature.Aircraft=0',
         '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution)
     ("`"$Editor`" " + ($GameArgs -join ' ')) | Set-Content -Encoding utf8 (Join-Path $RunDir 'command-line.txt')
     if (-not (Enter-EditorLock -GpuTest -TimeoutMinutes $LockTimeoutMinutes -Why "HUD shots $Car on $Root")) { exit 1 }

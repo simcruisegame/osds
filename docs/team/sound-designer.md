@@ -1,8 +1,8 @@
 # Sound designer: study notes
 
-Role: vehicle audio for SimCruise. Scope: engine voice, intake and exhaust, load, rev limiter, tyres, road, wind, cabin and exterior pickup, traffic voices, Doppler, mix and loudness.
+Role: vehicle audio for OSDS. Scope: engine voice, intake and exhaust, load, rev limiter, tyres, road, wind, cabin and exterior pickup, traffic voices, Doppler, mix and loudness.
 Written 2026-11-12. Style: ASD-STE100 Simplified Technical English (short sentences, active voice, one instruction per sentence).
-Marks: **[V]** = verified in a source on 2026-11-12. **[U]** = not verified; treat as an estimate. **[C]** = read from SimCruise code.
+Marks: **[V]** = verified in a source on 2026-11-12. **[U]** = not verified; treat as an estimate. **[C]** = read from OSDS code.
 
 ## 1. What the player must hear
 
@@ -34,9 +34,9 @@ Numbers for the three cars that matter:
 
 ### 2.2 Cross-plane V8 burble
 
-- A cross-plane crank fires each bank at uneven intervals (90, 180, 270 degrees within a bank). **[V]** (crank geometry; also the code comment in SimCruiseInlineFourSynth.h)
+- A cross-plane crank fires each bank at uneven intervals (90, 180, 270 degrees within a bank). **[V]** (crank geometry; also the code comment in OsdsInlineFourSynth.h)
 - With two separate pipes, each pipe receives an uneven pulse train. The listener hears orders below order 4 (orders 0.5, 1, 1.5...). This is the "burble". **[U]** for the exact level of each order.
-- If both pipes are equal in distance and gain, the burble cancels. The SimCruise test `SimCruise.Audio.CrossPlaneV8` checks this. **[C]**
+- If both pipes are equal in distance and gain, the burble cancels. The OSDS test `OSDS.Audio.CrossPlaneV8` checks this. **[C]**
 - Firing orders: Ford 289: 1-5-4-2-6-3-7-8. GM LT2: 1-8-7-2-6-5-4-3. **[U]** (manual numbering from CarPresentation.json comments; not re-checked against a service manual here).
 
 ### 2.3 Load
@@ -61,7 +61,7 @@ Numbers for the three cars that matter:
 
 | Method | Source | Strength | Weakness |
 |---|---|---|---|
-| Harmonic tables / wavetable per firing event (SimCruise today) | Code [C] | Cheap. Deterministic. Easy to test. | Static timbre per load. No pipe resonance. |
+| Harmonic tables / wavetable per firing event (OSDS today) | Code [C] | Cheap. Deterministic. Easy to test. | Static timbre per load. No pipe resonance. |
 | Granular / sample loops by rpm and load | Jagla et al. 2012 (PSOLA) [V] | Real recorded timbre. | Needs licensed recordings. Artefacts on fast rpm changes. |
 | Physically informed (pulse source + pipe waveguides) | Baldan et al. 2015; Sound Design Toolkit motor model [V] | Pipe resonances. Intake and exhaust as separate outputs. | More tuning. More CPU. |
 | Neural pulse-train resonator | Doerfler and Wyse 2026 (arXiv 2603.09391, CC BY-NC-SA) [V] | Better fit to recordings. | Licence is non-commercial. Needs training data. |
@@ -69,11 +69,11 @@ Numbers for the three cars that matter:
 Rules:
 - Keep the current procedural voice for this phase. Fix bugs only.
 - Before any sample-based work, confirm the licence of every recording. Use only own recordings or recordings with a written licence.
-- The paper arXiv 2603.09391 is CC BY-NC-SA. Do not copy its code into SimCruise unless the licence of the code is checked.
+- The paper arXiv 2603.09391 is CC BY-NC-SA. Do not copy its code into OSDS unless the licence of the code is checked.
 
 ## 4. Tyres, road and wind
 
-- Tyre/road noise rises about 30-40 dB per decade of speed (A-weighted pass-by). **[U]** (SimCruise uses amplitude ~ v^1.5, that is 30 dB per decade [C])
+- Tyre/road noise rises about 30-40 dB per decade of speed (A-weighted pass-by). **[U]** (OSDS uses amplitude ~ v^1.5, that is 30 dB per decade [C])
 - Asphalt tyre noise peaks near 800-1000 Hz. Transversely tined concrete adds energy near 1 kHz. **[U]** (FHWA OBSI data, cited in docs/research/domain-ideas.md)
 - Squeal is a tonal band. It starts when the tyre passes its peak slip. Scrub (broadband) starts before the peak. **[U]** for the exact squeal frequency of a 195/50R15 or 205/45R16 tyre.
 - Wind noise power rises steeply with speed (aeroacoustic sources scale between v^5 and v^8 in power). **[U]**
@@ -88,10 +88,10 @@ Rules:
 
 ## 6. Unreal implementation
 
-- SimCruise uses `USynthComponent` subclasses that render DSP on the audio render thread (`OnGenerateAudio`). **[C]** Epic documents `USynthComponent` as the base for procedural audio components. **[V]**
+- OSDS uses `USynthComponent` subclasses that render DSP on the audio render thread (`OnGenerateAudio`). **[C]** Epic documents `USynthComponent` as the base for procedural audio components. **[V]**
 - MetaSounds give a DSP graph, parameter inputs and sample-accurate scheduling. **[V]** (MetaSounds overview). Use MetaSounds only when a designer must tune without C++. The C++ synth is acceptable now.
 - Route every source through a Sound Class and a Submix. A Submix lets the game apply a master limiter and measure loudness. **[U]** for exact UE 5.8 API names.
-- Keep game-thread to audio-thread parameter hand-off lock-light. SimCruise copies a small struct under a critical section. **[C]** This is acceptable.
+- Keep game-thread to audio-thread parameter hand-off lock-light. OSDS copies a small struct under a critical section. **[C]** This is acceptable.
 
 ## 7. Loudness
 
@@ -101,17 +101,17 @@ Rules:
 - Rule: measure loudness range (LRA). A driving game with a highway cruise and a full-throttle run should stay within about 10-20 LU. **[U]**
 - Rule: give the player at least master, engine and road/wind volume controls. Game Accessibility Guidelines and XAG ask for separate volume controls. **[U]** for the exact guideline numbers.
 
-## 8. How to judge SimCruise
+## 8. How to judge OSDS
 
 Files to read first:
-- `Source/SimCruise/Private/Audio/SimCruiseInlineFourSynth.cpp` and `Public/Audio/SimCruiseInlineFourSynth.h` (engine voice).
-- `Source/SimCruise/Private/Audio/SimCruiseRoadNoiseSynth.cpp` and its header (tyres, road, wind, cabin filter).
-- `Source/SimCruise/Private/Audio/SimCruiseEngineSoundComponent.cpp` (USynthComponent glue).
-- `Source/SimCruise/Private/Vehicle/SimCruiseVehicle.cpp` (`UpdateEngineSound`, `UpdateRoadNoise`).
-- `Source/SimCruise/Private/World/SimCruiseTraffic.cpp` (`UpdateVoice`).
+- `Source/OSDS/Private/Audio/OsdsInlineFourSynth.cpp` and `Public/Audio/OsdsInlineFourSynth.h` (engine voice).
+- `Source/OSDS/Private/Audio/OsdsRoadNoiseSynth.cpp` and its header (tyres, road, wind, cabin filter).
+- `Source/OSDS/Private/Audio/OsdsEngineSoundComponent.cpp` (USynthComponent glue).
+- `Source/OSDS/Private/Vehicle/OsdsVehicle.cpp` (`UpdateEngineSound`, `UpdateRoadNoise`).
+- `Source/OSDS/Private/World/OsdsTraffic.cpp` (`UpdateVoice`).
 - `Content/Vehicles/CarPresentation.json` (`engine_sound` per car).
 - `data/cars/*.json` (`idle_rpm`, `fuel_cut_rpm`, `max_gear_rpm`).
-- Tests: `Private/Audio/Tests/SimCruiseAudioTests.cpp`, `SimCruiseRoadNoiseTests.cpp`.
+- Tests: `Private/Audio/Tests/OsdsAudioTests.cpp`, `OsdsRoadNoiseTests.cpp`.
 
 Checks (each one must pass):
 1. Pitch: an FFT of 1 s at steady rpm shows the strongest peak at rpm x N_cyl / 120 +-2 %. Do it for all three cars.
@@ -162,34 +162,34 @@ Licence notes: EBU documents are free to download. Epic docs are reference only.
 ## What I now know (onboarding, 2026-11-14)
 
 **How my area works today.**
-- Engine voice. `FSimCruiseInlineFourSynth::Render` (`Source/SimCruise/Private/Audio/SimCruiseInlineFourSynth.cpp:62`) renders mono audio at 22.05 kHz. The phase runs at rpm/30 for an inline four and at rpm/120 over a 720-degree cycle of 8 events for a V8 (`:77`). The firing frequency is correct for both: I4 = 2 pulses per revolution, V8 = 4.
-- The timbre blends a light-load table (12 harmonics) and a full-load table (16 harmonics) by delivered combustion (`:19-20`, `:157`). Overrun has its own level term (`:89`, `:158`). Pops come above `PopRpm = 3000` for every car (`SimCruiseInlineFourSynth.h:28`).
-- Limiter. The limiter now reads each car's data: `LimiterRpm = FuelCutSpeedRpm - 25` (`Source/SimCruise/Private/Vehicle/SimCruiseVehicle.cpp:521`). The pitch clamps at `LimiterRpm + 200` (`:77`). The stutter runs at 14 Hz with a 42 % cut (`.h:27`, `.cpp:130`). This fixes finding 1 of the 2026-11-12 review. Fuel cuts: Miata 7250, C8 6600, Mustang 5000 rpm.
+- Engine voice. `FOsdsInlineFourSynth::Render` (`Source/OSDS/Private/Audio/OsdsInlineFourSynth.cpp:62`) renders mono audio at 22.05 kHz. The phase runs at rpm/30 for an inline four and at rpm/120 over a 720-degree cycle of 8 events for a V8 (`:77`). The firing frequency is correct for both: I4 = 2 pulses per revolution, V8 = 4.
+- The timbre blends a light-load table (12 harmonics) and a full-load table (16 harmonics) by delivered combustion (`:19-20`, `:157`). Overrun has its own level term (`:89`, `:158`). Pops come above `PopRpm = 3000` for every car (`OsdsInlineFourSynth.h:28`).
+- Limiter. The limiter now reads each car's data: `LimiterRpm = FuelCutSpeedRpm - 25` (`Source/OSDS/Private/Vehicle/OsdsVehicle.cpp:521`). The pitch clamps at `LimiterRpm + 200` (`:77`). The stutter runs at 14 Hz with a 42 % cut (`.h:27`, `.cpp:130`). This fixes finding 1 of the 2026-11-12 review. Fuel cuts: Miata 7250, C8 6600, Mustang 5000 rpm.
 - V8 voice. `ConfigureCrossPlaneV8` (`.cpp:39`) scales each event by its bank's gain (near 1.0, far 0.62, an estimate). Data: `Content/Vehicles/CarPresentation.json:818` (Mustang, 289, 1-5-4-2-6-3-7-8) and `:926` (C8, LT2, 1-8-7-2-6-5-4-3). A car without `engine_sound` gets the inline four.
-- Pickup. Cabin: a one-pole at about 780 Hz (coefficient .20), a 120 Hz boom at .45, then a 2.4 kHz biquad (`SimCruiseEngineSoundComponent.cpp:36-45`). Exterior: a one-pole at about 2.6 kHz (.52). I estimate the cabin at about 22 dB down at 5 kHz. Both filters keep their state on a view change, but the boom level and the filter coefficient switch in one step (`SimCruiseInlineFourSynth.cpp:92-93`).
-- Levels. The player engine volume is 0.25 (-12 dB) for all cars (`SimCruiseVehicle.cpp:504`). In `SimCruiseRoadNoiseSynth.h:39-40`, road is -8 dB and wind is -30 dB (the owner's "faint hiss" request). There is no Sound Class, no Submix and no master limiter. The engine output still hard-clips at ±.94 (`SimCruiseInlineFourSynth.cpp:167`). The road and wind use tanh limits (.90 and .85).
-- Road noise. `RenderRoad` (`SimCruiseRoadNoiseSynth.cpp:74`) receives only one surface number: the mean `SurfaceGrip` of the wheels in contact (`SimCruiseVehicle.cpp:575,584`). It derives these from that number:
+- Pickup. Cabin: a one-pole at about 780 Hz (coefficient .20), a 120 Hz boom at .45, then a 2.4 kHz biquad (`OsdsEngineSoundComponent.cpp:36-45`). Exterior: a one-pole at about 2.6 kHz (.52). I estimate the cabin at about 22 dB down at 5 kHz. Both filters keep their state on a view change, but the boom level and the filter coefficient switch in one step (`OsdsInlineFourSynth.cpp:92-93`).
+- Levels. The player engine volume is 0.25 (-12 dB) for all cars (`OsdsVehicle.cpp:504`). In `OsdsRoadNoiseSynth.h:39-40`, road is -8 dB and wind is -30 dB (the owner's "faint hiss" request). There is no Sound Class, no Submix and no master limiter. The engine output still hard-clips at ±.94 (`OsdsInlineFourSynth.cpp:167`). The road and wind use tanh limits (.90 and .85).
+- Road noise. `RenderRoad` (`OsdsRoadNoiseSynth.cpp:74`) receives only one surface number: the mean `SurfaceGrip` of the wheels in contact (`OsdsVehicle.cpp:575,584`). It derives these from that number:
   - `Paved = SmoothStep(.70,.92,Grip)` (`:80`).
   - Hiss level ∝ v^1.5, through a band-pass at 850 + 9·v Hz (`:86,89`).
   - Gravel crunch: Poisson bursts at 25 + 4.5·v per second.
   - A 60 Hz rumble, from off-road and from `Bump`.
-  - `Bump` is the high-passed suspension travel rate (`SimCruiseVehicle.cpp:536-548`).
-- Surface grip comes from `ASimCruiseWorldTile::SurfaceGripAtFace` (`Source/SimCruise/Private/World/SimCruiseWorldTile.cpp:96-141`):
+  - `Bump` is the high-passed suspension travel rate (`OsdsVehicle.cpp:536-548`).
+- Surface grip comes from `AOsdsWorldTile::SurfaceGripAtFace` (`Source/OSDS/Private/World/OsdsWorldTile.cpp:96-141`):
   - Asphalt 1.0.
-  - Gravel 0.7, set by the vertex colour R from OSM `surface=unpaved` (`SimCruiseRoadNetwork.cpp:497`, `SimCruiseTileBuilder.cpp:747`).
+  - Gravel 0.7, set by the vertex colour R from OSM `surface=unpaved` (`OsdsRoadNetwork.cpp:497`, `OsdsTileBuilder.cpp:747`).
   - Terrain 0.8.
-  - Concrete is only curbs and sidewalks (`SimCruiseTileBuilder.cpp:88`) and has the default grip of 1.0.
-  - Then grip = DryGrip × (1 − WetLoss × Wetness) (`SimCruiseVehicleMovementComponent.cpp:339`).
+  - Concrete is only curbs and sidewalks (`OsdsTileBuilder.cpp:88`) and has the default grip of 1.0.
+  - Then grip = DryGrip × (1 − WetLoss × Wetness) (`OsdsVehicleMovementComponent.cpp:339`).
 - Tyres. `RenderTyres` (`:130`): scrub from s = 0.6, squeal from s = 1.0 to 1.4 at 700 + 25 Hz per m/s of slide, skid hiss from 1.4 to 2.5. The tyre layer is gated by `SmoothStep(.80,.95,Grip)`, so it is silent on gravel.
 - Wind. `RenderWind(SpeedMps)` (`:190`) uses only the car's own speed. Level ∝ v², cutoff 160 + 7·v. It ignores the live wind that physics receives (`SetAir`, `VehicleMovementComponent.cpp:630`).
-- Traffic. `ASimCruiseTraffic::UpdateVoice` (`Source/SimCruise/Private/World/SimCruiseTraffic.cpp:681-725`):
+- Traffic. `AOsdsTraffic::UpdateVoice` (`Source/OSDS/Private/World/OsdsTraffic.cpp:681-725`):
   - A voice plays within 40 m (`:31`). Exterior pickup, NaturalSound falloff, volume 0.25.
   - Rpm = 750 + 80·v + 600·accel (`:718`).
   - Only `model3` is silent, and that is a hard-coded id (`:684`).
   - There is no Doppler and no distance low-pass.
   - F-150, Grand Cherokee and Odyssey all use the I4 voice.
 - Ambience. None exists. A search for ambience, SoundWave, Submix or SoundClass in `Source` finds no audio match. There is also no rain sound and no tyre spray.
-- Tests: `SimCruise.Audio.InlineFour`, `.CrossPlaneV8`, `.Limiter` (`Audio/Tests/SimCruiseAudioTests.cpp:63,163,206`) and `SimCruise.Audio.RoadNoise` (`SimCruiseRoadNoiseTests.cpp:79`). All are offline. None measures the full mix (LUFS or true peak). Pre-flight records video only (`scripts/preflight.ps1:1-20`). No run captures sound.
+- Tests: `OSDS.Audio.InlineFour`, `.CrossPlaneV8`, `.Limiter` (`Audio/Tests/OsdsAudioTests.cpp:63,163,206`) and `OSDS.Audio.RoadNoise` (`OsdsRoadNoiseTests.cpp:79`). All are offline. None measures the full mix (LUFS or true peak). Pre-flight records video only (`scripts/preflight.ps1:1-20`). No run captures sound.
 
 **Does it work at a random US place?**
 - General (works anywhere): the engine and tyre layers. They read physics only (rpm, combustion, slip, load), and the roughness comes from suspension travel. Expansion joints at Doraville (us-doraville-ga) and broken pavement in Detroit (us-detroit-mi) will give rumble through `Bump` (estimate).
@@ -199,32 +199,32 @@ Licence notes: EBU documents are free to download. Epic docs are reference only.
 - Car-bound items: the car voice is chosen per car (it is not tied to a region or road). The cabin filter is one 2.4 kHz value for a soft-top 2001 Miata, a 2020s coupe and a 1965 hardtop.
 
 **Main gaps against "realistic everywhere".**
-1. P1: Wet roads sound like gravel, and the tyres go silent in rain. Files: `Source/SimCruise/Private/Audio/SimCruiseRoadNoiseSynth.cpp:80-81` and `Source/SimCruise/Private/Vehicle/SimCruiseVehicleMovementComponent.cpp:339`. The sound reads grip after wetness is applied. It must read the dry surface class.
+1. P1: Wet roads sound like gravel, and the tyres go silent in rain. Files: `Source/OSDS/Private/Audio/OsdsRoadNoiseSynth.cpp:80-81` and `Source/OSDS/Private/Vehicle/OsdsVehicleMovementComponent.cpp:339`. The sound reads grip after wetness is applied. It must read the dry surface class.
 2. P1: The Mustang and the C8 have one shared V8 voice. Rotate the C8's `bank_of_event` [0,1,0,1,1,0,1,0] left by one step and you get the Mustang's [1,0,1,1,0,1,0,0] (`CarPresentation.json:818,926`). The two cars also share the harmonic tables, the 1.0/0.62 bank gains, the filters and the 0.25 level. Only the rpm range differs. The voice has no data for displacement, exhaust system (X-pipe, H-pipe, mufflers) or cabin per car.
-3. P1: The surface only has paved and unpaved. Asphalt, concrete and chip seal sound the same (fixed band 850 + 9·v Hz). Untagged gravel sounds paved. Files: `SimCruiseRoadNoiseSynth.cpp:86-89`, `SimCruiseWorldTile.cpp:122-140`, `helper/atlas.mjs:130`.
-4. P1: There is no place ambience and no rain or spray layer. Wind uses the car's speed only. File: `SimCruiseRoadNoiseSynth.cpp:190`.
+3. P1: The surface only has paved and unpaved. Asphalt, concrete and chip seal sound the same (fixed band 850 + 9·v Hz). Untagged gravel sounds paved. Files: `OsdsRoadNoiseSynth.cpp:86-89`, `OsdsWorldTile.cpp:122-140`, `helper/atlas.mjs:130`.
+4. P1: There is no place ambience and no rain or spray layer. Wind uses the car's speed only. File: `OsdsRoadNoiseSynth.cpp:190`.
 5. P2: Items still open from the 2026-11-12 review:
    - No volume sliders, no submix and no loudness gate (review #2 and #3).
-   - Hard clip at `SimCruiseInlineFourSynth.cpp:167` (#4).
-   - Smoothing applied once per buffer, `SimCruiseRoadNoiseSynth.cpp:90,195` (#6).
+   - Hard clip at `OsdsInlineFourSynth.cpp:167` (#4).
+   - Smoothing applied once per buffer, `OsdsRoadNoiseSynth.cpp:90,195` (#6).
    - Traffic: I4 voice for V6 cars and no Doppler (#5).
    - `PopRpm` is one constant for all cars (#8).
 
 **My first three actions.**
 1. Separate surface from wetness for sound.
-   - Change: add a dry surface kind (or `DryGrip`) and the wetness to the wheel telemetry. Feed them to `FSimCruiseRoadNoiseSynth::FInputs` (`SimCruiseVehicle.cpp:562-584`).
-   - Done when: a new test `SimCruise.Audio.RoadNoise.WetAsphalt` passes. At wetness 1 and 25 m/s, crunch RMS is at least 40 dB below the dry gravel case. Squeal at s = 1.5 is within 1 dB of dry.
-   - Note: `-SimCruiseLiveWet=` changes only the materials, not physics wetness (`SimCruiseLiveWorldSubsystem.cpp:510` and `SimCruiseVehicle.cpp:445`). The proof must therefore be offline.
+   - Change: add a dry surface kind (or `DryGrip`) and the wetness to the wheel telemetry. Feed them to `FOsdsRoadNoiseSynth::FInputs` (`OsdsVehicle.cpp:562-584`).
+   - Done when: a new test `OSDS.Audio.RoadNoise.WetAsphalt` passes. At wetness 1 and 25 m/s, crunch RMS is at least 40 dB below the dry gravel case. Squeal at s = 1.5 is within 1 dB of dry.
+   - Note: `-OsdsLiveWet=` changes only the materials, not physics wetness (`OsdsLiveWorldSubsystem.cpp:510` and `OsdsVehicle.cpp:445`). The proof must therefore be offline.
 2. Measure the surface at random places.
-   - Change: log a surface histogram per drive (the share of wheel contact on asphalt, gravel and terrain) in `ASimCruisePreflight`.
+   - Change: log a surface histogram per drive (the share of wheel contact on asphalt, gravel and terrain) in `AOsdsPreflight`.
    - Run: `scripts\preflight.ps1 -Roads us-casselton-nd,us-delta-ut,random -Cars nb2001_lowered,mustang65,meridian_z -Seconds 60`.
    - Done when: each `preflight.json` reports the gravel share. I compare that share with OSM `surface` tag coverage on the same roads. That gives the size of the untagged-gravel problem before anyone designs a fallback rule.
 3. Prove that each car has its own voice, and measure the mix.
-   - Change: an offline render test `SimCruise.Audio.CarVoices`. It renders each of the 3 cars at idle, 3000 rpm at full load, 3000 rpm on overrun, and the limiter.
+   - Change: an offline render test `OSDS.Audio.CarVoices`. It renders each of the 3 cars at idle, 3000 rpm at full load, 3000 rpm on overrun, and the limiter.
    - Done when: the firing peak is at rpm × N/120 ±2 % for each car. The test reports the order-level difference between the Mustang and the C8; today I expect about 0 dB (estimate), which proves gap 2. The same render, summed at the mix gains and measured with `ffmpeg -af ebur128=peak=true`, reports integrated LUFS and true peak. The target is −24 ±2 LUFS and below −1 dBTP.
 
 **Docs that are wrong or old.**
 - `docs/unreal-architecture.md:743` says "Worst case at the output: engine 0.236 + road 0.358 + wind 0.027, under 1, so nothing clips." It leaves out traffic voices. Each traffic voice can reach 0.235 within 3 m, so two or three close cars can push the sum past 1 (estimate).
-- `Source/SimCruise/Public/Audio/SimCruiseRoadNoiseSynth.h:56` says "1 paved, about 0.76 gravel, 0.65 verge". The code uses gravel 0.70 and terrain 0.80, and wet asphalt also falls to 0.70 (`SimCruiseWorldTile.cpp:129,135`).
+- `Source/OSDS/Public/Audio/OsdsRoadNoiseSynth.h:56` says "1 paved, about 0.76 gravel, 0.65 verge". The code uses gravel 0.70 and terrain 0.80, and wet asphalt also falls to 0.70 (`OsdsWorldTile.cpp:129,135`).
 - `docs/unreal-architecture.md:574` says ToggleSound is a "flag until audio and lamps are ported". Audio is ported.
 - `docs/team/ownership.md:55` sends readers to `docs/team/test-places.md`. That file does not exist. The list is `data/test-places.json`.

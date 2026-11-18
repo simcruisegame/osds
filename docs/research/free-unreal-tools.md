@@ -1,6 +1,6 @@
 # Free Unreal tools we can use or build on (12 November 2026)
 
-The owner asked: "Are there free tools for Unreal that we can build on, like car physics? Do we have a plan to make buildings look better?" A research agent checked free, legally usable tools and compared each with the SimCruise code. No money, licences that a free MIT game can use. Items marked **[unconfirmed]** were not checked at the source. GPU costs are estimates, not measured.
+The owner asked: "Are there free tools for Unreal that we can build on, like car physics? Do we have a plan to make buildings look better?" A research agent checked free, legally usable tools and compared each with the OSDS code. No money, licences that a free MIT game can use. Items marked **[unconfirmed]** were not checked at the source. GPU costs are estimates, not measured.
 
 ## Short answer
 

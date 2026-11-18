@@ -1,20 +1,20 @@
 <#
 .SYNOPSIS
-  Builds SimCruise and runs its automation tests; exits 1 if anything failed.
+  Builds OSDS and runs its automation tests; exits 1 if anything failed.
 
 .DESCRIPTION
   The Unreal successor of the Godot client's scripts/check.sh and ScriptErrorGuard:
-  one command that builds the editor target, runs the SimCruise.* automation tests
+  one command that builds the editor target, runs the OSDS.* automation tests
   headless, and fails on any failed test, on a test that never reported, or on an
   error the game itself logged (an ensure, a fatal error, or an Error line from a
-  SimCruise log category), so a check cannot pass after an abandoned function.
+  OSDS log category), so a check cannot pass after an abandoned function.
   The benches' calibration bands live in the tests themselves.
 
 .PARAMETER Filter
-  Test path prefix (default SimCruise; for example SimCruise.Vehicle or SimCruise.Audio).
+  Test path prefix (default OSDS; for example OSDS.Vehicle or OSDS.Audio).
 
 .PARAMETER Slots
-  How many headless test runs may run at once on this PC (1 to 3). Default: $env:SIMCRUISE_TEST_SLOTS,
+  How many headless test runs may run at once on this PC (1 to 3). Default: $env:OSDS_TEST_SLOTS,
   else what the free memory allows (free GB minus 8, divided by one test editor's peak;
   at least 2 when 20 GB or more is free).
   Test runs start without the MCP plugin and with -nullrhi, so they use neither port 8000
@@ -48,14 +48,14 @@
 
 .PARAMETER NoViewCheck
   Skip the view check (viewcheck.ps1 in this folder: the game at fixed places, the screenshots
-  judged by ASimCruiseViewCheck). It runs after the automation tests pass and needs a GPU.
+  judged by AOsdsViewCheck). It runs after the automation tests pass and needs a GPU.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\check.ps1
-  powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -Filter SimCruise.Audio -NoBuild
+  powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -Filter OSDS.Audio -NoBuild
 #>
 param(
-    [string]$Filter = 'SimCruise',
+    [string]$Filter = 'OSDS',
     [int]$Slots = 0,
     [ValidateSet('fast', 'full')][string]$Tier = 'full',
     [switch]$ForceBuild,
@@ -69,7 +69,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
 $BuildBat = Join-Path $EngineDir 'Engine\Build\BatchFiles\Build.bat'
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
@@ -121,13 +121,13 @@ function Get-BuildStamp {
 $Started = Get-Date
 if (-not $NoBuild) {
     $Stamp = Get-BuildStamp
-    $EditorDll = Join-Path $Root 'Binaries\Win64\UnrealEditor-SimCruise.dll'
+    $EditorDll = Join-Path $Root 'Binaries\Win64\UnrealEditor-OSDS.dll'
     if (-not $ForceBuild -and (Test-Path $EditorDll) -and (Test-Path $BuildStamp) -and ((Get-Content $BuildStamp -Raw).Trim() -eq $Stamp)) {
         Write-Host 'Build skipped: nothing under Source\ or in the .uproject changed since the last good build (-ForceBuild builds anyway).'
     }
     else {
-        Write-Host 'Building SimCruiseEditor (Win64 Development)...'
-        & $BuildBat SimCruiseEditor Win64 Development "-Project=$Project" -WaitMutex -NoHotReloadFromIDE | Out-Host
+        Write-Host 'Building OSDSEditor (Win64 Development)...'
+        & $BuildBat OSDSEditor Win64 Development "-Project=$Project" -WaitMutex -NoHotReloadFromIDE | Out-Host
         $Timing.Build = ((Get-Date) - $Started).TotalSeconds
         if ($LASTEXITCODE -ne 0) { Write-Host 'BUILD FAILED'; Remove-Item $BuildStamp -ErrorAction SilentlyContinue; Write-CheckTime 'build-failed'; exit 1 }
         # Hash again after the build, in case a file changed while it ran (then the next run builds).
@@ -136,7 +136,7 @@ if (-not $NoBuild) {
     }
 }
 
-$LogName = 'SimCruiseChecks.log'
+$LogName = 'OsdsChecks.log'
 $Log = Join-Path $Root "Saved\Logs\$LogName"
 if (Test-Path $Log) { Remove-Item $Log -Force }
 $LockStart = Get-Date
@@ -190,7 +190,7 @@ foreach ($Line in $Lines) {
     }
 }
 # Errors the game logged outside a failed expectation (the ScriptErrorGuard principle).
-$Logged = $Lines | Where-Object { $_ -match 'Ensure condition failed|Fatal error|LogSimCruise\w*: Error:' }
+$Logged = $Lines | Where-Object { $_ -match 'Ensure condition failed|Fatal error|LogOSDS\w*: Error:' }
 
 $Passed = ($Results | Where-Object { $_.Result -eq 'Success' }).Count
 $Seconds = [int]((Get-Date) - $Started).TotalSeconds

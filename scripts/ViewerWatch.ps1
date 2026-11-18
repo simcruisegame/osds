@@ -17,7 +17,7 @@ function Start-ViewerWatch([string]$RunDir) {
     'utc,event,detail' | Set-Content -Encoding utf8 $Csv
     return Start-Job -ScriptBlock {
         param($Csv)
-        Add-Type -Namespace SimCruise -Name Win -MemberDefinition @'
+        Add-Type -Namespace OSDS -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr hWnd, out uint pid);
 [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
@@ -27,15 +27,15 @@ function Start-ViewerWatch([string]$RunDir) {
         while ($true) {
             $Now = (Get-Date).ToUniversalTime()
             [uint32]$Fg = 0
-            [void][SimCruise.Win]::GetWindowThreadProcessId([SimCruise.Win]::GetForegroundWindow(), [ref]$Fg)
+            [void][OSDS.Win]::GetWindowThreadProcessId([OSDS.Win]::GetForegroundWindow(), [ref]$Fg)
             if ($Fg -ne $LastPid) {
                 $Name = (Get-Process -Id $Fg -ErrorAction SilentlyContinue).ProcessName
                 "$($Now.ToString('o')),focus,$Name#$Fg" | Add-Content -Encoding utf8 $Csv
                 $LastPid = $Fg
             }
-            $Info = New-Object SimCruise.Win+LASTINPUTINFO
+            $Info = New-Object OSDS.Win+LASTINPUTINFO
             $Info.cbSize = 8
-            if ([SimCruise.Win]::GetLastInputInfo([ref]$Info) -and $Info.dwTime -ne $LastInput) {
+            if ([OSDS.Win]::GetLastInputInfo([ref]$Info) -and $Info.dwTime -ne $LastInput) {
                 if ($LastInput -ne 0 -and ($Now - $LastInputNote).TotalSeconds -ge 1) {
                     "$($Now.ToString('o')),input,user input" | Add-Content -Encoding utf8 $Csv
                     $LastInputNote = $Now
@@ -56,7 +56,7 @@ function Get-ViewerEvents([string]$RunDir, [datetime]$FromUtc, [datetime]$ToUtc)
     $Rows = @(Import-Csv (Join-Path $RunDir 'viewer.csv') -ErrorAction SilentlyContinue)
     return @($Rows | Where-Object {
         $T = [datetime]::Parse($_.utc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime()
-        # The game: the editor's -game process, or a cooked package (SimCruise.exe and SimCruise-Win64-*.exe; OSDS* if the exe is ever renamed).
-        $T -ge $FromUtc -and $T -le $ToUtc -and ($_.event -eq 'focus' -and $_.detail -notmatch '^(UnrealEditor|SimCruise|OSDS)[^#]*#')
+        # The game: the editor's -game process, or a cooked package (OSDS.exe and OSDS-Win64-*.exe; OSDS* if the exe is ever renamed).
+        $T -ge $FromUtc -and $T -le $ToUtc -and ($_.event -eq 'focus' -and $_.detail -notmatch '^(UnrealEditor|OSDS|OSDS)[^#]*#')
     })
 }

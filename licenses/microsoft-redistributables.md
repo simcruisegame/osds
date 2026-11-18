@@ -1,6 +1,6 @@
 # Microsoft redistributables in the Windows package
 
-The Windows package and installer carry two installers from Microsoft, unchanged, in `Engine\Extras\Redist\en-us`. A clean Windows 10 or 11 does not have them, and the game needs them (`scripts\dep-check.py` lists the DLLs). The installer runs each one only when the PC needs it (`packaging\windows\simcruise.iss`); the launcher `SimCruise.exe` offers them when they are missing.
+The Windows package and installer carry two installers from Microsoft, unchanged, in `Engine\Extras\Redist\en-us`. A clean Windows 10 or 11 does not have them, and the game needs them (`scripts\dep-check.py` lists the DLLs). The installer runs each one only when the PC needs it (`packaging\windows\osds.iss`); the launcher `OSDS.exe` offers them when they are missing.
 
 | File | What | Version in 2.0.3 | Where it comes from | Terms |
 |---|---|---|---|---|

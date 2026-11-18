@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   For each car it starts one game (editor binaries, -game, Ultra, 1280x720, driver's seat, the
-  bundled Ocean Drive start, offline, the one-editor lock) with -SimCruiseCockpitTest. With the car
+  bundled Ocean Drive start, offline, the one-editor lock) with -OsdsCockpitTest. With the car
   at rest, the stick goes to the centre, half and full lock both ways, each held 2 s. At each pose
   the game reads the transforms of the steering wheel, the dial faces, the needles and the body,
   and takes a frame as the driver sees it and one with the wheel hidden. It FAILs when the gauges
@@ -38,7 +38,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
 . (Join-Path $PSScriptRoot 'ReviewLib.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
 # "powershell -File" hands "a,b" over as one string.
@@ -52,9 +52,9 @@ foreach ($Car in $Cars) {
     $RunDir = Join-Path $OutRoot "cockpit-$Car"
     New-Item -ItemType Directory -Force $RunDir | Out-Null
     $Log = Join-Path $RunDir 'game.log'
-    $GameArgs = @("`"$Project`"", '-game', '-SimCruiseWorld', '-SimCruiseBundledStart', '-SimCruiseNoLive', '-SimCruiseNoNeural', "-SimCruiseGraphics=$Graphics",
-        '-SimCruiseUtc=2026-11-12T17:00:00Z', "-SimCruiseCar=$Car", '-SimCruiseCockpitTest', "`"-SimCruiseCockpitOut=$(Join-Path $RunDir 'cockpit')`"",
-        '-DPCVars=simcruise.Traffic.Cars=0', '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution)
+    $GameArgs = @("`"$Project`"", '-game', '-OsdsWorld', '-OsdsBundledStart', '-OsdsNoLive', '-OsdsNoNeural', "-OsdsGraphics=$Graphics",
+        '-OsdsUtc=2026-11-12T17:00:00Z', "-OsdsCar=$Car", '-OsdsCockpitTest', "`"-OsdsCockpitOut=$(Join-Path $RunDir 'cockpit')`"",
+        '-DPCVars=osds.Traffic.Cars=0', '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution)
     if (-not (Enter-EditorLock -GpuTest -TimeoutMinutes $LockTimeoutMinutes -Why "cockpit test $Car on $Root")) { exit 1 }
     $Started = Get-Date; $TimedOut = $false; $ExitCode = -1
     try {

@@ -1,7 +1,7 @@
-# Crash bench SimCruise.Vehicle.Crash.<car> and fixed-bug tests, commit da53362, 2026-11-12T10:49Z
+# Crash bench OSDS.Vehicle.Crash.<car> and fixed-bug tests, commit da53362, 2026-11-12T10:49Z
 # Pass rules: rise < 0.6 m, up speed < 3 m/s, tilt < 60 deg, car centre stays before the wall/tree face, never on the far side of the rail, striking car never ahead of the stopped car, finite state, reset gives 4 wheels down and > 3 m/s after 3 s at half throttle.
 
-24 passed, 0 failed, 0 logged errors in 195 s (log: D:\sc\lane-release\Saved\Logs\SimCruiseChecks.log)
+24 passed, 0 failed, 0 logged errors in 195 s (log: D:\sc\lane-release\Saved\Logs\OsdsChecks.log)
 CHECKS PASSED
 
 CRASH meridian_z  car       impact 54 km/h, peak rise 0.17 m, closest centres 4.33 m (car length 4.33 m), finite 1
@@ -22,27 +22,27 @@ CRASH nb2001_lowered tree      impact 49 km/h, peak rise 0.03 m, peak up speed 0
 CRASH nb2001_lowered wall      impact 59 km/h, peak rise 0.00 m, peak up speed 0.05 m/s, peak tilt 1 deg, max x 77.63 m (limit 77.67), finite 1
 g-meter with uneven physics steps per frame: -0.8000 .. -0.8000 g
 
-Success SimCruise.Drive.LowBeams
-Success SimCruise.Drive.Mapping
-Success SimCruise.Drive.OceanDrive
-Success SimCruise.Drive.ShellControl
-Success SimCruise.Gameplay.Camera.ChaseShowsSlip
-Success SimCruise.Gameplay.Camera.HeadModel
-Success SimCruise.Gameplay.Camera.HeadModelFrameRate
-Success SimCruise.Gameplay.Camera.PhysicsTimeNoJitter
-Success SimCruise.Gameplay.Haptics.SlipRumble
-Success SimCruise.Gameplay.Hud.Levels
-Success SimCruise.Gameplay.Input.BindingsMatchControlsDoc
-Success SimCruise.Gameplay.Input.DeadZonesAndDirections
-Success SimCruise.Gameplay.Loop.PlaceholderConventionsAndSlideCatch
-Success SimCruise.Gameplay.Places.Query
-Success SimCruise.Gameplay.Places.StartPool
-Success SimCruise.Gameplay.Steering.CountersteerAllowance
-Success SimCruise.Gameplay.Steering.KeyTapAtHighwaySpeed
-Success SimCruise.Gameplay.Steering.PedalRamps
-Success SimCruise.Gameplay.Steering.RangeMatchesGodot
-Success SimCruise.Gameplay.Steering.StickAndKeysCentreExactly
-Success SimCruise.Vehicle.Crash.meridian_z
-Success SimCruise.Vehicle.Crash.mustang65
-Success SimCruise.Vehicle.Crash.nb2001
-Success SimCruise.Vehicle.Crash.nb2001_lowered
+Success OSDS.Drive.LowBeams
+Success OSDS.Drive.Mapping
+Success OSDS.Drive.OceanDrive
+Success OSDS.Drive.ShellControl
+Success OSDS.Gameplay.Camera.ChaseShowsSlip
+Success OSDS.Gameplay.Camera.HeadModel
+Success OSDS.Gameplay.Camera.HeadModelFrameRate
+Success OSDS.Gameplay.Camera.PhysicsTimeNoJitter
+Success OSDS.Gameplay.Haptics.SlipRumble
+Success OSDS.Gameplay.Hud.Levels
+Success OSDS.Gameplay.Input.BindingsMatchControlsDoc
+Success OSDS.Gameplay.Input.DeadZonesAndDirections
+Success OSDS.Gameplay.Loop.PlaceholderConventionsAndSlideCatch
+Success OSDS.Gameplay.Places.Query
+Success OSDS.Gameplay.Places.StartPool
+Success OSDS.Gameplay.Steering.CountersteerAllowance
+Success OSDS.Gameplay.Steering.KeyTapAtHighwaySpeed
+Success OSDS.Gameplay.Steering.PedalRamps
+Success OSDS.Gameplay.Steering.RangeMatchesGodot
+Success OSDS.Gameplay.Steering.StickAndKeysCentreExactly
+Success OSDS.Vehicle.Crash.meridian_z
+Success OSDS.Vehicle.Crash.mustang65
+Success OSDS.Vehicle.Crash.nb2001
+Success OSDS.Vehicle.Crash.nb2001_lowered

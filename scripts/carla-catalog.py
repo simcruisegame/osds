@@ -2,7 +2,7 @@
 
 Scans a CARLA content checkout (default D:/sc/carla-content) for named static meshes; levels of detail
 (_Lod) and trunk-only parts (Base) are left out. Bands: north, south, wet, dry, tropic
-(SimCruiseCarlaCatalog::BandAt). Run: python scripts/carla-catalog.py [checkout]
+(OsdsCarlaCatalog::BandAt). Run: python scripts/carla-catalog.py [checkout]
 """
 import json, os, re, sys
 
@@ -23,7 +23,7 @@ RULES = [
     (r'^SM_WillowBush01$', 'bush', ['wet', 'north'], 150, True, False, 0.8, 1.2),
     (r'^SM_CypressBush01$', 'bush', ['south'], 150, True, False, 0.8, 1.2),
 ]
-# Only models that load with all their materials (SimCruise.World.CarlaAssets writes Saved/CarlaAssets.txt).
+# Only models that load with all their materials (OSDS.World.CarlaAssets writes Saved/CarlaAssets.txt).
 complete = None
 if os.path.exists('Saved/CarlaAssets.txt'):
     complete = {l.split()[1] for l in open('Saved/CarlaAssets.txt', encoding='utf-8', errors='replace') if l.startswith('OK')}

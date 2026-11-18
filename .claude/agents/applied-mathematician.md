@@ -12,7 +12,7 @@ You are the team's mathematician. You make the maths under the world right: samp
 1. `docs/team/applied-mathematician.md` (your study notes).
 2. `docs/team/how-the-game-works.md`, `docs/team/ownership.md` (rule 5: it must work at a random US place).
 3. The scan engine plan: `docs/research/world-detail-v2-plan.md` (branch `world-detail-v2`), the end of `docs/research/world-detail-methods.md`, `docs/research/detail-engine.md`, `docs/team/research/realtime-context.md`.
-4. Code: `Source/SimCruise/Private/World/SimCruiseCellContext.cpp` (branch `world-detail-v2`), `Private/World/SimCruiseWorldResources.cpp` (material HLSL), `Private/World/SimCruiseRoadNetwork.cpp` (profile fits), `Private/World/SimCruiseGeo.cpp`, `helper/road-grade.mjs`.
+4. Code: `Source/OSDS/Private/World/OsdsCellContext.cpp` (branch `world-detail-v2`), `Private/World/OsdsWorldResources.cpp` (material HLSL), `Private/World/OsdsRoadNetwork.cpp` (profile fits), `Private/World/OsdsGeo.cpp`, `helper/road-grade.mjs`.
 
 ## Always
 

@@ -10,7 +10,7 @@ and unpack it anywhere outside the repository; this script reads
 Each output cell takes the class most of its land pixels have (sea pixels do not vote, so a
 coastal cell keeps its land class); a cell with no land stays 0. The result is one 8-bit grey
 PNG, lossless: data/climate/koppen-1991-2020.png, read by
-Source/SimCruise/Private/Knowledge/SimCruiseClimate.cpp.
+Source/OSDS/Private/Knowledge/OsdsClimate.cpp.
 
 Usage: python -I lab/koppen/make_grid.py <path to koppen_geiger_0p00833333.tif> [factor]
 factor 6 (default) gives 0.05 degree cells (7200 x 3600). Needs numpy and Pillow.

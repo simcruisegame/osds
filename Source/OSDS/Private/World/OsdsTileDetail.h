@@ -1,0 +1,162 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "World/OsdsTileBuilder.h"
+
+struct FOsdsTileData;
+struct FOsdsTileContext;
+
+/**
+ * Detail built on top of a tile's terrain and roads: building recipes, palms
+ * and street lights. Pure functions of the tile data, run on the tile build's
+ * worker thread like the rest of OsdsTileBuilder.
+ *
+ * Everything here is light geometry whose look comes from the building
+ * material (OsdsSurfaceKind in UV1): a facade is a handful of quads, the
+ * windows, stucco and neon are drawn by the shader (docs/unreal-architecture.md,
+ * "World detail").
+ */
+namespace OsdsTileDetail
+{
+	/** Regional character of the buildings at a place. */
+	enum class EBuildingStyle : uint8
+	{
+		Generic,
+		/** The Miami Beach Architectural District (National Register, 1979): 1930s-40s Art Deco and MiMo. */
+		MiamiBeachDeco,
+	};
+
+	OSDS_API EBuildingStyle StyleForPlace(double LatDeg, double LonDeg);
+
+	/** Where coconut palms (Cocos nucifera) grow outdoors in the US: South Florida's coasts and the Keys, Hawaii. */
+	OSDS_API bool IsCoconutPalmRegion(double LatDeg, double LonDeg);
+
+	struct FContext
+	{
+		const FOsdsTileData& Data;
+		FOsdsTileBuild& B;
+		double Side = 0.0;        // tile size, m
+		double LatDeg = 0.0;      // tile centre
+		double LonDeg = 0.0;
+		/** Land cover at a point (tile metres). */
+		TFunction<bool(const FVector2d&)> IsVegetation;
+		TFunction<bool(const FVector2d&)> IsPavedPath;
+		TFunction<bool(const FVector2d&)> IsWater;
+		/** The tile's context record (climate, species, per-segment roadside); null in old callers. */
+		const FOsdsTileContext* Cells = nullptr;
+		/** The tile's aerial photograph (zoom 14, this tile one of its 4 x 4 cells); null: none. */
+		const FOsdsAerialImage* Aerial = nullptr;
+	};
+
+	/** Roof shapes with reliable mapped support in the procedural building mesh. */
+	enum class EBuildingRoofForm : uint8 { Unspecified, Flat, Gabled, Hipped };
+	OSDS_API EBuildingRoofForm BuildingRoofFormFromFact(FName RoofFact);
+
+	/**
+	 * A roof's colour seen from above: the median of the photograph's pixels well inside the
+	 * footprint (half a pixel in from its outline, so walls and shadows at the edge stay out),
+	 * linear, clamped to the albedo range of roofs (luminance 0.04-0.60, saturation 0.45 at most).
+	 * False when there is no photograph or under 6 pixels fall inside.
+	 */
+	OSDS_API bool RoofColourFromAerial(const FContext& Context, const TArray<FVector2d>& RingM, FLinearColor& OutColour);
+
+	/**
+	 * Where a wall's window grid stops (m, absolute height): at the top of the last storey whose
+	 * glass ends BandMinM or more under the wall's top (the shader draws glass from 0.95 m to
+	 * Storey - 0.68 m above each storey's floor; a shop's ground storey to Storey - 0.45 m). The
+	 * wall above it is a plain band: no window row is ever cut by the roof line. Never above WallTop.
+	 */
+	OSDS_API double FacadeGridTop(double GroundZ, double WallTop, double Storey, bool bShopFront, double BandMinM = 0.4);
+
+	/** Off: the old facades (the grid to the wall top), for the tests' before/after counts. */
+	OSDS_API extern bool bFitFacadeGrid;
+
+	/** What a building's walls are built of (OsdsWallMaterial), from its data, else the rules. */
+	struct FWallMaterialInput
+	{
+		double LatDeg = 0.0, LonDeg = 0.0;
+		double HeightM = 0.0, AreaM2 = 0.0;
+		FString Use;              // the footprint's class (Overture/OSM: house, commercial, industrial ...)
+		FName MaterialFact;       // the strongest material:* fact (OSM building:material, Wikidata P186), or none
+		FName Region, Climate;    // region:* and climate:* facts, or none
+		bool bBefore1945 = false, bAfter1975 = false;
+		bool bHouse = false, bMainStreet = false, bDowntown = false, bCurtain = false, bDeco = false, bTower = false;
+		uint32 Hash = 0;
+	};
+	OSDS_API int32 WallMaterialFor(const FWallMaterialInput& In, bool* bOutFromData = nullptr);
+
+	/** How a region builds (wall materials, foundation heights): from the region and climate facts, else latitude and longitude. */
+	enum EBuildingBand : int32 { North, South, Dry, Tropic, Wet };
+	OSDS_API int32 BuildingBand(const FWallMaterialInput& In);
+
+	/** Off: every wall plain render (the look before wall materials), for an A/B and the tests. */
+	OSDS_API extern bool bWallMaterials;
+
+	/** Footprints extruded by the place's recipe into the Building layer. */
+	OSDS_API void BuildBuildings(const FContext& Context);
+
+	/** Coconut palms on the parks and lawns of the palm region, as instances (FOsdsTileBuild::PalmInstances). */
+	OSDS_API void BuildPalms(const FContext& Context);
+
+	/** Number of palm meshes the instances choose from. */
+	inline constexpr int32 PalmVariants = 6;
+
+	/** One palm variant at the origin (cm), leaning toward +X: trunk (building material kinds) and fronds (foliage). */
+	OSDS_API void BuildPalmVariant(int32 Variant, FOsdsMeshData& Trunk, FOsdsMeshData& Fronds);
+
+	/** Street lights behind the curbs of public streets (Props), with their lamp points for the night light pool. */
+	OSDS_API void BuildStreetLights(const FContext& Context);
+	/** Roadside grass and bushes from the CARLA catalogue: both sides of the public roads, on vegetated
+	 *  ground (never a carriageway, water or paving), thicker in wet climates, sparse in dry ones. */
+	OSDS_API void BuildCarlaVerges(const FContext& Context);
+
+	/**
+	 * Promenades: a low stone seawall where a mapped footway runs along sand (the beach
+	 * side), and benches and lamp posts along footways 3 m and wider (Props; lamps join the
+	 * night light pool).
+	 */
+	OSDS_API void BuildPromenades(const FContext& Context);
+
+	/**
+	 * A US stop sign (MUTCD R1-1): a 30 in red octagon with a white border and STOP, its
+	 * bottom 7 ft above the ground (urban), on a galvanised square post at BaseM (tile
+	 * metres, ground at GroundZM), the face toward Facing (the approaching drivers).
+	 */
+	OSDS_API void AddStopSign(FOsdsMeshData& Props, const FVector2d& BaseM, double GroundZM, const FVector2d& Facing);
+
+	/** Albedo caps (luminance) for weathered exterior paint: walls, trim, concrete towers. */
+	inline constexpr float MaxWallAlbedo = 0.75f;
+	inline constexpr float MaxTrimAlbedo = 0.80f;
+	inline constexpr float MaxTowerAlbedo = 0.55f;
+	/** A colour scaled down (hue kept) so its luminance is at most Max. */
+	OSDS_API FLinearColor WeatheredPaint(const FLinearColor& Colour, float Max = MaxWallAlbedo);
+
+	/** How a named place signs its building: 0 none, 1 painted letters, 2 neon letters; a hotel ranks first on its building. */
+	struct FSignStyle
+	{
+		int32 Rank = 0;       // 0: no sign; 3 hotel, 2 bar or club, 1 shop, restaurant, office
+		bool bNeon = false;
+		bool bHotel = false;
+	};
+	OSDS_API FSignStyle SignStyleFor(const FString& PoiKind);
+
+	/**
+	 * The words on a place's sign from its map name: the branch or location tail
+	 * ("Cardozo Hotel South Beach" -> "CARDOZO", "Mercato Di Mare - Ocean Drive" ->
+	 * "Mercato Di Mare"); hotels in capitals without "Hotel". Empty when nothing is left.
+	 */
+	OSDS_API FString SignText(const FString& Name, bool bHotel);
+
+	/**
+	 * Footprint corner rounding (Streamline Moderne): convex corners of street fronts become
+	 * quarter arcs. Ring in metres, Sign the winding (+1/-1), Front per edge. Out: the new ring,
+	 * per new edge its source edge (or INDEX_NONE on an arc).
+	 */
+	OSDS_API void RoundCorners(const TArray<FVector2d>& Ring, double Sign, const TArray<bool>& Front, const TArray<bool>& Keep,
+		double MaxRadiusM, TArray<FVector2d>& OutRing, TArray<int32>& OutSource);
+
+	/** True when a point (tile metres) lies inside any building footprint of the tile. */
+	OSDS_API bool IsInsideBuilding(const FOsdsTileData& Data, double Side, const FVector2d& P);
+}

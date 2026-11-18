@@ -1,0 +1,77 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Gameplay/OsdsUiTheme.h"
+#include "Vehicle/OsdsTuning.h"
+#include "Widgets/DeclarativeSyntaxSupport.h"
+#include "Widgets/SCompoundWidget.h"
+
+class AOsdsVehicle;
+class SVerticalBox;
+
+/**
+ * The tuning menu (D-pad Right or F4, standing still): the car's setup in workshop units,
+ * each row inside a safe range around the real car's, the body roll per g it gives, and a
+ * reset to the real car. Up and down choose a row, left and right change it, X resets the
+ * row, Y twice resets everything to the real car, A saves for this car and applies, B cancels.
+ */
+class OSDS_API SOsdsTuningMenu : public SCompoundWidget
+{
+public:
+	SLATE_BEGIN_ARGS(SOsdsTuningMenu) {}
+		SLATE_ARGUMENT(TWeakObjectPtr<AOsdsVehicle>, Vehicle)
+		SLATE_EVENT(FSimpleDelegate, OnClose)
+	SLATE_END_ARGS()
+
+	void Construct(const FArguments& InArgs);
+
+	virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& InAnalogInputEvent) override;
+	virtual bool SupportsKeyboardFocus() const override { return true; }
+
+	/** Apply the working setup to the car and save it; false when the save failed. */
+	bool Commit();
+	enum class ETuningResult : uint8 { Open, Saved, SaveFailed, Cancelled };
+	ETuningResult GetResult() const { return Result; }
+
+	/** Change the selected row by Steps (tests). */
+	void Nudge(int32 Steps);
+	void Select(int32 Row) { Selected = FMath::Clamp(Row, 0, NumRows() - 1); }
+	const FOsdsTuning& GetWorking() const { return Working; }
+	int32 GetSelected() const { return Selected; }
+	/** A real car's setup with no car in the world (tests): the stock values set each row's range. */
+	void SetSetup(const FOsdsTuning& InStock, const FOsdsTuning& InWorking) { Stock = InStock; Working = InWorking; }
+	/** Y was pressed once: the next Y puts everything back as the real car. */
+	bool IsConfirmingReset() const { return bConfirmReset; }
+	/** The pad hints at the bottom (the help line is made from them). */
+	static TArray<OsdsTheme::FHint> GetPadHints();
+
+private:
+	struct FRow
+	{
+		FText Label;
+		double FOsdsTuning::* Field = nullptr;
+		double Step = 1.0;
+		FString Unit;
+		int32 Decimals = 0;
+	};
+	int32 NumRows() const { return Rows.Num(); }
+	FText RowText(int32 Index) const;
+	FSlateColor RowColor(int32 Index) const;
+	FText RollText() const;
+	void Close(bool bSave);
+
+	TWeakObjectPtr<AOsdsVehicle> Vehicle;
+	FSimpleDelegate OnClose;
+	FOsdsTuning Working;
+	FOsdsTuning Stock;
+	TArray<FRow> Rows;
+	int32 Selected = 0;
+	/** The left stick as the D-pad: one push one step, held it repeats (OsdsTheme::StickNav). */
+	OsdsTheme::FStickRepeat Stick;
+	bool bConfirmReset = false;
+	FText Notice;
+	ETuningResult Result = ETuningResult::Open;
+};

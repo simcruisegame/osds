@@ -1,7 +1,7 @@
 # Sound designer review, 2026-11-12
 
 Reviewer: sound-designer (see docs/team/sound-designer.md).
-Scope: `Source/SimCruise/Private/Audio/*`, audio glue in `SimCruiseVehicle.cpp` and `SimCruiseTraffic.cpp`, `Content/Vehicles/CarPresentation.json`, car data, audio tests.
+Scope: `Source/OSDS/Private/Audio/*`, audio glue in `OsdsVehicle.cpp` and `OsdsTraffic.cpp`, `Content/Vehicles/CarPresentation.json`, car data, audio tests.
 Method: code reading and arithmetic. No audio was rendered or heard in this session. Every "hear" statement below is a prediction from the code.
 
 ## Summary
@@ -11,57 +11,57 @@ The procedural voices are well built. The firing frequencies are correct (inline
 ## Findings
 
 ### 1. Audio rev limiter and pitch clamp are constants, not the car's fuel cut  (P1)
-Evidence: `Public/Audio/SimCruiseInlineFourSynth.h:25` `LimiterRpm = 6950.0`; `Private/Audio/SimCruiseInlineFourSynth.cpp:76` `FMath::Clamp(Rpm, 0.0, 7200.0)`; `SimCruiseInlineFourSynth.cpp:96` `bLimiting = Rpm > LimiterRpm && ...`. Car data: `data/cars/nb2001_lowered.json:104` fuel cut 7250, `:110` max_omega 775 rad/s (7400 rpm); `meridian_z.json:105` fuel cut 6600; `mustang65.json:112` fuel cut 5000.
+Evidence: `Public/Audio/OsdsInlineFourSynth.h:25` `LimiterRpm = 6950.0`; `Private/Audio/OsdsInlineFourSynth.cpp:76` `FMath::Clamp(Rpm, 0.0, 7200.0)`; `OsdsInlineFourSynth.cpp:96` `bLimiting = Rpm > LimiterRpm && ...`. Car data: `data/cars/nb2001_lowered.json:104` fuel cut 7250, `:110` max_omega 775 rad/s (7400 rpm); `meridian_z.json:105` fuel cut 6600; `mustang65.json:112` fuel cut 5000.
 Problem:
 - Miata: from 6950 to 7250 rpm the synth stutters as if on the limiter while the engine still makes full power. Above 7200 rpm the pitch stops rising. The auto upshift is at 6900 rpm (`nb2001_lowered.json:123`), so overshoot during a full-throttle shift can trigger a false stutter (estimate; not observed).
 - Corvette C8 and Mustang: the engine cuts fuel at 6600 and 5000 rpm, but the synth never reaches 6950. The player hears no limiter at all. The real cue "you are on the limiter, shift" is lost for two of the three main cars.
-Fix: add `LimiterRpm` and `MaxRpm` to `FSimCruiseInlineFourSynth::FInputs` (or a configure call). Fill them from `FSimCruiseCarDefinition::FuelCutSpeedRpm` and `max_omega` in `ASimCruiseVehicle::UpdateEngineSound`. Better: send a `bFuelCut` flag from the powertrain, so sound and physics cut together.
-Verify: new test `SimCruise.Audio.LimiterFollowsCar`: render at fuel cut + 100 rpm with pedal 1 for each of the three cars; expect the quarter-cycle level ratio > 2 (as in `SimCruise.Audio.InlineFour`). Render the Miata at 7100 rpm; expect no stutter. Render at 7350 rpm; expect the firing peak at 245 Hz +-2 %.
+Fix: add `LimiterRpm` and `MaxRpm` to `FOsdsInlineFourSynth::FInputs` (or a configure call). Fill them from `FOsdsCarDefinition::FuelCutSpeedRpm` and `max_omega` in `AOsdsVehicle::UpdateEngineSound`. Better: send a `bFuelCut` flag from the powertrain, so sound and physics cut together.
+Verify: new test `OSDS.Audio.LimiterFollowsCar`: render at fuel cut + 100 rpm with pedal 1 for each of the three cars; expect the quarter-cycle level ratio > 2 (as in `OSDS.Audio.InlineFour`). Render the Miata at 7100 rpm; expect no stutter. Render at 7350 rpm; expect the firing peak at 245 Hz +-2 %.
 
 ### 2. No player volume controls and no mix bus  (P1)
-Evidence: only a sound on/off (`SimCruiseInputConfig.cpp:57` `ToggleSound` on M; `SimCruisePlayerController.cpp:478-483` atlas settings list "Sound · On/Off"). Levels are fixed: `SimCruiseVehicle.cpp:443` engine `SetVolumeMultiplier(0.25f)` (Godot -12 dB); `SimCruiseRoadNoiseSynth.h:39-40` road -8 dB, wind -30 dB. No Sound Class or Submix is set on the components.
+Evidence: only a sound on/off (`OsdsInputConfig.cpp:57` `ToggleSound` on M; `OsdsPlayerController.cpp:478-483` atlas settings list "Sound · On/Off"). Levels are fixed: `OsdsVehicle.cpp:443` engine `SetVolumeMultiplier(0.25f)` (Godot -12 dB); `OsdsRoadNoiseSynth.h:39-40` road -8 dB, wind -30 dB. No Sound Class or Submix is set on the components.
 Problem: the player cannot lower the engine against tyres and wind, or set an overall level. A long drive at a fixed mix is tiring for some players. Accessibility guidance asks for separate volume controls (GAG / XAG; exact item not re-verified). Without a submix there is no place for a master limiter or a loudness meter.
 Fix: route both synth components through one Sound Class tree (Master, Engine, Road and wind, Traffic) and one Submix. Expose Master, Engine and Road volumes in the atlas settings, remembered in `preferences.json`. This is a small settings addition; schedule it for the next phase if it counts as a feature.
 Verify: unit test that each setting changes the class volume; capture test that the settings persist across a restart.
 
 ### 3. No loudness target or measurement of the full mix  (P1)
-Evidence: tests check RMS and peak per layer only (`SimCruiseRoadNoiseTests.cpp:101` "asphalt at 30 m/s near -16 dBFS"; `SimCruiseAudioTests.cpp:77` peak <= 0.94). Nothing measures the summed engine + road + wind + traffic.
+Evidence: tests check RMS and peak per layer only (`OsdsRoadNoiseTests.cpp:101` "asphalt at 30 m/s near -16 dBFS"; `OsdsAudioTests.cpp:77` peak <= 0.94). Nothing measures the summed engine + road + wind + traffic.
 Problem: perceived loudness (LUFS) and true peak of the real mix are unknown. Full throttle plus squeal on rough road could exceed full scale after the mixer sums three sources (estimate: engine 0.94 x 0.25 + road/wind up to 0.40 = 0.64 peak, so likely safe, but not proven with traffic voices added).
 Fix: add an offline render of a scripted 10-minute drive (DriveTest telemetry) through both synths at their mix gains. Measure integrated loudness, LRA and true peak.
 Verify: target -24 LUFS +-2 LU integrated, true peak < -1 dBTP (EBU R128 gives -23 LUFS / -1 dBTP for broadcast; -24 for console games is unverified).
 
 ### 4. Hard clip at the engine output  (P2)
-Evidence: `SimCruiseInlineFourSynth.cpp:166` `FMath::Clamp(OutputLow * Gain, -.94, .94)`. The road and wind use `tanh` soft limiting (`SimCruiseRoadNoiseSynth.cpp`, `RenderRoad` and `RenderWind`).
+Evidence: `OsdsInlineFourSynth.cpp:166` `FMath::Clamp(OutputLow * Gain, -.94, .94)`. The road and wind use `tanh` soft limiting (`OsdsRoadNoiseSynth.cpp`, `RenderRoad` and `RenderWind`).
 Problem: if pops, boom and full load stack, the engine clips hard and adds harsh odd harmonics. The test only checks that the peak is <= 0.94, so it cannot see clipping.
 Fix: use the same `0.94 * tanh(x / 0.94)` limiter as the road layer.
 Verify: test that renders a worst case (limiter + overrun pops + cabin boom) and counts samples at exactly +-0.94; expect zero.
 
 ### 5. Traffic voices: one voice type, no Doppler, no air absorption  (P2)
-Evidence: `SimCruiseTraffic.cpp:692-711`: every non-V8 traffic car uses the inline-four voice; only the attenuation falloff is set (`NaturalSound`, 3 m inner radius); no pitch shift from closing speed; no LPF by distance. Car data includes V6 trucks and SUVs (`f150raptor18`, `grandcherokee13`, `odyssey18`).
+Evidence: `OsdsTraffic.cpp:692-711`: every non-V8 traffic car uses the inline-four voice; only the attenuation falloff is set (`NaturalSound`, 3 m inner radius); no pitch shift from closing speed; no LPF by distance. Car data includes V6 trucks and SUVs (`f150raptor18`, `grandcherokee13`, `odyssey18`).
 Problem: a passing V6 truck sounds like a small four (wrong firing frequency: rpm/30 instead of rpm/20). A car passing at 25 m/s gives no pitch fall (expected about 14 % across the pass: c/(c-25) vs c/(c+25)). Speed feels lower.
 Fix: add a V6 even-fire layout (three pulses per revolution) to the presentation profile. Add a pitch ratio input to the synth, set from the radial velocity each frame. Enable the attenuation LPF (air absorption) on the traffic voice.
 Verify: test of the Doppler ratio function; render test of a V6 voice (firing peak at rpm/20).
 
 ### 6. Smoothing coefficients applied once per buffer  (P2)
-Evidence: `SimCruiseRoadNoiseSynth.cpp:90` `HissCutoff += (CutoffTarget - HissCutoff) * .3;` and `:195` the same for `WindCutoff`, once per `Render` call.
+Evidence: `OsdsRoadNoiseSynth.cpp:90` `HissCutoff += (CutoffTarget - HissCutoff) * .3;` and `:195` the same for `WindCutoff`, once per `Render` call.
 Problem: the glide time depends on the audio buffer size (256 vs 1024 frames gives a 4x change). On a slow PC with large buffers, the hiss colour lags speed changes.
 Fix: use a time constant: `alpha = 1 - exp(-Frames / (SampleRate * tau))` with tau about 50 ms.
 Verify: test that two renders with 256-frame and 1024-frame buffers over 1 s end at the same cutoff within 1 %.
 
 ### 7. Sample rate 22.05 kHz removes all content above 11 kHz  (P2)
-Evidence: `SimCruiseInlineFourSynth.h:24` and `SimCruiseRoadNoiseSynth.h:38` `SampleRate = 22050`.
+Evidence: `OsdsInlineFourSynth.h:24` and `OsdsRoadNoiseSynth.h:38` `SampleRate = 22050`.
 Problem: the exterior pickup, wind and skid hiss lose their top octave. The cabin filter (2.4 kHz) hides this in the driver's seat, which is the default view. The chase view sounds dull (prediction).
 Fix: none needed this phase. Next phase: render at the device rate (48 kHz) after a CPU check; the DSP is cheap.
 Verify: profile the audio render thread at 48 kHz on the 28 W target; compare spectra above 11 kHz in the chase view.
 
 ### 8. Overrun pop threshold is one constant for all cars  (P2)
-Evidence: `SimCruiseInlineFourSynth.h:27` `PopRpm = 3000.0`; `SimCruiseInlineFourSynth.cpp:99`.
+Evidence: `OsdsInlineFourSynth.h:27` `PopRpm = 3000.0`; `OsdsInlineFourSynth.cpp:99`.
 Problem: a 1965 Mustang 289 with a carburettor and a 5000 rpm cut behaves differently from a modern C8; pops above 3000 rpm are an estimate for all (header says "estimates, not BP-4W microphone measurements").
 Fix: move pop rpm and pop chance to `engine_sound` in `CarPresentation.json` with a source note per car.
 Verify: data load test that the field is read; listening test against owner-approved reference clips.
 
 ### 9. Engine voice is not tied to the camera position in the chase view  (P2)
-Evidence: `SimCruiseEngineSoundComponent.cpp:11` `bAllowSpatialization = false` for the player car; the exterior pickup is only a brighter filter (`SimCruiseInlineFourSynth.cpp:91` `Filter = In.bCabin ? .20 : .52`).
+Evidence: `OsdsEngineSoundComponent.cpp:11` `bAllowSpatialization = false` for the player car; the exterior pickup is only a brighter filter (`OsdsInlineFourSynth.cpp:91` `Filter = In.bCabin ? .20 : .52`).
 Problem: in the chase view the car turns but the engine stays centred. This is a design choice from the Godot build (header comment), so it is not a bug. It removes a small spatial cue.
 Fix: next phase only; optional spatialized exhaust emitter at the tail pipes in the chase view.
 Verify: listening test in the chase view while turning.

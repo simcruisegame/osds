@@ -1,0 +1,248 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#include "Gameplay/OsdsDriverShaping.h"
+
+#include "HAL/IConsoleManager.h"
+#include "Vehicle/OsdsSteeringGeometry.h"
+
+static TAutoConsoleVariable<float> CVarTriggerGamma(
+	TEXT("osds.TriggerGamma"),
+	static_cast<float>(OsdsShaping::DefaultTriggerGamma),
+	TEXT("Right-trigger throttle curve: pedal = trigger^gamma (1 = linear, 1.8 default, up to 3)."),
+	ECVF_Default);
+
+// The left trigger: a gentle start, as a brake pedal's first travel is (about 1 cm of trigger
+// against 4-6 cm of pedal). Half a squeeze is about 38 % of the brake; a full squeeze is all of it.
+static TAutoConsoleVariable<float> CVarBrakeTriggerGamma(
+	TEXT("osds.BrakeTriggerGamma"), 1.4f,
+	TEXT("Left-trigger brake curve: pedal = trigger^gamma (1 = linear, 1.4 default, up to 3)."),
+	ECVF_Default);
+
+// The player's stick preferences (road atlas, Controls row). The defaults are the shaping as researched.
+static TAutoConsoleVariable<float> CVarPadSteerSpeed(
+	TEXT("osds.Pad.SteerSpeed"), 1.f,
+	TEXT("How fast the thumbstick moves the wheel, x the researched hand rate (0.5-2, default 1)."),
+	ECVF_Default);
+static TAutoConsoleVariable<float> CVarPadSteerDeadZone(
+	TEXT("osds.Pad.SteerDeadZone"), 0.f,
+	TEXT("Extra thumbstick dead zone for steering, 0-0.25 of the travel (the rest is rescaled to the full range)."),
+	ECVF_Default);
+static TAutoConsoleVariable<float> CVarPadSteerLinearity(
+	TEXT("osds.Pad.SteerLinearity"), 0.f,
+	TEXT("0 = fine centre (the stick's middle for lane corrections, default), 1 = linear stick to wheel."),
+	ECVF_Default);
+
+namespace OsdsShaping
+{
+	double StickDeadZone(double Stick, double DeadZone)
+	{
+		DeadZone = FMath::Clamp(DeadZone, 0.0, 0.25);
+		const double Magnitude = FMath::Abs(Stick);
+		return Magnitude <= DeadZone ? 0.0 : FMath::Sign(Stick) * FMath::Min(1.0, (Magnitude - DeadZone) / (1.0 - DeadZone));
+	}
+
+	static double MoveToward(double From, double To, double Delta)
+	{
+		if (FMath::Abs(To - From) <= Delta)
+		{
+			return To;
+		}
+		return From + FMath::Sign(To - From) * Delta;
+	}
+
+	double SmoothMin(double A, double B, double K)
+	{
+		const double H = FMath::Clamp(0.5 + 0.5 * (B - A) / K, 0.0, 1.0);
+		return FMath::Lerp(B, A, H) - K * H * (1.0 - H);
+	}
+
+	double AvailableSteeringRad(const FOsdsVehicleSetup& Setup, double ForwardSpeedMps)
+	{
+		const double Speed = FMath::Abs(ForwardSpeedMps);
+		const double LimitAngle = FMath::Atan(Setup.WheelbaseM * Setup.SteeringAssistLateralG * StandardGravity / FMath::Max(Speed * Speed, 0.01))
+			+ Setup.SteeringSlipLimitSurplusRad;
+		return SmoothMin(Setup.ParkingRackAngleRad, LimitAngle, LockBlendRad);
+	}
+
+	double FrontAxleSlipAngleRad(const FOsdsVehicleSetup& Setup, double ForwardSpeedMps, double LateralSpeedMps, double YawRateRadPerS)
+	{
+		if (ForwardSpeedMps <= BetaMinForwardSpeedMps)
+		{
+			return 0.0;
+		}
+		const double FrontLateral = LateralSpeedMps + YawRateRadPerS * Setup.CenterOfMassToFrontAxleM;
+		return FMath::Atan2(FrontLateral, FMath::Max(ForwardSpeedMps, 3.0));
+	}
+
+	double RangeTowardRad(const FOsdsVehicleSetup& Setup, double ForwardSpeedMps, double BetaFrontRad, double Direction)
+	{
+		const double Cap = AvailableSteeringRad(Setup, ForwardSpeedMps);
+		if (Direction * BetaFrontRad <= CountersteerMinBetaRad)
+		{
+			return Cap;
+		}
+		const double Allowance = FMath::Min(FMath::Abs(BetaFrontRad) + Setup.SteeringSlipLimitSurplusRad, Setup.ParkingRackAngleRad);
+		return FMath::Max(Cap, Allowance);
+	}
+
+	double ThumbstickCommand(const FOsdsVehicleSetup& Setup, double Stick, double ForwardSpeedMps)
+	{
+		Stick = FMath::Clamp(Stick, -1.0, 1.0);
+		const double SpeedSquared = FMath::Max(ForwardSpeedMps * ForwardSpeedMps, 0.01);
+		const double AngleForCornering = FMath::Atan(Setup.WheelbaseM * PadCentreCorneringG * StandardGravity / SpeedSquared);
+		const double CentreGain = FMath::Clamp(AngleForCornering / AvailableSteeringRad(Setup, ForwardSpeedMps), 0.16, 1.0);
+		return Stick * (CentreGain + (1.0 - CentreGain) * Stick * Stick);
+	}
+
+	double PadStickForCommand(const FOsdsVehicleSetup& Setup, double Command, double ForwardSpeedMps)
+	{
+		const double Quick = FMath::Clamp(Setup.SteeringQuickness, 0.5, 2.0);
+		const double Want = FMath::Clamp(FMath::Abs(Command) / Quick, 0.0, 1.0);
+		if (Want <= 0.0) return 0.0;
+		const double Linearity = FMath::Clamp(static_cast<double>(CVarPadSteerLinearity.GetValueOnAnyThread()), 0.0, 1.0);
+		// Shaped(P) rises monotonically from 0 to 1 over P in 0..1: bisect.
+		double Lo = 0.0, Hi = 1.0;
+		for (int32 I = 0; I < 30; ++I)
+		{
+			const double Mid = 0.5 * (Lo + Hi);
+			const double Shaped = FMath::Lerp(ThumbstickCommand(Setup, Mid, ForwardSpeedMps), Mid, Linearity);
+			(Shaped < Want ? Lo : Hi) = Mid;
+		}
+		const double Pad = 0.5 * (Lo + Hi);
+		// Back through the player's dead zone (StickDeadZone) and the input's fixed axial 0.12.
+		const double Dead = FMath::Clamp(static_cast<double>(CVarPadSteerDeadZone.GetValueOnAnyThread()), 0.0, 0.25);
+		const double AfterInput = Dead + Pad * (1.0 - Dead);
+		const double Raw = 0.12 + AfterInput * (1.0 - 0.12);
+		return FMath::Sign(Command) * FMath::Min(Raw, 1.0);
+	}
+
+	double KeyRackRateRadPerS(const FOsdsVehicleSetup& Setup, double ForwardSpeedMps)
+	{
+		const double Parking = 2.75 * Setup.ParkingRackAngleRad;
+		return FMath::Lerp(Parking, KeyRackRateHighwayRadPerS, FMath::SmoothStep(5.0, 25.0, FMath::Abs(ForwardSpeedMps)));
+	}
+
+	double AdvanceSteering(double Current, double Target, double DeltaTimeS, double ApplyRate, double ReturnRate)
+	{
+		const double UnwindTarget = Current * Target < 0.0 ? 0.0 : Target;
+		if (FMath::Abs(UnwindTarget) < FMath::Abs(Current))
+		{
+			const double UnwindSeconds = FMath::Abs(Current - UnwindTarget) / FMath::Max(ReturnRate, UE_DOUBLE_SMALL_NUMBER);
+			Current = MoveToward(Current, UnwindTarget, DeltaTimeS * ReturnRate);
+			DeltaTimeS = FMath::Max(0.0, DeltaTimeS - UnwindSeconds);
+		}
+		return MoveToward(Current, Target, DeltaTimeS * ApplyRate);
+	}
+
+	double TriggerThrottle(double Trigger, double Gamma)
+	{
+		return FMath::Pow(FMath::Clamp(Trigger, 0.0, 1.0), FMath::Clamp(Gamma, 1.0, 3.0));
+	}
+
+	double KeyPedal(double Current, bool bPressed, double RisePerS, double DeltaTimeS)
+	{
+		return bPressed ? MoveToward(Current, 1.0, RisePerS * DeltaTimeS) : MoveToward(Current, 0.0, KeyPedalReleasePerS * DeltaTimeS);
+	}
+}
+
+void FOsdsDriverShaper::Reset()
+{
+	RackRad = 0.0;
+	KeyThrottle = 0.0;
+	KeyBrake = 0.0;
+	Clutch = 0.0;
+	RangeLeft = 0.0;
+	RangeRight = 0.0;
+	bUsingThumbstick = false;
+}
+
+FOsdsDriverCommand FOsdsDriverShaper::Update(const FOsdsVehicleSetup& Setup, const FOsdsDriveTelemetry& Telemetry,
+	const FOsdsRawControls& Raw, double DeltaTimeS)
+{
+	using namespace OsdsShaping;
+	DeltaTimeS = FMath::Clamp(DeltaTimeS, 0.0, 0.1);
+
+	const double ForwardSpeed = Telemetry.BodyVelocityMps.X;
+	const double Cap = AvailableSteeringRad(Setup, ForwardSpeed);
+	const double Beta = FrontAxleSlipAngleRad(Setup, ForwardSpeed, Telemetry.BodyVelocityMps.Y, Telemetry.BodyAngularVelocityRadPerS.Z);
+	RangeRight = RangeTowardRad(Setup, ForwardSpeed, Beta, 1.0);
+	RangeLeft = RangeTowardRad(Setup, ForwardSpeed, Beta, -1.0);
+
+	double Pad = StickDeadZone(FMath::Clamp(Raw.PadSteer, -1.0, 1.0), CVarPadSteerDeadZone.GetValueOnAnyThread());
+	double Key = FMath::Clamp(Raw.KeySteer, -1.0, 1.0);
+	if (FMath::Abs(Pad) < SteerDeadBand) { Pad = 0.0; }
+	if (FMath::Abs(Key) < SteerDeadBand) { Key = 0.0; }
+	bUsingThumbstick = FMath::Abs(Pad) > FMath::Abs(Key);
+
+	double Target = 0.0;
+	double ApplyRate = 0.0;
+	double ReturnRate = 0.0;
+	if (bUsingThumbstick)
+	{
+		// A quicker steering ratio turns the wheels further for the same thumb, up to the range.
+		const double Quick = FMath::Clamp(Setup.SteeringQuickness, 0.5, 2.0);
+		const double Linearity = FMath::Clamp(static_cast<double>(CVarPadSteerLinearity.GetValueOnAnyThread()), 0.0, 1.0);
+		const double Shaped = FMath::Lerp(ThumbstickCommand(Setup, Pad, ForwardSpeed), Pad, Linearity);
+		const double Command = FMath::Clamp(Shaped * Quick, -1.0, 1.0);
+		Target = Command * (Command > 0.0 ? RangeRight : RangeLeft);
+		const double HandSpeed = FMath::Clamp(static_cast<double>(CVarPadSteerSpeed.GetValueOnAnyThread()), 0.5, 2.0);
+		ApplyRate = PadApplyRatePerS * Cap * Quick * HandSpeed;
+		ReturnRate = PadReturnRatePerS * Cap * HandSpeed;
+	}
+	else
+	{
+		Target = Key * (Key > 0.0 ? RangeRight : RangeLeft);
+		ApplyRate = KeyRackRateRadPerS(Setup, ForwardSpeed) * FMath::Clamp(Setup.SteeringQuickness, 0.5, 2.0);
+		ReturnRate = FMath::Max(ApplyRate * KeyReturnFactor, KeyReturnRateMinRadPerS);
+	}
+
+	// A hand catching a slide moves fast: toward the front axle's velocity the
+	// rack may travel at up to 40 deg/s. Every other move keeps its own rate.
+	const bool bCatching = FMath::Abs(Beta) > CountersteerMinBetaRad && Target * Beta > 0.0;
+	if (bCatching)
+	{
+		ApplyRate = FMath::Max(ApplyRate, CountersteerRateRadPerS);
+		ReturnRate = FMath::Max(ReturnRate, CountersteerRateRadPerS);
+	}
+	// No faster than a hand turns the real rim: the rack's rate is the hand's over the column's
+	// local ratio, so a slow ratio (the Mustang's 21.7:1) moves the wheels slower, and the rim on
+	// screen never spins faster than a driver's hands could turn it.
+	if (Setup.SteeringRatio > 0.0)
+	{
+		const double Local = OsdsSteering::LocalRatio(RackRad, Setup.SteeringRatio, Setup.ParkingRackAngleRad, Setup.SteeringLockTurns);
+		const double AtSpeed = FMath::SmoothStep(5.0, 25.0, FMath::Abs(ForwardSpeed));
+		const double Hand = bUsingThumbstick ? FMath::Clamp(static_cast<double>(CVarPadSteerSpeed.GetValueOnAnyThread()), 0.5, 2.0) : 1.0;
+		const double ApplyCap = FMath::DegreesToRadians(bCatching ? HandCatchDegPerS : FMath::Lerp(HandApplyParkingDegPerS, HandApplyHighwayDegPerS, AtSpeed)) * Hand / Local;
+		const double ReturnCap = FMath::DegreesToRadians(bCatching ? HandCatchDegPerS : FMath::Lerp(HandReturnParkingDegPerS, HandReturnHighwayDegPerS, AtSpeed)) * Hand / Local;
+		ApplyRate = FMath::Min(ApplyRate, ApplyCap);
+		ReturnRate = FMath::Min(ReturnRate, ReturnCap);
+	}
+
+	RackRad = AdvanceSteering(RackRad, Target, DeltaTimeS, ApplyRate, ReturnRate);
+	if (Raw.bWheel)
+	{
+		// A real steering wheel drives the rack directly, as the column does.
+		RackRad = Raw.WheelRackRad;
+		bUsingThumbstick = false;
+	}
+	RackRad = FMath::Clamp(RackRad, -Setup.ParkingRackAngleRad, Setup.ParkingRackAngleRad);
+
+	KeyThrottle = KeyPedal(KeyThrottle, Raw.bKeyThrottle, KeyThrottleRisePerS, DeltaTimeS);
+	KeyBrake = KeyPedal(KeyBrake, Raw.bKeyBrake, KeyBrakeRisePerS, DeltaTimeS);
+	const double ClutchTarget = Raw.bClutch ? 1.0 : 0.0;
+	Clutch = Clutch + FMath::Clamp(ClutchTarget - Clutch, -ClutchReleasePerS * DeltaTimeS, ClutchPressPerS * DeltaTimeS);
+	if (Raw.bWheel && Raw.bWheelClutch)
+	{
+		Clutch = FMath::Max(Raw.bClutch ? Clutch : 0.0, FMath::Clamp(Raw.WheelClutch, 0.0, 1.0));
+	}
+
+	FOsdsDriverCommand Command;
+	Command.Throttle = static_cast<float>(FMath::Clamp(FMath::Max3(TriggerThrottle(Raw.PadThrottle, CVarTriggerGamma.GetValueOnGameThread()), KeyThrottle,
+		Raw.bWheel ? Raw.WheelThrottle : 0.0), 0.0, 1.0));
+	Command.Brake = static_cast<float>(FMath::Clamp(FMath::Max3(TriggerThrottle(Raw.PadBrake, CVarBrakeTriggerGamma.GetValueOnGameThread()), KeyBrake, Raw.bWheel ? Raw.WheelBrake : 0.0), 0.0, 1.0));
+	Command.Clutch = static_cast<float>(Clutch);
+	Command.ParkingBrake = Raw.bParkingBrake ? 1.f : 0.f;
+	Command.bFullServiceBrake = Raw.bFullServiceBrake;
+	Command.RackAngleRad = RackRad;
+	return Command;
+}

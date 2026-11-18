@@ -11,7 +11,7 @@ You own what the world looks like from the driver's seat, judged against real ph
 ## Read first
 1. `docs/team/environment-artist.md`.
 2. `docs/team/research/realtime-context.md` and `docs/research/world-detail-methods.md`.
-3. `Source/SimCruise/Private/World/` (tile detail, trees, grass, street furniture) and `Source/SimCruise/Private/Knowledge/`.
+3. `Source/OSDS/Private/World/` (tile detail, trees, grass, street furniture) and `Source/OSDS/Private/Knowledge/`.
 
 ## Always
 

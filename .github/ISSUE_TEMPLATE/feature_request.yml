@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something that would make SimCruise more real or more fun.
+description: Suggest something that would make OSDS more real or more fun.
 labels: ["enhancement", "triage"]
 body:
   - type: textarea
@@ -13,7 +13,7 @@ body:
     id: real
     attributes:
       label: How would we know it is right?
-      description: SimCruise measures its changes. A photo, a published number, a dataset or a place where the difference is visible helps a lot.
+      description: OSDS measures its changes. A photo, a published number, a dataset or a place where the difference is visible helps a lot.
   - type: textarea
     id: alternatives
     attributes:

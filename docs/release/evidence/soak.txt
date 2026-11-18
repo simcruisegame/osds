@@ -1,5 +1,5 @@
 # 20 minute soak, final 2.0.0 Shipping build (commit b7ac2de), 1920x1080 full screen, default settings (Medium, 60 fps cap), no wheel connected
-# SimCruise-Win64-Shipping.exe -SimCruiseSoak=20 -SimCruiseFrameCheck: a normal (random) start, the robot holds about 45 km/h with a slow weave through the real input stack, recovers when stuck 6 s, changes the camera every 45 s, the car every 4 min and travels to the next preset every 6 min. Shipping writes no log; the soak writes Saved/Profiling/SimCruiseSoak.log.
+# OSDS-Win64-Shipping.exe -OsdsSoak=20 -OsdsFrameCheck: a normal (random) start, the robot holds about 45 km/h with a slow weave through the real input stack, recovers when stuck 6 s, changes the camera every 45 s, the car every 4 min and travels to the next preset every 6 min. Shipping writes no log; the soak writes Saved/Profiling/OsdsSoak.log.
 # Result: exit code 0 after 1208 s (clean exit), 0 non-finite states, no crash.
 
 2026-11-12 11:58:59 SOAK start: 20.0 minutes, travel 1

@@ -1,6 +1,6 @@
 # Game domains and original ideas (12 November 2026)
 
-This note divides SimCruise into domains. Four research agents studied the domains with real sources: papers, books, standards, sim developers and film crews. This note then gives new ideas for the game. Each idea:
+This note divides OSDS into domains. Four research agents studied the domains with real sources: papers, books, standards, sim developers and film crews. This note then gives new ideas for the game. Each idea:
 
 - comes from a finding in the research, with its source,
 - has a cost on the 28 W RTX 2070 Max-Q GPU (most ideas use the CPU only),
@@ -215,7 +215,7 @@ The recordings belong to the owner, so the licence is clean.
 
 ## Each idea: its to-do item, its licensed source, its test
 
-Item numbers are from the team to-do list of 12 November 2026 ("SimCruise to-do list (team review)"). "New item" means no item covers it yet.
+Item numbers are from the team to-do list of 12 November 2026 ("OSDS to-do list (team review)"). "New item" means no item covers it yet.
 
 | Idea | To-do item | Data source and licence | Test against reality |
 |---|---|---|---|

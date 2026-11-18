@@ -19,7 +19,7 @@ nb1999.json is the only Miata spec. CarSpec has no inheritance or variant mechan
 2) Real-car logging protocol in lab/reality/owner-car/README.md:
 - A phone in a fixed mount running a CSV IMU and GNSS logger at 50-100 Hz on a chosen public road segment, driven legally and safely.
 - Steady-state circles in a legal empty lot at 2-3 speeds (for the ay against speed envelope), straight-line coast-downs from 50 mph in neutral (rolling plus aero), and gentle braking tests.
-3) RealCarCompare tool: aligns the logs to the same OSM road in SimCruise, then compares
+3) RealCarCompare tool: aligns the logs to the same OSM road in OSDS, then compares
 - the steady-state ay against steer-implied radius,
 - the coast-down deceleration curve, with A and B fitted,
 - the pitch and roll angle at a given g (from phone attitude),

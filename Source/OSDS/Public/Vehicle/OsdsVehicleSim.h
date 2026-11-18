@@ -1,0 +1,294 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Templates/Function.h"
+#include "Vehicle/CarDefinition.h"
+
+/**
+ * OSDS vehicle dynamics, independent of any engine object.
+ *
+ * A faithful port of godot-final:game/Powertrain.gd (contacts, springs, dampers, anti-roll
+ * bars, relaxed slip angles, combined-slip slip-ratio tyres, engine, clutch,
+ * gearbox, differentials, brakes with ABS, traction control, aero and rolling
+ * resistance) and godot-final:game/CarSuspension.gd. Everything is SI, in Unreal's axes:
+ * X forward, Y right, Z up. A positive steer turns right.
+ *
+ * One Step() is one rigid-body interval: contact geometry, loads and slip
+ * angles are evaluated once, then wheel spin, driveline and longitudinal tyre
+ * force are integrated over Substeps equal sub-intervals, and the mean force
+ * is returned for the interval. Godot ran this at 60 Hz with 6 substeps; the
+ * Chaos adapter runs it on the physics thread at a fixed rate (see
+ * docs/unreal-architecture.md, "Vehicle physics core").
+ */
+
+/** Driver inputs, already in pedal/stick fractions. */
+struct FOsdsVehicleControls
+{
+	/** Accelerator, 0..1. In automatic it also selects drive near standstill. */
+	double Throttle = 0.0;
+	/** Brake pedal, 0..1. In automatic, below 0.45 m/s it selects reverse and drives. */
+	double Brake = 0.0;
+	/** Steering request, -1..1, positive right. A thumbstick is shaped by the vehicle. */
+	double Steer = 0.0;
+	/** Clutch pedal, 0..1 (manual gearbox only). */
+	double Clutch = 0.0;
+	/** The steering request comes from a thumbstick (Godot's pad steering). */
+	bool bThumbstickSteer = false;
+	/** Rear parking brake (lever). */
+	bool bHandbrake = false;
+	/** Full service brake held (Godot's "handbrake" action on Space). */
+	bool bFullBrake = false;
+	/**
+	 * The driving shell has already shaped the steering (rates, speed cap,
+	 * countersteer allowance) into a rack angle: apply RackAngleRad as it is,
+	 * limited only by the car's lock, instead of Steer.
+	 */
+	bool bDirectRack = false;
+	/** Mean front road-wheel angle, radians, positive right (with bDirectRack). */
+	double RackAngleRad = 0.0;
+};
+
+/** Rigid-body state at the start of an interval (SI, world frame, Unreal axes). */
+struct FOsdsBodyState
+{
+	/** Body (root component) origin. */
+	FVector3d PositionM = FVector3d::ZeroVector;
+	FQuat4d Rotation = FQuat4d::Identity;
+	FVector3d CenterOfMassM = FVector3d::ZeroVector;
+	/** Velocity of the centre of mass. */
+	FVector3d LinearVelocityMps = FVector3d::ZeroVector;
+	FVector3d AngularVelocityRadPerSecond = FVector3d::ZeroVector;
+};
+
+/** What a suspension ray found. */
+struct FOsdsGroundHit
+{
+	FVector3d PointM = FVector3d::ZeroVector;
+	FVector3d NormalM = FVector3d::UnitZ();
+	/** Grip of this surface relative to dry asphalt. */
+	double SurfaceGrip = 1.0;
+	/** EOsdsSurfaceKind of the face hit, and whether the tyre stands on a kerb (a step carried
+	 *  it, or the steep part of a kerb's concrete). */
+	uint8 SurfaceKind = 0;
+	bool bKerb = false;
+	/** Road roughness under the tyre (m, + raises the road) and its rate (m/s). */
+	double RoadProfileM = 0.0;
+	double RoadProfileRateMps = 0.0;
+};
+
+/** Segment query against drivable collision: true and a hit when the segment Start->End meets ground. */
+using FOsdsGroundQuery = TFunctionRef<bool(const FVector3d& StartM, const FVector3d& EndM, FOsdsGroundHit& OutHit)>;
+
+/** Wheel order everywhere: 0 front left, 1 front right, 2 rear left, 3 rear right. */
+struct FOsdsWheelState
+{
+	double AngularSpeedRadPerSecond = 0.0;
+	/** Rolling (relaxed) slip-angle state. */
+	double RollingSlipAngleRad = 0.0;
+	/** Slip angle the last interval's lateral force used. */
+	double SlipAngleRad = 0.0;
+	double SlipRatio = 0.0;
+	double TractionControlSlip = 0.0;
+	double GripUse = 0.0;
+	double AbsRelease = 1.0;
+	double PeakSlip = 0.1;
+	/** Normal (spring, damper, bump stop and anti-roll bar) load. */
+	double LoadN = 0.0;
+	double SuspensionLengthM = 0.0;
+	/** Road-wheel steer angle, positive right (toe included). */
+	double SteerAngleRad = 0.0;
+	/** Wheel lean, positive with its top to the car's right (camber and caster). */
+	double InclinationRad = 0.0;
+	double FrictionCoefficient = 0.0;
+	double SurfaceGrip = 1.0;
+	uint8 SurfaceKind = 0;
+	bool bKerb = false;
+	double ForwardSpeedMps = 0.0;
+	double LateralSpeedMps = 0.0;
+	/** Interval-mean tyre forces in the wheel's ground frame. */
+	double LongitudinalForceN = 0.0;
+	double LateralForceN = 0.0;
+	/** Torque about the steering axis from the tyre (pneumatic plus caster trail), + steering the wheel to the right. */
+	double AligningTorqueNm = 0.0;
+	/** Accumulated rotation for presentation. */
+	double SpinAngleRad = 0.0;
+	bool bContact = false;
+	FVector3d ContactPointM = FVector3d::ZeroVector;
+	FVector3d ContactNormal = FVector3d::UnitZ();
+};
+
+struct FOsdsVehicleSimState
+{
+	FOsdsWheelState Wheels[4];
+	double EngineRpm = 850.0;
+	double EngineOmegaRadPerSecond = 89.0;
+	/** Forward gear index (0 = first). */
+	int32 Gear = 0;
+	bool bInReverse = false;
+	bool bManual = false;
+	/** -1 reverse, 0 neutral, 1.. forward (manual selection). */
+	int32 SelectedGear = 1;
+	double ClutchPedal = 0.0;
+	bool bStalled = false;
+	/** Launch control: armed (brake and full accelerator at a standstill) and launching. */
+	bool bLaunchArmed = false;
+	bool bLaunching = false;
+	double TcCut = 0.0;
+	double TcIntegral = 0.0;
+	double TcSlip = 0.0;
+	double TcSlipFiltered = 0.0;
+	/** Stability control: the yaw rate the steering asks for and the car's own (rad/s, + turning right),
+	 *  the filtered oversteer and understeer past the dead bands (rad/s), the brake torque it adds at
+	 *  each wheel (N m), its engine torque cut (0-1), and how long its dash light stays lit (s). */
+	double EscReferenceYawRadPerS = 0.0;
+	double EscYawRadPerS = 0.0;
+	double EscOversteer = 0.0;
+	double EscUndersteer = 0.0;
+	double EscBrakeNm[4] = { 0.0, 0.0, 0.0, 0.0 };
+	double EscCut = 0.0;
+	/** The share of an electric car's coasting regeneration it takes away in a slide (0-1). */
+	double EscRegenCut = 0.0;
+	double EscLightS = 0.0;
+	/** Braking a wheel or cutting the engine this step (the light stays on EscLightHoldS longer). */
+	bool bEscActing = false;
+	/** How far the handbrake is applied (0-1): it builds over HandbrakeApplyS as a hand pulls a lever. */
+	double HandbrakeAmount = 0.0;
+	/** True while stability control brakes a wheel or cuts the engine. */
+	bool IsEscActive() const { return EscLightS > 0.0; }
+	bool bClutchSaturated = false;
+	double ShiftTimeS = 0.0;
+	/** The automatic's last change (+1 up, -1 down) and the time since it: no change back the
+	 *  other way within 2 s (no hunting). */
+	int32 LastShiftDirection = 0;
+	double SinceShiftS = 100.0;
+	/** Steering input fraction (-1..1, + right) and the rack angle it gives. */
+	double SteeringInput = 0.0;
+	double SteeringRad = 0.0;
+	bool bServiceBrake = false;
+	double BrakeAmount = 0.0;
+	double PedalThrottle = 0.0;
+	double ForwardSpeedMps = 0.0;
+	double ClutchTorqueNm = 0.0;
+	/** Both front tyres' aligning torque about the steering axes (N m, + steering right). */
+	double RackAligningTorqueNm = 0.0;
+	int32 WheelContactCount = 0;
+	bool bRoofDown = false;
+	double FlippedSeconds = 0.0;
+	double StuckSeconds = 0.0;
+	double StrandedSeconds = 0.0;
+	double SoundThrottle = 0.0;
+	double SoundCombustion = 0.0;
+	double SoundShaftLoad = 0.0;
+};
+
+/** Mean force over the interval and its torque about the centre of mass (SI, world). */
+struct FOsdsBodyForces
+{
+	FVector3d ForceN = FVector3d::ZeroVector;
+	FVector3d TorqueNm = FVector3d::ZeroVector;
+	FVector3d WheelPointM[4] = { FVector3d::ZeroVector, FVector3d::ZeroVector, FVector3d::ZeroVector, FVector3d::ZeroVector };
+	FVector3d WheelForceN[4] = { FVector3d::ZeroVector, FVector3d::ZeroVector, FVector3d::ZeroVector, FVector3d::ZeroVector };
+	bool bWheelActive[4] = { false, false, false, false };
+};
+
+class OSDS_API FOsdsVehicleSim
+{
+public:
+	FOsdsVehicleSim();
+
+	/** Install a car. Resets the state as Powertrain.gd's use_spec does. */
+	void Initialize(const FOsdsCarDefinition& InCar);
+	const FOsdsCarDefinition& GetCar() const { return Car; }
+
+	/** Powertrain.gd restart(): wheels stopped, idle, first (or neutral in manual). */
+	void ResetState();
+
+	/** Advance one interval and return the forces to apply over it. */
+	void Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicleControls& Controls,
+		const FOsdsBodyState& Body, FOsdsGroundQuery Ground, FOsdsBodyForces& OutForces);
+
+	// Gearbox (Powertrain.gd set_manual, change_gear, start_engine, select_ratio).
+	void SetManual(bool bEnabled, double BodySpeedMps);
+	/** Manual only: returns "" on success, or why the change was refused. */
+	FString ChangeGear(int32 GearStep, double ForwardSpeedMps);
+	/** Queue one manual shift so the clutch can finish its current input ramp. */
+	void QueueManualGearChange(int32 GearStep);
+	/** Return and clear the result of the most recently processed queued shift. */
+	FString ConsumeGearChangeMessage();
+	void StartEngine();
+	void SelectRatio(int32 Ratio);
+	FString GetGearText() const;
+	bool IsElectric() const;
+
+	// Geometry in the body (root component) frame, Unreal axes, metres.
+	FVector3d GetMountLocalM(int32 WheelIndex) const { return MountsLocalM[WheelIndex]; }
+	FVector3d GetCenterOfMassLocalM() const { return CenterOfMassLocalM; }
+	/** Godot's car origin: the ground plane at static ride height. */
+	FVector3d GetReferenceOriginLocalM() const { return ReferenceOriginLocalM; }
+	/** Principal moments about the centre of mass, Unreal axes (roll, pitch, yaw). */
+	FVector3d GetPrincipalInertiaKgM2() const;
+	double GetTireRadiusM() const { return TireRadiusM; }
+	double GetMaximumSuspensionLengthM() const { return RestLengthM; }
+
+	// Steering map (Powertrain.gd).
+	double AvailableSteeringRad(double SpeedMps, bool bAssisted) const;
+	double KeyRackRateRadPerSecond(double SpeedMps) const;
+	double ThumbstickCommand(double Stick, double SpeedMps) const;
+	static double AdvanceSteering(double Current, double Target, double DeltaTimeS, double ApplyRate, double ReturnRate);
+
+	/** Mean driven-wheel speed as the propeller shaft sees it. */
+	double DrivenOmega() const;
+
+	/** Everything that evolves; benches and telemetry read it directly. */
+	FOsdsVehicleSimState State;
+
+	/** Assisted steering (a person on keys or a stick); Direct for benches and real wheels. */
+	bool bSteeringAssist = true;
+
+	/** Manual gearbox with an automatic clutch (the pad player's default): a shift request presses the
+	 *  clutch, lifts the throttle, changes gear, blips the throttle on a downshift to match the engine
+	 *  to the lower gear, and lets the clutch out. At a crawl in gear it holds the clutch in so the engine
+	 *  does not stall, and slips it to pull away. The driver's own clutch (Controls.Clutch) still works on
+	 *  top. Off for benches; the movement component sets it from osds.Gearbox.AutoClutch. */
+	bool bAutoClutch = false;
+	/** The driver's stability control switch (on by default, as a real car starts). It only acts on a car
+	 *  that has stability control (CarDefinition::bStabilityControlEnabled); the movement component sets it
+	 *  from osds.Assists.StabilityControl. */
+	bool bStabilityControlSwitch = true;
+	/** True while the automatic clutch works through a shift. */
+	bool IsAutoShifting() const { return AutoPhase != 0; }
+
+	/** The air the car drives through: density (kg/m3; ISA sea level by default) and the wind
+	 *  at the car's height (m/s, world axes). Drag acts on the car's speed through the air. */
+	double AirDensityKgPerM3 = 1.225;
+	FVector3d WindMps = FVector3d::ZeroVector;
+
+private:
+	double MotorTorqueNm(double Throttle, double Ratio, double SignDirection, double SpeedMps);
+
+	FOsdsCarDefinition Car;
+	FVector3d MountsLocalM[4];
+	FVector3d CenterOfMassLocalM = FVector3d::ZeroVector;
+	FVector3d ReferenceOriginLocalM = FVector3d::ZeroVector;
+	double TireRadiusM = 0.3;
+	double WheelInertiaKgM2 = 1.0;
+	double RestLengthM = 0.3;
+	double AntiRollRateNPerM[2] = { 0.0, 0.0 };
+	double ParkingRackRad = 0.0;
+	double RoadReferenceRad = 0.0;
+	double LimitSlipSurplusRad = 0.0;
+	double KeyRackRateParkingRadPerSecond = 0.0;
+	int32 PendingManualGearStep = 0;
+	double PendingManualGearAgeS = 0.0;
+	FString GearChangeMessage;
+	// Automatic clutch: 0 idle, 1 pressing, 2 held (gear changed, blip), 3 letting out.
+	int32 AutoPhase = 0;
+	double AutoPhaseTimeS = 0.0;
+	double SinceGearStepS = 10.0;
+	bool bAutoBlip = false;
+	bool bAutoDownshift = false;
+	double AutoBlipTargetRpm = 0.0;
+	void ResetShiftQueue();
+};

@@ -6,4 +6,4 @@ One offline AI-generated layer of fine detail for asphalt, concrete, stucco, bri
 - `generate.py`: prompts, seeds (20261113 + slice index), 30 steps, guidance 6, 1024 px, CPU offload on the 8 GB laptop GPU. Environment: Python 3.12, torch 2.6 cu124, diffusers 0.43 (on the PC: `C:\sc-cache\detailkit-venv`). `--only litter,bark` remakes some slices.
 - `raw/`: the eight slices and `prompts.json`.
 - `make_kit.py`: writes `data/art/detail-kit/detail-albedo.png`, `detail-normal.png` and `kit.json` (albedo ratio with mean 1, soft log clamp per material; Sobel normals; 4 x 2 atlas of 512 px slices with wrapped borders). The game loads the PNGs at start; no material rebuild is needed after a remake.
-- Shader side: `DetailKitCode` (struct `FDK`) in `SimCruiseWorldResources.cpp`, used by the ground and asphalt materials; flag `-SimCruiseNoDetailLayer`.
+- Shader side: `DetailKitCode` (struct `FDK`) in `OsdsWorldResources.cpp`, used by the ground and asphalt materials; flag `-OsdsNoDetailLayer`.

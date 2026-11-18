@@ -1,10 +1,10 @@
-<!-- Road-engineering knowledge base for SimCruise. Written 2026-11-10 from five research sweeps (cross sections, alignment, urban streets and intersections, pavement, roadside furniture, OSM inference) and a code audit of main 6cadf05 and roads/edge-authority faaf27d. Companion design: road-standards-engine.md. -->
+<!-- Road-engineering knowledge base for OSDS. Written 2026-11-10 from five research sweeps (cross sections, alignment, urban streets and intersections, pavement, roadside furniture, OSM inference) and a code audit of main 6cadf05 and roads/edge-authority faaf27d. Companion design: road-standards-engine.md. -->
 
 # How US public roads are designed and built: a knowledge base for the road generator
 
 ## 0. What this is and how to use it
 
-SimCruise builds real US roads from OpenStreetMap while the game runs. The owner wants those roads to be impossible to tell apart from the real thing. To get there, the generator has to know what a road engineer knows: where a road's edge is and what lies beyond it, how wide each piece is, how a curve is laid out, how a corner is rounded, and what pavement looks like at ten years old.
+OSDS builds real US roads from OpenStreetMap while the game runs. The owner wants those roads to be impossible to tell apart from the real thing. To get there, the generator has to know what a road engineer knows: where a road's edge is and what lies beyond it, how wide each piece is, how a curve is laid out, how a corner is rounded, and what pavement looks like at ten years old.
 
 This document collects that knowledge in a form a generator can use. Every rule has the same parts:
 
@@ -36,7 +36,7 @@ Nothing below is copied text. Every passage is a paraphrase written for this pro
 
 ### The one-paragraph summary
 
-A US road is a **template swept along a smooth curve**. The curve is made of tangents, circular arcs and clothoid spirals, and its sharpest radius follows from the design speed. The template is an ordered list of strips, each with a width, a cross slope and a material. On a rural road the list is: lane, edge line, paved shoulder, gravel or turf shoulder, rounded hinge, foreslope, ditch, backslope. On a town street it is: lane, sometimes a parking or bike lane, gutter pan, curb, planting strip, sidewalk. Every edge, line, curb and ditch is an exact offset of that one curve, so none of them can wobble on its own. The pavement colour comes from the material and its age, not from the photograph. The defects the owner sees (zig-zag edges, dirt on the asphalt, missing curbs, road the same colour as the desert) are all places where SimCruise breaks one of these principles.
+A US road is a **template swept along a smooth curve**. The curve is made of tangents, circular arcs and clothoid spirals, and its sharpest radius follows from the design speed. The template is an ordered list of strips, each with a width, a cross slope and a material. On a rural road the list is: lane, edge line, paved shoulder, gravel or turf shoulder, rounded hinge, foreslope, ditch, backslope. On a town street it is: lane, sometimes a parking or bike lane, gutter pan, curb, planting strip, sidewalk. Every edge, line, curb and ditch is an exact offset of that one curve, so none of them can wobble on its own. The pavement colour comes from the material and its age, not from the photograph. The defects the owner sees (zig-zag edges, dirt on the asphalt, missing curbs, road the same colour as the desert) are all places where OSDS breaks one of these principles.
 
 ---
 
@@ -85,9 +85,9 @@ The edge is not one line. It is a sequence of named strips, and which ones exist
 
 A rolled or sloped curb, 3-6 in high with a face of 2:3 or flatter, then turf. TxDOT allows curbs on suburban roads at 50 mph or more only if they are mountable [TX-RDM 4.10.12]. Caltrans avoids curbs at 40 mph or more except as its Table 303.1 allows [CT-HDM 303.1].
 
-### 1.4 Why SimCruise's edges look wrong today (diagnosis, code audit 2026-11-10)
+### 1.4 Why OSDS's edges look wrong today (diagnosis, code audit 2026-11-10)
 
-| Real road | SimCruise main 6cadf05 | Status on roads/edge-authority faaf27d |
+| Real road | OSDS main 6cadf05 | Status on roads/edge-authority faaf27d |
 |---|---|---|
 | Edges are exact offsets of one smooth curve | Raw chord centre with a corner at every OSM vertex, paired with a normal smoothed over 16 m; lane markings use a third normal (helper/road-grade.mjs:217-256, game/RoadSurface.gd:77-87, game/LaneMarkings.gd:449) | Vertices filleted (at most 1 m), tangent from the fillet. No spirals, curvature still jumps. |
 | Pavement extent set by design | A 1.875 m/texel aerial logistic classifier decides asphalt versus ground (game/terrain.gdshader:162-167, game/RoadEdges.gd:26-45) | Ribbon UV2 is the authority; the classifier no longer adds asphalt |
@@ -131,7 +131,7 @@ OSM has **no traffic volume**, but most design tables need it. The ADT proxy by 
 
 ### 2.2 Context
 
-TxDOT designs by five contexts: rural, rural town, suburban, urban, urban core [TX-RDM 5.1.2-8.1.2]. FDOT uses a similar set (natural, rural, rural town, suburban, urban general, urban centre, urban core) [FDOT-FDM 210]. For SimCruise, use five contexts:
+TxDOT designs by five contexts: rural, rural town, suburban, urban, urban core [TX-RDM 5.1.2-8.1.2]. FDOT uses a similar set (natural, rural, rural town, suburban, urban general, urban centre, urban core) [FDOT-FDM 210]. For OSDS, use five contexts:
 
 | Context | Signals (any of) | Default section |
 |---|---|---|
@@ -144,7 +144,7 @@ TxDOT designs by five contexts: rural, rural town, suburban, urban, urban core [
 **Sources:**
 - Census 2020 urban areas: at least 2,000 housing units or 5,000 people. Initial core blocks have at least 425 housing units per sq mi, fill blocks at least 200, and a nucleus at least 1,275 [CENSUS-UA].
 - NLCD developed classes by impervious share: 21 under 20%, 22 20-49%, 23 50-79%, 24 80% or more [NLCD].
-- Existing SimCruise rule: a mapped limit of 40 mph or less means town; otherwise at least 15 buildings or 600 m of streets in the 250 m square (game/LaneMarkings.gd:87-100).
+- Existing OSDS rule: a mapped limit of 40 mph or less means town; otherwise at least 15 buildings or 600 m of streets in the 250 m square (game/LaneMarkings.gd:87-100).
 - Sidewalk prevalence: 62.6% of US adults report sidewalks on most streets near home, much lower in rural areas [NHIS].
 
 ### 2.3 Terrain
@@ -776,7 +776,7 @@ Vertical curves are parabolas with L = K x A, where A is the algebraic grade dif
 - Allowances: +1% for one-way downgrades shorter than 500 ft; +1% in urban areas; +2% on low-volume rural roads [KTC summary].
 - Minimum grade on curbed roads: 0.3%.
 
-**For SimCruise:**
+**For OSDS:**
 - Where the DEM requires a steeper grade than the limit, keep the DEM (the road exists) and mark the segment steep.
 - Treat profile waves shorter than 3 V ft as DEM artefacts.
 
@@ -1014,7 +1014,7 @@ The 2010 technical summary groups them as mini 45-90 ft, single-lane 90-180 ft a
 - No concentric lane lines in the circle.
 - Outer edge line not carried across exits.
 
-**For SimCruise:** fit a true circle to the OSM ring by least squares and snap the ring to it. That removes the lobed ring edges.
+**For OSDS:** fit a true circle to the OSM ring by least squares and snap the ring to it. That removes the lobed ring edges.
 
 ### 6.9 Driveways and alleys
 

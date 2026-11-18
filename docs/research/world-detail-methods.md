@@ -58,7 +58,7 @@ The top of the table is the same idea three times: **measure the real ground onc
 
 **Cost.** GPU: 0 ms (the same texture, the same fetch). CPU: about 3 s per z16 tile with a known sun, plus about 45 s to download the lidar; the sun fit (about 100 s) runs once per photograph. All inputs are public domain, so the result can be committed and shipped.
 
-**In the game.** `SimCruiseTileData.cpp`: `BundledAerialPath` prefers the unbaked photograph. `-SimCruiseBakedAerial` turns it off for A/B tests. The 4 bundled Miami Beach aerial tiles are done; see the results section for the realism score.
+**In the game.** `OsdsTileData.cpp`: `BundledAerialPath` prefers the unbaked photograph. `-OsdsBakedAerial` turns it off for A/B tests. The 4 bundled Miami Beach aerial tiles are done; see the results section for the realism score.
 
 **Next.** Run it in the atlas helper for every streamed tile with lidar (the helper already reads 3DEP Entwine for roofs and road grade), with the sun fitted once per photograph and cached. Use NAIP (0.3-0.6 m) near the road instead of the 2.4 m photograph, which makes the shadows sharper and the fit better.
 
@@ -117,7 +117,7 @@ The cheapest large gains are the middle sizes, the depth on near grass and the n
 This is the "new tech" the project owner asked for. It needs no stored textures beyond the 640 px CC0 grass photograph we already have, no new draw calls and no AI on the frame.
 
 1. **Micro (under 0.5 m): no-repeat photograph.** Hex tiling (Mikkelsen, JCGT 2022): three lookups of the same photograph, each rotated and offset by a hash of its hex cell, blended with the contrast restored. No two metres of lawn are the same.
-2. **Meso (0.3-10 m): the size that was missing.** Hashed value noise makes clumps (0.3-1 m, brighter and darker), patches of yellower and bluer grass (2-8 m), clover spots and dry patches. The dry share comes from the season and the graph (`state:dormant_tan`, `state:cured_straw`); for now `-SimCruiseGrassDry=0..1`. It only multiplies around 1, so the mean colour that the photograph and the colour grade set does not move.
+2. **Meso (0.3-10 m): the size that was missing.** Hashed value noise makes clumps (0.3-1 m, brighter and darker), patches of yellower and bluer grass (2-8 m), clover spots and dry patches. The dry share comes from the season and the graph (`state:dormant_tan`, `state:cured_straw`); for now `-OsdsGrassDry=0..1`. It only multiplies around 1, so the mean colour that the photograph and the colour grade set does not move.
 3. **Near (under 22 m): blades with depth.** The pixel marches 8 thin shells from 8 cm down to the ground along the view ray. On each shell it tests one flat, tapering, leaning blade per 2 cm cell on two offset grids (St. Augustine blades are 6-10 mm wide); the first blade the ray meets decides: high is a bright tip, low is a dark base, none is shaded thatch. So blades stand up, hide each other and shade their bases, with parallax as the car moves. This is shell texturing (the fur technique) done inside one pixel, with no extra geometry. The shells start at a per-pixel random height, so they never show as steps; blades fade out where the land-cover mask is under about 0.6 (path edges) and where a pixel covers more than 1-2 cm of lawn, so they cannot shimmer. The first version thresholded value noise per shell instead; on the PC it drew stacked cones like a sawtooth carpet and spilled onto the beachwalk (picture below).
 
 All three are arithmetic in the existing ground shader: about 3 texture fetches and roughly 150 ALU operations per grass pixel near the car, fewer far away. On a 28 W GPU that is expected at 0.1-0.3 ms when lawns fill half the screen; the PC measures it.
@@ -128,7 +128,7 @@ All three are arithmetic in the existing ground shader: about 3 texture fetches 
 
 **Where AI helps.** (a) An optimiser on the CPU fits the field's few numbers (clump size, patch colours, blade height and density) per species and season to licensed photographs of real lawns, by the realism score's detail and colour parts. (b) Texture by example makes the micro photograph for a species with no CC0 scan. No network runs while driving.
 
-**In the game.** Ground material parameters `GrassField` (on; `-SimCruiseNoGrassField` turns it off) and `GrassDry`. The materials are rebuilt with `-run=SimCruiseBuildWorldMaterials`.
+**In the game.** Ground material parameters `GrassField` (on; `-OsdsNoGrassField` turns it off) and `GrassDry`. The materials are rebuilt with `-run=OsdsBuildWorldMaterials`.
 
 ## The knowledge graph chooses the surfaces (the project owner, 13 November)
 
@@ -148,7 +148,7 @@ The project owner asked: can the AI use a knowledge graph to make building textu
 
 **Limits found.** The 2.4 m photograph mixes a lawn with its paths and palms, so its colour is too grey to be the grass albedo; the measured colour must come from NAIP at 0.6 m or from street photographs, and it must be converted from camera sRGB to albedo (the sand of known albedo on the same tile can set that gain). Building surfaces need the C++ hub's facts (style, era, recipe), so the prototype covers roads and land; the hub already has the engine and needs only the extra rule file.
 
-**In the game (next step).** `SimCruisePlaceHub` loads `surface-rules.json` beside `place-graph.json`; `BakeForBuild` resolves roads and land patches on the worker thread; the tile builder writes the chosen material id and colour into vertex colour (no new draw calls), as it does for walls. This touches the knowledge-graph and world-look code, so it goes in with those owners after Wave A.
+**In the game (next step).** `OsdsPlaceHub` loads `surface-rules.json` beside `place-graph.json`; `BakeForBuild` resolves roads and land patches on the worker thread; the tile builder writes the chosen material id and colour into vertex colour (no new draw calls), as it does for walls. This touches the knowledge-graph and world-look code, so it goes in with those owners after Wave A.
 
 ## Results in the game
 
@@ -157,7 +157,7 @@ Realism A/B on the PC (`scripts\realism.ps1`, ultra, traffic off, the build at c
 | Aerial | REALISM line |
 |---|---|
 | Unbaked (default) | `REALISM lummus: 45.7 / 100  layout 31.8  tone 38.4  colour 50.3  structure 55.4  detail 67.2  sky 30.7` |
-| Baked (`-SimCruiseBakedAerial`) | `REALISM lummus: 45.8 / 100  layout 32.1  tone 38.2  colour 50.0  structure 55.3  detail 67.0  sky 31.4` |
+| Baked (`-OsdsBakedAerial`) | `REALISM lummus: 45.8 / 100  layout 32.1  tone 38.2  colour 50.0  structure 55.3  detail 67.0  sky 31.4` |
 
 Nothing moved more than 0.7 on any part, within the run-to-run noise: from the lummus pose the near ground is the park and promenade materials, and the aerial photograph shows only in the far ground, so this score cannot see the change. The unbaked photographs stay on by default (the rule was to turn them off only if the total dropped by 1.0 or more). The change shows from above and at a distance, where the photograph is the ground (see the image in Prototype 1): in the drive capture's top-down shot at the Ocean Drive start the two frames differ by 4.2 / 255 per pixel, almost all of it the lifted shadows beside the road.
 
@@ -169,7 +169,7 @@ Right half of each image: Panoramax [4b6d216b](https://panoramax.xyz/#focus=pic&
 
 ## Grass field in the game
 
-Measured on the PC on 13 November 2026 (`scripts\realism.ps1`, ultra, traffic off; field on is the default, `-SimCruiseNoGrassField` turns it off). The dragon and bixby poses come from the picture thread's realism poses (Tail of the Dragon, Bixby Creek Bridge) and were run with the first blade version; lummus was run again after the blades were rebuilt (below).
+Measured on the PC on 13 November 2026 (`scripts\realism.ps1`, ultra, traffic off; field on is the default, `-OsdsNoGrassField` turns it off). The dragon and bixby poses come from the picture thread's realism poses (Tail of the Dragon, Bixby Creek Bridge) and were run with the first blade version; lummus was run again after the blades were rebuilt (below).
 
 | Pose | Field on | Field off |
 |---|---|---|
@@ -177,11 +177,11 @@ Measured on the PC on 13 November 2026 (`scripts\realism.ps1`, ultra, traffic of
 | lummus (first blades) | `REALISM lummus: 46.2 / 100  layout 31.9  tone 38.8  colour 50.2  structure 56.6  detail 67.2  sky 31.7` | `REALISM lummus: 45.8 / 100  layout 31.8  tone 38.4  colour 50.3  structure 55.4  detail 67.3  sky 30.7` |
 | dragon | `REALISM dragon: 45.9 / 100  layout 29.6  tone 18.0  colour 72.9  structure 66.5  detail 71.7  sky 10.9` | `REALISM dragon: 45.8 / 100  layout 29.6  tone 18.1  colour 72.6  structure 66.5  detail 71.7  sky 10.9` |
 | bixby | `REALISM bixby: 34.9 / 100  layout 17.2  tone 20.8  colour 46.5  structure 59.0  detail 46.5  sky 11.3` | `REALISM bixby: 34.4 / 100  layout 17.2  tone 20.6  colour 45.5  structure 57.7  detail 46.2  sky 11.2` |
-| bixby, July (`-SimCruiseGrassDry=0.9`) | `REALISM bixby: 34.1 / 100  layout 17.0  tone 20.3  colour 45.1  structure 55.6  detail 49.0  sky 10.8` | |
+| bixby, July (`-OsdsGrassDry=0.9`) | `REALISM bixby: 34.1 / 100  layout 17.0  tone 20.3  colour 45.1  structure 55.6  detail 49.0  sky 10.8` | |
 
 No pose moved by 1.0 or more, so the field stays on by default. The score is taken at the photographs' distances, where the field only changes the lawn's mid-size texture; the blades show only within 22 m. At Bixby the hills are the regional terrain, not the tile ground the field is written for, so the dry setting barely changes them (the next step is the same field in the landscape material).
 
-GPU cost: RTX 2070 Super Max-Q, plugged in, 1920x1080 full screen, parked at the Ocean Drive start at 11:00 with Lummus Park on the left, traffic off, `-SimCruiseDrivePerf=high,ultra`, two runs each way, GPU ms average of the 10 s window:
+GPU cost: RTX 2070 Super Max-Q, plugged in, 1920x1080 full screen, parked at the Ocean Drive start at 11:00 with Lummus Park on the left, traffic off, `-OsdsDrivePerf=high,ultra`, two runs each way, GPU ms average of the 10 s window:
 
 | View | Field on | Field off | Difference |
 |---|---|---|---|
@@ -208,14 +208,14 @@ Right half of the last two images: Panoramax [4b6d216b](https://panoramax.xyz/#f
 
 ## Grass field on the hillsides (13 November 2026)
 
-The regional landscape (`M_SimCruiseLandscape`, the 45 km mesh drawn past 550 m) now has the grass field too. The ground and the landscape share one HLSL text (`USimCruiseWorldResources::GrassFieldHlsl()`, struct `FGF`: hash, value noise and the meso layer), prepended to each Custom node. On the hills the meso layer runs at 25 times a lawn's sizes: clumps about 11 m, patches of yellower or bluer grass about 125 m, and dry patches about 175 m that turn straw-gold with `GrassDry`. It is drawn only where the photograph shows plants (coloured, not bright, greener than blue), so rock, sand, sea and today's snow keep their colour. Each part fades out before a pixel is wide enough to alias it. There is no micro texture and there are no blades: past 550 m a pixel covers metres of hill. Same flags as the ground: `-SimCruiseNoGrassField`, `-SimCruiseGrassDry=0..1`.
+The regional landscape (`M_OsdsLandscape`, the 45 km mesh drawn past 550 m) now has the grass field too. The ground and the landscape share one HLSL text (`UOsdsWorldResources::GrassFieldHlsl()`, struct `FGF`: hash, value noise and the meso layer), prepended to each Custom node. On the hills the meso layer runs at 25 times a lawn's sizes: clumps about 11 m, patches of yellower or bluer grass about 125 m, and dry patches about 175 m that turn straw-gold with `GrassDry`. It is drawn only where the photograph shows plants (coloured, not bright, greener than blue), so rock, sand, sea and today's snow keep their colour. Each part fades out before a pixel is wide enough to alias it. There is no micro texture and there are no blades: past 550 m a pixel covers metres of hill. Same flags as the ground: `-OsdsNoGrassField`, `-OsdsGrassDry=0..1`.
 
 Measured on the PC (build from `11d3c79`, ultra, traffic off):
 
 | Pose | Field on | Field off |
 |---|---|---|
 | bixby | `REALISM bixby: 34.8 / 100  layout 17.2  tone 20.7  colour 46.4  structure 58.4  detail 46.6  sky 11.3` | `REALISM bixby: 34.6 / 100  layout 17.2  tone 20.8  colour 46.5  structure 57.6  detail 46.4  sky 11.3` |
-| bixby, July (`-SimCruiseGrassDry=0.9`) | `REALISM bixby: 34.1 / 100  layout 16.9  tone 20.1  colour 45.4  structure 55.5  detail 48.8  sky 10.8` | |
+| bixby, July (`-OsdsGrassDry=0.9`) | `REALISM bixby: 34.1 / 100  layout 16.9  tone 20.1  colour 45.4  structure 55.5  detail 48.8  sky 10.8` | |
 | lummus | `REALISM lummus: 45.4 / 100  layout 31.3  tone 34.9  colour 52.3  structure 55.2  detail 66.7  sky 33.1` | 45.5 (the table above) |
 | dragon | `REALISM dragon: 45.3 / 100  layout 29.6  tone 18.1  colour 68.3  structure 66.4  detail 71.2  sky 10.7` | `REALISM dragon: 45.3 / 100  layout 29.6  tone 18.1  colour 68.2  structure 66.4  detail 71.0  sky 10.7` |
 
@@ -237,7 +237,7 @@ Fine detail for the road and the ground up close, made once and offline by an op
 
 ![The kit: asphalt, concrete, stucco, brick / soil, sand, leaf litter, bark (ratio maps)](images/world-detail/detail-kit-atlas.jpg)
 
-**In the game: road and ground only.** `DetailKitCode` (struct `FDK`) does hex tiling: three rotated, offset lookups so a slice never visibly repeats. Brick tiles plainly and bark is never rotated (both have a direction). The layer fades in from 0.5 m and out by 40 m, and fades out before a slice is under about 30 pixels. Its mip footprint is clamped, so it never mixes slices or shimmers. The asphalt material uses the asphalt slice (soil on the gravel edge). The ground's dominant class picks soil, pavement concrete, sand or leaf litter; lawns keep the grass field. Walls, kerbs and palm bark were tried and left out to keep the layer small: on walls the change was barely measurable (mean pixel difference 0.8 of 255 in a close facade frame). The layer is on by default; `-SimCruiseNoDetailLayer` turns it off.
+**In the game: road and ground only.** `DetailKitCode` (struct `FDK`) does hex tiling: three rotated, offset lookups so a slice never visibly repeats. Brick tiles plainly and bark is never rotated (both have a direction). The layer fades in from 0.5 m and out by 40 m, and fades out before a slice is under about 30 pixels. Its mip footprint is clamped, so it never mixes slices or shimmers. The asphalt material uses the asphalt slice (soil on the gravel edge). The ground's dominant class picks soil, pavement concrete, sand or leaf litter; lawns keep the grass field. Walls, kerbs and palm bark were tried and left out to keep the layer small: on walls the change was barely measurable (mean pixel difference 0.8 of 255 in a close facade frame). The layer is on by default; `-OsdsNoDetailLayer` turns it off.
 
 Near frame on the Ocean Drive carriageway, 1.65 m eye, 30° down (left on, right off). The fine high-pass energy of the frame rises from 7.7 to 9.1 (+18 %) at the same mean brightness (111.9 vs 111.8). The aggregate reads as stones rather than blotches.
 
@@ -251,7 +251,7 @@ Realism (`scripts\realism.ps1`, ultra, traffic off, build `70b9236`):
 | dragon | `REALISM dragon: 45.3 / 100  layout 29.6  tone 18.0  colour 68.2  structure 67.4  detail 69.7  sky 10.6` | `REALISM dragon: 45.2 / 100  layout 29.6  tone 18.0  colour 68.1  structure 67.2  detail 69.7  sky 10.6` |
 | bixby | `REALISM bixby: 35.0 / 100  layout 17.2  tone 20.7  colour 46.4  structure 59.0  detail 47.0  sky 11.3` | `REALISM bixby: 35.0 / 100  layout 17.2  tone 20.7  colour 46.4  structure 59.0  detail 47.0  sky 11.3` |
 
-GPU, the same setup as the grass field (Ocean Drive start, 11:00, High, 1920x1080 full screen, plugged in and power-capped, `-SimCruiseDrivePerf=high`, two runs each way, GPU ms average of the 10 s window):
+GPU, the same setup as the grass field (Ocean Drive start, 11:00, High, 1920x1080 full screen, plugged in and power-capped, `-OsdsDrivePerf=high`, two runs each way, GPU ms average of the 10 s window):
 
 | View | Layer on | Layer off | Difference |
 |---|---|---|---|
@@ -262,7 +262,7 @@ Both are inside the run-to-run spread. The scores cannot see the layer: the pose
 
 ## Leaf mips for the Dragon's trees (13 November 2026)
 
-The leaf PNGs are black where they are transparent, so the box-filtered mips and the bilinear lookup at the cut mixed black into every leaf edge, and the averaged alpha fattened the clusters (46 % covered at full size, 53 % by the 96 px mip). The result was dark, solid blobs with distance. `LeafMipChain` (`SimCruiseTrees.cpp`) fills the transparent texels with the mean leaf colour, averages colour by alpha and scales each mip's alpha to keep the full-size coverage at the 0.3 clip. It runs on the CPU at load; `-SimCruiseOldTreeMips` gives the old chain for an A/B.
+The leaf PNGs are black where they are transparent, so the box-filtered mips and the bilinear lookup at the cut mixed black into every leaf edge, and the averaged alpha fattened the clusters (46 % covered at full size, 53 % by the 96 px mip). The result was dark, solid blobs with distance. `LeafMipChain` (`OsdsTrees.cpp`) fills the transparent texels with the mean leaf colour, averages colour by alpha and scales each mip's alpha to keep the full-size coverage at the 0.3 clip. It runs on the CPU at load; `-OsdsOldTreeMips` gives the old chain for an A/B.
 GPU, Dragon start, Miata, High 1920x1080 full screen, two runs each: driver 30.26, 30.25 ms old vs 30.22, 30.25 ms new; chase 22.76, 23.11 ms old vs 23.21, 23.56 ms new (+0.45 ms, close to the run-to-run spread).
 Realism dragon: 44.8 old, 44.9 new. In motion (preflight robot, 318 frames at 10 fps), the windscreen band's frame-to-frame change is 9.41 old vs 9.52 new and fine detail is 1.77 vs 1.83: no new shimmer or pop.
 Not fixed: the crown cards keep sphere-like normals (whole crowns shade as one ball), and close crowns stay soft because the 768 px cluster texture is magnified.

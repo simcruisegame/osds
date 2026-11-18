@@ -4,10 +4,10 @@
 
 .DESCRIPTION
   Use it for play tests and MCP sessions when several people or agents share the PC:
-  it waits until no other SimCruise GPU editor run (another scripts\editor.ps1, a capture,
+  it waits until no other OSDS GPU editor run (another scripts\editor.ps1, a capture,
   a play-test build) is open, opens the editor, and frees the lock when the editor closes.
   Headless test runs (scripts\check.ps1) do not wait for it.
-  Extra arguments go to the editor, for example -game or -SimCruiseDriveCapture.
+  Extra arguments go to the editor, for example -game or -OsdsDriveCapture.
   A -game run gets -unattended, so a crash ends the run instead of opening a crash window.
 
 .PARAMETER TimeoutMinutes
@@ -17,7 +17,7 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\editor.ps1
-  powershell -ExecutionPolicy Bypass -File scripts\editor.ps1 -TimeoutMinutes 15 -game -SimCruiseDriveTest
+  powershell -ExecutionPolicy Bypass -File scripts\editor.ps1 -TimeoutMinutes 15 -game -OsdsDriveTest
 #>
 param(
     [string]$EngineDir = $(if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:\Program Files\Epic Games\UE_5.8' }),
@@ -29,7 +29,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
 

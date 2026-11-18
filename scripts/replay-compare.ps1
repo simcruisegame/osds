@@ -12,10 +12,10 @@
   CSV and logs one REPLAY line. This script compares the two REPLAY lines and the two CSVs
   (the largest speed, yaw-rate and slip differences at the same time).
 
-  Record a tape in any game with -SimCruiseRecordInput or F9 (Saved\DriveTest\input-<time>.csv).
+  Record a tape in any game with -OsdsRecordInput or F9 (Saved\DriveTest\input-<time>.csv).
 
 .PARAMETER Tape
-  The recording (CSV from -SimCruiseRecordInput or F9).
+  The recording (CSV from -OsdsRecordInput or F9).
 .PARAMETER RootA
   Checkout for run A (default: this checkout). Its editor binaries must be built.
 .PARAMETER RootB
@@ -58,11 +58,11 @@ if (-not $CarB) { $CarB = $CarA }
 $Tape = (Resolve-Path $Tape).Path
 # Start the game where the tape was recorded: its '# lonlat=' line (newer tapes also name the place).
 # An older tape without it starts at the bundled Ocean Drive start, as before.
-$Start = @('-SimCruiseBundledStart')
+$Start = @('-OsdsBundledStart')
 $LonLat = Select-String -Path $Tape -Pattern '^# lonlat=([-0-9.]+),([-0-9.]+)' | Select-Object -First 1
 $HasPlace = [bool](Select-String -Path $Tape -Pattern '^# place=' -Quiet)
 if ($LonLat -and $HasPlace) {
-    $Start = @("-SimCruiseStart=$($LonLat.Matches[0].Groups[2].Value),$($LonLat.Matches[0].Groups[1].Value)")
+    $Start = @("-OsdsStart=$($LonLat.Matches[0].Groups[2].Value),$($LonLat.Matches[0].Groups[1].Value)")
     Write-Host "Tape start: $($LonLat.Matches[0].Groups[2].Value), $($LonLat.Matches[0].Groups[1].Value)"
 } else {
     Write-Host 'WARNING: the tape names no place (an older recording); it replays at the bundled Ocean Drive start.'
@@ -73,12 +73,12 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 function Invoke-Replay([string]$Name, [string]$Root, [string]$Car) {
     $Log = Join-Path $Out "$Name.log"
     $Csv = (Join-Path $Out "$Name.csv") -replace '\\', '/'
-    $Args = @('-game', '-SimCruiseWorld') + $Start + @('-SimCruiseNoLive', '-SimCruiseNoNeural', '-SimCruiseRealCar',
-        "-SimCruiseReplayInput=$($Tape -replace '\\', '/')", "-SimCruiseReplayOut=$Csv", $(if ($ShowWindow) { '-windowed' } else { '-RenderOffScreen' }), '-ResX=1280', '-ResY=720', '-log', "-abslog=$Log")
-    if ($Car) { $Args += "-SimCruiseReplayCar=$Car"; $Args += "-SimCruiseCar=$Car" }
-    if ($Pad) { $Args += '-SimCruiseReplayPad' }
-    # The replay turns traffic off itself; -Traffic keeps it (-SimCruiseReplayTraffic).
-    if (-not $Traffic) { $Args += '-DPCVars=simcruise.Traffic.Cars=0' } else { $Args += '-SimCruiseReplayTraffic' }
+    $Args = @('-game', '-OsdsWorld') + $Start + @('-OsdsNoLive', '-OsdsNoNeural', '-OsdsRealCar',
+        "-OsdsReplayInput=$($Tape -replace '\\', '/')", "-OsdsReplayOut=$Csv", $(if ($ShowWindow) { '-windowed' } else { '-RenderOffScreen' }), '-ResX=1280', '-ResY=720', '-log', "-abslog=$Log")
+    if ($Car) { $Args += "-OsdsReplayCar=$Car"; $Args += "-OsdsCar=$Car" }
+    if ($Pad) { $Args += '-OsdsReplayPad' }
+    # The replay turns traffic off itself; -Traffic keeps it (-OsdsReplayTraffic).
+    if (-not $Traffic) { $Args += '-DPCVars=osds.Traffic.Cars=0' } else { $Args += '-OsdsReplayTraffic' }
     $Commit = (git -C $Root rev-parse --short HEAD).Trim()
     Write-Host "Replay $Name on $Root ($Commit)$(if ($Car) { ", car $Car" })"
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'scripts\editor.ps1') -TimeoutMinutes $TimeoutMinutes @Args | Out-Null

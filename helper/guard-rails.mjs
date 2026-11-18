@@ -17,9 +17,9 @@
 // GuardRails.gd draws what this returns and keeps its engineering-warrant
 // rails only where nothing is mapped.
 //
-// SIMCRUISE_OVERPASS_URL replaces the mirror list with one interpreter (for
-// operators who run their own). SIMCRUISE_GUARD_RAILS=offline keeps to the
-// cache. SIMCRUISE_GUARD_RAILS_FIXTURE=<file> reads an Overpass-shaped JSON
+// OSDS_OVERPASS_URL replaces the mirror list with one interpreter (for
+// operators who run their own). OSDS_GUARD_RAILS=offline keeps to the
+// cache. OSDS_GUARD_RAILS_FIXTURE=<file> reads an Overpass-shaped JSON
 // file instead of the network (tests and captures only; it is not cached).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -104,7 +104,7 @@ export async function mappedGuardRails(x,y,cache,read,options={}){
  const budget=options.budget??BUDGET_MS;
  const mx=Math.floor(x/4),my=Math.floor(y/4);
  const id=VERSION+'-'+mx+'-'+my,file=path.join(cache,id);
- const fixture=env.SIMCRUISE_GUARD_RAILS_FIXTURE;
+ const fixture=env.OSDS_GUARD_RAILS_FIXTURE;
  if(fixture){
   try{return {status:'fixture',rows:guardRailRows(validElements(fs.readFileSync(fixture)),x,y)}}
   catch{return {status:'unavailable',rows:[]}}
@@ -114,13 +114,13 @@ export async function mappedGuardRails(x,y,cache,read,options={}){
   try{return {status:'mapped',rows:guardRailRows(validElements(fs.readFileSync(file)),x,y)}}catch{fs.rmSync(file,{force:true})}
  }
  const stale=()=>{try{return {status:'mapped',rows:guardRailRows(validElements(fs.readFileSync(file)),x,y)}}catch{return null}};
- if(env.SIMCRUISE_GUARD_RAILS==='offline')return stale()??{status:'offline',rows:[]};
+ if(env.OSDS_GUARD_RAILS==='offline')return stale()??{status:'offline',rows:[]};
  const missFile=path.join(cache,id+'.miss'),providerFile=path.join(cache,VERSION+'-provider.miss');
  const miss=readJSON(missFile),provider=readJSON(providerFile);
  if((miss&&now()<miss.until)||(provider&&now()<provider.until))return stale()??{status:'unavailable',rows:[]};
  let mirrors=MIRRORS;
- if(env.SIMCRUISE_OVERPASS_URL){
-  try{const u=new URL(env.SIMCRUISE_OVERPASS_URL);if(['http:','https:'].includes(u.protocol))mirrors=[u.toString()]}catch{}
+ if(env.OSDS_OVERPASS_URL){
+  try{const u=new URL(env.OSDS_OVERPASS_URL);if(['http:','https:'].includes(u.protocol))mirrors=[u.toString()]}catch{}
  }
  // Start at a different mirror per neighbourhood so load spreads across them.
  const start=((mx*31+my*17)%mirrors.length+mirrors.length)%mirrors.length;

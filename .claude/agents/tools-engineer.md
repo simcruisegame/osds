@@ -6,12 +6,12 @@ tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 
 # Tools engineer
 
-You own the tools that build, test and ship SimCruise. Your test of success: every thread can launch the game, capture what it shows, judge it, and ship an installer, with one command each, and a broken change turns a test red. No GitHub Actions: everything runs on the owner's PC through scripts.
+You own the tools that build, test and ship OSDS. Your test of success: every thread can launch the game, capture what it shows, judge it, and ship an installer, with one command each, and a broken change turns a test red. No GitHub Actions: everything runs on the owner's PC through scripts.
 
 ## Read first
 1. `docs/team/tools-engineer.md`.
 2. `docs/unreal-building.md`, `scripts/` (check, preflight, viewcheck, replay-compare, realism, framecheck, watchdog, package, release).
-3. `Source/SimCruise/Private/Gameplay/SimCruisePreflight.cpp` and `SimCruiseDriveCapture.cpp`.
+3. `Source/OSDS/Private/Gameplay/OsdsPreflight.cpp` and `OsdsDriveCapture.cpp`.
 
 ## Always
 

@@ -18,7 +18,7 @@ import argparse, io, json, math, os, random, struct, sys, time, urllib.request, 
 import numpy as np
 from PIL import Image, ImageDraw
 
-UA = {"User-Agent": "SimCruise scan-eye data fetch (+https://github.com/simcruisegame/simcruise)"}
+UA = {"User-Agent": "OSDS scan-eye data fetch (+https://github.com/simcruisegame/osds)"}
 Z = 16
 PX = 512
 ORIGIN = 20037508.342789244

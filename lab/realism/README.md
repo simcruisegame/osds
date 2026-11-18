@@ -8,7 +8,7 @@ With the editor closed (Windows, from the checkout):
 
     powershell -ExecutionPolicy Bypass -File scripts\realism.ps1
 
-It builds the editor target (skip with `-NoBuild`), fetches each pose's photograph into `Saved\Realism\photos` (with Bun and `lab/taste/scripts/panoramax-near.mjs`; the photographs are never committed), opens the game once per pose under the PC-wide editor lock with `-SimCruiseDriveCapture -SimCruiseRealismPose=...` at the photograph's time and size, with moving traffic off, and scores the captures. It prints one line per pose and appends them to `Saved\Realism\history.csv`, labelled with the commit:
+It builds the editor target (skip with `-NoBuild`), fetches each pose's photograph into `Saved\Realism\photos` (with Bun and `lab/taste/scripts/panoramax-near.mjs`; the photographs are never committed), opens the game once per pose under the PC-wide editor lock with `-OsdsDriveCapture -OsdsRealismPose=...` at the photograph's time and size, with moving traffic off, and scores the captures. It prints one line per pose and appends them to `Saved\Realism\history.csv`, labelled with the commit:
 
     REALISM lummus: 44.6 / 100  layout 31.6  tone 34.9  colour 50.1  structure 51.5  detail 62.8  sky 41.9
 
@@ -33,7 +33,7 @@ The score is a tracker, not an absolute grade. People, parked cars, clouds and t
 
 ## Poses
 
-Commons photographs: `python lab/realism/commons-near.py LAT LON [RADIUS_M]` lists licensed photos near a point with date, licence and size; set `"photo": {"source": "commons", "file": ...}` and realism.ps1 fetches it at 1600 px. Two optional pose fields help when a geotag is off: `"snap": "road"` stands the camera on the nearest carriageway within 60 m looking along it (nearest to `heading`), and `"pitch"` tilts it (degrees, negative looks down). Each run also writes `side-<pose>.jpg`, the game frame next to the photograph, for the eye. `-ExecExtra "SimCruise.Env.Look ExposureCompensation -0.1"` and `-ExtraArgs "-DPCVars=..."` run A/B variants.
+Commons photographs: `python lab/realism/commons-near.py LAT LON [RADIUS_M]` lists licensed photos near a point with date, licence and size; set `"photo": {"source": "commons", "file": ...}` and realism.ps1 fetches it at 1600 px. Two optional pose fields help when a geotag is off: `"snap": "road"` stands the camera on the nearest carriageway within 60 m looking along it (nearest to `heading`), and `"pitch"` tilts it (degrees, negative looks down). Each run also writes `side-<pose>.jpg`, the game frame next to the photograph, for the eye. `-ExecExtra "OSDS.Env.Look ExposureCompensation -0.1"` and `-ExtraArgs "-DPCVars=..."` run A/B variants.
 
 [`poses.json`](poses.json) lists them. To add one, find a licensed frame with its position, compass heading and time (`bun lab/taste/scripts/panoramax-near.mjs search LAT LON 0.002`), take the field of view from the camera model, and add an entry; poses outside the bundled Miami Beach tiles set `"world": "helper"` and need the atlas helper (`tools\atlas.exe`). Record the photograph's author and licence; commit only the link.
 

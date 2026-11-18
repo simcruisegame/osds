@@ -46,6 +46,6 @@ try {
  await assert.rejects(missing('m1','https://tiles.example.org/x',0),/404/);
  assert.ok(!fs.existsSync(path.join(dir,'.source-state','tiles.example.org.until')));
  // One generic User-Agent naming the game, no person.
- assert.equal(agent,userAgent);assert.match(userAgent,/^OSDS\/2\.0\.3 \(open-source driving simulator; \+https:\/\/github\.com\/simcruisegame\/simcruise\)$/);
+ assert.equal(agent,userAgent);assert.match(userAgent,/^OSDS\/2\.0\.3 \(open-source driving simulator; \+https:\/\/github\.com\/simcruisegame\/osds\)$/);
  console.log('PASS concurrent miss, warm read, stale fallback, provider-wide Retry-After, per-host cap, growing backoff and User-Agent');
 } finally {fs.rmSync(dir,{recursive:true,force:true})}

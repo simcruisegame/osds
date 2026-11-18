@@ -19,8 +19,8 @@ Thanks for looking. Everyone taking part follows the [Code of Conduct](CODE_OF_C
 
 - **No keys, no accounts, no paid services.** Every data source the game talks to must be free to use without registration. If a source needs a token, it does not go in.
 - **Licences are part of the change.** New assets must be CC0 or public domain unless they are fetched at runtime under their own terms; record the source URL and licence in `licenses/` (and in `Credits.txt` when it is a bundled asset) in the same commit. ODbL and ShareAlike data is cached on the player's machine, never committed to the repository.
-- **Every change is measurable.** Add or extend an automation test under `Source/SimCruise` (`SimCruise.*`) for what you change, and put the before and after numbers in the pull request. Screenshots are welcome; numbers are required.
-- **Calibration must not regress.** `SimCruise.Vehicle.CarTrack.<car>` at the shipping 360 Hz keeps every car inside its bands (0-60 mph ± 0.15 s, 70-0 mph ± 5 ft, skidpad ± 0.02 g of its published figures, see docs/cars.md), whatever else moves.
+- **Every change is measurable.** Add or extend an automation test under `Source/OSDS` (`OSDS.*`) for what you change, and put the before and after numbers in the pull request. Screenshots are welcome; numbers are required.
+- **Calibration must not regress.** `OSDS.Vehicle.CarTrack.<car>` at the shipping 360 Hz keeps every car inside its bands (0-60 mph ± 0.15 s, 70-0 mph ± 5 ft, skidpad ± 0.02 g of its published figures, see docs/cars.md), whatever else moves.
 - **Keep what works.** Tile streaming, the bounded cache, the atlas map, the manual gearbox and Xbox controller support are features, not side effects.
 - **Trust the Unreal Engine 5.8 documentation and source.** When a change depends on engine behaviour (renderer features, Chaos, light functions), cite the documentation or the engine source file in the commit or comment.
 
@@ -41,15 +41,15 @@ powershell -ExecutionPolicy Bypass -File scripts\check.ps1
 
 While you work, `-Tier fast` skips the slow tests listed in `Config\Tests\Tags.ini` (under 2 minutes). Run the full tier before a merge.
 
-It fails (exit 1) on any failed test, on a filter no test matched, and on an error the game logged outside a test's expectations (an ensure, a fatal error, or an `Error` line from a `LogSimCruise*` category), and prints `N passed, N failed, N logged errors`. `-Filter SimCruise.Vehicle` (or any prefix) runs a part; `-NoBuild` skips the build; `-EngineDir` (or `UE_ROOT`) points at another engine install. The same run by hand is `UnrealEditor-Cmd.exe SimCruise.uproject -ExecCmds="Automation RunTests SimCruise;Quit" -unattended -nopause -nullrhi -nosplash -testexit="Automation Test Queue Empty"`. Results are in `Saved/Logs`; the benches log one `CARTRACK`, `LIFTOFF`, `STATICLOAD` or `CONVERGENCE` line per car. The map helper's tests run with `sh scripts/check-helper.sh`. What each test checks is listed in [docs/unreal-building.md](docs/unreal-building.md#automation-tests) and [docs/unreal-architecture.md](docs/unreal-architecture.md).
+It fails (exit 1) on any failed test, on a filter no test matched, and on an error the game logged outside a test's expectations (an ensure, a fatal error, or an `Error` line from a `LogOSDS*` category), and prints `N passed, N failed, N logged errors`. `-Filter OSDS.Vehicle` (or any prefix) runs a part; `-NoBuild` skips the build; `-EngineDir` (or `UE_ROOT`) points at another engine install. The same run by hand is `UnrealEditor-Cmd.exe OSDS.uproject -ExecCmds="Automation RunTests OSDS;Quit" -unattended -nopause -nullrhi -nosplash -testexit="Automation Test Queue Empty"`. Results are in `Saved/Logs`; the benches log one `CARTRACK`, `LIFTOFF`, `STATICLOAD` or `CONVERGENCE` line per car. The map helper's tests run with `sh scripts/check-helper.sh`. What each test checks is listed in [docs/unreal-building.md](docs/unreal-building.md#automation-tests) and [docs/unreal-architecture.md](docs/unreal-architecture.md).
 
-Visual changes come with captures (`-SimCruiseDriveCapture`, docs/unreal-building.md) compared against licensed photographs of the place or car.
+Visual changes come with captures (`-OsdsDriveCapture`, docs/unreal-building.md) compared against licensed photographs of the place or car.
 
 ## Where things are
 
 | Path | What it is |
 |---|---|
-| `Source/SimCruise/` | The Unreal client: `Vehicle/` (car physics on a Chaos rigid body), `World/` (tile streaming, roads, buildings, palms, street lights), `Presentation/` (car models), `Environment/` (sun, sky, exposure), `Gameplay/` (input, cameras, HUD, rumble), tests beside each. |
+| `Source/OSDS/` | The Unreal client: `Vehicle/` (car physics on a Chaos rigid body), `World/` (tile streaming, roads, buildings, palms, street lights), `Presentation/` (car models), `Environment/` (sun, sky, exposure), `Gameplay/` (input, cameras, HUD, rumble), tests beside each. |
 | `Config/`, `Content/` | Unreal project settings; car presentation profiles (`Content/Vehicles/CarPresentation.json`) and calibration overlays. |
 | `data/` | Engine-neutral data the client reads: car files, glTF car models, detail photographs, the bundled offline tiles, helper fixtures. |
 | `helper/` | The atlas helper: `atlas.mjs` dispatches jobs; each module owns one data source or layer; its JSON datasets and the vendored HDF5 reader (`helper/vendor/`) sit beside them. `scripts\package.ps1` compiles it to `tools\atlas.exe` with Bun. |

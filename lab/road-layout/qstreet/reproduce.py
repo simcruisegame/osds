@@ -14,7 +14,7 @@ options = args.parse_args()
 root = Path(__file__).resolve().parent
 work = options.work.resolve()
 work.mkdir(parents=True, exist_ok=True)
-os.environ['SIMCRUISE_LAYOUT_WORK'] = str(work)
+os.environ['OSDS_LAYOUT_WORK'] = str(work)
 
 for row in json.loads((root/'sources.json').read_text()):
     file = work/row['path']

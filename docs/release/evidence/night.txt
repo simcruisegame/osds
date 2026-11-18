@@ -1,7 +1,7 @@
 # Night driving, final 2.0.0 Shipping build (commit b7ac2de, main ff35887 with the cars thread's night fix), Ultra preset, 1920x1080
-# Captures: -SimCruiseDriveCapture -SimCruiseGraphics=ultra; low beams on at night.
-#   Ocean Drive, Miami Beach, -SimCruiseUtc=2026-11-13T02:00:00Z (21:00 local)
-#   Princeton Road, Lancaster County NE (gravel, no street lights), -SimCruiseUtc=2026-11-13T04:00:00Z (22:00 local)
+# Captures: -OsdsDriveCapture -OsdsGraphics=ultra; low beams on at night.
+#   Ocean Drive, Miami Beach, -OsdsUtc=2026-11-13T02:00:00Z (21:00 local)
+#   Princeton Road, Lancaster County NE (gravel, no street lights), -OsdsUtc=2026-11-13T04:00:00Z (22:00 local)
 # Luminance: Rec. 709 luma of the 8-bit sRGB screenshot (0-255), measured with Pillow.
 
 | Shot | Frame mean | Pixels below 8/255 | Road patch mean | Pass |

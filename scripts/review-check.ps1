@@ -7,7 +7,7 @@
   Prints, for each review.md under -Path, the items still TODO and the items that FAIL. Exits 0
   only when every sheet is complete and none has a FAIL. For a pre-flight folder (one with
   report.md and a pre-flight that passed its own checks) a complete review with no FAIL adds the
-  PASS row to %LOCALAPPDATA%\SimCruise\preflight-index.csv that scripts\playtest.ps1 needs;
+  PASS row to %LOCALAPPDATA%\OSDS\preflight-index.csv that scripts\playtest.ps1 needs;
   a FAIL adds a FAIL row.
 
 .EXAMPLE
@@ -45,7 +45,7 @@ if ((Test-Path $Report) -and (Test-Path $Marker) -and $Incomplete -eq 0) {
     $Commit = ($Auto | Where-Object { $_ -like 'commit *' }) -replace '^commit ', ''
     $AutoResult = ($Auto | Where-Object { $_ -like 'result *' }) -replace '^result ', ''
     $Verdict = if ($AutoResult -eq 'PASS' -and $Failed -eq 0 -and $Invalid -eq 0) { 'PASS' } else { 'FAIL' }
-    $Index = Join-Path $env:LOCALAPPDATA 'SimCruise\preflight-index.csv'
+    $Index = Join-Path $env:LOCALAPPDATA 'OSDS\preflight-index.csv'
     if (Test-Path $Index) {
         $Why = if ($Verdict -eq 'PASS') { 'reviewed' } else { "reviewed: automatic $AutoResult, $Failed sheets with FAIL items, $Invalid not valid for sign-off" }
         "$(Get-Date -Format 'yyyyMMdd-HHmmss'),$Commit,$Verdict,$($Sheets.Count),,,$Report,`"$Why`"" | Add-Content -Encoding utf8 $Index

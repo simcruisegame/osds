@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Run scripts\package.ps1 -Configuration Shipping -Zip first. This script reads the
-  package in Saved\Package\Windows, compiles packaging\windows\simcruise.iss with
+  package in Saved\Package\Windows, compiles packaging\windows\osds.iss with
   Inno Setup 6 (ISCC.exe; install it with
   `winget install --id JRSoftware.InnoSetup -e --scope user`) into
   Saved\Package\OSDS-<ProjectVersion>-windows-x64-setup.exe, and writes
@@ -21,7 +21,7 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $Out = Join-Path $Root 'Saved\Package'
 $Source = Join-Path $Out 'Windows'
-if (-not (Test-Path (Join-Path $Source 'SimCruise.exe'))) { throw "No package at $Source (run scripts\package.ps1 -Configuration Shipping -Zip)" }
+if (-not (Test-Path (Join-Path $Source 'OSDS.exe'))) { throw "No package at $Source (run scripts\package.ps1 -Configuration Shipping -Zip)" }
 if (-not $Iscc) {
     $Iscc = @(
         (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
@@ -34,7 +34,7 @@ if (-not $Iscc) { throw 'Inno Setup 6 is not installed (winget install --id JRSo
 $Version = ((Get-Content (Join-Path $Root 'Config\DefaultGame.ini')) -match '^ProjectVersion=' | Select-Object -First 1).Split('=')[1]
 # Windows file versions are numeric: 2.0.0-preview.1 -> 2.0.0.
 $Numeric = ($Version -split '-')[0]
-$Script = Join-Path $Root 'packaging\windows\simcruise.iss'
+$Script = Join-Path $Root 'packaging\windows\osds.iss'
 
 # A clean Windows has neither the Visual C++ runtime nor GameInput; the installer runs
 # Microsoft's installers for them from the package (scripts\package.ps1 copies them in).

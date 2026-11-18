@@ -1,6 +1,6 @@
 <!-- Random-place drive campaign, 2026-11-10: six testers, 24 real places in every US region, RoadDrive at 0.4 g, Ultra captures, Panoramax references where available. Statements marked unverified are hypotheses. -->
 
-# SimCruise field test: 24 places on real US roads
+# OSDS field test: 24 places on real US roads
 
 The six testers drove 24 places with RoadDrive at a lateral target of 0.4 g and 20 m/s unless stated otherwise. Only 3 places had a usable real photo: Allston, Two Harbors and Moab. Every other "real life" comparison comes from general knowledge and is unverified.
 
