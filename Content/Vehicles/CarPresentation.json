@@ -817,6 +817,7 @@
    ],
    "engine_sound": {
     "layout": "v8_crossplane",
+    "tone": {"body_hz": 140, "body_q": 1.3, "rasp_hz": 1400, "rasp_gain": 0.6, "lope": 0.05, "exterior_filter": 0.45, "cylinder_spread": 0.12},
     "bank_of_event": [
      1,
      0,
@@ -925,6 +926,7 @@
    "screen": { "material": "Gauges", "note": "The C8's 12.3 in digital cluster in its Tour layout: the model's picture (stored upside down: flip_v) shows 0 MPH and a lit tachometer arc to about 1000 r/min. A material erases the painted arc and draws the live one (0 r/min at 142 degrees left of 12 o'clock, 37.5 degrees a thousand: the 4 at the top, the 7 at 121 degrees right) and the speed in the empty centre above MPH. Pixel positions measured on the texture.", "texture_px": [1024, 512], "flip_v": true, "tach_centre_px": [513, 265], "tach_band_px": [124, 139], "tach_start_deg": -142, "tach_deg_per_1000": 37.5, "tach_painted_end_deg": -100, "speed_box_px": [478, 238, 548, 290], "backlight_nits": 150 },
    "engine_sound": {
     "layout": "v8_crossplane",
+    "tone": {"body_hz": 210, "rasp_hz": 2400, "rasp_gain": 1.4, "lope": 0.02, "cabin_filter": 0.3, "exterior_filter": 0.62, "cylinder_spread": 0.08},
     "bank_of_event": [
      0,
      1,
@@ -991,6 +993,7 @@
   },
   "model3": {
    "model": "data/art/traffic/model3-3a602469/scene.gltf",
+   "engine_sound": {"layout": "electric", "motor": {"pole_pairs": 3, "slots": 54, "pinion_teeth": 23, "max_rpm": 17000, "gain": 1.0}, "source": "Tesla rear drive unit: a 6-pole (3 pole pairs), 54-slot interior permanent magnet motor (secondary sources); 9.04:1 reduction. The pinion's tooth count and all levels are estimates."},
    "credit": "\"Tesla M3 model\" by wintrez (https://sketchfab.com/3d-models/tesla-m3-model-3a602469d7874d1397efa67182198705), CC BY 4.0",
    "steering_ratio": 10.3,
    "steering_ratio_source": "About 10:1 overall (two turns lock to lock), Tesla Model 3; estimate from reviews, unverified.",
@@ -1006,6 +1009,7 @@
   },
   "f150raptor18": {
    "model": "data/art/traffic/f150raptor18-096aa1ba/scene.gltf",
+   "engine_sound": {"layout": "v6_60", "bank_of_event": [1, 0, 1, 0, 1, 0], "near_gain": 1.0, "far_gain": 0.8, "tone": {"body_hz": 160, "rasp_hz": 1800, "rasp_gain": 0.9, "cylinder_spread": 0.05}, "turbo": {"spool_rpm": 2500, "lag_s": 0.7, "whine_hz": 5200, "whine_gain": 1.0, "whoosh_gain": 1.0, "blow_off": "recirc", "count": 2}, "source": "Ford 3.5 L EcoBoost 60-degree V6, firing order 1-4-2-5-3-6, cylinders 1-3 on the right (passenger) bank, 4-6 on the left: the banks alternate. Twin turbochargers, 510 lb-ft at 3500 rpm. Tone and turbo levels are estimates."},
    "credit": "\"2018 Ford F-150 Raptor\" by Galaxy Car Showroom (https://sketchfab.com/3d-models/2018-ford-f-150-raptor-096aa1ba46984eeeb196b75f4d213a0a), CC BY 4.0",
    "steering_ratio": 17.0,
    "steering_ratio_source": "About 17:1 electric power steering (F-150, 2015-2020); estimate for the Raptor, unverified.",
@@ -1019,6 +1023,7 @@
   },
   "grandcherokee13": {
    "model": "data/art/traffic/grandcherokee13-74686a75/scene.gltf",
+   "engine_sound": {"layout": "v8_crossplane", "bank_of_event": [0, 1, 1, 0, 1, 0, 0, 1], "near_gain": 1.0, "far_gain": 0.7, "tone": {"body_hz": 175, "rasp_hz": 2000, "rasp_gain": 1.1, "lope": 0.02, "cylinder_spread": 0.06}, "source": "Chrysler 6.4 L HEMI V8 (the SRT8 is a V8, not a V6): firing order 1-8-4-3-6-5-7-2, odd cylinders on the left (driver's) bank. Tone is an estimate."},
    "credit": "\"2013 Jeep Grand Cherokee SRT8\" by Galaxy Car Showroom (https://sketchfab.com/3d-models/2013-jeep-grand-cherokee-srt8-74686a75e26146a19337724a7e1d458a), CC BY 4.0",
    "steering_ratio": 15.7,
    "steering_ratio_source": "About 15.7:1 (Grand Cherokee WK2 hydraulic rack); estimate, unverified.",
@@ -1032,6 +1037,7 @@
   },
   "odyssey18": {
    "model": "data/art/traffic/odyssey-175ce6fb/scene.gltf",
+   "engine_sound": {"layout": "v6_60", "bank_of_event": [0, 1, 0, 1, 0, 1], "near_gain": 0.95, "far_gain": 0.85, "tone": {"body_hz": 190, "rasp_hz": 2100, "rasp_gain": 0.5, "cabin_filter": 0.22, "cylinder_spread": 0.04}, "source": "Honda J35Y6 60-degree V6, firing order 1-4-2-5-3-6, cylinders 1-3 and 4-6 on opposite banks (they alternate); one quiet exhaust. Tone is an estimate."},
    "credit": "\"Honda Odessey\" by MattDoesBlender (https://sketchfab.com/3d-models/honda-odessey-175ce6fbbb11469ab068965ce4854554), CC BY 4.0",
    "steering_ratio": 16.0,
    "steering_ratio_source": "About 16:1 (Odyssey, 2018); estimate, unverified.",
@@ -1045,6 +1051,7 @@
   },
   "crv25": {
    "model": "data/art/traffic/crv25-91c66738/scene.gltf",
+   "engine_sound": {"layout": "i4", "tone": {"body_hz": 210, "rasp_hz": 2000, "rasp_gain": 0.4, "cabin_filter": 0.2}, "turbo": {"spool_rpm": 1700, "lag_s": 0.45, "whine_hz": 6500, "whine_gain": 0.6, "whoosh_gain": 0.6, "blow_off": "recirc", "count": 1}, "source": "Honda L15B7 1.5 L turbo inline four (179 lb-ft from 1700 rpm); quiet SUV exhaust. Levels are estimates."},
    "credit": "\"2025 Honda CR-V 1.5 VTEC Turbo CVT\" by Palma123 JAAT (https://sketchfab.com/3d-models/2025-honda-cr-v-15-vtec-turbo-cvt-91c6673859444597bf006a0ef8570005), CC BY 4.0",
    "steering_ratio": 14.3,
    "steering_ratio_source": "About 14.3:1 variable-ratio rack (CR-V, 2023); estimate, unverified.",
@@ -1057,6 +1064,7 @@
   },
   "mini15s": {
    "model": "data/art/traffic/minif56-carla/scene.gltf",
+   "engine_sound": {"layout": "i4", "tone": {"body_hz": 200, "rasp_hz": 2200, "rasp_gain": 1.2}, "turbo": {"spool_rpm": 1300, "lag_s": 0.5, "whine_hz": 6000, "whine_gain": 0.8, "whoosh_gain": 0.9, "blow_off": "recirc", "count": 1}, "source": "BMW B48 2.0 L turbo inline four (Mini US: 207 lb-ft from 1250 rpm, so boost from about 1300); stock recirculating valve. Tone and turbo levels are estimates, checked against the CC0 Mini Cooper S contact recording (Freesound 669623, docs/engine-sound.md)."},
    "credit": "\"Mini Cooper\" by the CARLA Team (carla-simulator/carla-content), CC BY 4.0",
    "steering_ratio": 14.2,
    "steering_ratio_source": "14.2:1 Servotronic electric rack (MINI media information, F56).",
@@ -1092,6 +1100,7 @@
    "steering_ratio_source": "14:1 power steering, 2.5 turns lock to lock (camarotech.com; secondary).",
    "engine_sound": {
     "layout": "v8_crossplane",
+    "tone": {"body_hz": 160, "rasp_hz": 1600, "rasp_gain": 0.6, "exterior_filter": 0.42, "cylinder_spread": 0.15, "lope": 0.03},
     "bank_of_event": [
      0,
      1,

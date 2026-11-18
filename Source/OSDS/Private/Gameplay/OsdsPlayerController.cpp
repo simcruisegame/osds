@@ -272,7 +272,9 @@ void AOsdsPlayerController::PlayerTick(float DeltaTime)
 			for (const FPref& Pref : { FPref(TEXT("head_motion"), TEXT("osds.Camera.HeadMotion")), FPref(TEXT("rumble"), TEXT("osds.Rumble.Strength")),
 				FPref(TEXT("pad_steer_speed"), TEXT("osds.Pad.SteerSpeed")), FPref(TEXT("pad_steer_linearity"), TEXT("osds.Pad.SteerLinearity")),
 				FPref(TEXT("pad_steer_dead_zone"), TEXT("osds.Pad.SteerDeadZone")), FPref(TEXT("trigger_gamma"), TEXT("osds.TriggerGamma")),
-				FPref(TEXT("auto_clutch"), TEXT("osds.Gearbox.AutoClutch")), FPref(TEXT("stability_control"), TEXT("osds.Assists.StabilityControl")) })
+				FPref(TEXT("auto_clutch"), TEXT("osds.Gearbox.AutoClutch")), FPref(TEXT("stability_control"), TEXT("osds.Assists.StabilityControl")),
+				FPref(TEXT("master_volume"), TEXT("osds.Audio.MasterVolume")), FPref(TEXT("engine_volume"), TEXT("osds.Audio.EngineVolume")),
+				FPref(TEXT("world_volume"), TEXT("osds.Audio.WorldVolume")) })
 			{
 				// Stored as hundredths (the throttle curve's 1.8 as 180).
 				const int32 Percent = OsdsPreferences::GetInt(Pref.Key, -1, -1, 300);

@@ -182,6 +182,7 @@ Press F4 (D-pad right), or pick *Tune car...* on the Your car page. You can only
 
 ## Settings
 
+- **Master, Engine and World volume** (Settings page): 0 to 100 % in steps of 10. Engine is your car's engine and turbo. World is the tyres, the road, the wind and the other cars. Left and right on the pad change a row; Y puts it back to 100 %. All three are saved.
 - **Speed units** (Settings page): mph (default) or km/h. The GPS uses miles and feet, or kilometres and metres. The HUD speed is rounded to a whole number and is 0 when you stand still. Engine speed shows to the nearest 50 rpm (idle is about 850 rpm in the Miata).
 - **Map** (Settings page): *With route* (default) shows the round map only during a route; *Always* shows it all the time. In the driver's seat it is smaller (75 %) and sits top left, so it never covers the gauges or mirrors. In other views it is bottom right.
 - **Controls** (road atlas, all saved):

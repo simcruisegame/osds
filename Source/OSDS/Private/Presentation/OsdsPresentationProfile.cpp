@@ -166,15 +166,13 @@ bool OsdsPresentationProfiles::Load(const FString& CarId, FOsdsCarPresentationPr
 	{
 		FOsdsCarPresentationProfile::FEngineSound Sound;
 		const FJsonObject& J = **SoundObject;
-		FString Layout;
-		J.TryGetStringField(TEXT("layout"), Layout);
-		const TArray<TSharedPtr<FJsonValue>>* Banks = nullptr;
-		if (Layout != TEXT("v8_crossplane") || !J.TryGetArrayField(TEXT("bank_of_event"), Banks) || !Banks || Banks->Num() != 8)
+		FString SpecError;
+		if (!OsdsEngineVoice::ParseSpec(J, Sound.Voice, SpecError))
 		{
-			OutError = Where + TEXT(": 'engine_sound' needs layout 'v8_crossplane' and 8 'bank_of_event' values (0 or 1)");
+			OutError = Where + TEXT(": ") + SpecError;
 			return false;
 		}
-		for (const TSharedPtr<FJsonValue>& V : *Banks) Sound.BankOfEvent.Add(FMath::Clamp(static_cast<int32>(V->AsNumber()), 0, 1));
+		Sound.BankOfEvent = Sound.Voice.BankOfEvent;
 		J.TryGetNumberField(TEXT("near_gain"), Sound.NearGain);
 		J.TryGetNumberField(TEXT("far_gain"), Sound.FarGain);
 		J.TryGetNumberField(TEXT("cabin_engine_distance_m"), Sound.CabinEngineDistanceM);

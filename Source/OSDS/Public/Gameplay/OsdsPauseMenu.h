@@ -29,7 +29,7 @@ enum class EOsdsMenuRow : uint8
 	// Seat & view
 	Lens, HeadMotion, ScreenSize, EyeDistance, Seat,
 	// Settings
-	Sound, HudLevel, HudMap, SpeedUnits, Rumble, StickSpeed, StickResponse, StickDeadZone, Trigger, Graphics,
+	Sound, MasterVolume, EngineVolume, WorldVolume, HudLevel, HudMap, SpeedUnits, Rumble, StickSpeed, StickResponse, StickDeadZone, Trigger, Graphics,
 	// Not a row: X on the Drive page while a route is on.
 	EndRoute,
 	Count,
