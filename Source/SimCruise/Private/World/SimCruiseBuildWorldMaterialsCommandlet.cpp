@@ -76,6 +76,14 @@ int32 USimCruiseBuildWorldMaterialsCommandlet::Main(const FString& Params)
 		for (const FSimCruiseCarlaEntry& E : SimCruiseCarlaCatalog::Entries()) Paths.Add(E.Path);
 		Paths.Append(ASimCruiseSignals::CarlaMeshPaths());
 		Paths.Add(TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures/T_Brick_02_d.T_Brick_02_d"));
+		Paths.Add(TEXT("/Game/Carla/Static/GenericMaterials/Facade/Textures/T_Facade05_d.T_Facade05_d"));
+		for (const TCHAR* Decal : { TEXT("/Game/Carla/Static/FX/Decals/Road/Cracks/Textures/T_cracks01_msk.T_cracks01_msk"),
+			TEXT("/Game/Carla/Static/FX/Decals/Road/TarSnakes/Textures/T_tarsnakeBig01_msk.T_tarsnakeBig01_msk"),
+			TEXT("/Game/Carla/Static/FX/Decals/Road/RoadDirt/Textures/T_DecRoad01_msk.T_DecRoad01_msk"),
+			TEXT("/Game/Carla/Static/FX/Decals/Road/Cracks/Textures/T_DecRodCrack02_msk.T_DecRodCrack02_msk") }) Paths.Add(Decal);
+		// Engine assets loaded by name at run time (the streamer's horizon ground).
+		Paths.Add(TEXT("/Engine/BasicShapes/Plane.Plane"));
+		Paths.Add(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
 		for (const FString& Path : Paths)
 		{
 			if (UObject* Asset = LoadObject<UObject>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet)) List->Assets.Add(Asset);

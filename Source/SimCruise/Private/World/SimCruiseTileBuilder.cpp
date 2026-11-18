@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseTileBuilder.h"
+#include "Algo/Reverse.h"
 
 #include "HAL/PlatformTime.h"
 #include "Misc/App.h"
@@ -113,14 +114,22 @@ namespace
 		{
 		case ESimCruiseRoadEdge::Kerb:
 		{
+			// A cast curb as poured, not a box: a small fillet where the gutter pan meets the face,
+			// the battered face, and a rounded nose (about 25 mm radius) onto the top, so the edge
+			// catches the light as real concrete does (owner, 2.1.1: "it should be rounded and not
+			// edged"). Bands: 0 gutter, 1 fillet, 2 face, 3-4 nose, 5 top, 6 sidewalk, 7 skirt.
 			const double Top = -GutterDropM + CurbFaceM;
+			const double Face = GutterM + CurbBatterM;
 			Out.Add(FVector2d(0.0, 0.0));
 			Out.Add(FVector2d(GutterM, -GutterDropM));
-			Out.Add(FVector2d(GutterM + CurbBatterM, Top));
-			Out.Add(FVector2d(GutterM + CurbBatterM + CurbTopM, Top + 0.005));
-			Out.Add(FVector2d(GutterM + CurbBatterM + CurbTopM + Sidewalk, Top + 0.005 + SidewalkSlope * Sidewalk));
-			Out.Add(FVector2d(GutterM + CurbBatterM + CurbTopM + Sidewalk + 0.02, Top + 0.005 + SidewalkSlope * Sidewalk - SkirtM));
-			for (int32 b = 0; b < 5; ++b) BandLayer.Add(static_cast<uint8>(ESimCruiseTileLayer::Concrete));
+			Out.Add(FVector2d(GutterM + 0.006, -GutterDropM + 0.014));
+			Out.Add(FVector2d(Face - 0.002, Top - 0.025));
+			Out.Add(FVector2d(Face + 0.007, Top - 0.007));
+			Out.Add(FVector2d(Face + 0.025, Top));
+			Out.Add(FVector2d(Face + CurbTopM, Top + 0.005));
+			Out.Add(FVector2d(Face + CurbTopM + Sidewalk, Top + 0.005 + SidewalkSlope * Sidewalk));
+			Out.Add(FVector2d(Face + CurbTopM + Sidewalk + 0.02, Top + 0.005 + SidewalkSlope * Sidewalk - SkirtM));
+			for (int32 b = 0; b < 8; ++b) BandLayer.Add(static_cast<uint8>(ESimCruiseTileLayer::Concrete));
 			break;
 		}
 		case ESimCruiseRoadEdge::Rural:
@@ -926,6 +935,10 @@ namespace SimCruiseTileBuilder
 			for (int32 k = 0; k <= NP; ++k) Columns[k] = { Skirt[0][k], Skirt[1][k] };
 			EmitStrip(Asphalt, Columns, Outward, Color, false);
 		}
+		// Side runs (curbs, town edges, shoulders) are gathered first and drawn after every ribbon,
+		// so the curbs that meet at a street corner can be pulled back and joined by a curb return.
+		struct FPendingRun { TArray<FSection> Run; ESimCruiseRoadEdge Edge; int32 SideIndex; double Sign; bool bCutStart; bool bCutEnd; };
+		TArray<FPendingRun> PendingRuns;
 		for (int32 r = 0; r < Roads.Ribbons.Num(); ++r)
 		{
 			const FSimCruiseRibbon& Ribbon = Roads.Ribbons[r];
@@ -993,6 +1006,10 @@ namespace SimCruiseTileBuilder
 					int32 j = i;
 					while (j + 1 < NS && !RS.Cut[j + 1] && RS.Edge[j + 1] == Edge) ++j;
 					// The run spans stations i..j; extend to the exact crossing where a cut follows or precedes it.
+					// Run ends at a junction: a crossing carriageway cut, or the ribbon's own end (OSM splits
+					// streets at junctions) unless that end lies on a tile seam.
+					const bool bCutStart = (i > 0 && RS.Cut[i - 1]) || (i == 0 && !Ribbon.bStartOnBoundary);
+					const bool bCutEnd = (j + 1 < NS && RS.Cut[j + 1]) || (j == NS - 1 && !Ribbon.bEndOnBoundary);
 					TArray<FSection> Run;
 					if (i > 0 && RS.Cut[i - 1])
 					{
@@ -1019,74 +1036,199 @@ namespace SimCruiseTileBuilder
 					if (Run.Num() < 2) continue;
 					for (FSection& S : Run) if (Edge == ESimCruiseRoadEdge::Kerb) S.Sidewalk = RS.SidewalkM[FMath::Min(j, NS - 1)];
 
-					TArray<FVector2d> Profile; TArray<uint8> BandLayers;
-					SideProfile(Edge, Run[0].Sidewalk, Profile, BandLayers);
-					const int32 NP = Profile.Num();
-					// Offset lines of every profile point, unfolded on the inside of bends.
-					TArray<FVector2d> RunT;
-					for (const FSection& S : Run) RunT.Add(S.T);
-					TArray<TArray<FVector2d>> Lines;
-					Lines.SetNum(NP);
-					for (int32 p = 0; p < NP; ++p)
+						PendingRuns.Add({ MoveTemp(Run), Edge, SideIndex, Sign, bCutStart, bCutEnd });
+				}
+			}
+		}
+
+		auto EmitRun = [&](const TArray<FSection>& Run, ESimCruiseRoadEdge Edge, int32 SideIndex, double Sign)
+		{
+				TArray<FVector2d> Profile; TArray<uint8> BandLayers;
+				SideProfile(Edge, Run[0].Sidewalk, Profile, BandLayers);
+				const int32 NP = Profile.Num();
+				// Offset lines of every profile point, unfolded on the inside of bends.
+				TArray<FVector2d> RunT;
+				for (const FSection& S : Run) RunT.Add(S.T);
+				TArray<TArray<FVector2d>> Lines;
+				Lines.SetNum(NP);
+				for (int32 p = 0; p < NP; ++p)
+				{
+					for (const FSection& S : Run) Lines[p].Add(S.C + S.R * (Sign * (S.HalfW + Profile[p].X)));
+					Unfold(Lines[p], RunT);
+				}
+				auto PointAt = [&](int32 Row, int32 p)
+				{
+					const FSection& S = Run[Row];
+					const double EdgeH = SideIndex == 0 ? S.HL : S.HR;
+					return Cm(Lines[p][Row], EdgeH + Profile[p].Y);
+				};
+				for (int32 Band = 0; Band + 1 < NP; ++Band)
+				{
+					TArray<TArray<FVector>> BandRows;
+					BandRows.SetNum(Run.Num());
+					TArray<FVector> Reference;
+					const bool bLast = Band == NP - 2;
+					const bool bFace = Edge == ESimCruiseRoadEdge::Kerb && Band == 2;
+					for (int32 Row = 0; Row < Run.Num(); ++Row)
 					{
-						for (const FSection& S : Run) Lines[p].Add(S.C + S.R * (Sign * (S.HalfW + Profile[p].X)));
-						Unfold(Lines[p], RunT);
+						BandRows[Row] = { PointAt(Row, Band), PointAt(Row, Band + 1) };
+						const FVector Outward = FVector(Run[Row].R.X, Run[Row].R.Y, 0.0) * Sign;
+						Reference.Add(bLast ? Outward : (bFace ? -Outward : FVector::UpVector));
 					}
-					auto PointAt = [&](int32 Row, int32 p)
+					// Vertex colour: R gravel, G gutter grime, B curb (for the concrete shader).
+					FLinearColor Color(0.f, 0.f, 0.f, 1.f);
+					if (Edge == ESimCruiseRoadEdge::Rural) Color.R = 1.f;
+					if (Edge == ESimCruiseRoadEdge::Kerb && Band == 0) Color.G = 1.f;
+					if (Edge == ESimCruiseRoadEdge::Kerb && Band >= 1 && Band <= 5) Color.B = 1.f;
+					FSimCruiseMeshData& Mesh = BandLayers[Band] == static_cast<uint8>(ESimCruiseTileLayer::Concrete) ? Concrete : Asphalt;
+					if (bLast || bFace)
 					{
-						const FSection& S = Run[Row];
-						const double EdgeH = SideIndex == 0 ? S.HL : S.HR;
-						return Cm(Lines[p][Row], EdgeH + Profile[p].Y);
-					};
-					for (int32 Band = 0; Band + 1 < NP; ++Band)
-					{
-						TArray<TArray<FVector>> BandRows;
-						BandRows.SetNum(Run.Num());
-						TArray<FVector> Reference;
-						const bool bLast = Band == NP - 2;
-						const bool bFace = Edge == ESimCruiseRoadEdge::Kerb && Band == 1;
-						for (int32 Row = 0; Row < Run.Num(); ++Row)
-						{
-							BandRows[Row] = { PointAt(Row, Band), PointAt(Row, Band + 1) };
-							const FVector Outward = FVector(Run[Row].R.X, Run[Row].R.Y, 0.0) * Sign;
-							Reference.Add(bLast ? Outward : (bFace ? -Outward : FVector::UpVector));
-						}
-						// Vertex colour: R gravel, G gutter grime, B curb (for the concrete shader).
-						FLinearColor Color(0.f, 0.f, 0.f, 1.f);
-						if (Edge == ESimCruiseRoadEdge::Rural) Color.R = 1.f;
-						if (Edge == ESimCruiseRoadEdge::Kerb && Band == 0) Color.G = 1.f;
-						if (Edge == ESimCruiseRoadEdge::Kerb && (Band == 1 || Band == 2)) Color.B = 1.f;
-						FSimCruiseMeshData& Mesh = BandLayers[Band] == static_cast<uint8>(ESimCruiseTileLayer::Concrete) ? Concrete : Asphalt;
-						if (bLast || bFace)
-						{
-							// Per-face normals along a vertical band keep the strip readable.
-							EmitStrip(Mesh, BandRows, Reference, Color, false);
-						}
-						else
-						{
-							EmitStrip(Mesh, BandRows, Reference, Color, true);
-						}
+						// Per-face normals along a vertical band keep the strip readable.
+						EmitStrip(Mesh, BandRows, Reference, Color, false);
 					}
-					// End caps where a curb run stops (junction cuts, a change of treatment).
-					if (Edge == ESimCruiseRoadEdge::Kerb)
+					else
 					{
-						for (int32 End = 0; End < 2; ++End)
+						EmitStrip(Mesh, BandRows, Reference, Color, true);
+					}
+				}
+				// End caps where a curb run stops (junction cuts, a change of treatment).
+				if (Edge == ESimCruiseRoadEdge::Kerb)
+				{
+					for (int32 End = 0; End < 2; ++End)
+					{
+						const int32 Row = End == 0 ? 0 : Run.Num() - 1;
+						const FVector2d T = Run[Row].T * (End == 0 ? -1.0 : 1.0);
+						const FVector Facing(T.X, T.Y, 0.0);
+						const double Bottom = PointAt(Row, NP - 1).Z;
+						for (int32 p = 0; p + 2 < NP; ++p)
 						{
-							const int32 Row = End == 0 ? 0 : Run.Num() - 1;
-							const FVector2d T = Run[Row].T * (End == 0 ? -1.0 : 1.0);
-							const FVector Facing(T.X, T.Y, 0.0);
-							const double Bottom = PointAt(Row, NP - 1).Z;
-							for (int32 p = 0; p + 2 < NP; ++p)
-							{
-								const FVector A = PointAt(Row, p), Bp = PointAt(Row, p + 1);
-								const int32 Ia = Concrete.Add(A, Facing), Ib = Concrete.Add(Bp, Facing);
-								const int32 Ic = Concrete.Add(FVector(Bp.X, Bp.Y, Bottom), Facing), Id = Concrete.Add(FVector(A.X, A.Y, Bottom), Facing);
-								Concrete.Quad(Ia, Ib, Ic, Id, Facing);
-							}
+							const FVector A = PointAt(Row, p), Bp = PointAt(Row, p + 1);
+							const int32 Ia = Concrete.Add(A, Facing), Ib = Concrete.Add(Bp, Facing);
+							const int32 Ic = Concrete.Add(FVector(Bp.X, Bp.Y, Bottom), Facing), Id = Concrete.Add(FVector(A.X, A.Y, Bottom), Facing);
+							Concrete.Quad(Ia, Ib, Ic, Id, Facing);
 						}
 					}
 				}
+		};
+
+		// Curb returns (AASHTO: 4.5-9 m on city streets): where two curbs of different streets end at
+		// the same corner, both are pulled back to the arc's tangent points and joined by the same
+		// curb, gutter and sidewalk swept along a circle, with the road paved into the corner. Square
+		// corners with bare curb ends were the old look (owner, 2.1.1: "rounded and not edged").
+		{
+			struct FEnd { int32 Run; bool bEnd; FVector2d P, D, N; double H; };
+			TArray<FEnd> Ends;
+			for (int32 k = 0; k < PendingRuns.Num(); ++k)
+			{
+				const FPendingRun& PR = PendingRuns[k];
+				if (PR.Edge != ESimCruiseRoadEdge::Kerb || PR.Run.Num() < 2) continue;
+				for (int32 e = 0; e < 2; ++e)
+				{
+					if (e == 0 ? !PR.bCutStart : !PR.bCutEnd) continue;
+					const FSection& S = e == 0 ? PR.Run[0] : PR.Run.Last();
+					FEnd E;
+					E.Run = k; E.bEnd = e == 1;
+					E.N = S.R * PR.Sign;
+					E.P = S.C + E.N * S.HalfW;
+					E.D = S.T * (e == 0 ? -1.0 : 1.0);
+					E.H = PR.SideIndex == 0 ? S.HL : S.HR;
+					Ends.Add(E);
+				}
 			}
+			auto RunLength = [](const TArray<FSection>& Run) { double Len = 0.0; for (int32 q = 1; q < Run.Num(); ++q) Len += FVector2d::Distance(Run[q].C, Run[q - 1].C); return Len; };
+			// Trims a run back by Dist metres from one end (along its centre line).
+			auto Trim = [](TArray<FSection>& Run, bool bEnd, double Dist)
+			{
+				if (!bEnd) Algo::Reverse(Run);
+				double Left = Dist;
+				while (Run.Num() >= 2 && Left > 0.0)
+				{
+					const double Seg = FVector2d::Distance(Run.Last().C, Run[Run.Num() - 2].C);
+					if (Seg <= Left) { Left -= Seg; Run.Pop(); continue; }
+					Run.Last() = LerpSection(Run[Run.Num() - 2], Run.Last(), 1.0 - Left / FMath::Max(Seg, 1e-6));
+					Left = 0.0;
+				}
+				if (!bEnd) Algo::Reverse(Run);
+			};
+			TSet<int32> UsedEnds;
+			int32 Returns = 0, NoPartner = 0, BadAngle = 0, TooShort = 0;
+			for (int32 a = 0; a < Ends.Num(); ++a)
+			{
+				if (UsedEnds.Contains(a)) continue;
+				int32 Best = INDEX_NONE; double BestT = 0.0, BestU = 0.0; FVector2d BestK = FVector2d::ZeroVector;
+				for (int32 b = 0; b < Ends.Num(); ++b)
+				{
+					if (b == a || UsedEnds.Contains(b) || Ends[b].Run == Ends[a].Run) continue;
+					const FEnd& A = Ends[a]; const FEnd& Bn = Ends[b];
+					if (FVector2d::Distance(A.P, Bn.P) > 14.0 || FMath::Abs(A.H - Bn.H) > 0.4) continue;
+					// Both curbs face the same corner: each outward side faces against the other run.
+					if (FVector2d::DotProduct(A.N, Bn.D) > -0.5 || FVector2d::DotProduct(Bn.N, A.D) > -0.5) continue;
+					const double Den = A.D.X * Bn.D.Y - A.D.Y * Bn.D.X;
+					if (FMath::Abs(Den) < 0.2) continue;
+					const FVector2d W = Bn.P - A.P;
+					const double T = (W.X * Bn.D.Y - W.Y * Bn.D.X) / Den;
+					const double U = (W.X * A.D.Y - W.Y * A.D.X) / Den;
+					if (T < -3.0 || U < -3.0 || T > 10.0 || U > 10.0) continue;
+					if (Best == INDEX_NONE || T + U < BestT + BestU) { Best = b; BestT = T; BestU = U; BestK = A.P + A.D * T; }
+				}
+				if (Best == INDEX_NONE) { ++NoPartner; continue; }
+				const FEnd& A = Ends[a]; const FEnd& Bn = Ends[Best];
+				// The interior angle of the corner between the two curbs, and the tangent distance for R.
+				const FVector2d Ba = -A.D, Bb = -Bn.D;
+				const double Phi = FMath::Acos(FMath::Clamp(FVector2d::DotProduct(Ba, Bb), -1.0, 1.0));
+				if (Phi < FMath::DegreesToRadians(35.0) || Phi > FMath::DegreesToRadians(150.0)) { ++BadAngle; continue; }
+				const double LenA = RunLength(PendingRuns[A.Run].Run), LenB = RunLength(PendingRuns[Bn.Run].Run);
+				auto TanDist = [Phi](double Rr) { return Rr / FMath::Tan(0.5 * Phi); };
+				double Radius = 5.0;
+				while (Radius > 1.5 && (TanDist(Radius) - BestT > LenA - 1.0 || TanDist(Radius) - BestU > LenB - 1.0)) Radius -= 0.5;
+				if (Radius <= 1.5) { ++TooShort; continue; }
+				++Returns;
+				const double Dt = TanDist(Radius);
+				UsedEnds.Add(a); UsedEnds.Add(Best);
+				const float WalkA = PendingRuns[A.Run].Run[0].Sidewalk, WalkB = PendingRuns[Bn.Run].Run[0].Sidewalk;
+				Trim(PendingRuns[A.Run].Run, A.bEnd, FMath::Max(0.0, Dt - BestT));
+				Trim(PendingRuns[Bn.Run].Run, Bn.bEnd, FMath::Max(0.0, Dt - BestU));
+				const FVector2d K = BestK;
+				const FVector2d TA = K + Ba * Dt, TB = K + Bb * Dt;
+				const FVector2d Bis = (Ba + Bb).GetSafeNormal();
+				const FVector2d Centre = K + Bis * (Radius / FMath::Sin(0.5 * Phi));
+				// The arc from TA to TB as sections whose edge is the arc (HalfW 0) and whose right
+				// points to the centre (the sidewalk side).
+				const FVector2d Ra = (TA - Centre) / Radius, Rb = (TB - Centre) / Radius;
+				const double Sweep = FMath::Atan2(Ra.X * Rb.Y - Ra.Y * Rb.X, FVector2d::DotProduct(Ra, Rb));
+				const int32 Steps = FMath::Clamp(FMath::CeilToInt(FMath::Abs(Sweep) * Radius / 0.5), 4, 24);
+				const float Walk = FMath::Min(WalkA, WalkB);
+				TArray<FSection> Arc;
+				TArray<FVector> Fill;
+				for (int32 q = 0; q <= Steps; ++q)
+				{
+					const double Ang = Sweep * q / Steps;
+					const FVector2d Rq(Ra.X * FMath::Cos(Ang) - Ra.Y * FMath::Sin(Ang), Ra.X * FMath::Sin(Ang) + Ra.Y * FMath::Cos(Ang));
+					FSection S;
+					S.C = Centre + Rq * Radius;
+					S.R = -Rq;
+					S.T = FVector2d(-Rq.Y, Rq.X) * (Sweep >= 0.0 ? 1.0 : -1.0);
+					S.HalfW = 0.0;
+					const double H = FMath::Lerp(A.H, Bn.H, static_cast<double>(q) / Steps);
+					S.HL = S.HC = S.HR = H;
+					S.Sidewalk = Walk;
+					Arc.Add(S);
+					Fill.Add(Cm(S.C, H + 0.004));
+				}
+				EmitRun(Arc, ESimCruiseRoadEdge::Kerb, 1, 1.0);
+				// Pave the corner between the old square corner and the arc.
+				const FLinearColor CornerPaved(0.f, 0.f, 0.f, 1.f);
+				const int32 Hub = Asphalt.Add(Cm(K, 0.5 * (A.H + Bn.H) + 0.004), FVector::UpVector, CornerPaved);
+				TArray<int32> Rim;
+				for (const FVector& P : Fill) Rim.Add(Asphalt.Add(P, FVector::UpVector, CornerPaved));
+				for (int32 q = 0; q + 1 < Rim.Num(); ++q) Asphalt.Tri(Hub, Rim[q], Rim[q + 1], FVector::UpVector);
+			}
+			UE_LOG(LogTemp, Verbose, TEXT("CURBRETURNS tile %d_%d: %d curb ends, %d returns, %d without a partner, %d angle, %d too short"),
+				Data.Id.X, Data.Id.Y, Ends.Num(), Returns, NoPartner, BadAngle, TooShort);
+		}
+		for (const FPendingRun& PR : PendingRuns)
+		{
+			if (PR.Run.Num() >= 2) EmitRun(PR.Run, PR.Edge, PR.SideIndex, PR.Sign);
 		}
 
 		// ---------------------------------------------------------------- buildings, palms, street lights
@@ -1267,6 +1409,19 @@ namespace SimCruiseTileBuilder
 								if ((Hash % 100u) >= 58u) continue;
 								const double OffCurb = 0.25 + 0.15 * static_cast<double>((Hash >> 8) & 0xFF) / 255.0;
 								const double L = Sgn * (HalfW - OffCurb - 0.9);
+								// Not across the mouth of a side street or on a junction: a road that ends at
+								// this one (a T junction) does not cut its stripes, so look past this side's
+								// edge, 9 m either way (a car, and the 20 ft MUTCD keeps clear of a
+								// crosswalk), and under the car itself, for any other carriageway.
+								// (2.1: cars parked across Miami Beach side streets blocked them.)
+								bool bMouth = false;
+								for (double Along = -9.0; Along <= 9.0 && !bMouth; Along += 3.0)
+								{
+									FSimCruiseRoadHit Other;
+									if (Roads.FindCarriageway(Cc + Tt * Along + Rr * (Sgn * (HalfW + 1.2)), Other, r)) bMouth = true;
+								}
+								FSimCruiseRoadHit Under;
+								if (bMouth || Roads.FindCarriageway(Cc + Rr * L, Under, r)) continue;
 								const double Hgt = FMath::Lerp(Ribbon.CarriagewayHeight(i, L), Ribbon.CarriagewayHeight(i + 1, L), T);
 								const FVector2d Heading = Tt * (A.Travel != 0 ? static_cast<double>(A.Travel) : Sgn);
 								FSimCruiseParkedCar Car;

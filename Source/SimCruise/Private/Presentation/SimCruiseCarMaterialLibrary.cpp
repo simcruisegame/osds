@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Presentation/SimCruiseCarMaterialLibrary.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 
 #include "Engine/Texture2D.h"
 #include "ImageCore.h"
@@ -313,7 +314,7 @@ return Base.rgb * Tex;
 			UTexture* Created = FImageUtils::CreateTexture(ETextureClass::TwoD, Image, GetTransientPackage(), TEXT("T_SimCruiseLinearWhite"), RF_Transient, false);
 			Created->SRGB = false;
 			Created->CompressionSettings = TC_Masks;
-			Created->PostEditChange();
+						Created->PostEditChange();
 			Texture.Reset(Created);
 		}
 		return Texture.Get();
@@ -457,6 +458,7 @@ return Base.rgb * Tex;
 		Bottom->Input.Connect(1, Normals);
 
 		Material->PreEditChange(nullptr);
+		SimCruiseShaderSafety::PatchForRayTracing(Material);
 		Material->PostEditChange();
 		return Material;
 	}
@@ -505,6 +507,7 @@ return Base.rgb * Tex;
 		Thin->TransmittanceColor.Connect(0, Tint);
 		Thin->SurfaceCoverage.Connect(0, One);
 		Material->PreEditChange(nullptr);
+		SimCruiseShaderSafety::PatchForRayTracing(Material);
 		Material->PostEditChange();
 		return Material;
 	}

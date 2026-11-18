@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "Presentation/SimCruiseCarClock.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 
 #include "Materials/Material.h"
 #include "UObject/StrongObjectPtr.h"
@@ -248,6 +249,7 @@ namespace SimCruiseCarClock
 			Built->GetEditorOnlyData()->EmissiveColor.Connect(1, Custom);
 			Built->GetEditorOnlyData()->Roughness.Connect(0, Scalar(TEXT("Roughness"), 0.35f));
 			Built->PreEditChange(nullptr);
+			SimCruiseShaderSafety::PatchForRayTracing(Built);
 			Built->PostEditChange();
 			Material = Built;
 		}
@@ -328,6 +330,7 @@ namespace SimCruiseCarScreen
 			Built->GetEditorOnlyData()->EmissiveColor.Connect(1, Custom);
 			Built->GetEditorOnlyData()->Roughness.Connect(0, Scalar(TEXT("Roughness"), 0.2f));
 			Built->PreEditChange(nullptr);
+			SimCruiseShaderSafety::PatchForRayTracing(Built);
 			Built->PostEditChange();
 			Material = Built;
 		}

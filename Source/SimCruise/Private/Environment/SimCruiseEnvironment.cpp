@@ -461,6 +461,16 @@ void ASimCruiseEnvironment::ApplyExposure()
 	S.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
 	S.AutoExposureApplyPhysicalCameraExposure = false;
 
+	// Local exposure: in sun it lifts shadows and holds highlights as a phone camera's HDR does
+	// (the ini's 0.7 / 0.55). Under a full overcast the scene's range is already small, and the
+	// same lift flattened it (2.1 owner screenshot, Miami Beach: flat, clay-like): ease both
+	// toward neutral as the cloud closes (lighting review 2026-11-17).
+	const float Overcast = FMath::SmoothStep(0.5f, 1.0f, Weather.CloudCover);
+	S.bOverride_LocalExposureShadowContrastScale = true;
+	S.LocalExposureShadowContrastScale = FMath::Lerp(0.7f, 0.95f, Overcast);
+	S.bOverride_LocalExposureHighlightContrastScale = true;
+	S.LocalExposureHighlightContrastScale = FMath::Lerp(0.55f, 0.9f, Overcast);
+
 	// Lens: no game-style flares or heavy vignette; a modern camera corrects most falloff.
 	S.bOverride_LensFlareIntensity = true;
 	S.LensFlareIntensity = 0.0f;

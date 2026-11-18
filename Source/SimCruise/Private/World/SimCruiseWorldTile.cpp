@@ -415,6 +415,9 @@ void ASimCruiseWorldTile::Install(const TSharedRef<FSimCruiseTileBuild>& InBuild
 			C->SetStaticMesh(PropMesh);
 			C->SetCollisionProfileName(E.bCollide ? UCollisionProfile::BlockAll_ProfileName : UCollisionProfile::NoCollision_ProfileName);
 			C->SetCastShadow(E.bShadow);
+			// Out of the ray-traced scene: thin plants cost the most to trace and change Lumen's light
+			// least, and CARLA's foliage master has no ray-tracing variant that compiles.
+			C->bVisibleInRayTracing = false;
 			C->SetCullDistances(0, FMath::RoundToInt(E.CullM * 100.0));
 			C->RegisterComponent();
 			C->AddInstances(Pair.Value, false, false);

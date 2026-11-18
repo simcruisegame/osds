@@ -2,6 +2,19 @@
 
 The short version of each release, newest first. Every release has full notes in [docs/release/notes/](docs/release/notes/). OSDS was called SimCruise up to 2.0.3 and Sunday Driver up to 1.0.8 ([history](docs/history.md)).
 
+## 2.1.1 (2026-11-18)
+
+**Real ray-traced light, road wear and rounded corners.**
+
+- **Ray-traced lighting** on High and Ultra: shadowed cabins, cars that sit on the road, streets with depth.
+- **Presets retuned:** High for laptops like an RTX 2070 Max-Q (Auto picks it), Ultra for stronger PCs.
+- **Road wear** from CARLA's decals: cracks, crack seal and stains on every road.
+- **Rounded curbs** and curved street corners.
+- Fixed: cars parked across side streets; a black band on the horizon; flat-looking overcast skies.
+- Known issues: the rear-view mirror is still blocky; the Camaro's hood camera sits in its hood bulge.
+
+[Full notes](docs/release/notes/2.1.1.md)
+
 ## 2.1.0 (2026-11-17)
 
 **Two new cars, a drift handbrake, and CARLA art.**

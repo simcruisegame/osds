@@ -1,6 +1,7 @@
 // Copyright SimCruise contributors. All Rights Reserved.
 
 #include "World/SimCruiseGuardRails.h"
+#include "Rendering/SimCruiseShaderSafety.h"
 #include "World/SimCruiseCellContext.h"
 
 #include "Engine/World.h"
@@ -108,6 +109,7 @@ UMaterial* ASimCruiseGuardRails::BuildMaterial(UObject* Outer, FName Name, EObje
 	Material->GetEditorOnlyData()->Metallic.Connect(0, Metal);
 	Material->GetEditorOnlyData()->Roughness.Connect(0, Rough);
 	Material->PreEditChange(nullptr);
+	SimCruiseShaderSafety::PatchForRayTracing(Material);
 	Material->PostEditChange();
 	return Material;
 #else

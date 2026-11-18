@@ -1,0 +1,4 @@
+OSDS 2.1.1 installer test, 2026-11-18, release PC, normal user
+- setup /VERYSILENT /CURRENTUSER: exit 0 (updated 2.1.0 in place).
+- Installed game self-test: exit 0, PASSED, no crash report.
+- Sizes: setup 987.1 MB, zip 1,064.5 MB.
