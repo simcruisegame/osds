@@ -134,6 +134,14 @@ private:
 	/** Traffic and parked-car models built so far while the start tiles load. */
 	int32 PrebuiltModels = 0;
 	FVector StartCm = FVector::ZeroVector;
+	/**
+	 * A start point with no road in its tiles (the sea off a beach, back country): the start
+	 * steps outwards in rings of tiles until one has a road (RoadHuntStep steps so far, from
+	 * the point the player chose, kept as longitude and latitude: the floating origin moves
+	 * with the focus, so a world position goes stale after the first step).
+	 */
+	int32 RoadHuntStep = 0;
+	FVector2d RoadHuntOriginLonLat = FVector2d::ZeroVector;
 	FString StartRoadName;
 	FString CarId;
 	double WaitStartedSeconds = 0.0;

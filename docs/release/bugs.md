@@ -18,6 +18,20 @@ Owners: **release** (this gate; fixed on `release/v2.0.0`), **physics** (lane1),
 | R8 | At night on an unlit rural road the low beams light the road to about 45-50 m | `docs/release/evidence/night.txt`: rural night cockpit capture, road brightness down the lane falls to 3/255 at about 50 m | cars | open (minor, routed); the rule asks for about 60 m |
 | R9 | The lowered NB stops 3.3 % shorter than its estimated target after the ride-height fix | `CarTrack.nb2001_lowered`: 70-0 154.8 ft against the 160 ft estimate (81a88f0 lowered the body 20 mm) | physics | FYI: the target is an estimate, not a test of the car |
 
+## Found by the 2.2 nightly (2026-11-17, main cedfcc1)
+
+`scripts\preflight.ps1 -Roads randomus,hard -RandomCount 10` at Ultra, five cars (Miata, C8, Mustang 65, Mini, Camaro): 110 drives, 60 passed. Runs in `Saved/Review/20261117-223244-cedfcc1-preflight` (C:/sc/v204).
+
+| # | Bug | Run and evidence | Owner | Status |
+|---|---|---|---|---|
+| N1 | Road and building tiles were never in the ray tracing scene: hardware Lumen (High and Ultra) saw no streets or buildings in its reflections and bounce light | every run: ensure "StaticMesh [SM_OsdsTile_x_y] missing RayTracingProxy" (StaticMeshSceneProxy.cpp 385), 110 of 110 crash folders | coordinator | fixed on `qa/raytracing-tiles`: the runtime tile mesh gets its ray tracing representation from its one LOD |
+| N2 | A start point with no road in its 3 x 3 tiles left the car on the sea or the slope; every car "moved 0 m" | `rand-coast-6` (39.80421,-74.03156, the Atlantic off New Jersey), `rand-mountains-9` (39.39217,-105.68159, Colorado back country) | coordinator | fixed on `qa/raytracing-tiles`: the start steps out in rings of tiles (up to about 8 km, kept as longitude and latitude because the floating origin moves) until one has a road. New hard place `jersey-sea` passes (698 m); `rand-mountains-9` passes the start (557 m) |
+| N3 | Glenwood Canyon: 150-390 m/s^2 jolts at 957 m, exactly on a tile corner (viaduct) | `glenwood`, all five cars. Border-surface log (20261118-081151): the road is 1798.59 m on tile 13245_24914 and 1799.10 m 4 m on, on tile 13245_24913: a 0.5 m step where the two tiles' builds of I-70 meet | world | open: the seam contract does not hold on this carriageway |
+| N4 | Mackinac Bridge: 236 m/s^2 jolt at 397 m (tile border mid-span), then the Miata left the deck and fell 4.5 m to the water (same seam as H4) | `mackinac-nb2001_lowered` frames 5-6. Border-surface log (20261118-081151): at 397-398 m no tile surface 4 m behind the car (a hole at the border of 17343_23363 / 23364), and a bridge-actor deck at 183.97 m over the tile road at 183.11 m (0.86 m lip). Rerun 20261118-131913: the first seam is smooth now, the car reaches 833 m, then at the 23364 / 23365 seam a stretch of the deck is built at the lake's level (176.7 m): a hole, the 0.86 m lip, and a 6.5 m fall | world | open: a deck stretch loses its bridge flag near a seam |
+| N7 | With tiles in ray tracing, development builds printed a red "RAY TRACING GEOMETRY - ALWAYS RESIDENT MEMORY EXCEEDS 20% OF THE BUDGET (116 MiB / 400 MiB)" over the drive | `glenwood` rerun 20261118-131913 | coordinator | fixed on `qa/raytracing-tiles`: pool 800 MB, warning at 50 % |
+| N5 | Camaro and Mustang 65 spins | `bridge-5`, `forest-8`, `dragon` | cars | routed to cars-driving |
+| N6 | Smaller border jolts (8-60 m/s^2) | `million-dollar`, `forest-8`, `suburb-3`, `us-50-nevada` | world | open |
+
 ## Found by the 2.0.4 bug hunt (2026-11-17)
 
 `scripts\preflight.ps1 -Roads hard,randomus -RandomCount 6 -Seed 20261117 -Cars meridian_z -Seconds 45`: 12 hard places and 6 random US points; 12 passed the first time. Runs in `Saved/Review/20261117-*-preflight` (the C:/sc/v204 checkout).

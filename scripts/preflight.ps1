@@ -105,8 +105,9 @@ $Defs = @{
     'glenwood'       = @('-OsdsStart=39.555,-107.245')     # I-70 Glenwood Canyon: stacked carriageways
     'high-five'      = @('-OsdsStart=32.925,-96.764')      # High Five interchange, Dallas: levels
     'us-50-nevada'   = @('-OsdsStart=39.3,-117.0')         # US-50 Nevada: long straight at speed
+    'jersey-sea'     = @('-OsdsStart=39.80421,-74.03156')  # In the Atlantic 5 km off New Jersey: the start must find the shore road
 }
-$HardPlaces = @('dragon', 'lombard', 'million-dollar', 'pikes-peak', 'badwater', 'mackinac', 'seven-mile', 'bay-bridge-tunnel', 'glenwood', 'high-five', 'us-50-nevada', 'nebraska')
+$HardPlaces = @('dragon', 'lombard', 'million-dollar', 'pikes-peak', 'badwater', 'mackinac', 'seven-mile', 'bay-bridge-tunnel', 'glenwood', 'high-five', 'us-50-nevada', 'nebraska', 'jersey-sea')
 if ($Seed -lt 0) { $Seed = [int](Get-Date -Format 'yyyyMMdd') }
 # Ordinary US places: the world must work everywhere, not only on the hero roads.
 $PlacesFile = Join-Path $Root 'data\test-places.json'

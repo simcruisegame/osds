@@ -341,6 +341,8 @@ void AOsdsGameMode::BeginTravel(const FOsdsPlace& Place, bool bRestartWorld)
 		Stream->StartAt(Place.Lon, Place.Lat, Place.Title);
 	}
 	StartCm = Stream->GetFrame().LonLatToWorldCm(Place.Lon, Place.Lat);
+	RoadHuntOriginLonLat = FVector2d(Place.Lon, Place.Lat);
+	RoadHuntStep = 0;
 	Stream->SetFocus(StartCm, FVector::ZeroVector);
 	WaitStartedSeconds = FPlatformTime::Seconds();
 	LastMessageSeconds = -100.0;
@@ -681,6 +683,34 @@ bool AOsdsGameMode::TryPlacePendingPlayers()
 		if (bFirstPlacement && (!StartChain.IsEmpty() || bStartLaunch))
 		{
 			TravelFailed(TEXT("no road near the start point"));
+			return false;
+		}
+		// No road in the start tiles: look further out, nearest ring first. Ring R moves the start
+		// 3 R tiles in each of eight directions (a 3 x 3 block of tiles is new ground each time);
+		// six rings reach about 18 tiles (8 km at 40 deg N), about 3 s a step on empty tiles.
+		// Overnight QA 2026-11-17: points in the sea off New Jersey (shore about 5 km away) and
+		// in Colorado back country left the car on the water or the slope, every car "moved 0 m".
+		constexpr int32 HuntRings = 6;
+		if (bFirstPlacement && RoadHuntStep < HuntRings * 8 && Stream->GetFrame().IsValid())
+		{
+			static const FIntPoint Directions[8] = { {1, 0}, {0, 1}, {-1, 0}, {0, -1}, {1, 1}, {-1, 1}, {-1, -1}, {1, -1} };
+			const int32 Ring = 1 + RoadHuntStep / 8;
+			const FIntPoint Step = Directions[RoadHuntStep % 8] * (3 * Ring);
+			++RoadHuntStep;
+			const double TileCm = Stream->GetFrame().TileSizeCm();
+			const FVector OriginCm = Stream->GetFrame().LonLatToWorldCm(RoadHuntOriginLonLat.X, RoadHuntOriginLonLat.Y);
+			StartCm = OriginCm + FVector(Step.X * TileCm, Step.Y * TileCm, 0.0);
+			Stream->SetFocus(StartCm, FVector::ZeroVector);
+			WaitStartedSeconds = FPlatformTime::Seconds();
+			UE_LOG(LogOsdsDrive, Display, TEXT("No road within %.0f m of the start; looking %.1f km away (step %d)"),
+				AnyRadiusM, FVector::Dist2D(StartCm, OriginCm) / 100000.0, RoadHuntStep);
+			for (const TWeakObjectPtr<AController>& Weak : PendingPlayers)
+			{
+				if (AOsdsPlayerController* SimPlayer = Cast<AOsdsPlayerController>(Weak.Get()))
+				{
+					SimPlayer->ShowMessage(TEXT("No road here: looking for the nearest one"), 3.f);
+				}
+			}
 			return false;
 		}
 		double Z = 0.0;
