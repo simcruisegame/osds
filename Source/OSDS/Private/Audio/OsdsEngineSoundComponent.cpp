@@ -20,7 +20,7 @@ void UOsdsEngineSoundComponent::SetEngineState(const FOsdsInlineFourSynth::FInpu
 
 bool UOsdsEngineSoundComponent::Init(int32& SampleRate)
 {
-	SampleRate = FOsdsInlineFourSynth::SampleRate;
+	SampleRate = Voice.GetSampleRate();
 	NumChannels = 1;
 	return true;
 }
@@ -32,16 +32,18 @@ int32 UOsdsEngineSoundComponent::OnGenerateAudio(float* OutAudio, int32 NumSampl
 		FScopeLock Lock(&InputsLock);
 		Inputs = Latest;
 	}
-	Synth.Render(OutAudio, NumSamples, Inputs);
+	Voice.Render(OutAudio, NumSamples, Inputs);
 	if (!bCabinSet)
 	{
-		Cabin.Set(FOsdsRoadNoiseSynth::CabinCutoffHz, FOsdsInlineFourSynth::SampleRate);
+		Cabin.Set(FOsdsRoadNoiseSynth::CabinCutoffHz, Voice.GetSampleRate());
 		bCabinSet = true;
 	}
+	// A recording made in the cabin already is the cabin; anything else passes the cabin's low-pass.
+	const bool bFilter = Voice.NeedsCabinFilter();
 	for (int32 I = 0; I < NumSamples; ++I)
 	{
 		const float Filtered = Cabin.Process(OutAudio[I]);
-		if (Inputs.bCabin) OutAudio[I] = Filtered;
+		if (Inputs.bCabin && bFilter) OutAudio[I] = Filtered;
 	}
 	return NumSamples;
 }

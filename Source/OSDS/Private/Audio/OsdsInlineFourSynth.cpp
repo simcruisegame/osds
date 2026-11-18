@@ -39,15 +39,30 @@ FOsdsInlineFourSynth::FOsdsInlineFourSynth()
 void FOsdsInlineFourSynth::ConfigureCrossPlaneV8(const TArray<int32>& BankOfEvent, double NearGain, double FarGain)
 {
 	if (BankOfEvent.Num() != 8) return;
+	ConfigureEvenFiring(BankOfEvent, NearGain, FarGain);
+}
+
+void FOsdsInlineFourSynth::ConfigureEvenFiring(const TArray<int32>& BankOfEvent, double NearGain, double FarGain)
+{
+	const int32 N = BankOfEvent.Num();
+	if (N < 3 || N > 16) return;
+	Events = N;
 	CycleLight.SetNumUninitialized(Size + 1);
 	CycleLoad.SetNumUninitialized(Size + 1);
-	auto GainOf = [&](int32 Event) { return BankOfEvent[(Event + 8) % 8] == 0 ? NearGain : FarGain; };
+	// Each cylinder a little different (a fixed pattern scaled by the tone's spread).
+	static constexpr double Pattern[16] = { 0.1, -0.9, 0.6, -0.3, 0.9, -0.6, 0.3, -0.1, 0.5, -0.7, 0.8, -0.4, 0.2, -0.8, 0.7, -0.2 };
+	auto GainOf = [&](int32 Event)
+	{
+		const int32 E = (Event + N) % N;
+		return (BankOfEvent[E] == 0 ? NearGain : FarGain) * (1.0 + Tone.CylinderSpread * Pattern[E]);
+	};
+	const double EventDeg = 720.0 / N;
 	for (int32 I = 0; I <= Size; ++I)
 	{
 		// Crank angle over the cycle; each event's pulse is one period of the event tables.
 		const double Angle = 720.0 * static_cast<double>(I % Size) / Size;
-		const int32 Event = FMath::FloorToInt(Angle / 90.0);
-		const double U = (Angle - 90.0 * Event) / 90.0;
+		const int32 Event = FMath::Min(FMath::FloorToInt(Angle / EventDeg), N - 1);
+		const double U = (Angle - EventDeg * Event) / EventDeg;
 		// The bank's gain eases in over the first fifth of the event (no click at the edge).
 		const double G = FMath::Lerp(GainOf(Event - 1), GainOf(Event), FMath::SmoothStep(0.0, 0.2, U));
 		const double X = U * Size;
@@ -56,7 +71,7 @@ void FOsdsInlineFourSynth::ConfigureCrossPlaneV8(const TArray<int32>& BankOfEven
 		CycleLight[I] = static_cast<float>(G * FMath::Lerp(ExhaustLight[K], ExhaustLight[K + 1], T));
 		CycleLoad[I] = static_cast<float>(G * FMath::Lerp(ExhaustLoad[K], ExhaustLoad[K + 1], T));
 	}
-	bV8 = true;
+	bV8 = true; // "multi-bank": the cycle tables are in use
 }
 
 void FOsdsInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& In)
@@ -75,6 +90,7 @@ void FOsdsInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& In)
 	// over the whole 720-degree cycle of eight events.
 	// The pitch follows the engine to just past its own limiter (the overshoot a fuel cut allows).
 	const double TargetHz = FMath::Clamp(Rpm, 0.0, In.LimiterRpm + 200.0) / (bV8 ? 120.0 : 30.0);
+	const double EventsPerCycle = static_cast<double>(Events);
 	const double SpeedHz = bV8 ? 215.0 / 4.0 : 215.0;
 	// The engine speed follows the physics continuously: rev limiter, shifts and stalls.
 	if (!bFired)
@@ -83,13 +99,15 @@ void FOsdsInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& In)
 		bFired = true;
 	}
 	const double HzStep = (TargetHz - FiringHz) / Frames;
+	// A lumpy cam lopes at idle and smooths out with revs.
+	const double Speed0 = FMath::Clamp((Rpm - 900.0) / 1600.0, 0.0, 1.0);
 	const double TargetCharge = In.bStalled ? 0.0 : FMath::Clamp(In.Combustion, 0.0, 1.0);
 	const double TargetThrottle = FMath::Clamp(In.Pedal, 0.0, 1.0);
 	const double TargetPull = FMath::Clamp(In.ShaftLoad, 0.0, 1.0);
 	const double TargetOverrun = FMath::Clamp(-In.ShaftLoad, 0.0, 1.0) * SmoothStep(1150.0, 2300.0, Rpm) * (1.0 - TargetCharge);
 	const double TargetGain = In.bStalled ? 0.0 : 1.0;
 	const double Smoothing = 1.0 - FMath::Exp(-1.0 / (SampleRate * .025));
-	const double Filter = In.bCabin ? .25 : .52;
+	const double Filter = In.bCabin ? Tone.CabinFilter : Tone.ExteriorFilter;
 	const double BoomLevel = In.bCabin ? .45 : 0.0;
 	const double ExhaustPresence = In.bCabin ? 1.0 : 1.12;
 	// The powertrain cuts torque over the limiter; with the pedal still down the sound
@@ -110,8 +128,8 @@ void FOsdsInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& In)
 		C[0] = A / N; C[1] = -A / N; C[2] = -2.0 * FMath::Cos(W) / N; C[3] = (1.0 - A) / N;
 	};
 	double BodyC[4], RaspC[4];
-	BandPass(180.0, 1.5, BodyC);
-	BandPass(1900.0, 1.2, RaspC);
+	BandPass(Tone.BodyHz, Tone.BodyQ, BodyC);
+	BandPass(Tone.RaspHz, 1.2, RaspC);
 	auto Ring = [](double X, const double* C, double* Z)
 	{
 		const double Y = C[0] * X + C[1] * Z[1] - C[2] * Z[2] - C[3] * Z[3];
@@ -138,7 +156,7 @@ void FOsdsInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& In)
 		{
 			Phase -= Size;
 			// A small zero-mean cycle-to-cycle variation, strongest under light load.
-			PulseGain = 1.0 + (static_cast<double>(RandomState) / 1073741824.0 - 1.0) * (.035 - .018 * Charge);
+			PulseGain = 1.0 + (static_cast<double>(RandomState) / 1073741824.0 - 1.0) * (.035 - .018 * Charge + Tone.Lope * (1.0 - Charge) * (1.0 - Speed0));
 			FireIndex = (FireIndex + 1) & 3;
 			if (!bV8) PulseGain *= CylinderGain[FireIndex];
 			if (PopChance > 0.0 && static_cast<double>(RandomState) / 2147483647.0 < PopChance)
@@ -162,7 +180,7 @@ void FOsdsInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& In)
 			Quiet = FMath::Lerp(CycleLight[K], CycleLight[K + 1], T);
 			Loaded = FMath::Lerp(CycleLoad[K], CycleLoad[K + 1], T);
 			// Intake and the breath window follow each event.
-			const double EventPhase = FMath::Fmod(Phase * 8.0, static_cast<double>(Size));
+			const double EventPhase = FMath::Fmod(Phase * EventsPerCycle, static_cast<double>(Size));
 			K = static_cast<int32>(EventPhase) & Mask;
 			T = EventPhase - FMath::FloorToDouble(EventPhase);
 		}
@@ -187,7 +205,7 @@ void FOsdsInlineFourSynth::Render(float* Out, int32 Frames, const FInputs& In)
 		const double Dry = Pulse * ExhaustLevel * RevGain;
 		// The resonances ring with the exhaust's energy: faint at idle (a real NB's idling cabin is the
 		// firing order alone), full under load.
-		const double Exhaust = .6 * Dry + .6 * (.15 + .85 * Charge) * Ring(Dry, BodyC, BodyZ) + (.05 + .35 * Charge) * Ring(Dry, RaspC, RaspZ);
+		const double Exhaust = .6 * Dry + .6 * (.15 + .85 * Charge) * Ring(Dry, BodyC, BodyZ) + Tone.RaspGain * (.05 + .35 * Charge) * Ring(Dry, RaspC, RaspZ);
 		Boom += .034 * (Exhaust - Boom);
 		const double Pressure = Exhaust + Boom * BoomLevel + Air * InletLevel + Breath * Airflow + PopLow;
 		OutputLow += Filter * (Pressure - OutputLow);

@@ -1,0 +1,32 @@
+Engine sound recordings used by OSDS
+====================================
+
+OSDS ships no third-party audio. From the recordings below it ships only numbers
+measured from them (engine-order levels in data/sound/reference/*.json), made with
+scripts/engine-sound/cut_loops.py analyze. Licences checked on each Freesound page
+on 18 November 2026.
+
+1. "Miata Start and Stop Exterior" and "Miata Start and Stop"
+   by TurboTheSergal, Freesound 523352 and 523351
+   https://freesound.org/people/TurboTheSergal/sounds/523352/
+   https://freesound.org/people/TurboTheSergal/sounds/523351/
+   Licence: Creative Commons Attribution 4.0 International (CC BY 4.0)
+   https://creativecommons.org/licenses/by/4.0/legalcode
+   Changes: idle order levels measured (2.0-4.5 s of 523352); no audio copied.
+
+2. "Corvette C5 INOX 2001" by Galarne, Freesound 360451
+   https://freesound.org/people/Galarne/sounds/360451/
+   Licence: CC0 1.0 Universal (public domain dedication)
+   https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+3. "1974 Camaro Engine Start and Takeoff" by alelizama (Estudio Mantra), Freesound 369522
+   https://freesound.org/people/alelizama/sounds/369522/
+   Licence: CC0 1.0 Universal. The maker asks for the credit "Estudio Mantra".
+
+4. "Car Engine Contact Recording-Mini Cooper S 2019_Gear Shift" by TheLittleCrow, Freesound 669623
+   https://freesound.org/people/TheLittleCrow/sounds/669623/
+   Licence: CC0 1.0 Universal. Listening reference only.
+
+5. "Turbo Spooling and Blow Off" by EwanPenman11, Freesound 659544
+   https://freesound.org/people/EwanPenman11/sounds/659544/
+   Licence: CC0 1.0 Universal. Listening reference only.

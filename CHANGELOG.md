@@ -2,6 +2,10 @@
 
 The short version of each release, newest first. Every release has full notes in [docs/release/notes/](docs/release/notes/). OSDS was called SimCruise up to 2.0.3 and Sunday Driver up to 1.0.8 ([history](docs/history.md)).
 
+## 2.2.0 (unreleased)
+
+- **Engine sound:** every car now has its own engine layout: an inline four, a 60-degree V6 (Odyssey, Raptor) or a cross-plane V8 with its own exhaust tone (Mustang, Corvette, Camaro, Grand Cherokee). There is a turbo with spool, whoosh and blow-off (Mini, CR-V, Raptor), and the Model 3's motor whine. Recorded engine loops play when a car has them, and you can [record your own car](docs/recording-your-car.md). Settings has Master, Engine and World volume.
+
 ## 2.1.1 (2026-11-18)
 
 **Real ray-traced light, road wear and rounded corners.**

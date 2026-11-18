@@ -16,6 +16,7 @@ Licences were checked at each maker's own page on 14 November 2026.
 - [Textures, sky and trees](#textures-sky-and-trees)
 - [Fonts](#fonts)
 - [Engine, libraries and tools](#engine-libraries-and-tools)
+- [Engine sound recordings](#engine-sound-recordings)
 - [Logo and brand](#logo-and-brand)
 - [Named in our research, not used now](#named-in-our-research-not-used-now)
 
@@ -157,6 +158,21 @@ Only the models the game places are packaged. No brand names or logos are taken.
 | pako, fflate, zstddec, lerc, float16, quick-lru, web-worker, xml-utils, parse-headers, protocol-buffers-schema, resolve-protobuf-schema | Their authors (see [`licenses/`](licenses/)) | MIT, Apache 2.0 (lerc: Esri; web-worker), CC0 (xml-utils) | Helper support code |
 
 Licence texts for all of these are in [`licenses/`](licenses/).
+
+## Engine sound recordings
+
+The game plays no third-party audio. It ships order levels measured from these recordings (`data/sound/reference/*.json`), which the engine-sound test compares each car's voice with, and the team listened to them while tuning. Full texts and notes: [`licenses/Engine sound recordings.txt`](licenses/Engine%20sound%20recordings.txt).
+
+| Recording | Maker | Licence | Used for |
+| --- | --- | --- | --- |
+| [Miata Start and Stop Exterior (Freesound 523352)](https://freesound.org/people/TurboTheSergal/sounds/523352/) | TurboTheSergal | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Idle order levels for the three NB Miatas |
+| [Miata Start and Stop (Freesound 523351)](https://freesound.org/people/TurboTheSergal/sounds/523351/) | TurboTheSergal | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | The cabin idle check in `OSDS.Audio.InlineFour` (since 2.0) |
+| [Corvette C5 INOX 2001 (Freesound 360451)](https://freesound.org/people/Galarne/sounds/360451/) | Galarne | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Idle order levels for the C8 (same small-block family) |
+| [1974 Camaro Engine Start and Takeoff (Freesound 369522)](https://freesound.org/people/alelizama/sounds/369522/) | Estudio Mantra (alelizama) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Idle order levels for the 1987 Camaro (same small-block family) |
+| [Car Engine Contact Recording, Mini Cooper S 2019 (Freesound 669623)](https://freesound.org/people/TheLittleCrow/sounds/669623/) | TheLittleCrow | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Listening reference for the Mini's voice and turbo |
+| [Turbo Spooling and Blow Off (Freesound 659544)](https://freesound.org/people/EwanPenman11/sounds/659544/) | EwanPenman11 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Listening reference for the blow-off |
+
+Recorded loop banks (`data/sound/engines/`) carry their own credit and licence in their `bank.json`; a bank recorded by the project owner is CC BY 4.0 under the project.
 
 ## Logo and brand
 

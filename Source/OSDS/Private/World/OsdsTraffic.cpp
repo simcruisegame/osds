@@ -14,6 +14,7 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Presentation/OsdsCarAssets.h"
+#include "Audio/OsdsAudioMix.h"
 #include "World/OsdsRoadNetwork.h"
 #include "World/OsdsSignals.h"
 #include "World/OsdsTileBuilder.h"
@@ -815,12 +816,12 @@ void AOsdsTraffic::UpdateVoice(AOsdsTrafficCar& Car, double DistanceM, bool bSou
 		A.FalloffDistance = static_cast<float>(VoiceRangeM * 100.0) - 300.f;
 		// The player's engine sits at -12 dB as the Godot mix had it; an engine outside is
 		// heard at the same level up close.
-		Car.Voice->SetVolumeMultiplier(0.25f);
+		Car.Voice->SetVolumeMultiplier(0.25f * OsdsAudioMix::World());
 		if (const FOsdsCarPresentationProfile* Profile = Car.Presentation->GetProfile())
 		{
 			if (Profile->EngineSound.IsSet())
 			{
-				Car.Voice->ConfigureCrossPlaneV8(Profile->EngineSound->BankOfEvent, Profile->EngineSound->NearGain, Profile->EngineSound->FarGain);
+				Car.Voice->ConfigureVoice(Profile->EngineSound->Voice);
 			}
 		}
 		Car.Voice->RegisterComponent();
@@ -834,6 +835,7 @@ void AOsdsTraffic::UpdateVoice(AOsdsTrafficCar& Car, double DistanceM, bool bSou
 	In.ShaftLoad = FMath::Clamp(0.06 + 0.45 * Car.Accel, -1.0, 1.0);
 	In.Pedal = FMath::Clamp(Pull / 1.4, 0.0, 1.0);
 	In.bCabin = false;
+	Car.Voice->SetVolumeMultiplier(0.25f * OsdsAudioMix::World());
 	Car.Voice->SetEngineState(In);
 	if (!Car.Voice->IsPlaying()) Car.Voice->Start();
 }

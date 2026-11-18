@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Audio/OsdsEngineVoice.h"
 #include "Presentation/OsdsWheelBuilder.h"
 #include "Presentation/OsdsCarMaterialRoles.h"
 
@@ -172,12 +173,13 @@ struct FOsdsCarPresentationProfile
 	TOptional<FParkedDimensions> Parked;
 
 	/**
-	 * The engine's voice when it is not the default inline four: a cross-plane V8, the
-	 * bank of each firing event in firing order (0 the driver's side, whose pipe is
-	 * nearer), and how loud each bank's pipe reaches the listener.
+	 * The engine's voice ("engine_sound"): its layout (inline four, V6, cross-plane V8 with
+	 * the bank of each firing event in firing order, 0 the nearer pipe; or electric), tone,
+	 * turbo, motor and recorded loops (FOsdsEngineVoiceSpec).
 	 */
 	struct FEngineSound
 	{
+		FOsdsEngineVoiceSpec Voice;
 		TArray<int32> BankOfEvent;
 		double NearGain = 1.0;
 		double FarGain = 0.62;
