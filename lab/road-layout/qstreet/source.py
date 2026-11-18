@@ -4,7 +4,7 @@ from pyproj import Transformer
 from PIL import Image
 import io
 import os
-D=Path(os.environ['SIMCRUISE_LAYOUT_WORK'])
+D=Path(os.environ['OSDS_LAYOUT_WORK'])
 TF=Transformer.from_crs(4326,3857,always_xy=True)
 def get(file,url,cap):
  f=D/file

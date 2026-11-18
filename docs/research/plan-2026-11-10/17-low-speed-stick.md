@@ -2,7 +2,7 @@
 category physics · impact 3 · 2 d · depends: tyre-mf-combined-core, substep-chassis-coupling
 
 ## Rationale
-Below 0.8 m/s the contact is a lateral damper with c·dt/m ≈ 1.04 at 60 Hz, so the lateral velocity changes sign every tick and the car creeps about 1 m/min on a 10 % cross slope. Real-road driving is full of stops, hill holds and parking, so this matters more for SimCruise than for a racing sim.
+Below 0.8 m/s the contact is a lateral damper with c·dt/m ≈ 1.04 at 60 Hz, so the lateral velocity changes sign every tick and the car creeps about 1 m/min on a 10 % cross slope. Real-road driving is full of stops, hill holds and parking, so this matters more for OSDS than for a racing sim.
 
 ## Code claims (proposer)
 Powertrain.gd:174 is target = atan2(vy, max(1.8,|vx|)). Powertrain.gd:179 makes the relaxation length smoothstep(0.8,3.5,speed), so it is 0 at low speed. The comment at :175 claims static friction, but no stick state exists. Powertrain.gd:445 Fx = Fz·12·Δv/1.5 below 1.5 m/s acts as a damper. Powertrain.gd:453-461 blends locked braked wheels below 1.5 m/s.

@@ -1,0 +1,217 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "Presentation/OsdsCarPresentationComponent.h"
+#include "OsdsTraffic.generated.h"
+
+struct FOsdsWorldFrame;
+
+class AOsdsWorldStreamer;
+class UBoxComponent;
+class UOsdsEngineSoundComponent;
+struct FOsdsRibbon;
+
+/** Pure traffic rules, testable without a world. */
+namespace OsdsTrafficModel
+{
+	/**
+	 * The Intelligent Driver Model (Treiber, Hennecke and Helbing 2000): acceleration
+	 * (m/s^2) at speed V toward desired speed V0, with a leader GapM ahead (bumper to
+	 * bumper) closing at ClosingMps (positive when approaching). No leader: GapM < 0.
+	 */
+	OSDS_API double IdmAcceleration(double V, double V0, double GapM, double ClosingMps);
+
+	/** US urban speed limit (m/s) a road class is usually posted at. */
+	OSDS_API double SpeedLimitMps(const FString& Class);
+
+	/**
+	 * The gap (s) a waiting car accepts ahead of another car: shorter the longer it has waited,
+	 * so a steady stream never holds it for good. Never shorter in front of the player.
+	 * Left turn: 4.5 s, after 8 s 2.5 s, after 15 s 1.5 s; stop sign: 5 s, after 10 s 3 s, after 20 s 2 s.
+	 */
+	OSDS_API double GapWindowS(bool bLeftTurn, double WaitedS, bool bPlayer);
+
+	/** A motorway span the data draws crossing another road at grade: traffic keeps off it. */
+	OSDS_API bool CrossesAtGrade(const TArray<FOsdsRibbon>& Ribbons, int32 Index);
+
+	/** A road that ends here is a true dead end (a car may turn round): it ends 30 m or more inside its tile. */
+	OSDS_API bool IsTrueDeadEnd(const FOsdsWorldFrame& Frame, const FVector& EndCm, const FVector2d& Heading);
+
+	/**
+	 * Lateral offset (m, + toward the station's R) of the rightmost travel lane for a car
+	 * driving the ribbon in direction Dir (+1 along S, -1 against), at station I: the
+	 * lane the markings draw, inside any parking lane on the driver's right.
+	 */
+	OSDS_API double LaneOffsetM(const FOsdsRibbon& Ribbon, int32 I, int32 Dir, int32 Lane = 0);
+
+	/** How many travel lanes a car driving the ribbon in Dir has at station I (at least 1). */
+	OSDS_API int32 LaneCount(const FOsdsRibbon& Ribbon, int32 I, int32 Dir);
+
+	/**
+	 * The next place along the ribbon (m, station S) where a car driving in Dir from S
+	 * chooses its way: the centre of the next run of stations another carriageway crosses
+	 * (FOsdsRibbonSide::Cut) beyond 2 m ahead and not within 15 m of SkipNearS (the
+	 * junction just passed), or the ribbon's end (bEnd true).
+	 */
+	OSDS_API double NextDecisionS(const FOsdsRibbon& Ribbon, int32 Dir, double S, double SkipNearS, bool& bEnd);
+}
+
+/**
+ * One car of the moving traffic: a car body (the parked cars' models and colours) moved
+ * kinematically along a lane by AOsdsTraffic, wheels rolling and steering, brake
+ * lamps when it brakes, lamps at night, and a box the player's car can hit.
+ */
+UCLASS(NotPlaceable, Transient)
+class OSDS_API AOsdsTrafficCar : public AActor, public IOsdsWheelStateProvider
+{
+	GENERATED_BODY()
+
+public:
+	AOsdsTrafficCar();
+
+	bool Setup(const FString& InCarId, const FLinearColor& Paint);
+	virtual bool GetCarVisualState(FOsdsCarVisualState& OutState) const override;
+
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UOsdsCarPresentationComponent> Presentation;
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UBoxComponent> Collision;
+	/** The engine heard from outside, in place (only while the car is near the player). */
+	UPROPERTY(Transient)
+	TObjectPtr<UOsdsEngineSoundComponent> Voice;
+	FString CarId;
+	double Accel = 0.0;
+
+	// Path: a ribbon of a tile, driven in Dir from station position S (m along the ribbon).
+	FIntPoint Tile = FIntPoint::ZeroValue;
+	int32 Ribbon = INDEX_NONE;
+	int32 Dir = 1;
+	double S = 0.0;
+	double Speed = 0.0;
+	double DesiredSpeed = 10.0;
+	double LengthM = 4.5;
+	double TyreRadiusCm = 30.0;
+	/** World offset and heading error left by a change of ribbon, eased out over about 2 s. */
+	FVector BlendCm = FVector::ZeroVector;
+	double BlendYawDeg = 0.0;
+	double SteerRad = 0.0;
+	double Spin = 0.0;
+	/** The front-left wheel's drawn roll at the last traffic report (checks that the wheels visibly roll). */
+	double ReportedSpinRad = 0.0;
+	bool bBraking = false;
+	bool bLamps = false;
+	/** The successor chosen ahead of the ribbon's end (tile, ribbon, dir, entry S); Ribbon INDEX_NONE until chosen. */
+	FIntPoint NextTile = FIntPoint::ZeroValue;
+	int32 NextRibbon = INDEX_NONE;
+	int32 NextDir = 1;
+	double NextS = 0.0;
+	double NextTurnDeg = 0.0;
+	bool bNextChosen = false;
+	uint32 Seed = 1;
+	/**
+	 * The junction at this ribbon's end: 0 none or a priority road, 1 a stop ahead (a
+	 * minor approach, or an all-way stop between equal minor streets), 2 stopped and
+	 * waiting for a gap, 3 clear to go.
+	 */
+	int32 StopState = 0;
+	FVector JunctionCm = FVector::ZeroVector;
+	double StopBackM = 6.0;
+	double WaitS = 0.0;
+	/** Travel lane, counted from the right (0); a change eases sideways over about 3 s. */
+	int32 Lane = 0;
+	FVector LaneShiftCm = FVector::ZeroVector;
+	double LaneChangeCooldownS = 0.0;
+	/** What set the gap last frame: 0 nothing, 1 a car in the lane, 2 the player, 3 a crossing car, 4 a stop line, 5 giving way on a left turn. */
+	int32 Why = 0;
+	bool bYielding = false;
+	/** Seconds at a standstill (below 0.3 m/s), for the deadlock report and the gridlock breaker. */
+	double StandS = 0.0;
+	/** Where the thing this car waited for last frame stood (the car or player ahead or across; zero for a stop line or a yield). */
+	FVector BlockerCm = FVector::ZeroVector;
+	/** Where the chosen way on starts (m along the ribbon), whether that is the ribbon's end, and whether it is straight on. */
+	double DecisionS = 0.0;
+	bool bDecisionAtEnd = true;
+	bool bNextStraight = false;
+	/** The last junction passed straight through (not chosen again). */
+	double LastDecisionS = -1e9;
+};
+
+/**
+ * The moving traffic round the player's car: keeps about MaxCars cars within the radius,
+ * spawning them on public roads out of the driver's sight and removing them far away.
+ * Each follows its lane (the lane geometry the markings use), continues onto the next
+ * ribbon at its end (straight on across a tile seam, or a turn at a junction, slowing for
+ * it), keeps its distance from the car ahead and from the player (IDM), and drives the
+ * class's usual US speed limit, give or take a tenth.
+ */
+UCLASS(NotPlaceable, Transient)
+class OSDS_API AOsdsTraffic : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	AOsdsTraffic();
+	/** Traffic is out of the game for now (2026-11-14: the details and the driving first). The one
+	 * switch: sc.Feature.Traffic (default 0; -OsdsTraffic on the command line sets it) brings it back.
+	 * Read when the world starts: the streamer spawns the traffic actor only with it. */
+	static bool IsEnabled();
+	virtual void Tick(float DeltaSeconds) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+
+	TWeakObjectPtr<AOsdsWorldStreamer> Streamer;
+
+	int32 NumCars() const { return Cars.Num(); }
+	/** Tests: drive the traffic round this point with no player (bTestFocus). */
+	bool bTestFocus = false;
+	FVector TestFocusCm = FVector::ZeroVector;
+
+	/** Cars that have stood still longer than Seconds (the deadlock soak test reads it). */
+	int32 CountStuckCars(double Seconds = 20.0) const;
+	/** Cars that left a queue behind a car standing for good (you parked in the lane). */
+	int32 GetQueueGiveUps() const { return QueueGiveUps; }
+	/** Cars removed because the player's car was placed within ClearOnPlaceM of them. */
+	int32 GetPlacementClears() const { return PlacementClears; }
+	static constexpr double ClearOnPlaceM = 20.0;
+
+	/** Remove every car (a jump to another place: their roads are gone). */
+	void ClearCars();
+
+private:
+	struct FPose
+	{
+		FVector LocationCm = FVector::ZeroVector;
+		FVector2d Heading = FVector2d(1.0, 0.0);
+		bool bValid = false;
+	};
+
+	const FOsdsRibbon* GetRibbon(const FIntPoint& Tile, int32 Ribbon) const;
+	FPose PoseAt(const FIntPoint& Tile, int32 Ribbon, int32 Dir, double S, int32 Lane = 0) const;
+	/** Whether a car could move into Lane here: nobody within 15 m behind or 25 m ahead in it. */
+	bool LaneClear(const AOsdsTrafficCar& Car, int32 Lane, const FVector& PlayerCm) const;
+	bool Spawn(const FVector& FocusCm, const FVector& PlayerFwd, const FVector& CameraCm, const FVector& CameraFwd, bool bAnywhere);
+	/** Picks the way on at DecisionS (a junction along the ribbon, or its end when bAtEnd). */
+	bool ChooseAt(AOsdsTrafficCar& Car, double DecisionS, bool bAtEnd) const;
+	/** OsdsTrafficModel::CrossesAtGrade, once per tile and ribbon. */
+	bool CrossesAtGradeCached(const FIntPoint& Tile, const TArray<FOsdsRibbon>& Ribbons, int32 Index) const;
+	mutable TMap<TPair<FIntPoint, int32>, bool> GradeCrossings;
+	void Advance(AOsdsTrafficCar& Car, double Dt, const FVector& PlayerCm, const FVector& PlayerVelCm);
+	/** Starts, feeds or stops a car's engine voice by its distance from the listener. */
+	void UpdateVoice(AOsdsTrafficCar& Car, double DistanceM, bool bSound);
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<AOsdsTrafficCar>> Cars;
+	uint32 Random = 0x5eed1234;
+	double SinceStart = 0.0;
+	double ReportClock = 5.0;
+	int32 RibbonChanges = 0, Spawned = 0, StopsPassed = 0, LaneChanges = 0, LeftTurnYields = 0, QueueGiveUps = 0, PlacementClears = 0;
+	FVector LastFocusCm = FVector::ZeroVector;
+	bool bHaveLastFocus = false;
+	FDelegateHandle RebaseHandle;
+	/** Car-frames held at a red or late yellow signal (for the report). */
+	int64 SignalHolds = 0;
+	TWeakObjectPtr<const class AOsdsSignals> CachedSignals;
+	double LastSignalLookup = -10.0;
+};

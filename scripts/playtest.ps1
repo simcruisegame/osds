@@ -7,8 +7,8 @@
   it fetches origin, puts a dedicated worktree (default D:\sc\playtest) on origin/main
   (or -Ref), copies in tools\atlas.exe from this checkout when it is there, and runs
   scripts\package.ps1 -Zip in that worktree under the PC-wide editor lock. Then it starts the
-  packaged game headless with -SimCruiseShellSelfTest (stopped after -SmokeMinutes) and copies
-  the zip to -OutDir as SimCruise-<version>-<date>-<commit>.zip with a NOTES.txt: the commits
+  packaged game headless with -OsdsShellSelfTest (stopped after -SmokeMinutes) and copies
+  the zip to -OutDir as OSDS-<version>-<date>-<commit>.zip with a NOTES.txt: the commits
   since the last play-test build and the smoke-test result. Keeps the newest -Keep builds.
   Nothing is published; share the zip by hand.
 
@@ -19,11 +19,11 @@
   The play-test worktree (default D:\sc\playtest; made on first use).
 
 .PARAMETER OutDir
-  Where the zips go (default D:\SimCruise-playtests).
+  Where the zips go (default D:\OSDS-playtests).
 
 .PARAMETER SkipPreflight
   Build even when no passed pre-flight (scripts\preflight.ps1) of this commit is in
-  %LOCALAPPDATA%\SimCruise\preflight-index.csv. Prints a warning; do not give such a
+  %LOCALAPPDATA%\OSDS\preflight-index.csv. Prints a warning; do not give such a
   build to the owner.
 
 .EXAMPLE
@@ -33,7 +33,7 @@ param(
     [switch]$SkipPreflight,
     [string]$Ref = 'origin/main',
     [string]$Worktree = 'D:\sc\playtest',
-    [string]$OutDir = 'D:\SimCruise-playtests',
+    [string]$OutDir = 'D:\OSDS-playtests',
     [int]$Keep = 5,
     [int]$SmokeMinutes = 10,
     [int]$LockTimeoutMinutes = 120,
@@ -50,7 +50,7 @@ if ($LASTEXITCODE -ne 0) { throw 'git fetch failed' }
 $Commit = (& git -C $Root rev-parse --short $Ref).Trim()
 
 # Only a commit that passed the pre-flight goes to the owner.
-$Index = Join-Path $env:LOCALAPPDATA 'SimCruise\preflight-index.csv'
+$Index = Join-Path $env:LOCALAPPDATA 'OSDS\preflight-index.csv'
 $Preflight = if (Test-Path $Index) { Import-Csv $Index | Where-Object { $_.commit -eq $Commit } | Select-Object -Last 1 } else { $null }
 if ($Preflight -and $Preflight.result -eq 'PASS') {
     Write-Host "Pre-flight of $Commit passed: $($Preflight.report)"
@@ -83,8 +83,8 @@ if (Test-Path $Atlas) {
 
 # package.ps1 first runs an editor commandlet, so the worktree's editor module must be built
 # (a new worktree has none). Unreal Build Tool queues on its own mutex.
-Write-Host "Building SimCruiseEditor in $Worktree"
-& (Join-Path $EngineDir 'Engine\Build\BatchFiles\Build.bat') SimCruiseEditor Win64 Development "-Project=$(Join-Path $Worktree 'SimCruise.uproject')" -WaitMutex -NoHotReloadFromIDE | Out-Host
+Write-Host "Building OSDSEditor in $Worktree"
+& (Join-Path $EngineDir 'Engine\Build\BatchFiles\Build.bat') OSDSEditor Win64 Development "-Project=$(Join-Path $Worktree 'OSDS.uproject')" -WaitMutex -NoHotReloadFromIDE | Out-Host
 if ($LASTEXITCODE -ne 0) { Write-Host 'EDITOR BUILD FAILED'; exit 1 }
 
 if (-not (Enter-EditorLock -TimeoutMinutes $LockTimeoutMinutes -Why "play-test build of $Commit")) { exit 1 }
@@ -93,14 +93,14 @@ try {
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Worktree 'scripts\package.ps1') -Zip -EngineDir $EngineDir | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Host 'PACKAGE FAILED'; exit 1 }
 
-    $Exe = Join-Path $Worktree 'Saved\Package\Windows\SimCruise.exe'
+    $Exe = Join-Path $Worktree 'Saved\Package\Windows\OSDS.exe'
     # Off-screen, not -nullrhi: a cooked game without a renderer asserts when it builds the car
     # and world meshes at run time ("RenderData should not initialize resources in headless cooked runs").
-    Write-Host 'Smoke test: the packaged game, off-screen, -SimCruiseShellSelfTest'
+    Write-Host 'Smoke test: the packaged game, off-screen, -OsdsShellSelfTest'
     $Smoke = 'not run'
-    $GameLog = Join-Path $Worktree 'Saved\Package\Windows\SimCruise\Saved\Logs\SimCruise.log'
+    $GameLog = Join-Path $Worktree 'Saved\Package\Windows\OSDS\Saved\Logs\OSDS.log'
     if (Test-Path $GameLog) { Remove-Item $GameLog -Force }
-    $Proc = Start-Process -FilePath $Exe -ArgumentList '-RenderOffscreen -windowed -ResX=640 -ResY=360 -unattended -nopause -nosplash -SimCruiseShellSelfTest' -PassThru -WindowStyle Hidden
+    $Proc = Start-Process -FilePath $Exe -ArgumentList '-RenderOffscreen -windowed -ResX=640 -ResY=360 -unattended -nopause -nosplash -OsdsShellSelfTest' -PassThru -WindowStyle Hidden
     if (-not $Proc.WaitForExit($SmokeMinutes * 60 * 1000)) {
         Stop-ProcessTree -ProcessId $Proc.Id
         $Smoke = "TIMED OUT after $SmokeMinutes min"
@@ -125,14 +125,14 @@ Copy-Item $Zip.FullName $Target -Force
 $LastFile = Join-Path $OutDir 'last-commit.txt'
 $Since = if (Test-Path $LastFile) { (Get-Content $LastFile -Raw).Trim() } else { '' }
 $Log = if ($Since) { & git -C $Root log --no-merges --format='- %s' "$Since..$Commit" } else { & git -C $Root log --no-merges --format='- %s' -n 30 $Commit }
-$Notes = @("SimCruise play-test build $Name, commit $Commit, $(Get-Date -Format 'yyyy-MM-dd HH:mm')", '',
-    "Smoke test (packaged game, -SimCruiseShellSelfTest): $Smoke", '',
+$Notes = @("OSDS play-test build $Name, commit $Commit, $(Get-Date -Format 'yyyy-MM-dd HH:mm')", '',
+    "Smoke test (packaged game, -OsdsShellSelfTest): $Smoke", '',
     $(if ($Since) { "Changes since the last play-test build ($Since):" } else { 'Latest changes:' })) + @($Log)
 Set-Content -Path ($Target -replace '\.zip$', '-NOTES.txt') -Value $Notes -Encoding utf8
 Set-Content -Path $LastFile -Value $Commit
 
 # Keep the newest builds only.
-Get-ChildItem $OutDir -Filter 'SimCruise-*.zip' | Sort-Object LastWriteTime -Descending | Select-Object -Skip $Keep | ForEach-Object {
+Get-ChildItem $OutDir -Filter 'OSDS-*.zip' | Sort-Object LastWriteTime -Descending | Select-Object -Skip $Keep | ForEach-Object {
     Remove-Item $_.FullName -Force
     $N = $_.FullName -replace '\.zip$', '-NOTES.txt'
     if (Test-Path $N) { Remove-Item $N -Force }

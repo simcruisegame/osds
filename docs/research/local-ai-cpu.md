@@ -42,8 +42,8 @@ CPU times are measured on this PC with ONNX Runtime on 2 threads unless marked (
 | Model | Weights licence | Known training data | Size | CPU speed | What it gives the game | Status |
 |---|---|---|---|---|---|---|
 | Satlas Aerial_SwinB_SI (Allen AI) | ODC-BY 1.0 | SatlasPretrain: NAIP (PD), OSM and MS Buildings (ODbL), WorldCover (CC BY 4.0), own annotations (ODC-BY); ImageNet start | 89.6 M params; ONNX 352 MB fp32, 88 MB int8 | 1.40 s per 512 px tile (1 m/px), 0.34 s per 256 px; peak RAM 0.74 GB fp32, 0.50 GB int8 | Backbone of the aerial eye: surface classes per cell | **In use** (teacher; heads trained by us) |
-| SimCruise aerial head | MIT (ours) | USGS aerial (PD), OSM (ODbL), Meta/WRI CHM v2 (CC BY 4.0), ESA WorldCover 2021 (CC BY 4.0) | 0.08 M params | under 5 ms | Class probabilities from Satlas features | **In use** |
-| SimCruise aerial student (planned) | MIT (ours) | Same labels plus the Satlas eye's soft labels | 2-8 M params (target) | target p95 1.5 s per tile, 2 cores, int8 | The shipped eye (Satlas stays a development teacher) | Next |
+| OSDS aerial head | MIT (ours) | USGS aerial (PD), OSM (ODbL), Meta/WRI CHM v2 (CC BY 4.0), ESA WorldCover 2021 (CC BY 4.0) | 0.08 M params | under 5 ms | Class probabilities from Satlas features | **In use** |
+| OSDS aerial student (planned) | MIT (ours) | Same labels plus the Satlas eye's soft labels | 2-8 M params (target) | target p95 1.5 s per tile, 2 cores, int8 | The shipped eye (Satlas stays a development teacher) | Next |
 | DeepForest tree (weecology) | MIT | NEON 10 cm RGB (CC BY 4.0), lidar-made labels plus hand labels | 32.3 M params | (estimate) 0.3-0.6 s per 400 px window | Tree crown boxes, but trained at 10 cm: weak on 0.6-1 m NAIP | Low priority: CHM v2 crowns already exist |
 | Meta/WRI canopy height v2 (map, not a model we run) | CC BY 4.0 (data) | DINOv3 model by Meta | data only | 0 (download) | Canopy height and crowns | Already in the game (helper) |
 | SAM 2 tiny / small | Apache-2.0 | SA-1B (research licence), SA-V | 39 / 46 M | (estimate) 1-2 s per image | Masks of objects | Allowed; no clear use yet |
@@ -81,11 +81,11 @@ Gain for the player, CPU cost, and what happens when the model is absent.
   the 1/4-resolution features, trained on full-resolution tiles and on tiles degraded to the game's
   own zoom-14 photo (2.4 m/px). Held-out places: Gilbert AZ, Seattle WA, Jasper AR, Selma AL,
   Hilo HI and three random places.
-- In the game (`Live/SimCruiseAerialEye`): the world streamer queues each tile with its photo; one
+- In the game (`Live/OsdsAerialEye`): the world streamer queues each tile with its photo; one
   thread at below-normal priority cuts the tile out of the zoom-14 photo, runs the ONNX model with
   NNERuntimeORTCpu, writes 12 channels of 256 x 256 (the scan contract names) to
   `Saved/Scan/eyes/satlas-v1/16/<x>/<y>.eye`, and keeps the last 64 tiles in memory. A second drive
-  reads the disk cache and runs no inference. `-SimCruiseNoEye` turns it off; without the model file
+  reads the disk cache and runs no inference. `-OsdsNoEye` turns it off; without the model file
   it is off.
 
 Results: section 6.
@@ -131,7 +131,7 @@ Gate (agreed with the coordinator): within 5 points of the teacher for the class
 from the map. The first row of the student passes; the second trades grass for water and fails.
 Pictures checked on held-out places: Seattle, Gilbert and Jasper look right; **Hilo, Hawaii fails**
 (the whole town reads as roof; Hawaii's NAIP photos are darker and bluer), so the student runs only on
-the lower 48 states (`FSimCruiseAerialEye::IsLower48`) until it learns Hawaii and Alaska.
+the lower 48 states (`FOsdsAerialEye::IsLower48`) until it learns Hawaii and Alaska.
 
 ## 7. Next (v2.0.4): restoration and generation on the CPU
 

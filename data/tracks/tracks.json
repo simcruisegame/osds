@@ -1,6 +1,6 @@
 {
  "version": 1,
- "note": "Race tracks of the pause menu (SimCruiseTracks), made by scripts/tracks/curate.py. Start points, bearings, centres and oval loops come from OpenStreetMap highway=raceway ways (ODbL); lengths and banking are the published figures of each track (Wikipedia infobox, November 2026). OSDS is not affiliated with or endorsed by any track or racing series.",
+ "note": "Race tracks of the pause menu (OsdsTracks), made by scripts/tracks/curate.py. Start points, bearings, centres and oval loops come from OpenStreetMap highway=raceway ways (ODbL); lengths and banking are the published figures of each track (Wikipedia infobox, November 2026). OSDS is not affiliated with or endorsed by any track or racing series.",
  "tracks": [
   {
    "id": "daytona",

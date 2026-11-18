@@ -1,6 +1,6 @@
 # Lane markings from mapped lanes and local surveys
 
-> Former name: this study was written when SimCruise was called "Sunday Driver"; the app, paths and commands it mentions under that name are now SimCruise.
+> Former name: this study was written when OSDS was called "Sunday Driver"; the app, paths and commands it mentions under that name are now OSDS.
 
 On a mapped one-way arterial with a single motor lane, the previous renderer drew a white divider between two implied motor lanes. The road-layout helper now checks explicit OpenStreetMap lane counts against the visible game road. Other refinements, such as painted parking boundaries, need separate observations.
 

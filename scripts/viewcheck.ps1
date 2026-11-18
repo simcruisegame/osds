@@ -1,12 +1,12 @@
 ﻿<#
 .SYNOPSIS
-  The view check gate: starts the game at fixed places, lets ASimCruiseViewCheck look at
+  The view check gate: starts the game at fixed places, lets AOsdsViewCheck look at
   the player's view, and fails when a view that must pass fails (or the other way round).
 
 .DESCRIPTION
   Each case runs the editor binaries as a game (-game, Ultra graphics, 1280x720, under the
-  one-editor lock of scripts\EditorLock.ps1, taken once for all the cases) with -SimCruiseViewCheck -SimCruiseViewCheckQuit,
-  offline (-SimCruiseNoLive -SimCruiseNoNeural) on the bundled Miami Beach tiles. The game
+  one-editor lock of scripts\EditorLock.ps1, taken once for all the cases) with -OsdsViewCheck -OsdsViewCheckQuit,
+  offline (-OsdsNoLive -OsdsNoNeural) on the bundled Miami Beach tiles. The game
   writes one line:
 
     VIEWCHECK PASS|FAIL place="..." road=..% building=..% ... shot=<png> reason=<...>
@@ -14,7 +14,7 @@
   Cases:
     ocean-drive  the bundled Ocean Drive start                      must PASS
     collins-ave  a second start on the bundled tiles (Collins Ave)   must PASS
-    test-pad     the drive robot's test pad (-SimCruiseDriveTestPad) must FAIL
+    test-pad     the drive robot's test pad (-OsdsDriveTestPad) must FAIL
 
   A missing VIEWCHECK line fails the gate. Each run copies the screenshots and their JSON
   statistics to Saved\ViewCheck\<date-time>\ (the last 10 runs are kept) and to
@@ -42,16 +42,16 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ReviewLib.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
 $ReviewRoot = Get-ReviewRoot $Root
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
 
-$Common = @('-game', '-SimCruiseWorld', '-SimCruiseNoLive', '-SimCruiseNoNeural', '-SimCruiseGraphics=ultra',
-    '-SimCruiseViewCheck', '-SimCruiseViewCheckQuit', '-NoLiveCoding', '-nosplash', '-unattended', '-log') + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution)
+$Common = @('-game', '-OsdsWorld', '-OsdsNoLive', '-OsdsNoNeural', '-OsdsGraphics=ultra',
+    '-OsdsViewCheck', '-OsdsViewCheckQuit', '-NoLiveCoding', '-nosplash', '-unattended', '-log') + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution)
 $Defs = @{
-    'ocean-drive' = @{ Expect = 'PASS'; Args = @('-SimCruiseBundledStart') }
-    'collins-ave' = @{ Expect = 'PASS'; Args = @('-SimCruiseStart=25.7850,-80.1318', '"-SimCruiseStartRoad=Collins Avenue"') }
-    'test-pad'    = @{ Expect = 'FAIL'; Args = @('-SimCruiseBundledStart', '-SimCruiseDriveTest', '-SimCruiseDriveTestPad') }
+    'ocean-drive' = @{ Expect = 'PASS'; Args = @('-OsdsBundledStart') }
+    'collins-ave' = @{ Expect = 'PASS'; Args = @('-OsdsStart=25.7850,-80.1318', '"-OsdsStartRoad=Collins Avenue"') }
+    'test-pad'    = @{ Expect = 'FAIL'; Args = @('-OsdsBundledStart', '-OsdsDriveTest', '-OsdsDriveTestPad') }
 }
 
 # A game run needs no platform SDK check: skip the start-up call to Unreal Build Tool,

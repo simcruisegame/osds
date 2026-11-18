@@ -100,7 +100,7 @@ Budget check: `CORR`, `GEOL`, `PROC`, `TREE` add about 1-3 MB per tile before zs
 - REGEN (2025) distils that into a faster image-to-image network: **33.5 ms per frame at 960 x 512 on an RTX 4090**, 11.5 GB of memory, no TensorRT; the original method takes about 1.1 s per frame. Temporal stability was not measured. Trained on GTA V frames and Cityscapes. [V] https://arxiv.org/pdf/2508.17061
 - NVIDIA DLSS 5 ("3D-guided neural rendering", announced March 2026, in games from about September 2026): a last rendering stage that adds lighting and material detail from the engine's colour and motion vectors; deterministic, one frame in and one out; developer controls for "structure" and "tone" intensity and masks; **RTX 50 series only**. [V] https://nvidia.com/en-us/geforce/news/dlss-5-3d-guided-neural-rendering/
 
-**Assessment for SimCruise.**
+**Assessment for OSDS.**
 
 | Question | Answer |
 |---|---|

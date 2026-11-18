@@ -44,7 +44,7 @@ Per tile on CPU, cached in the scan map, any US place with a fallback, makers' l
 
 ## 3. GPU budget (performance-engineer)
 
-Ultra measured 21.5 ms GPU (45 fps), about 5 ms over 60 Hz. Savings (estimates): moving shadow pages 0.5-1.0 ms; Lumen GI High under Ultra 1.0-1.5 ms; mirror at half resolution 0.5-0.8 ms (and even pacing); reflections max roughness 0.4 0.5-0.8 ms; foliage without shadow and wind past 92 m 0.3-0.6 ms. Input delay: frame cap and a 15 ms dynamic-resolution budget, expected 55-65 ms at Ultra (from 96 ms). New detail goes into baked per-tile CPU textures first, then HISM with impostors; no new material layers, no new tile-mesh geometry. Rule: each new detail costs at most 0.3 ms GPU p95 at Ultra and has an off switch; measured with `-SimCruiseDrivePerf`, seat view, two runs on and two off.
+Ultra measured 21.5 ms GPU (45 fps), about 5 ms over 60 Hz. Savings (estimates): moving shadow pages 0.5-1.0 ms; Lumen GI High under Ultra 1.0-1.5 ms; mirror at half resolution 0.5-0.8 ms (and even pacing); reflections max roughness 0.4 0.5-0.8 ms; foliage without shadow and wind past 92 m 0.3-0.6 ms. Input delay: frame cap and a 15 ms dynamic-resolution budget, expected 55-65 ms at Ultra (from 96 ms). New detail goes into baked per-tile CPU textures first, then HISM with impostors; no new material layers, no new tile-mesh geometry. Rule: each new detail costs at most 0.3 ms GPU p95 at Ultra and has an off switch; measured with `-OsdsDrivePerf`, seat view, two runs on and two off.
 
 ## 4. v2.0.3 scope and order
 

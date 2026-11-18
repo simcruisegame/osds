@@ -1,6 +1,6 @@
 # Lighting director: study notes
 
-Role: light, exposure, HDR and colour-science expert for SimCruise.
+Role: light, exposure, HDR and colour-science expert for OSDS.
 Question this role answers: is the light in the frame physically correct, and does the picture reach the display the way a mastering colourist ("Dolby style") would deliver it?
 Style: ASD-STE100 Simplified Technical English. Short sentences. Active voice.
 Status of facts: each fact has a source in section 7. "(unverified)" marks a fact that we did not check in the primary source.
@@ -25,8 +25,8 @@ Rule: fix an error in the layer where it is. Do not fix a wrong lamp with exposu
 - Sky light: luminance in cd/m² (an HDR value of 1.0 × intensity) [L2].
 - Point, spot and rect lights: candela, lumen or unitless. 1 cd = 1 lm/sr [L2].
 - Rule: use candela for spot lights. Epic: lumens of a spot light depend on the cone angle; candela does not [L2].
-- Emissive material: 1.0 = 1 cd/m² before exposure (SimCruise uses this; `SimCruiseCarMaterialLibrary.cpp:895`).
-- Rule: with `SkyAtmosphere`, set the sun at its illuminance above the atmosphere. The atmosphere applies the transmittance per pixel. SimCruise: 127.8 klx at 1 AU (`SimCruiseDaylightModel.cpp:66-70`). (Epic guidance on this is in the SkyAtmosphere docs, unverified page.)
+- Emissive material: 1.0 = 1 cd/m² before exposure (OSDS uses this; `OsdsCarMaterialLibrary.cpp:895`).
+- Rule: with `SkyAtmosphere`, set the sun at its illuminance above the atmosphere. The atmosphere applies the transmittance per pixel. OSDS: 127.8 klx at 1 AU (`OsdsDaylightModel.cpp:66-70`). (Epic guidance on this is in the SkyAtmosphere docs, unverified page.)
 - Rule: keep the sun colour white at the top of the atmosphere. The atmosphere reddens it. Do not add a temperature to the sun as well (double reddening).
 
 ### 2.2 Daylight and night numbers (ground, horizontal)
@@ -41,7 +41,7 @@ Rule: fix an error in the layer where it is. Do not fix a wrong lamp with exposu
 | Full moon high in the sky | about 0.1-0.3 lx | -4 to -2.5 |
 | Moonless, clear, no city | about 0.001 lx | about -11 |
 
-Source: IES daylight model as coded in `SimCruiseDaylightModel.cpp`, checked by `SimCruise.Environment.Daylight.Illuminance` [L6, L7].
+Source: IES daylight model as coded in `OsdsDaylightModel.cpp`, checked by `OSDS.Environment.Daylight.Illuminance` [L6, L7].
 
 - Meter equation (ISO 2720): EV100 = log2(L × 100 / K), K = 12.5. A grey card: L = 0.18 × E / π [L6].
 - Unreal histogram: the target exposure is the mean log luminance of the pixels between Low % and High %. Defaults since 4.25 are 10 % and 90 % [L3].
@@ -58,7 +58,7 @@ Source: IES daylight model as coded in `SimCruiseDaylightModel.cpp`, checked by 
 - Rule: a lit commercial street renders its asphalt at about 0.6-1.2 cd/m². Check the rendered value, not only the lamp setting.
 - Road luminance from low beams alone, 0-32 m ahead: 0.41 cd/m² is the minimum drivers accept; 0.88 cd/m² reads "bright" at standstill; a full-output LED low beam reached 2.08 cd/m² (Erkan et al. 2021) [L9]. A 2001 halogen low beam gives less (unverified; assume 0.3-0.8 cd/m²).
 - Rule: the driver adapts to the road luminance, about 0.3-1 cd/m² with low beams on an unlit road. Use that luminance for the night meter. Do not use the illuminance on a card that faces the lamps.
-- Halogen low beam: peak about 15-20 kcd, CCT about 3200 K (unverified for the NB; SimCruise uses 15 000 cd).
+- Halogen low beam: peak about 15-20 kcd, CCT about 3200 K (unverified for the NB; OSDS uses 15 000 cd).
 - LED street luminaires: 3000-4000 K; high-pressure sodium about 2000-2100 K (unverified).
 - Real street luminaires (cobra heads, IES Type II/III) throw their peak at about 60-75° from nadir, not straight down. Use an IES profile when cost allows; Unreal spot/point lights take IES textures (unverified for runtime-made lights).
 - Unreal spot attenuation: the cone term is Square(saturate((cos θ − cos outer) / (cos inner − cos outer))). It multiplies any light function. The distance window is Square(saturate(1 − (d/r)^4)) for inverse-square lights (engine shader, unverified for 5.8).
@@ -94,7 +94,7 @@ Source: IES daylight model as coded in `SimCruiseDaylightModel.cpp`, checked by 
 
 - Car paint: base coat under a clear coat. Clear coat F0 about 0.04 (IOR 1.5). Clear-coat roughness about 0.02-0.06 on a polished car (unverified range).
 - A dark paint (British Racing Green) is mostly reflection: what the clear coat reflects decides the look. Missing environment in reflections makes dark paint look like plastic.
-- Wet asphalt: albedo falls to about 0.6 of dry (Lekner and Dorf 1988, as cited in `SimCruiseWorldResources.cpp:151`); a water film makes it a mirror at grazing angles.
+- Wet asphalt: albedo falls to about 0.6 of dry (Lekner and Dorf 1988, as cited in `OsdsWorldResources.cpp:151`); a water film makes it a mirror at grazing angles.
 - Asphalt dry albedo about 0.05-0.12; concrete 0.25-0.35; fresh white paint 0.8 (unverified range; the lab uses 0.085 and 0.30).
 
 ### 2.7 Global illumination and reflections on the 28 W GPU
@@ -109,26 +109,26 @@ Source: IES daylight model as coded in `SimCruiseDaylightModel.cpp`, checked by 
 
 - Working colour space in Unreal: linear Rec.709/sRGB primaries, D65 white.
 - Rule: author albedo from sRGB chips with an sRGB-to-linear conversion (`FLinearColor::FromSRGBColor`; the lab does this).
-- Rule: signal colours (brake red, amber) can lie outside sRGB. Keep them saturated and bright in the red channel only, so they do not tone-map to salmon (SimCruise does this).
+- Rule: signal colours (brake red, amber) can lie outside sRGB. Keep them saturated and bright in the red channel only, so they do not tone-map to salmon (OSDS does this).
 - Rule: perceptual shifts (Purkinje blue at night, mesopic desaturation) belong in the grade, not in the light colour. Physically, moonlight is slightly redder than sunlight (unverified CCT about 4100 K).
 - Rule: white balance follows the illuminant a camera would balance for. Sunlit grey in a daylight photo is slightly warm (Commons Ocean Drive photo: sunlit asphalt sRGB 136, 130, 121; `docs/unreal-architecture.md:461`).
 
-## 3. How to judge SimCruise
+## 3. How to judge OSDS
 
 ### 3.1 Files to read first
 
-1. `Source/SimCruise/Private/Environment/SimCruiseDaylightModel.cpp` and its header (units, meter, night display curve).
-2. `Source/SimCruise/Private/Environment/SimCruiseEnvironment.cpp` (`UpdateSky`, `ApplyExposure`, `ApplyFog`, `SetArtificialIlluminanceLux`).
-3. `Source/SimCruise/Public/Environment/SimCruiseEnvironment.h` (exposure band, compensation, aerosol).
+1. `Source/OSDS/Private/Environment/OsdsDaylightModel.cpp` and its header (units, meter, night display curve).
+2. `Source/OSDS/Private/Environment/OsdsEnvironment.cpp` (`UpdateSky`, `ApplyExposure`, `ApplyFog`, `SetArtificialIlluminanceLux`).
+3. `Source/OSDS/Public/Environment/OsdsEnvironment.h` (exposure band, compensation, aerosol).
 4. `Config/DefaultEngine.ini` lines 7-52 (auto exposure, local exposure, Lumen, pre-exposure).
-5. `Config/DefaultScalability.ini` and `SimCruiseGraphics.cpp` (Lumen per preset).
-6. `Source/SimCruise/Private/Vehicle/SimCruiseVehicle.cpp:135-221` (low beams, night adaptation) and `Public/Vehicle/SimCruiseVehicle.h:127-133`.
-7. `Source/SimCruise/Private/Presentation/SimCruiseLowBeamPattern.cpp` (beam pattern).
-8. `Source/SimCruise/Private/World/SimCruiseWorldStreamer.cpp:380-480` (street lights, sky glow).
-9. `Source/SimCruise/Private/World/SimCruiseWorldResources.cpp` (asphalt wetness, window and facade emissive).
-10. `Source/SimCruise/Private/Presentation/SimCruiseCarMaterialLibrary.cpp` (paint, lamps in nits).
+5. `Config/DefaultScalability.ini` and `OsdsGraphics.cpp` (Lumen per preset).
+6. `Source/OSDS/Private/Vehicle/OsdsVehicle.cpp:135-221` (low beams, night adaptation) and `Public/Vehicle/OsdsVehicle.h:127-133`.
+7. `Source/OSDS/Private/Presentation/OsdsLowBeamPattern.cpp` (beam pattern).
+8. `Source/OSDS/Private/World/OsdsWorldStreamer.cpp:380-480` (street lights, sky glow).
+9. `Source/OSDS/Private/World/OsdsWorldResources.cpp` (asphalt wetness, window and facade emissive).
+10. `Source/OSDS/Private/Presentation/OsdsCarMaterialLibrary.cpp` (paint, lamps in nits).
 11. `docs/unreal-architecture.md` sections "Light in physical units", "Against photographs of Ocean Drive", "Light that is not the sky's".
-12. `Source/SimCruise/Private/Environment/Tests/SimCruiseEnvironmentTests.cpp`, `Private/Tests/DriveIntegrationTests.cpp` (`SimCruise.Drive.LowBeams`).
+12. `Source/OSDS/Private/Environment/Tests/OsdsEnvironmentTests.cpp`, `Private/Tests/DriveIntegrationTests.cpp` (`OSDS.Drive.LowBeams`).
 
 ### 3.2 Checks
 
@@ -146,13 +146,13 @@ Source: IES daylight model as coded in `SimCruiseDaylightModel.cpp`, checked by 
 
 ### 3.3 Test methods
 
-- Lighting lab: `-SimCruiseLab -SimCruiseLabShots=name@<UTC> -SimCruiseLabViews=street,props,road`. Read the probe points in the JSON sidecar. Convert sRGB to linear before you compare.
+- Lighting lab: `-OsdsLab -OsdsLabShots=name@<UTC> -OsdsLabViews=street,props,road`. Read the probe points in the JSON sidecar. Convert sRGB to linear before you compare.
 - `ShowFlag.VisualizeHDR 1` and `r.EyeAdaptation.VisualizeDebugType 1`: show the histogram, target EV100 and current EV100 [L3].
-- `SimCruise.Env.Report`: logs reference EV and band.
-- Drive capture: `-SimCruiseDriveCapture` at noon and at 22:00 local. Run the histogram script below on the PNGs.
+- `OSDS.Env.Report`: logs reference EV and band.
+- Drive capture: `-OsdsDriveCapture` at noon and at 22:00 local. Run the histogram script below on the PNGs.
 - Photo match: licensed photos of the same place and hour (Commons with CC licence, Panoramax). Compare sunlit grey, shade grey, sky at 25° elevation, histogram percentiles. Same metric in both.
 - Histogram script (Python, Pillow + NumPy): luma Y = 0.2126 R + 0.7152 G + 0.0722 B on sRGB codes; report p1, p50, p99, % at ≥ 254, % at ≤ 3.
-- Automation: `SimCruise.Environment.*`, `SimCruise.Drive.LowBeams`, `SimCruise.Presentation.LowBeamPattern`.
+- Automation: `OSDS.Environment.*`, `OSDS.Drive.LowBeams`, `OSDS.Presentation.LowBeamPattern`.
 
 ## 4. Common failure modes
 
@@ -186,7 +186,7 @@ Source: IES daylight model as coded in `SimCruiseDaylightModel.cpp`, checked by 
 - [L4] Epic Games, Auto Exposure: https://dev.epicgames.com/documentation/en-us/unreal-engine/auto-exposure-in-unreal-engine
 - [L5] Lagarde and de Rousiers, Moving Frostbite to Physically Based Rendering 3.0, SIGGRAPH 2014 course notes: https://blog.selfshadow.com/publications/s2014-shading-course/frostbite/s2014_pbs_frostbite_slides.pdf
 - [L6] ISO 2720:1974, General purpose photographic exposure meters (K = 12.5). Paid standard; value as used in the code and in [L5].
-- [L7] IES Lighting Handbook daylight model (as cited in `SimCruiseDaylightModel.h`). Not checked in the primary text.
+- [L7] IES Lighting Handbook daylight model (as cited in `OsdsDaylightModel.h`). Not checked in the primary text.
 - [L8] TxDOT Highway Illumination Manual, Illumination Levels (ANSI/IES RP-8-14 tables): https://www.txdot.gov/manuals/trf/hwi/lighting_design_and_layout/illumination_levels-i1004163.html
 - [L9] Erkan et al., Determination of Speed-Dependent Roadway Luminance for an Adequate Feeling of Safety at Nighttime Driving, Vehicles 3(4) 2021, CC BY: https://www.mdpi.com/2624-8921/3/4/49
 - [L10] Dolby, Dolby Vision Best Practices for Color Grading v4: https://professional.dolby.com/siteassets/pdfs/dolby_vision_best-practices_colorgrading_v4.pdf
@@ -199,42 +199,42 @@ Source: IES daylight model as coded in `SimCruiseDaylightModel.cpp`, checked by 
 ## What I now know (onboarding, 2026-11-14)
 
 **How my area works today.**
-- Sun position: `FSimCruiseSolarPosition::Sun/Moon` (NOAA/Meeus, refraction, topocentric moon) works for any latitude, longitude and UTC. The NREL SPA test passes to 0.03°. `UpdateSky` runs every 2 s (`SimCruiseEnvironment.cpp:372-407`).
-- Sun light: 1361 W/m² × 93.9 lm/W = 127.8 klx / R², white, set at the top of the atmosphere. `SkyAtmosphere` applies the transmittance per pixel (`SimCruiseDaylightModel.cpp:7-8,66-70`; `SimCruiseEnvironment.cpp:383-390`). Shadows are on above -1°. The light is off below -18°.
-- Moon: Allen's phase law, 0.32 lx at full moon (`SimCruiseDaylightModel.cpp:118-125`). The light colour is (0.86, 0.93, 1.0), so the Purkinje shift is in the light and not in the grade (`SimCruiseEnvironment.cpp:92`).
-- Meter: the IES daylight model gives the horizontal lux. Then an 18 % card, K = 12.5, gives `ReferenceEV100` (`SimCruiseDaylightModel.cpp:88-109`). `DisplayEV100` has a knee at EV 10 and a slope of 0.55 below it (`:111-116`). Histogram 10-90 %. Band is Display-3 to Display-0.5. Bias is +0.2, plus -0.3 by day (`SimCruiseEnvironment.cpp:437-451`; `SimCruiseEnvironment.h:156-181`). Saturation falls to 0.35 at night (`:479-481`).
-- Haze: Mie = 3.912/V - 0.0116/km, floor 0.014/km. If CAMS AOD exists and V ≥ 10 km, Mie = τ / 0.7 km. SSA 0.93, g 0.76, Ångström 0.7 (`SimCruiseEnvironment.cpp:31,257-274`; `.h:193-197`). Below V = 8 km, the remaining extinction is a ground fog with a 150 m scale height (`:296-315`).
-- Clouds: Epic's simple material. The layer is fixed at 1.2 km to 7.2 km ("Florida fair-weather cumulus") (`SimCruiseEnvironment.cpp:329-331`). The coverage knots run from CLR -0.5 to OVC 0.35 (`SimCruiseWeather.cpp:104`).
-- Weather input: `USimCruiseLiveWorldSubsystem::ApplyWeather` merges Open-Meteo, a METAR within 40 km and CAMS, then calls `SetWeather` (`SimCruiseLiveWorldSubsystem.cpp:833-848`). The road wets with τ = 180 s and dries with τ = 900 s (`SimCruiseWeather.cpp:91-97`).
-- Time: `StartInDaylight` sets 10:00 local solar time from longitude/15 (`SimCruiseEnvironment.cpp:204-218`; `.h:62`). No time-zone data is necessary.
-- Altitude: world Z is the height above sea level in NAVD88 (`SimCruiseTileBuilder.cpp:25`). `ElevationM` stays 0 in normal play, so the atmosphere's ground is at Z = 0. Rayleigh at altitude is correct.
-- Street lights: `BuildStreetLights` puts a pole every 33 m, staggered side to side, on every non-service road edge that is not rural, with 8.5 m poles or 5.2 m Deco poles (`SimCruiseTileDetail.cpp:1261-1345`). A pool of 24 spot lights is used: 1800 cd straight down, cone 50/74°, radius 32 m, 3000 K, no shadows. The lights fade in as the sun goes from 2° to -4° (`SimCruiseWorldStreamer.cpp:402-480`). Sky glow = 0.06 cd/m² × min(lamps/300, 1) (`:388-399`).
-- Low beams: 15 000 cd per lamp, 3200 K, aimed 1.5° down, cone 30/32°, radius 250 m. A light function gives a -0.57° cut-off and a 15° rise on the kerb side (`SimCruiseVehicle.cpp:194-224`; `SimCruiseLowBeamPattern.cpp:24-31`). The lamps come on when the sun is below -1° (`SimCruiseVehicle.cpp:622-631`). The meter adds 0.5 cd/m² × π / 0.18 = 8.7 lx (`SimCruiseVehicle.h:153-155`). The street lights do not feed the meter.
+- Sun position: `FOsdsSolarPosition::Sun/Moon` (NOAA/Meeus, refraction, topocentric moon) works for any latitude, longitude and UTC. The NREL SPA test passes to 0.03°. `UpdateSky` runs every 2 s (`OsdsEnvironment.cpp:372-407`).
+- Sun light: 1361 W/m² × 93.9 lm/W = 127.8 klx / R², white, set at the top of the atmosphere. `SkyAtmosphere` applies the transmittance per pixel (`OsdsDaylightModel.cpp:7-8,66-70`; `OsdsEnvironment.cpp:383-390`). Shadows are on above -1°. The light is off below -18°.
+- Moon: Allen's phase law, 0.32 lx at full moon (`OsdsDaylightModel.cpp:118-125`). The light colour is (0.86, 0.93, 1.0), so the Purkinje shift is in the light and not in the grade (`OsdsEnvironment.cpp:92`).
+- Meter: the IES daylight model gives the horizontal lux. Then an 18 % card, K = 12.5, gives `ReferenceEV100` (`OsdsDaylightModel.cpp:88-109`). `DisplayEV100` has a knee at EV 10 and a slope of 0.55 below it (`:111-116`). Histogram 10-90 %. Band is Display-3 to Display-0.5. Bias is +0.2, plus -0.3 by day (`OsdsEnvironment.cpp:437-451`; `OsdsEnvironment.h:156-181`). Saturation falls to 0.35 at night (`:479-481`).
+- Haze: Mie = 3.912/V - 0.0116/km, floor 0.014/km. If CAMS AOD exists and V ≥ 10 km, Mie = τ / 0.7 km. SSA 0.93, g 0.76, Ångström 0.7 (`OsdsEnvironment.cpp:31,257-274`; `.h:193-197`). Below V = 8 km, the remaining extinction is a ground fog with a 150 m scale height (`:296-315`).
+- Clouds: Epic's simple material. The layer is fixed at 1.2 km to 7.2 km ("Florida fair-weather cumulus") (`OsdsEnvironment.cpp:329-331`). The coverage knots run from CLR -0.5 to OVC 0.35 (`OsdsWeather.cpp:104`).
+- Weather input: `UOsdsLiveWorldSubsystem::ApplyWeather` merges Open-Meteo, a METAR within 40 km and CAMS, then calls `SetWeather` (`OsdsLiveWorldSubsystem.cpp:833-848`). The road wets with τ = 180 s and dries with τ = 900 s (`OsdsWeather.cpp:91-97`).
+- Time: `StartInDaylight` sets 10:00 local solar time from longitude/15 (`OsdsEnvironment.cpp:204-218`; `.h:62`). No time-zone data is necessary.
+- Altitude: world Z is the height above sea level in NAVD88 (`OsdsTileBuilder.cpp:25`). `ElevationM` stays 0 in normal play, so the atmosphere's ground is at Z = 0. Rayleigh at altitude is correct.
+- Street lights: `BuildStreetLights` puts a pole every 33 m, staggered side to side, on every non-service road edge that is not rural, with 8.5 m poles or 5.2 m Deco poles (`OsdsTileDetail.cpp:1261-1345`). A pool of 24 spot lights is used: 1800 cd straight down, cone 50/74°, radius 32 m, 3000 K, no shadows. The lights fade in as the sun goes from 2° to -4° (`OsdsWorldStreamer.cpp:402-480`). Sky glow = 0.06 cd/m² × min(lamps/300, 1) (`:388-399`).
+- Low beams: 15 000 cd per lamp, 3200 K, aimed 1.5° down, cone 30/32°, radius 250 m. A light function gives a -0.57° cut-off and a 15° rise on the kerb side (`OsdsVehicle.cpp:194-224`; `OsdsLowBeamPattern.cpp:24-31`). The lamps come on when the sun is below -1° (`OsdsVehicle.cpp:622-631`). The meter adds 0.5 cd/m² × π / 0.18 = 8.7 lx (`OsdsVehicle.h:153-155`). The street lights do not feed the meter.
 
 **Does it work at a random US place?**
 - General: sun, moon, twilight, exposure and time of day work at any latitude. Anchorage in December, at 10:00 solar time, has the sun at about 2° (computed). The reference EV is 10.8 when clear and 9.0 when overcast, so the frame is low-sun daylight and not black (computed). At Hilo at noon the reference is 15.9 (computed). The weather feeds cover the whole US. At Casselton or Welch there is often no METAR within 40 km, so Open-Meteo is the base.
-- Hard-wired to sea level: haze and ground fog have their reference at Z = 0, because the environment spawns at `FTransform::Identity` (`SimCruiseEnvironmentSubsystem.cpp:312`). This is the ratio at the car to the observed value (computed; elevations are estimates):
+- Hard-wired to sea level: haze and ground fog have their reference at Z = 0, because the environment spawns at `FTransform::Identity` (`OsdsEnvironmentSubsystem.cpp:312`). This is the ratio at the car to the observed value (computed; elevations are estimates):
   - Ground fog, exp(-h/150 m): Rawlins (2100 m) about 1e-6, Delta (1400 m) 1e-4, Welch (400 m) 0.07, Gilbert (380 m) 0.08, Ankeny (290 m) 0.14, Seattle (120 m) 0.45.
   - Mie, exp(-h/0.7 km): Rawlins 0.05, Delta 0.14, Welch 0.56.
   - Result: observed mist or smoke is lost inland. Only coastal places (Miami, Stonington, Hilo, Anchorage) get it right.
 - Hard-wired to Miami: the cloud base is 1.2 km above sea level. At Rawlins and Delta the car is inside the cloud layer, and at Hilo the trade-cumulus base is too high (estimate; the engine rule that clouds use the atmosphere's planet is unverified). Street lights are one Miami Beach spec: 3000 K, 1800 cd straight down, 33 m spacing. The sky glow uses the Miami Beach count of 300 lamps as full scale, so the Bronx glows the same as Selma (estimate). Ground albedo is 0.12 and the Ångström exponent is 0.7 (marine) everywhere. A snow-covered Rawlins or Anchorage gets no brighter bounce from the ground.
-- Poor map data: the street-light rule reads only the road-edge kind, not OSM `lit=*` or `highway=street_lamp`. Kerbed cul-de-sacs in Ankeny and Selma's side streets are all lit every 33 m (estimate). The Welch hollow with "Rural" edges gets no lamps. The tests use only Miami (`SimCruiseEnvironmentTests.cpp:90-94`). No test checks altitude, high latitude or polar night.
+- Poor map data: the street-light rule reads only the road-edge kind, not OSM `lit=*` or `highway=street_lamp`. Kerbed cul-de-sacs in Ankeny and Selma's side streets are all lit every 33 m (estimate). The Welch hollow with "Rural" edges gets no lamps. The tests use only Miami (`OsdsEnvironmentTests.cpp:90-94`). No test checks altitude, high latitude or polar night.
 
 **Main gaps against "realistic everywhere".**
-1. P1: Haze and ground fog have their reference at sea level, not at the ground under the car (`SimCruiseEnvironment.cpp:254-272,314-315`). Observed fog, mist and wildfire smoke are lost at most inland places.
-2. P1 (estimate): The cloud layer is a fixed 1.2-7.2 km above sea level (`SimCruiseEnvironment.cpp:329-331`). High places sit in the cloud. The METAR ceiling and the Open-Meteo low/mid/high cloud data are not used.
-3. P2: One street-light spec everywhere, with no open-data lamp source (`SimCruiseTileDetail.cpp:1265-1268`; `SimCruiseWorldStreamer.cpp:412-438`). Computed for Lambertian asphalt (ρ 0.085): about 25 lx at the pole base and about 1 lx between staggered poles, so Lmax/Lmin ≈ 25 against the RP-8 limit of 6. Lamps do not feed the meter, although `docs/unreal-architecture.md` says they should.
-4. P2: The sky glow is scaled to Miami Beach and not to measured night light (`SimCruiseWorldStreamer.cpp:388-399`). NASA Black Marble VIIRS (public domain, whole US) could set it per place (licence not checked in detail).
-5. P2: These do not come from the place: ground albedo 0.12 with no snow (`SimCruiseEnvironment.h:189`) and Ångström 0.7 (`SimCruiseEnvironment.cpp:31`). `-SimCruiseElevation` moves the atmosphere down a second time, because world Z is already above sea level (`SimCruiseEnvironment.cpp:254`; `SimCruiseTileBuilder.cpp:25`).
+1. P1: Haze and ground fog have their reference at sea level, not at the ground under the car (`OsdsEnvironment.cpp:254-272,314-315`). Observed fog, mist and wildfire smoke are lost at most inland places.
+2. P1 (estimate): The cloud layer is a fixed 1.2-7.2 km above sea level (`OsdsEnvironment.cpp:329-331`). High places sit in the cloud. The METAR ceiling and the Open-Meteo low/mid/high cloud data are not used.
+3. P2: One street-light spec everywhere, with no open-data lamp source (`OsdsTileDetail.cpp:1265-1268`; `OsdsWorldStreamer.cpp:412-438`). Computed for Lambertian asphalt (ρ 0.085): about 25 lx at the pole base and about 1 lx between staggered poles, so Lmax/Lmin ≈ 25 against the RP-8 limit of 6. Lamps do not feed the meter, although `docs/unreal-architecture.md` says they should.
+4. P2: The sky glow is scaled to Miami Beach and not to measured night light (`OsdsWorldStreamer.cpp:388-399`). NASA Black Marble VIIRS (public domain, whole US) could set it per place (licence not checked in detail).
+5. P2: These do not come from the place: ground albedo 0.12 with no snow (`OsdsEnvironment.h:189`) and Ångström 0.7 (`OsdsEnvironment.cpp:31`). `-OsdsElevation` moves the atmosphere down a second time, because world Z is already above sea level (`OsdsEnvironment.cpp:254`; `OsdsTileBuilder.cpp:25`).
 6. P2: There are no environment tests for altitude, 61° N or 19° N. `StartInDaylight` at 10:00 solar time gives night above the Arctic Circle in winter.
 
 **My first three actions.**
-1. Put haze and fog at the ground. In `SimCruiseEnvironment.cpp`, add an observer ground height, fed from `SimCruiseVehicle.cpp:451` (HeightM). Scale the Mie by exp(h/H) and set the HeightFog Z to h. Done when a new test `SimCruise.Environment.Sky.HazeAtAltitude` gives an extinction at the observer of 3.912/V ±5 % at h = 0, 400 and 2100 m. Also done when `scripts\preflight.ps1 -Roads us-rawlins-wy,us-welch-wv,us-seattle-wa -ExtraArgs "-SimCruiseVisibilityKm=2"` sheets show the same fog contrast at all three places.
-2. Get the cloud base from the place. In `ApplyClouds`, set bottom = ground km + base above ground. Use the METAR ceiling or Open-Meteo low cloud, else a climate default. Done when a unit test gives the base above ground for h = 2100 m. Also done when `scripts\preflight.ps1 -Roads us-rawlins-wy,us-delta-ut,us-hilo-hi -ExtraArgs "-SimCruiseCloud=0.78"` sheets show a cloud base above the terrain and clear air at the car.
+1. Put haze and fog at the ground. In `OsdsEnvironment.cpp`, add an observer ground height, fed from `OsdsVehicle.cpp:451` (HeightM). Scale the Mie by exp(h/H) and set the HeightFog Z to h. Done when a new test `OSDS.Environment.Sky.HazeAtAltitude` gives an extinction at the observer of 3.912/V ±5 % at h = 0, 400 and 2100 m. Also done when `scripts\preflight.ps1 -Roads us-rawlins-wy,us-welch-wv,us-seattle-wa -ExtraArgs "-OsdsVisibilityKm=2"` sheets show the same fog contrast at all three places.
+2. Get the cloud base from the place. In `ApplyClouds`, set bottom = ground km + base above ground. Use the METAR ceiling or Open-Meteo low cloud, else a climate default. Done when a unit test gives the base above ground for h = 2100 m. Also done when `scripts\preflight.ps1 -Roads us-rawlins-wy,us-delta-ut,us-hilo-hi -ExtraArgs "-OsdsCloud=0.78"` sheets show a cloud base above the terrain and clear air at the car.
 3. Do a light audit at random places. Run `scripts\preflight.ps1 -Roads random -RandomCount 3`, then `-Roads us-anchorage-ak -Utc 2026-12-21T22:00:00Z` (solar noon), then a night pass for `us-bronx-ny,us-ankeny-ia` at local 22:00 solar time. Measure with a Pillow/NumPy histogram script and probe patches. Done when every daylight sheet has luma p99 ≥ 225 and every night sheet has ≤ 25 % of pixels at codes 0-3. Record the road Lmax/Lmin under the street lights.
 
 **Docs that are wrong or old.**
-- `docs/unreal-architecture.md` "Light that is not the sky's" says 33 lx and EV100 3.9 (band 3.7..6.2). The code has 8.7 lx, which gives EV100 2.0, display 5.6 and band 2.6..5.1 (computed; `SimCruiseVehicle.h:153-155`). It also says "street lighting, when the world stream places it". The stream places lamps now, but the code does not add them to the meter.
-- `docs/unreal-architecture.md` "Camera" says "+0.7 compensation" and a band around the reference. The code has +0.2, plus -0.3 by day, and a band around `DisplayEV100` (`SimCruiseEnvironment.h:172,181`; `.cpp:437-443`).
-- `docs/unreal-architecture.md` "Haze" says the scale height is 1.2 km. The code has 0.7 km (`SimCruiseEnvironment.h:193`).
-- `docs/team/handoff-world-look-2026-11-13.md` says motion blur amount 0.3 and max 2 %. The code has 0.15 and 1.0 (`SimCruiseEnvironment.cpp:472-474`).
+- `docs/unreal-architecture.md` "Light that is not the sky's" says 33 lx and EV100 3.9 (band 3.7..6.2). The code has 8.7 lx, which gives EV100 2.0, display 5.6 and band 2.6..5.1 (computed; `OsdsVehicle.h:153-155`). It also says "street lighting, when the world stream places it". The stream places lamps now, but the code does not add them to the meter.
+- `docs/unreal-architecture.md` "Camera" says "+0.7 compensation" and a band around the reference. The code has +0.2, plus -0.3 by day, and a band around `DisplayEV100` (`OsdsEnvironment.h:172,181`; `.cpp:437-443`).
+- `docs/unreal-architecture.md` "Haze" says the scale height is 1.2 km. The code has 0.7 km (`OsdsEnvironment.h:193`).
+- `docs/team/handoff-world-look-2026-11-13.md` says motion blur amount 0.3 and max 2 %. The code has 0.15 and 1.0 (`OsdsEnvironment.cpp:472-474`).

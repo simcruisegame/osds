@@ -1,0 +1,148 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Presentation/OsdsCarMaterialRoles.h"
+
+struct FOsdsGltfModel;
+struct FOsdsCarPresentationProfile;
+struct FOsdsCarDefinition;
+
+/** Wheel order shared with the physics: front left, front right, rear left, rear right. */
+enum class EOsdsWheel : uint8 { FrontLeft = 0, FrontRight = 1, RearLeft = 2, RearRight = 3 };
+
+/** The car dimensions the rig fits a model to (SI units). */
+struct FOsdsRigInputs
+{
+	double WheelbaseM = 2.266;
+	double FrontTrackM = 1.414;
+	double RearTrackM = 1.44;
+	double TireRadiusM = 0.288;
+	double TireWidthM = 0.195;
+	/** Hub height above the vehicle origin at static ride (mount height minus static suspension length). */
+	double HubHeightM = 0.293;
+	/** Driver's eye, vehicle frame (X forward, Y right, Z up), metres. */
+	FVector DriverEyeM = FVector(-0.503, -0.347, 1.009);
+
+	OSDS_API static FOsdsRigInputs FromCar(const FOsdsCarDefinition& Car);
+};
+
+/** One material's triangles in a part's local frame (Unreal axes, centimetres). */
+struct FOsdsRigSection
+{
+	int32 MaterialIndex = INDEX_NONE;
+	EOsdsCarMaterialRole Role = EOsdsCarMaterialRole::Authored;
+	TArray<FVector3f> Positions;
+	TArray<FVector3f> Normals;
+	/** Tangent xyz and binormal sign (Unreal convention), or empty to compute. */
+	TArray<FVector4f> Tangents;
+	TArray<FVector2f> UV0;
+	TArray<uint32> Indices;
+
+	int32 NumTriangles() const { return Indices.Num() / 3; }
+};
+
+/** A rigid piece of the car with its own pivot in the vehicle frame. */
+struct FOsdsRigPart
+{
+	FName Name;
+	/** Pivot in the vehicle frame (Unreal axes, centimetres). */
+	FTransform PartToVehicle = FTransform::Identity;
+	TArray<FOsdsRigSection> Sections;
+
+	int32 NumTriangles() const;
+	FBox LocalBounds() const;
+	bool IsEmpty() const { return Sections.Num() == 0; }
+};
+
+/**
+ * A downloaded car model fitted to a car's dimensions, in the vehicle frame
+ * used by the presentation component: X forward, Y right, Z up, centimetres,
+ * origin midway between the axles at the height of the physics body origin
+ * (hubs sit at FOsdsRigInputs::HubHeightM at static ride).
+ */
+struct FOsdsRiggedCar
+{
+	FOsdsRigPart Body;
+	/** Spinning parts (tyre, rim, disc), origin at the hub, axle along Y. */
+	FOsdsRigPart Wheels[4];
+	/** Non-spinning parts that steer and travel with the wheel (calipers). */
+	FOsdsRigPart Uprights[4];
+	/** Origin at the rim centre, X along the column away from the driver, Z toward the rim's top. */
+	FOsdsRigPart SteeringWheel;
+	bool bHasSteeringWheel = false;
+	double SteeringWheelRadiusM = 0.0;
+
+	/** Dials placed in the vehicle frame (Unreal axes, cm): the face's centre, its normal toward the driver, its 12 o'clock. */
+	struct FDial
+	{
+		int32 Spec = INDEX_NONE;
+		FVector CentreCm = FVector::ZeroVector;
+		FVector Normal = FVector::BackwardVector;
+		FVector Up = FVector::UpVector;
+		double RadiusCm = 4.0;
+	};
+	TArray<FDial> Dials;
+
+	/** Hub centres at static ride, vehicle frame, centimetres. */
+	FVector HubsCm[4];
+	bool bNamedWheels = false;
+	double ScaleMetresPerUnit = 1.0;
+	/** Extra scale across the car applied to match the published track (1 = none). */
+	double LateralScale = 1.0;
+	/** Measured on the fitted model, for comparison with the car's data. */
+	double ModelFrontTrackM = 0.0;
+	double ModelRearTrackM = 0.0;
+	double ModelTyreRadiusM = 0.0;
+	double ModelLengthM = 0.0;
+	double ModelWidthM = 0.0;
+	double ModelHeightM = 0.0;
+	int32 BadgeTrianglesRemoved = 0;
+	int32 HiddenSurfaces = 0;
+	/**
+	 * Materials the rig adds after the model's own (index Model.Materials.Num() + I):
+	 * copies of an author material given another role by a profile role area.
+	 */
+	struct FExtraMaterial
+	{
+		int32 Source = INDEX_NONE;
+		EOsdsCarMaterialRole Role = EOsdsCarMaterialRole::Authored;
+	};
+	TArray<FExtraMaterial> ExtraMaterials;
+	TArray<FString> Log;
+
+	int64 NumTriangles() const;
+};
+
+namespace OsdsCarModelRig
+{
+	/**
+	 * Fit a model: find the wheels (by node name, else by the four ground
+	 * contacts refined by the tyre surfaces), scale to the wheelbase, face
+	 * forward, set the static hub height, cut the wheels and calipers out,
+	 * hide badges, find the steering wheel and convert to Unreal axes.
+	 */
+	OSDS_API bool Build(const FOsdsGltfModel& Model, const FOsdsCarPresentationProfile& Profile,
+		const FOsdsRigInputs& Inputs, FOsdsRiggedCar& OutCar, FString& OutError);
+
+	/**
+	 * Where the head-lamp beams leave the car: the centre of the lit head-lamp
+	 * lenses (LampFront surfaces ahead of the front axle) on each side, vehicle
+	 * frame, cm, left first. Empty when the model has no head-lamp surfaces;
+	 * one side found alone is mirrored.
+	 */
+	OSDS_API TArray<FVector> HeadLampCentresCm(const FOsdsRiggedCar& Car);
+
+	/**
+	 * The mirror glasses' centres (MirrorGlass surfaces), vehicle frame, cm: [0] the left
+	 * door mirror, [1] the rear-view mirror (within 30 cm of the centreline), [2] the right
+	 * door mirror; a mirror the model lacks is left invalid (W = 0, else W = 1).
+	 */
+	OSDS_API TArray<FVector4> MirrorCentresCm(const FOsdsRiggedCar& Car);
+
+	/** Godot vehicle frame (X right, Y up, Z rearward, metres) to Unreal (X forward, Y right, Z up, centimetres). */
+	inline FVector GodotToUnrealCm(const FVector& G) { return FVector(-G.Z, G.X, G.Y) * 100.0; }
+	inline FVector GodotToUnrealDir(const FVector& G) { return FVector(-G.Z, G.X, G.Y); }
+	inline FVector UnrealMToGodot(const FVector& U) { return FVector(U.Y, U.Z, -U.X); }
+}

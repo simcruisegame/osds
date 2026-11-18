@@ -1,15 +1,15 @@
-# Installer test, SimCruise-2.0.2-windows-x64-setup.exe
-setup: D:\sc\lane-release\Saved\Package\SimCruise-2.0.2-windows-x64-setup.exe (362 MB), SHA-256 09805574a5fe57826797fcaa61f54daee7c824f32e10c526b2ab88550eeb5ede
-installed before: SimCruise 2.0.0
+# Installer test, OSDS-2.0.2-windows-x64-setup.exe
+setup: D:\sc\lane-release\Saved\Package\OSDS-2.0.2-windows-x64-setup.exe (362 MB), SHA-256 09805574a5fe57826797fcaa61f54daee7c824f32e10c526b2ab88550eeb5ede
+installed before: OSDS 2.0.0
 test date: 2026-11-13 14:19 UTC; per-user install (no administrator rights), silent; mode upgrade
 install exit 0
 installed exe: True; atlas: True; pdb: 0; onnx: 0
-start menu: SimCruise controls.lnk, SimCruise.lnk, Uninstall SimCruise.lnk
-uninstall entry: SimCruise 2.0.2
-shortcut target: %LOCALAPPDATA%\Programs\SimCruise\SimCruise.exe
+start menu: OSDS controls.lnk, OSDS.lnk, Uninstall OSDS.lnk
+uninstall entry: OSDS 2.0.2
+shortcut target: %LOCALAPPDATA%\Programs\OSDS\OSDS.exe
 installed game run: exit 0
 settings folder kept between runs: True
 uninstall exit 0; program folder left: False; start menu left: False
 uninstall entry after: removed
-put back the version installed before (SimCruise 2.0.0): exit 0, now SimCruise 2.0.0
+put back the version installed before (OSDS 2.0.0): exit 0, now OSDS 2.0.0
 INSTALLER TEST DONE

@@ -53,12 +53,12 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\')
-if (-not (Test-Path -LiteralPath (Join-Path $Root 'SimCruise.uproject'))) { throw "$Root is not a SimCruise checkout (no SimCruise.uproject)" }
+if (-not (Test-Path -LiteralPath (Join-Path $Root 'OSDS.uproject'))) { throw "$Root is not a OSDS checkout (no OSDS.uproject)" }
 
 # Stop when something of this checkout runs: its files may be open, and a run folder may be half written.
 $Pattern = [regex]::Escape($Root) + '([\\"/ ]|$)'
 $Busy = @(Get-CimInstance Win32_Process | Where-Object {
-    $_.CommandLine -and $_.Name -match '^(UnrealEditor|SimCruise|UnrealBuildTool|dotnet|ShaderCompileWorker|CrashReportClient)' -and $_.CommandLine -match $Pattern })
+    $_.CommandLine -and $_.Name -match '^(UnrealEditor|OSDS|UnrealBuildTool|dotnet|ShaderCompileWorker|CrashReportClient)' -and $_.CommandLine -match $Pattern })
 if ($Busy.Count -gt 0) {
     $Busy | ForEach-Object { Write-Host ("  running: {0} (pid {1})" -f $_.Name, $_.ProcessId) }
     throw "Something of $Root runs now. Run the cleanup when it has stopped."

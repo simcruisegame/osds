@@ -1,6 +1,6 @@
 # Two surveyed street walls
 
-> Former name: this study was written when SimCruise was called "Sunday Driver"; the app, paths and commands it mentions under that name are now SimCruise.
+> Former name: this study was written when OSDS was called "Sunday Driver"; the app, paths and commands it mentions under that name are now OSDS.
 
 Sunday Driver draws two partial, light-reactive exterior finishes beside normal searchable addresses. Search **220 E Washington St, Iowa City, IA** and travel west, or **310 Hennepin Ave, Minneapolis, MN** and travel northwest. The photographs cover upper ornament and masonry on one Iowa wall and a narrow bank of windows in Minneapolis. The game checks the complete mapped footprint, vertex order, edge, terrain and roof height. New geometry, a replaced wall survey, explicit wall finish tags, or an unsupported tile uses the existing renderer. Each match adds one six-vertex surface. The baked route has zero image-provider requests, a 100,221-byte combined runtime payload and no inference or collision changes.
 

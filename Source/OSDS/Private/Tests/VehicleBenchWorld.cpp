@@ -1,0 +1,148 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#include "Tests/VehicleBenchWorld.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+#include "Components/BoxComponent.h"
+#include "Engine/CollisionProfile.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "GameFramework/GameModeBase.h"
+#include "GameFramework/WorldSettings.h"
+#include "PBDRigidsSolver.h"
+#include "Physics/Experimental/PhysScene_Chaos.h"
+#include "Vehicle/CarDefinitionLoader.h"
+#include "Vehicle/OsdsUnits.h"
+#include "Vehicle/OsdsVehicle.h"
+
+FOsdsVehicleBenchWorld::FOsdsVehicleBenchWorld(double InFixedStepS, double GroundHalfSizeM, bool bSingleThreaded)
+	: FixedStepS(InFixedStepS)
+{
+	if (!Wrapper.CreateTestWorld(EWorldType::Game))
+	{
+		return;
+	}
+	// The bench is an empty pad. Without this the project's OsdsGameMode
+	// starts the drive: it streams the Ocean Drive tiles (ground up to 4.5 m,
+	// kerbs, buildings) into the test world on worker threads, and the car
+	// sooner or later drives into whatever has landed, at a moment that
+	// depends on wall-clock time, not on the simulation.
+	if (AWorldSettings* Settings = Wrapper.GetTestWorld()->GetWorldSettings())
+	{
+		Settings->DefaultGameMode = AGameModeBase::StaticClass();
+	}
+	if (!Wrapper.BeginPlayInTestWorld())
+	{
+		return;
+	}
+	World = Wrapper.GetTestWorld();
+	const AGameModeBase* GameMode = World->GetAuthGameMode();
+	if (GameMode == nullptr || GameMode->GetClass() != AGameModeBase::StaticClass())
+	{
+		UE_LOG(LogTemp, Error, TEXT("Vehicle bench: the test world runs %s instead of an empty game mode"),
+			GameMode ? *GameMode->GetClass()->GetName() : TEXT("no game mode"));
+		World = nullptr;
+		return;
+	}
+
+	FPhysScene* Scene = World->GetPhysicsScene();
+	Chaos::FPhysicsSolver* Solver = Scene ? Scene->GetSolver() : nullptr;
+	if (Solver == nullptr)
+	{
+		World = nullptr;
+		return;
+	}
+	// Fixed asynchronous step, solved on the calling thread so a bench is
+	// reproducible step for step.
+	if (bSingleThreaded)
+	{
+		Solver->SetThreadingMode_External(Chaos::EThreadingModeTemp::SingleThread);
+	}
+	Solver->EnableAsyncMode(FixedStepS);
+
+	// The pad: a static box whose top face is Z = 0.
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AActor* Ground = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, Params);
+	UBoxComponent* Box = NewObject<UBoxComponent>(Ground, TEXT("BenchPad"));
+	const double HalfSizeCm = OsdsUnits::ToUnrealLength(GroundHalfSizeM);
+	Box->SetBoxExtent(FVector(HalfSizeCm, HalfSizeCm, 50.0), false);
+	Box->SetMobility(EComponentMobility::Static);
+	Box->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	Ground->SetRootComponent(Box);
+	Box->SetWorldLocation(FVector(0.0, 0.0, -50.0));
+	Box->RegisterComponent();
+	Wrapper.TickTestWorld(static_cast<float>(FixedStepS));
+}
+
+FOsdsVehicleBenchWorld::~FOsdsVehicleBenchWorld()
+{
+	if (Wrapper.GetTestWorld() != nullptr)
+	{
+		Wrapper.DestroyTestWorld(true);
+	}
+}
+
+FVector3d FOsdsVehicleBenchWorld::BodyLocationForGround(const FOsdsCarDefinition& Car, const FVector3d& GroundLocationM)
+{
+	return GroundLocationM + FVector3d(0.0, 0.0, Car.CollisionShapeCenterYM);
+}
+
+AOsdsVehicle* FOsdsVehicleBenchWorld::SpawnVehicle(const FOsdsCarDefinition& Car, const FVector3d& GroundLocationM,
+	TFunction<void(FOsdsVehicleDriverContext&)> Driver, bool bSteeringAssist, double MaxWheelSubstepS)
+{
+	if (World == nullptr)
+	{
+		return nullptr;
+	}
+	const FTransform Transform(FQuat::Identity, OsdsUnits::ToUnrealLength(BodyLocationForGround(Car, GroundLocationM)));
+	AOsdsVehicle* Vehicle = World->SpawnActorDeferred<AOsdsVehicle>(AOsdsVehicle::StaticClass(), Transform,
+		nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (Vehicle == nullptr)
+	{
+		return nullptr;
+	}
+	Vehicle->SetCarDefinition(Car);
+	Vehicle->GetVehicleMovement()->SetSteeringAssist(bSteeringAssist);
+	Vehicle->GetVehicleMovement()->MaxWheelSubstepSeconds = MaxWheelSubstepS;
+	Vehicle->GetVehicleMovement()->SetPhysicsThreadDriver(MoveTemp(Driver));
+	Vehicle->FinishSpawning(Transform);
+	return Vehicle;
+}
+
+bool FOsdsVehicleBenchWorld::RunUntil(TFunctionRef<bool()> Done, double MaxSimSeconds)
+{
+	if (World == nullptr)
+	{
+		return false;
+	}
+	// Six fixed steps per game frame at 360 Hz: the frame rate does not
+	// matter to the vehicle, whose bench driver runs on the physics step.
+	const int32 StepsPerFrame = FMath::Max(1, FMath::RoundToInt32((1.0 / 60.0) / FixedStepS));
+	const float FrameS = static_cast<float>(StepsPerFrame * FixedStepS);
+	double Elapsed = 0.0;
+	while (!Done())
+	{
+		if (Elapsed > MaxSimSeconds)
+		{
+			return false;
+		}
+		Wrapper.TickTestWorld(FrameS);
+		Elapsed += FrameS;
+	}
+	return true;
+}
+
+bool OsdsLoadBenchCar(FAutomationTestBase& Test, const FString& CarId, FOsdsCarDefinition& OutCar)
+{
+	FString Error;
+	if (!FOsdsCarDefinitionLoader::LoadById(CarId, OutCar, Error))
+	{
+		Test.AddError(FString::Printf(TEXT("Could not load %s: %s"), *CarId, *Error));
+		return false;
+	}
+	return true;
+}
+
+#endif

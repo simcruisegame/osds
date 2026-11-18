@@ -1,8 +1,8 @@
-# SimCruise game team: charter and ownership map (14 November 2026)
+# OSDS game team: charter and ownership map (14 November 2026)
 
 ## Charter (owner's words, 2026-11-14)
 
-SimCruise is **a realistic driving game that builds the world from real-world data.**
+OSDS is **a realistic driving game that builds the world from real-world data.**
 
 Every role works to these rules:
 

@@ -1,5 +1,5 @@
 {
- "_comment": "How each car looks in the Unreal client (Source/SimCruise/*/Presentation). Physics stays in data/cars/<id>.json. Boxes and points use the Unreal vehicle frame: X forward, Y right, Z up, metres, origin midway between the axles at the physics body origin. Colours are \"#rrggbb\" sRGB. Roles: see SimCruiseCarMaterialRoles.h. Every value that copies a real car names its source.",
+ "_comment": "How each car looks in the Unreal client (Source/OSDS/*/Presentation). Physics stays in data/cars/<id>.json. Boxes and points use the Unreal vehicle frame: X forward, Y right, Z up, metres, origin midway between the axles at the physics body origin. Colours are \"#rrggbb\" sRGB. Roles: see OsdsCarMaterialRoles.h. Every value that copies a real car names its source.",
  "cars": {
   "nb2001_lowered": {
    "model": "data/art/traffic/miata_nb-5d103c56/scene.gltf",

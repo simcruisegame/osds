@@ -2,7 +2,7 @@
 category pipeline · impact 4 · 8 d · depends: traffic-persistence, reality-loop
 
 ## Rationale
-The user asked directly about this. AI earns its place on SimCruise where data is missing: how much traffic a street carries, where parked cars and pedestrians belong, gap-fill materials and props, and spotting what looks wrong against a photo. It must never cost frames on an 8 GB 2070 Max-Q, and it must never decide physics. detail-engine.md already sets that rule for textures. This proposal extends it into one service covering traffic, extras, detail and critique, with the same gates.
+The user asked directly about this. AI earns its place on OSDS where data is missing: how much traffic a street carries, where parked cars and pedestrians belong, gap-fill materials and props, and spotting what looks wrong against a photo. It must never cost frames on an 8 GB 2070 Max-Q, and it must never decide physics. detail-engine.md already sets that rule for textures. This proposal extends it into one service covering traffic, extras, detail and critique, with the same gates.
 
 ## Code claims (proposer)
 TrafficDirector.gd:72-112 and :377-456 already run an opt-in Ollama area-persona label (qwen3 CPU, num_gpu 0, 2 s timeout, rule-based fallback, never on the frame path). docs/research/detail-engine.md defines the gate.json idle gate, the stable-diffusion.cpp sidecar, MatFuse and FLUX.2-klein-4B gap-fill, the provenance F-key view and a licence CI gate, but slices 3-7 are not built. game/art/materials does not exist yet (CarFinish and terrain shaders use flat or noise maps).
@@ -14,7 +14,7 @@ Lane A, traffic (behaviour stays IDM/MOBIL):
 - Density per segment from HPMS AADT: cars/km = AADT·K/(24·v_free), K about 0.09 for the peak hour, scaled by local clock time from the FHWA hourly profile. Feeds AmbientLife spawn weights.
 - The existing LLM persona label stays as the character label.
 - Optional, offline: the user-installed SUMO (EPL, never bundled) calibrates signal cycle and split from OSM networks. Results are cached per area.
-- Phase 2: small ONNX gap-acceptance policies trained in Godot RL Agents (MIT) on SimCruise's own junctions, used only for merges and unprotected lefts. Validated against HCM critical gaps (left from major 4.1 s, from minor 7.1 s).
+- Phase 2: small ONNX gap-acceptance policies trained in Godot RL Agents (MIT) on OSDS's own junctions, used only for merges and unprotected lefts. Validated against HCM critical gaps (left from major 4.1 s, from minor 7.1 s).
 
 Lane B, extras:
 - Pedestrians and cyclists are rule-based (OSM sidewalks, POI density, time of day) using NavigationServer RVO.

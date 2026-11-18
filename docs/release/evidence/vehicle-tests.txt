@@ -1,6 +1,6 @@
-# SimCruise.Vehicle automation run, commit b7ac2de on main ff35887, 2026-11-12T16:26Z
+# OSDS.Vehicle automation run, commit b7ac2de on main ff35887, 2026-11-12T16:26Z
 
-57 passed, 0 failed, 0 logged errors in 1788 s (log: D:\sc\lane-release\Saved\Logs\SimCruiseChecks.log)
+57 passed, 0 failed, 0 logged errors in 1788 s (log: D:\sc\lane-release\Saved\Logs\OsdsChecks.log)
 CHECKS PASSED
 
 CARTRACK crv25       0-60 8.31 s (target 8.30)  70-0 174.4 ft (target 175.0)  skidpad 0.822 g (target 0.82)  PASS
@@ -40,60 +40,60 @@ UNDERSTEER nb2001      1.31 deg/g (road-wheel steer 3.59 deg at 0.30 g, 3.85 deg
 UNDERSTEER nb2001_lowered 1.04 deg/g (road-wheel steer 3.57 deg at 0.30 g, 3.78 deg at 0.50 g)
 UNDERSTEER odyssey18   2.32 deg/g (road-wheel steer 4.96 deg at 0.30 g, 5.42 deg at 0.50 g)
 
-Success SimCruise.Vehicle.CarTrack.crv25
-Success SimCruise.Vehicle.CarTrack.f150raptor18
-Success SimCruise.Vehicle.CarTrack.grandcherokee13
-Success SimCruise.Vehicle.CarTrack.meridian_z
-Success SimCruise.Vehicle.CarTrack.model3
-Success SimCruise.Vehicle.CarTrack.mustang65
-Success SimCruise.Vehicle.CarTrack.nb1999
-Success SimCruise.Vehicle.CarTrack.nb2001
-Success SimCruise.Vehicle.CarTrack.nb2001_lowered
-Success SimCruise.Vehicle.CarTrack.odyssey18
-Success SimCruise.Vehicle.Card.meridian_z
-Success SimCruise.Vehicle.Card.mustang65
-Success SimCruise.Vehicle.Card.nb2001
-Success SimCruise.Vehicle.Chaos.BodyOwnership
-Success SimCruise.Vehicle.Chaos.BodyProperties
-Success SimCruise.Vehicle.Chaos.FixedStepConfig
-Success SimCruise.Vehicle.Chaos.ForceIntegration
-Success SimCruise.Vehicle.Convergence.meridian_z
-Success SimCruise.Vehicle.Convergence.mustang65
-Success SimCruise.Vehicle.Convergence.nb1999
-Success SimCruise.Vehicle.Crash.meridian_z
-Success SimCruise.Vehicle.Crash.mustang65
-Success SimCruise.Vehicle.Crash.nb2001
-Success SimCruise.Vehicle.Crash.nb2001_lowered
-Success SimCruise.Vehicle.Determinism
-Success SimCruise.Vehicle.Interface
-Success SimCruise.Vehicle.LiftOff.crv25
-Success SimCruise.Vehicle.LiftOff.f150raptor18
-Success SimCruise.Vehicle.LiftOff.grandcherokee13
-Success SimCruise.Vehicle.LiftOff.meridian_z
-Success SimCruise.Vehicle.LiftOff.model3
-Success SimCruise.Vehicle.LiftOff.mustang65
-Success SimCruise.Vehicle.LiftOff.nb1999
-Success SimCruise.Vehicle.LiftOff.nb2001
-Success SimCruise.Vehicle.LiftOff.nb2001_lowered
-Success SimCruise.Vehicle.LiftOff.odyssey18
-Success SimCruise.Vehicle.Model.Drivetrain
-Success SimCruise.Vehicle.Model.Gearbox
-Success SimCruise.Vehicle.Model.ManualClutchLocks
-Success SimCruise.Vehicle.Model.ReverseInhibit
-Success SimCruise.Vehicle.Model.ShiftMap
-Success SimCruise.Vehicle.Model.SuspensionPreload
-Success SimCruise.Vehicle.Model.Tuning
-Success SimCruise.Vehicle.Model.Tyre
-Success SimCruise.Vehicle.Model.TyreTmeasy
-Success SimCruise.Vehicle.StaticLoad.crv25
-Success SimCruise.Vehicle.StaticLoad.f150raptor18
-Success SimCruise.Vehicle.StaticLoad.grandcherokee13
-Success SimCruise.Vehicle.StaticLoad.meridian_z
-Success SimCruise.Vehicle.StaticLoad.model3
-Success SimCruise.Vehicle.StaticLoad.mustang65
-Success SimCruise.Vehicle.StaticLoad.nb1999
-Success SimCruise.Vehicle.StaticLoad.nb2001
-Success SimCruise.Vehicle.StaticLoad.nb2001_lowered
-Success SimCruise.Vehicle.StaticLoad.odyssey18
-Success SimCruise.Vehicle.Units.Axes
-Success SimCruise.Vehicle.Units.Scale
+Success OSDS.Vehicle.CarTrack.crv25
+Success OSDS.Vehicle.CarTrack.f150raptor18
+Success OSDS.Vehicle.CarTrack.grandcherokee13
+Success OSDS.Vehicle.CarTrack.meridian_z
+Success OSDS.Vehicle.CarTrack.model3
+Success OSDS.Vehicle.CarTrack.mustang65
+Success OSDS.Vehicle.CarTrack.nb1999
+Success OSDS.Vehicle.CarTrack.nb2001
+Success OSDS.Vehicle.CarTrack.nb2001_lowered
+Success OSDS.Vehicle.CarTrack.odyssey18
+Success OSDS.Vehicle.Card.meridian_z
+Success OSDS.Vehicle.Card.mustang65
+Success OSDS.Vehicle.Card.nb2001
+Success OSDS.Vehicle.Chaos.BodyOwnership
+Success OSDS.Vehicle.Chaos.BodyProperties
+Success OSDS.Vehicle.Chaos.FixedStepConfig
+Success OSDS.Vehicle.Chaos.ForceIntegration
+Success OSDS.Vehicle.Convergence.meridian_z
+Success OSDS.Vehicle.Convergence.mustang65
+Success OSDS.Vehicle.Convergence.nb1999
+Success OSDS.Vehicle.Crash.meridian_z
+Success OSDS.Vehicle.Crash.mustang65
+Success OSDS.Vehicle.Crash.nb2001
+Success OSDS.Vehicle.Crash.nb2001_lowered
+Success OSDS.Vehicle.Determinism
+Success OSDS.Vehicle.Interface
+Success OSDS.Vehicle.LiftOff.crv25
+Success OSDS.Vehicle.LiftOff.f150raptor18
+Success OSDS.Vehicle.LiftOff.grandcherokee13
+Success OSDS.Vehicle.LiftOff.meridian_z
+Success OSDS.Vehicle.LiftOff.model3
+Success OSDS.Vehicle.LiftOff.mustang65
+Success OSDS.Vehicle.LiftOff.nb1999
+Success OSDS.Vehicle.LiftOff.nb2001
+Success OSDS.Vehicle.LiftOff.nb2001_lowered
+Success OSDS.Vehicle.LiftOff.odyssey18
+Success OSDS.Vehicle.Model.Drivetrain
+Success OSDS.Vehicle.Model.Gearbox
+Success OSDS.Vehicle.Model.ManualClutchLocks
+Success OSDS.Vehicle.Model.ReverseInhibit
+Success OSDS.Vehicle.Model.ShiftMap
+Success OSDS.Vehicle.Model.SuspensionPreload
+Success OSDS.Vehicle.Model.Tuning
+Success OSDS.Vehicle.Model.Tyre
+Success OSDS.Vehicle.Model.TyreTmeasy
+Success OSDS.Vehicle.StaticLoad.crv25
+Success OSDS.Vehicle.StaticLoad.f150raptor18
+Success OSDS.Vehicle.StaticLoad.grandcherokee13
+Success OSDS.Vehicle.StaticLoad.meridian_z
+Success OSDS.Vehicle.StaticLoad.model3
+Success OSDS.Vehicle.StaticLoad.mustang65
+Success OSDS.Vehicle.StaticLoad.nb1999
+Success OSDS.Vehicle.StaticLoad.nb2001
+Success OSDS.Vehicle.StaticLoad.nb2001_lowered
+Success OSDS.Vehicle.StaticLoad.odyssey18
+Success OSDS.Vehicle.Units.Axes
+Success OSDS.Vehicle.Units.Scale

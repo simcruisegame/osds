@@ -1,7 +1,7 @@
 # Handoff: world look and picture (2026-11-13)
 
 ## Done (on main)
-- 7e417ad: sharpening after the TSR upscale (`FSimCruiseGraphics::SharpenFor`), motion blur at the real frame rate (TargetFPS 0, amount 0.3, max 2 %), VSync on by default (`simcruise.VSync`), pre-flight road-gap probe reads neighbour tiles (the US 129 / CA-1 "gaps" were probe faults), `scripts/framecheck.ps1` (frame times at a set speed; use `-Exe` with a packaged build, the editor is 2-3x slower).
+- 7e417ad: sharpening after the TSR upscale (`FOsdsGraphics::SharpenFor`), motion blur at the real frame rate (TargetFPS 0, amount 0.3, max 2 %), VSync on by default (`osds.VSync`), pre-flight road-gap probe reads neighbour tiles (the US 129 / CA-1 "gaps" were probe faults), `scripts/framecheck.ps1` (frame times at a set speed; use `-Exe` with a packaged build, the editor is 2-3x slower).
 - Earlier: building albedo caps, daylight exposure -0.3 EV, seam pinning for uncontracted road ends, staged tile installs, signs, Deco forms, realism score (`scripts/realism.ps1`).
 
 ## Measured

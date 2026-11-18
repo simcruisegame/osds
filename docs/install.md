@@ -1,17 +1,17 @@
 # Installing OSDS
 
-OSDS runs on Windows. Get it from the [Releases page](https://github.com/simcruisegame/simcruise/releases).
+OSDS runs on Windows. Get it from the [Releases page](https://github.com/simcruisegame/osds/releases).
 
 | File | What it is |
 |---|---|
 | `OSDS-<version>-windows-x64-setup.exe` | The installer. Adds a Start menu entry and an uninstaller. |
-| `OSDS-<version>-windows-x64.zip` | Portable version. Unzip and run `SimCruise.exe`. |
+| `OSDS-<version>-windows-x64.zip` | Portable version. Unzip and run `OSDS.exe`. |
 | `OSDS-<version>-SHA256SUMS.txt` | Checksums to check the two files above. |
 
 Good to know:
 
 - OSDS was called SimCruise until November 2026. Releases up to 2.0.3 use the old name (files start with `SimCruise-`, Start menu entry **SimCruise**).
-- The program file is always `SimCruise.exe`.
+- The program file is always `OSDS.exe`.
 - There is no Mac version of OSDS 2 yet (it needs a Mac to build on). The old 1.x versions for Mac and Windows (made with the Godot engine) are still on the Releases page. Their code is at the git tag `godot-final`.
 
 ## What your PC needs
@@ -32,7 +32,7 @@ We tested on **one PC only**: Windows 11, NVIDIA RTX 2070 Super with Max-Q Desig
 - The game picks a graphics preset for your GPU (Low, Medium, High or Ultra) and caps the frame rate at 60 fps.
 - Measured frame rates on the tested laptop: [release report](release/v2.0.0-report.md).
 - Without DirectX 12, the game uses DirectX 11 with a simpler picture.
-- If the game does not work on your PC, [open an issue](https://github.com/simcruisegame/simcruise/issues) with your Windows version, graphics card and memory.
+- If the game does not work on your PC, [open an issue](https://github.com/simcruisegame/osds/issues) with your Windows version, graphics card and memory.
 
 ## Internet
 
@@ -56,27 +56,27 @@ We tested on **one PC only**: Windows 11, NVIDIA RTX 2070 Super with Max-Q Desig
 ## Uninstall
 
 - Use **Settings > Apps > Installed apps > OSDS > Uninstall**, or **Uninstall OSDS** in the Start menu.
-- It deletes the game, the map cache, downloaded photos, other caches and logs in `%LOCALAPPDATA%\SimCruise`.
+- It deletes the game, the map cache, downloaded photos, other caches and logs in `%LOCALAPPDATA%\OSDS`.
 - It then asks whether to delete your settings, car tuning and screenshots too. The default is No, so they stay for a new install.
 - A silent uninstall (`unins000.exe /VERYSILENT`) keeps them.
 - It does not remove the Microsoft runtime or GameInput, because other programs may use them.
 
 ## Portable zip
 
-- Unzip `OSDS-<version>-windows-x64.zip` to any folder and run `SimCruise.exe`.
-- Keep the folder together: `SimCruise\tools\atlas.exe` (the map helper) and `SimCruise\data\` must stay next to the game.
-- The zip does not install the Microsoft parts. If they are missing, `SimCruise.exe` offers to install them from `Engine\Extras\Redist\en-us` in the folder.
-- To remove it, delete the folder, and `%LOCALAPPDATA%\SimCruise` for the caches.
+- Unzip `OSDS-<version>-windows-x64.zip` to any folder and run `OSDS.exe`.
+- Keep the folder together: `OSDS\tools\atlas.exe` (the map helper) and `OSDS\data\` must stay next to the game.
+- The zip does not install the Microsoft parts. If they are missing, `OSDS.exe` offers to install them from `Engine\Extras\Redist\en-us` in the folder.
+- To remove it, delete the folder, and `%LOCALAPPDATA%\OSDS` for the caches.
 
 ## Where your files are
 
-Everything is in `%LOCALAPPDATA%\SimCruise` (the old name, so updates keep it).
+Everything is in `%LOCALAPPDATA%\OSDS` (the old name, so updates keep it).
 
 | Folder | What is in it | On uninstall |
 |---|---|---|
 | `map-cache` | Map data, terrain and aerial photos of places you drove (kept near 100 MB) | Deleted |
 | `Saved\Live`, `Saved\NeuralDetail`, `Saved\Knowledge`, `Saved\Logs`, other `Saved` folders | Downloaded photos and weather, generated detail, place facts, logs | Deleted |
-| `Saved\SimCruise` | `preferences.json` (car, gearbox, sound, HUD, lens, head motion, rumble) and `tuning-<car>.json` | You choose (kept by default) |
+| `Saved\OSDS` | `preferences.json` (car, gearbox, sound, HUD, lens, head motion, rumble) and `tuning-<car>.json` | You choose (kept by default) |
 | `Saved\Config` | Graphics and input settings | You choose (kept by default) |
 | `Saved\Screenshots` | Your screenshots | You choose (kept by default) |
 
@@ -84,10 +84,10 @@ Everything is in `%LOCALAPPDATA%\SimCruise` (the old name, so updates keep it).
 
 | Problem | Fix |
 |---|---|
-| Nothing happens, or "MSVCP140.dll was not found" / "VCRUNTIME140_1.dll was not found" | The Visual C++ runtime is missing. Start `SimCruise.exe` and click **Yes** when it asks. Or run `Engine\Extras\Redist\en-us\vc_redist.x64.exe` in the install folder. Or get it from Microsoft: <https://aka.ms/vs/17/release/vc_redist.x64.exe>. |
+| Nothing happens, or "MSVCP140.dll was not found" / "VCRUNTIME140_1.dll was not found" | The Visual C++ runtime is missing. Start `OSDS.exe` and click **Yes** when it asks. Or run `Engine\Extras\Redist\en-us\vc_redist.x64.exe` in the install folder. Or get it from Microsoft: <https://aka.ms/vs/17/release/vc_redist.x64.exe>. |
 | "The Game Input Library is missing" | Click **Yes** to install it, or run `Engine\Extras\Redist\en-us\GameInputRedist.msi` in the install folder. |
 | The game always starts on Ocean Drive | A random start needs internet. Without it, the game starts on Ocean Drive, Miami Beach. |
-| Low frame rate | Start with a lower preset, for example `SimCruise.exe -SimCruiseGraphics=medium` (you can add this to a shortcut's target). |
+| Low frame rate | Start with a lower preset, for example `OSDS.exe -OsdsGraphics=medium` (you can add this to a shortcut's target). |
 | Something else is wrong | Open an issue on GitHub with your Windows version, graphics card and what you did. |
 
 ## The old 1.x version

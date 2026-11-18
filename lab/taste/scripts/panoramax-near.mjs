@@ -1,7 +1,7 @@
 // Find licensed Panoramax frames near a point, or fetch one for viewing (images stay out of the repo).
 // usage: bun panoramax-near.mjs search LAT LON HALF_DEG  |  bun panoramax-near.mjs get ID OUTDIR
 const [mode, a, b, c] = process.argv.slice(2);
-const H = {"User-Agent":"SimCruiseTasteTest/1.0"};
+const H = {"User-Agent":"OsdsTasteTest/1.0"};
 if (mode === "search") {
   const lat=+a, lon=+b, d=+(c||.002);
   const url = `https://api.panoramax.xyz/api/search?bbox=${lon-d},${lat-d},${lon+d},${lat+d}&limit=100`;

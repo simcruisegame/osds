@@ -7,7 +7,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {trimSourceCache} from '../helper/cache-eviction.mjs';
 
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),'simcruise-aerial16-'));
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'osds-aerial16-'));
 try{
  // Honolulu (Hawaii) and Juneau (Alaska) at zoom 16: regional sources, so no request at all.
  for(const [x,y] of [[4028,28796],[8296,19632]]){

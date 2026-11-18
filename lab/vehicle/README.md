@@ -1,6 +1,6 @@
 # Godot vehicle controller comparison
 
-> Former name: this study was written when SimCruise was called "Sunday Driver"; the app, paths and commands it mentions under that name are now SimCruise.
+> Former name: this study was written when OSDS was called "Sunday Driver"; the app, paths and commands it mentions under that name are now OSDS.
 
 These measurements used Godot 4.7.2.stable.official.ed1daf0bf on Apple Silicon, headless, with two isolated upstream projects. The bench uses the supplied vehicle scenes and their default tuning. It adds a level collider in the Road group, lets the car settle for two seconds, applies full throttle, then applies full brake at 30 km/h until ground speed falls below 0.15 m/s. A separate trial holds 25% left steering and full throttle for one second after crossing 30 km/h and then brakes. Fixed seed 4367. Shift uses a manual first-gear launch with a one-second clutch release. GEVP uses its automatic launch.
 

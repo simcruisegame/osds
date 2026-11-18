@@ -9,8 +9,8 @@ OSDS is the **Open Source Driving Simulator**. Until November 2026 its name was 
 - Write **OSDS** in capitals. The full name is **Open Source Driving Simulator** (each word with a capital letter).
 - At the first mention on a page, write "OSDS (Open Source Driving Simulator)" or "OSDS, the Open Source Driving Simulator".
 - Say "OSDS" letter by letter: "O-S-D-S".
-- Where history matters, write "named SimCruise until November 2026". Do not write "OSDS (SimCruise)" in titles.
-- The code keeps the old name inside: the `Source/SimCruise` module, `SimCruise.uproject`, `SimCruise.exe`, the `-SimCruise...` command-line options, the `simcruise.*` console variables and the `%LOCALAPPDATA%\SimCruise` folder. This keeps old saves, settings and scripts working. Do not rename these in a text change.
+- Where history matters, write "named OSDS until November 2026". Do not write "OSDS (OSDS)" in titles.
+- The code keeps the old name inside: the `Source/OSDS` module, `OSDS.uproject`, `OSDS.exe`, the `-OSDS...` command-line options, the `osds.*` console variables and the `%LOCALAPPDATA%\OSDS` folder. This keeps old saves, settings and scripts working. Do not rename these in a text change.
 
 ## The logo
 
@@ -43,7 +43,7 @@ All marks are paths only: no live text, no filters, no images. The SVG files are
 - Do not put Lane Amber on white or Edge Line: the contrast is only 1.8 : 1. The colour logo goes on Asphalt only. On light backgrounds use the Asphalt logo.
 - Do not change the colours, add shadows, gradients or outlines, or stretch, rotate or redraw the logo.
 - Do not put the logo on a busy photo without a dark panel behind it.
-- Do not set "OSDS" in another font, and do not use the old SimCruise map-pin icon with the new name.
+- Do not set "OSDS" in another font, and do not use the old OSDS map-pin icon with the new name.
 
 ## Colour
 

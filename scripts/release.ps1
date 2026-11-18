@@ -9,7 +9,7 @@
      helper\atlas.mjs when Bun is installed), under the PC-wide editor lock.
   2. Checks the zip: no .pdb, no Saved folder, the helper inside.
   3. scripts\installer.ps1: Inno Setup 6 installer and SHA256SUMS.txt.
-  4. Starts the packaged game with -SimCruiseShellSelfTest and needs exit code 0.
+  4. Starts the packaged game with -OsdsShellSelfTest and needs exit code 0.
   Ends with "RELEASE PACKAGE OK" and exit code 0, or names the step that failed.
   The files are in Saved\Package. Publishing (tag, gh release) stays a manual step.
 
@@ -29,9 +29,9 @@ $Root = Split-Path -Parent $PSScriptRoot
 $Out = Join-Path $Root 'Saved\Package'
 $Version = ((Get-Content (Join-Path $Root 'Config\DefaultGame.ini')) -match '^ProjectVersion=' | Select-Object -First 1).Split('=')[1]
 $Zip = Join-Path $Out "OSDS-$Version-windows-x64.zip"
-# The game itself, not the SimCruise.exe launcher stub: the stub's exit code is not always
+# The game itself, not the OSDS.exe launcher stub: the stub's exit code is not always
 # the game's, and a Shipping game writes no log, so the self-test's exit code decides.
-$Exe = Join-Path $Out 'Windows\SimCruise\Binaries\Win64\SimCruise-Win64-Shipping.exe'
+$Exe = Join-Path $Out 'Windows\OSDS\Binaries\Win64\OSDS-Win64-Shipping.exe'
 
 if (-not $NoBuild) {
     if (-not (Enter-EditorLock -TimeoutMinutes $LockTimeoutMinutes -Why "release package of $Root")) { exit 1 }
@@ -46,11 +46,11 @@ if (-not (Test-Path $Zip)) { Write-Host "RELEASE FAILED: no zip at $Zip"; exit 1
 $Tar = Join-Path $env:SystemRoot 'System32\tar.exe'
 $Listing = & $Tar -t -f $Zip
 if ($Listing -match '\.pdb$') { Write-Host 'RELEASE FAILED: the zip has debug symbols'; exit 1 }
-if ($Listing -match '^SimCruise/Saved/') { Write-Host 'RELEASE FAILED: the zip has a Saved folder'; exit 1 }
+if ($Listing -match '^OSDS/Saved/') { Write-Host 'RELEASE FAILED: the zip has a Saved folder'; exit 1 }
 # AI models: only the two cleared ones (scripts\ShippedModels.ps1); any other .onnx, or a Cityscapes file, fails.
 $Unshippable = Get-UnshippableModels $Listing
 if ($Unshippable.Count) { Write-Host "RELEASE FAILED: the zip has neural-network weights that may not be shipped: $($Unshippable -join ', ')"; exit 1 }
-if (-not ($Listing -match 'SimCruise/tools/atlas\.exe$')) { Write-Host 'RELEASE FAILED: the zip has no map helper (tools\atlas.exe)'; exit 1 }
+if (-not ($Listing -match 'OSDS/tools/atlas\.exe$')) { Write-Host 'RELEASE FAILED: the zip has no map helper (tools\atlas.exe)'; exit 1 }
 
 & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'installer.ps1')
 if ($LASTEXITCODE -ne 0) { Write-Host 'RELEASE FAILED: installer'; exit 1 }
@@ -58,9 +58,9 @@ if ($LASTEXITCODE -ne 0) { Write-Host 'RELEASE FAILED: installer'; exit 1 }
 Write-Host 'Smoke test: the packaged game self-test'
 if (-not (Enter-EditorLock -TimeoutMinutes $LockTimeoutMinutes -Why "release smoke test of $Root")) { exit 1 }
 try {
-    $Game = Start-Process -FilePath $Exe -ArgumentList @('-SimCruiseShellSelfTest', '-windowed', '-ResX=1280', '-ResY=720', '-unattended') -PassThru
+    $Game = Start-Process -FilePath $Exe -ArgumentList @('-OsdsShellSelfTest', '-windowed', '-ResX=1280', '-ResY=720', '-unattended') -PassThru
     if (-not $Game.WaitForExit(15 * 60000)) { Stop-ProcessTree -ProcessId $Game.Id; Write-Host 'RELEASE FAILED: smoke test timed out'; exit 1 }
-    $Result = Join-Path $env:LOCALAPPDATA 'SimCruise\Saved\SelfTest.txt'
+    $Result = Join-Path $env:LOCALAPPDATA 'OSDS\Saved\SelfTest.txt'
     if (Test-Path $Result) { Write-Host (Get-Content $Result -Raw) }
     if ($Game.ExitCode -ne 0) { Write-Host "RELEASE FAILED: smoke test exit code $($Game.ExitCode)"; exit 1 }
 }

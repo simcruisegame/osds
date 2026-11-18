@@ -13,7 +13,7 @@ Run from a scratch folder that holds a copy of `data/tiles/aerial/a-*.jpg`:
     python unbake.py 18179 27907 170,44     # later tiles of the same photograph: reuse the fitted sun (about 3 s)
     python stitch.py                        # -> unbaked/a-*.jpg; copy to data/tiles/aerial/unbaked/
 
-The committed `data/tiles/aerial/unbaked/` covers the 4 bundled aerial tiles (sun azimuth 170 degrees, elevation 44 degrees). `metrics.txt` has the shaded/lit luminance per tile before and after. The game uses these photographs by default; `-SimCruiseBakedAerial` uses the originals.
+The committed `data/tiles/aerial/unbaked/` covers the 4 bundled aerial tiles (sun azimuth 170 degrees, elevation 44 degrees). `metrics.txt` has the shaded/lit luminance per tile before and after. The game uses these photographs by default; `-OsdsBakedAerial` uses the originals.
 
 Limits: the photograph is not a true orthophoto, so tall towers lean away from their lidar footprint and a thin bright or dark rim can stay; the lift is limited to 4x and to the lit surface of the same class nearby, so the deepest tower shadows stay a little dark.
 

@@ -13,7 +13,7 @@
 . (Join-Path $PSScriptRoot 'ViewerWatch.ps1')
 
 # The world lane's start-pick fallback warning (the start fell back to an old pose): a FAIL for the place.
-$script:StartFallbackPattern = 'SimCruise START FALLBACK: start pick found no candidate|start-by-nearest-road-rule'
+$script:StartFallbackPattern = 'OSDS START FALLBACK: start pick found no candidate|start-by-nearest-road-rule'
 
 $script:Teams = [ordered]@{
     driving = 'Driving (physics, the robot judge, steering ratio)'
@@ -73,7 +73,7 @@ function Add-CaseResults($Cases, $Findings, $Numbers, $Frames, $Ran) {
             $Log = Join-Path $C.Dir 'game.log'
             $Pre = Read-Json (Join-Path $C.Dir 'preflight.json')
             $Forced = if (Test-Path $Log) { Select-String -Path $Log -Pattern 'Forced tile failures: (\d+)' | Select-Object -First 1 } else { $null }
-            $Failed = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'forced failure \(-SimCruiseFailTiles\)|Tile \S+ failed').Count } else { 0 }
+            $Failed = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'forced failure \(-OsdsFailTiles\)|Tile \S+ failed').Count } else { 0 }
             $Ground = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'Fallback ground under tile').Count } else { 0 }
             $Numbers['world'] += "| $Name | forced tile failures / failed tiles in the log / fallback ground laid | $(if ($Forced) { $Forced.Matches[0].Groups[1].Value } else { 0 }) / $Failed / $Ground | 2 / >0 / >0 | $(if ($Forced -and [int]$Forced.Matches[0].Groups[1].Value -ge 2 -and $Ground -gt 0) { 'ok' } else { 'FAIL' }) |"
             if (-not $Forced) { & $Add 'world' 'P1' '-' "$Name\game.log" 'the forced tile failure did not take effect (no "Forced tile failures" line)' }
@@ -184,7 +184,7 @@ function Write-ReleaseReports {
         if ($GameDisturbCount) { $Numbers['picture'] += "| $Rel | DISTURBED: $GameDisturbCount focus changes or viewer inputs logged by the game | - | none | DISTURBED |" }
         $View = if (Test-Path $Log) { Select-String -Path $Log -Pattern 'VIEWCHECK (PASS|FAIL) .*?reason=(\S+)' | Select-Object -Last 1 } else { $null }
         $Placed = if (Test-Path $Log) { Select-String -Path $Log -Pattern 'Car placed.*after ([\d.]+) s' | Select-Object -First 1 } else { $null }
-        $Engine = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'Ensure condition failed|Fatal error|LogSimCruise\w*: Error:') } else { @() }
+        $Engine = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'Ensure condition failed|Fatal error|LogOSDS\w*: Error:') } else { @() }
         $Crash = Test-Path (Join-Path $D 'crash')
         $CookedRun = (Test-Path (Join-Path $D 'cmdline.txt')) -and -not ((Get-Content (Join-Path $D 'cmdline.txt') -Raw) -match 'UnrealEditor')
         $ShaderLines = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'Preparing Shaders').Count } else { 0 }

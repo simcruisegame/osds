@@ -33,7 +33,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     work = os.path.join(OUT, 'download')
     os.makedirs(work, exist_ok=True)
-    req = urllib.request.Request(URL, headers={'User-Agent': 'SimCruise model fetch (+https://github.com/simcruisegame/simcruise)'})
+    req = urllib.request.Request(URL, headers={'User-Agent': 'OSDS model fetch (+https://github.com/simcruisegame/osds)'})
     print('downloading', URL)
     data = urllib.request.urlopen(req, timeout=600).read()
     with zipfile.ZipFile(io.BytesIO(data)) as z:

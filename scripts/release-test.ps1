@@ -98,7 +98,7 @@ $Places = @($Places | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $Cases = @($Cases | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $Retest = ($Places.Count + $Cases.Count) -gt 0
 if ($Retest) { $Plan = @($Plan | Where-Object { $N = $_.Name; @($Places | Where-Object { $N -like "*$_*" }).Count }) }
-if (-not $CookedExe) { $CookedExe = Join-Path $Root 'Saved\Package\Windows\SimCruise\Binaries\Win64\SimCruise.exe' }
+if (-not $CookedExe) { $CookedExe = Join-Path $Root 'Saved\Package\Windows\OSDS\Binaries\Win64\OSDS.exe' }
 if ($Cooked -and -not (Test-Path $CookedExe)) { Write-Host "No cooked game at ${CookedExe}: run scripts\package.ps1 -Configuration Development first."; exit 2 }
 $GameExeArgs = if ($Cooked) { @('-GameExe', $CookedExe) } else { @() }
 # A case runs when no selection was made, or when -Cases (or -OnlyCases) names its kind or its name.
@@ -151,15 +151,15 @@ function Test-GameFlag([string]$Flag) {
     return [bool](Get-ChildItem (Join-Path $Root 'Source') -Recurse -Include *.cpp | Select-String -Pattern "TEXT(`"$Flag" -SimpleMatch -List | Select-Object -First 1)
 }
 $CaseDefs = @(
-    [pscustomobject]@{ Case = 'standstill'; Name = 'standstill-ocean-drive'; Road = 'ocean-drive'; Flag = 'SimCruiseStandstillTest'; Seconds = 90 },
-    [pscustomobject]@{ Case = 'speed'; Name = 'speed-nebraska'; Road = 'nebraska'; Flag = 'SimCruiseSpeedTest'; Seconds = 180 },
-    [pscustomobject]@{ Case = 'speed'; Name = 'speed-dragon'; Road = 'dragon'; Flag = 'SimCruiseSpeedTest'; Seconds = 180 },
-    [pscustomobject]@{ Case = 'fallback'; Name = 'fallback-ocean-drive'; Road = 'ocean-drive'; Flag = 'SimCruiseFailTiles='; Seconds = 60 },
-    [pscustomobject]@{ Case = 'eyeoff'; Name = 'eye-off-ocean-drive'; Road = 'ocean-drive'; Flag = 'SimCruiseScanEye='; Seconds = 60 },
-    [pscustomobject]@{ Case = 'eye'; Name = 'eye-on-ocean-drive'; Road = 'ocean-drive'; Flag = 'SimCruiseScanEye='; Seconds = 60 },
+    [pscustomobject]@{ Case = 'standstill'; Name = 'standstill-ocean-drive'; Road = 'ocean-drive'; Flag = 'OsdsStandstillTest'; Seconds = 90 },
+    [pscustomobject]@{ Case = 'speed'; Name = 'speed-nebraska'; Road = 'nebraska'; Flag = 'OsdsSpeedTest'; Seconds = 180 },
+    [pscustomobject]@{ Case = 'speed'; Name = 'speed-dragon'; Road = 'dragon'; Flag = 'OsdsSpeedTest'; Seconds = 180 },
+    [pscustomobject]@{ Case = 'fallback'; Name = 'fallback-ocean-drive'; Road = 'ocean-drive'; Flag = 'OsdsFailTiles='; Seconds = 60 },
+    [pscustomobject]@{ Case = 'eyeoff'; Name = 'eye-off-ocean-drive'; Road = 'ocean-drive'; Flag = 'OsdsScanEye='; Seconds = 60 },
+    [pscustomobject]@{ Case = 'eye'; Name = 'eye-on-ocean-drive'; Road = 'ocean-drive'; Flag = 'OsdsScanEye='; Seconds = 60 },
     # The cooked package from the drive start: no frame or freeze over 0.5 s in the first 60 s, with an Insights trace.
-    [pscustomobject]@{ Case = 'cooked-drive'; Name = 'cooked-dragon'; Road = 'dragon'; Flag = 'SimCruisePreflight'; Seconds = 60 },
-    [pscustomobject]@{ Case = 'cooked-drive'; Name = 'cooked-ocean-drive'; Road = 'ocean-drive'; Flag = 'SimCruisePreflight'; Seconds = 60 }
+    [pscustomobject]@{ Case = 'cooked-drive'; Name = 'cooked-dragon'; Road = 'dragon'; Flag = 'OsdsPreflight'; Seconds = 60 },
+    [pscustomobject]@{ Case = 'cooked-drive'; Name = 'cooked-ocean-drive'; Road = 'ocean-drive'; Flag = 'OsdsPreflight'; Seconds = 60 }
 )
 $Selection = $Cases
 $Cases = @()

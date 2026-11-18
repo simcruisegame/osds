@@ -16,7 +16,7 @@ godot=${GODOT_BIN:-godot}
 mkdir -p "$out/car" "$out/place"
 win() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 helper="$root/tools/atlas.exe"; [ -x "$helper" ] || helper="$root/tools/atlas"
-SIMCRUISE_MAP_HELPER=$(win "$helper"); export SIMCRUISE_MAP_HELPER
+OSDS_MAP_HELPER=$(win "$helper"); export OSDS_MAP_HELPER
 extra=""; [ "$rend" = forward_plus ] && extra="--rendering-method forward_plus"
 cd "$root"
 

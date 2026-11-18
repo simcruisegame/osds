@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 
 API = "https://commons.wikimedia.org/w/api.php"
-HEADERS = {"User-Agent": "SimCruise-realism/1.0 (game development; realism score)"}
+HEADERS = {"User-Agent": "OSDS-realism/1.0 (game development; realism score)"}
 
 
 def get(params):

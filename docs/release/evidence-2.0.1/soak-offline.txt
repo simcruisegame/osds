@@ -48,7 +48,7 @@
 2026-11-12 19:13:21 SOAK 1170 s: driving, 44 km/h, 60 fps avg, worst frame 19 ms, 2566 MB used, 39 recoveries, 25 camera changes, place Clay Center · Charleston, WV, car grandcherokee13
 2026-11-12 19:13:51 SOAK DONE: 20.0 minutes, drove 1, 40 recoveries, 25 camera changes, 4 car changes, 3 travels, 0 non-finite states, peak 3111 MB used
 
-# Network fully off: HTTP_PROXY/HTTPS_PROXY/ALL_PROXY to a closed local port (the helper refuses to connect: checked directly, ECONNREFUSED), -SimCruiseLiveOffline, -SimCruiseNoPlaceFetch. The game started on a cached road and drove; exit 0.
+# Network fully off: HTTP_PROXY/HTTPS_PROXY/ALL_PROXY to a closed local port (the helper refuses to connect: checked directly, ECONNREFUSED), -OsdsLiveOffline, -OsdsNoPlaceFetch. The game started on a cached road and drove; exit 0.
 2026-11-12 19:13:58 SOAK start: 4.0 minutes, travel 0
 2026-11-12 19:14:28 SOAK   30 s: driving, 41 km/h, 53 fps avg, worst frame 400 ms, 2114 MB used, 1 recoveries, 0 camera changes, place Great River Road (WI-35) · Alma, WI, car nb2001_lowered
 2026-11-12 19:14:58 SOAK   60 s: driving, 0 km/h, 59 fps avg, worst frame 400 ms, 2179 MB used, 3 recoveries, 1 camera changes, place Great River Road (WI-35) · Alma, WI, car nb2001_lowered

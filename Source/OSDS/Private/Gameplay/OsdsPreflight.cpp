@@ -1,0 +1,1446 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#include "Gameplay/OsdsPreflight.h"
+
+#include "CollisionQueryParams.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Environment/OsdsEnvironment.h"
+#include "Environment/OsdsEnvironmentSubsystem.h"
+#include "GameFramework/Pawn.h"
+#include "Gameplay/OsdsGameMode.h"
+#include "Gameplay/OsdsPlayerController.h"
+#include "Gameplay/OsdsReview.h"
+#include "Gameplay/OsdsCockpitTest.h"
+#include "Gameplay/OsdsVehicleControl.h"
+#include "HAL/IConsoleManager.h"
+#include "Vehicle/OsdsVehicle.h"
+#include "Vehicle/OsdsVehicleMovementComponent.h"
+#include "Gameplay/OsdsViewCheck.h"
+#include "HAL/FileManager.h"
+#include "ImageCore.h"
+#include "ImageUtils.h"
+#include "InputCoreTypes.h"
+#include "Kismet/GameplayStatics.h"
+#include "Async/Async.h"
+#include "Misc/App.h"
+#include "Misc/CommandLine.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Parse.h"
+#include "Misc/Paths.h"
+#include "Presentation/OsdsCarPresentationComponent.h"
+#include "ProceduralMeshComponent.h"
+#include "ShaderCompiler.h"
+#include "UnrealClient.h"
+#include "World/OsdsBridges.h"
+#include "World/OsdsGeo.h"
+#include "World/OsdsRoadNetwork.h"
+#include "World/OsdsTileBuilder.h"
+#include "World/OsdsTraffic.h"
+#include "World/OsdsWorldStreamer.h"
+#include "World/OsdsWorldTile.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogOsdsPreflight, Log, All);
+
+namespace
+{
+	constexpr double ReadyTimeoutS = 600.0;
+	constexpr float SettleS = 2.f;
+	constexpr float FrameIntervalS = 0.1f;
+	constexpr int32 SkyGridX = 16;
+	constexpr int32 SkyGridY = 9;
+	constexpr int32 ThumbW = 64;
+	constexpr int32 ThumbH = 36;
+	/** Comfortable lateral and braking acceleration of the robot (m/s^2). */
+	constexpr double LateralAccel = 3.0;
+	constexpr double BrakeAccel = 3.0;
+	constexpr double MaxSpeedMps = 30.0;
+
+	bool IsRoadLayer(EOsdsTileLayer Layer)
+	{
+		return Layer == EOsdsTileLayer::Asphalt || Layer == EOsdsTileLayer::Concrete;
+	}
+
+	bool IsCarActor(const AActor* Actor)
+	{
+		for (const AActor* Each = Actor; Each; Each = Each->GetAttachParentActor())
+		{
+			if (Each->IsA<AOsdsTrafficCar>() || Each->IsA<AOsdsCarPresentationActor>()) return true;
+		}
+		return false;
+	}
+
+	float Luma(const FColor& C) { return 0.2126f * C.R + 0.7152f * C.G + 0.0722f * C.B; }
+}
+
+namespace OsdsPreflightRules
+{
+	bool IsTurnRound(const TArray<FVector2d>& TimeYawDeg)
+	{
+		// The heading unwrapped through +-180 deg, so that a turn round reads as about 180 deg.
+		TArray<double> Unwrapped;
+		Unwrapped.Reserve(TimeYawDeg.Num());
+		for (int32 I = 0; I < TimeYawDeg.Num(); ++I)
+		{
+			Unwrapped.Add(I == 0 ? TimeYawDeg[0].Y : Unwrapped[I - 1] + FMath::FindDeltaAngleDegrees(TimeYawDeg[I - 1].Y, TimeYawDeg[I].Y));
+		}
+		for (int32 I = 0; I < TimeYawDeg.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < TimeYawDeg.Num() && TimeYawDeg[J].X - TimeYawDeg[I].X <= TurnRoundWindowS; ++J)
+			{
+				if (FMath::Abs(Unwrapped[J] - Unwrapped[I]) >= TurnRoundDeg) return true;
+			}
+		}
+		return false;
+	}
+
+	bool IsCutIn(double AlongM, double SideM, double PrevSideM, double RelHeadingDeg, double OurSpeedMps, double TheirLengthM)
+	{
+		if (OurSpeedMps < CutInMinSpeedMps) return false;
+		const double BumperGapM = AlongM - OwnHalfLengthM - 0.5 * TheirLengthM;
+		if (BumperGapM < 0.0 || BumperGapM > CarLengthM || FMath::Abs(SideM) > 1.8) return false;
+		return FMath::Abs(RelHeadingDeg) > 30.0 || FMath::Abs(PrevSideM) > 2.5;
+	}
+
+	bool Overlaps(double AlongM, double SideM, double TheirLengthM)
+	{
+		return FMath::Abs(AlongM) < OwnHalfLengthM + 0.5 * TheirLengthM - 0.3 && FMath::Abs(SideM) < 2.0 * OwnHalfWidthM - 0.2;
+	}
+
+	bool IsAtGradeMotorway(const FString& TheirClass, double AlongM, double SideM, double DzM, double RelHeadingDeg)
+	{
+		const double Rel = FMath::Abs(RelHeadingDeg);
+		return TheirClass == TEXT("motorway") && AlongM > -10.0 && AlongM < 60.0 && FMath::Abs(SideM) < 8.0 && FMath::Abs(DzM) < 2.5 && Rel > 45.0 && Rel < 135.0;
+	}
+
+	FString Judge(const FOsdsPreflightStats& S)
+	{
+		TArray<FString> R;
+		if (S.DistanceM < MinDistanceM) R.Add(FString::Printf(TEXT("robot-moved-only-%.0fm"), S.DistanceM));
+		if (S.OffRoadSeconds > MaxOffRoadSeconds) R.Add(FString::Printf(TEXT("left-the-road-%.1fs"), S.OffRoadSeconds));
+		if (S.bFellBack) R.Add(TEXT("start-fell-back-to-bundled-place"));
+		if (S.bStartByNearestRoad) R.Add(TEXT("start-by-nearest-road-rule"));
+		if (S.bViewCheckRan && !S.bViewCheckPassed) R.Add(FString::Printf(TEXT("viewcheck-fail(%s)"), *S.ViewCheckReasons.Replace(TEXT(","), TEXT("+"))));
+		if (S.SkySamples >= 50 && S.SkyWhitePercent > MaxSkyWhitePercent) R.Add(FString::Printf(TEXT("white-sky-%.0f%%"), S.SkyWhitePercent));
+		if (S.TilePopIns > 0) R.Add(FString::Printf(TEXT("tile-pop-in-%d"), S.TilePopIns));
+		if (S.CarPopIns > MaxCarPopIns) R.Add(FString::Printf(TEXT("car-pop-in-%d"), S.CarPopIns));
+		if (S.FlashFrames > MaxFlashFrames) R.Add(FString::Printf(TEXT("flash-frames-%d"), S.FlashFrames));
+		if (S.RoadSteps > 0) R.Add(FString::Printf(TEXT("road-steps-%d-max-%.0fcm"), S.RoadSteps, S.MaxStepCm));
+		if (S.RoadGaps > 0) R.Add(FString::Printf(TEXT("road-gaps-%d"), S.RoadGaps));
+		if (S.BorderJolts > 0) R.Add(FString::Printf(TEXT("jolts-at-tile-borders-%d"), S.BorderJolts));
+		if (S.StuckTraffic > 0) R.Add(FString::Printf(TEXT("stuck-traffic-%d"), S.StuckTraffic));
+		if (S.TrafficCutIns > 0) R.Add(FString::Printf(TEXT("traffic-cut-in-%d"), S.TrafficCutIns));
+		if (S.TrafficOverlaps > 0) R.Add(FString::Printf(TEXT("traffic-through-our-car-%d"), S.TrafficOverlaps));
+		if (S.TrafficTurnRounds > 0) R.Add(FString::Printf(TEXT("traffic-turn-round-%d"), S.TrafficTurnRounds));
+		if (S.TrafficAtGrade > 0) R.Add(FString::Printf(TEXT("motorway-traffic-at-grade-%d"), S.TrafficAtGrade));
+		if (S.JunctionHoldAskedS > 0.f && S.JunctionHoldS < S.JunctionHoldAskedS - 0.5f) R.Add(FString::Printf(TEXT("junction-hold-%.0fs-of-%.0fs"), S.JunctionHoldS, S.JunctionHoldAskedS));
+		if (S.DriveSeconds > 0.f && S.Frames < S.DriveSeconds / 0.1f * 0.5f) R.Add(FString::Printf(TEXT("few-frames-%d"), S.Frames));
+		if (S.PeakRearSlipDeg > MaxRearSlipDeg || S.ReversedSeconds > MaxReversedSeconds)
+		{
+			R.Add(FString::Printf(TEXT("spin-rear-slip-%.0fdeg-backwards-%.1fs%s"), S.PeakRearSlipDeg, S.ReversedSeconds, S.bForcedSpin ? TEXT("-forced") : TEXT("")));
+		}
+		if (S.AirborneSeconds > MaxAirborneSeconds) R.Add(FString::Printf(TEXT("wheels-off-the-ground-%.1fs"), S.AirborneSeconds));
+		if (S.FlippedSeconds > MaxFlippedSeconds) R.Add(FString::Printf(TEXT("car-on-its-side-%.1fs"), S.FlippedSeconds));
+		if (S.EscStraightLongestS > MaxEscStraightS) R.Add(FString::Printf(TEXT("esc-on-a-straight-road-%.1fs"), S.EscStraightLongestS));
+		if (S.OffRibbonSeconds > MaxOffRibbonSeconds) R.Add(FString::Printf(TEXT("ran-off-%.1fm-past-the-edge-for-%.1fs"), S.MaxOffRibbonM, S.OffRibbonSeconds));
+		if (S.TimedFrames >= MinTimedFrames && S.FrameP95Ms > MaxFrameP95Ms) R.Add(FString::Printf(TEXT("slow-frames-p95-%.0fms"), S.FrameP95Ms));
+		if (S.TimedFrames >= MinTimedFrames && S.Hitches > MaxHitches) R.Add(FString::Printf(TEXT("hitches-%d-over-100ms"), S.Hitches));
+		return FString::Join(R, TEXT(","));
+	}
+
+	int32 CountSteps(const TArray<FVector2f>& D, float& OutMaxStepCm, float MaxGapM, TArray<int32>* OutIndices)
+	{
+		OutMaxStepCm = 0.f;
+		int32 Count = 0;
+		int32 LastCounted = -10;
+		for (int32 I = 1; I + 1 < D.Num(); ++I)
+		{
+			const FVector2f& A = D[I - 1];
+			const FVector2f& B = D[I];
+			const FVector2f& C = D[I + 1];
+			const float AB = B.X - A.X;
+			const float BC = C.X - B.X;
+			if (AB < 0.02f || BC < 0.02f || AB > MaxGapM || BC > MaxGapM) continue;
+			// The height change from B to C that the slope from A to B does not explain.
+			const float JumpCm = FMath::Abs((C.Y - B.Y) - (B.Y - A.Y) * BC / AB) * 100.f;
+			OutMaxStepCm = FMath::Max(OutMaxStepCm, JumpCm);
+			if (JumpCm > StepCm && I > LastCounted + 2)
+			{
+				++Count;
+				LastCounted = I;
+				if (OutIndices) OutIndices->Add(I);
+			}
+		}
+		return Count;
+	}
+
+	void MeasureFrames(const TArray<float>& TimedMs, FOsdsPreflightStats& Stats)
+	{
+		Stats.TimedFrames = TimedMs.Num();
+		Stats.FrameP95Ms = 0.f;
+		Stats.SlowFrames = 0;
+		Stats.Hitches = 0;
+		if (TimedMs.IsEmpty())
+		{
+			return;
+		}
+		TArray<float> Sorted = TimedMs;
+		Sorted.Sort();
+		Stats.FrameP95Ms = Sorted[FMath::Clamp(FMath::CeilToInt32(0.95 * Sorted.Num()) - 1, 0, Sorted.Num() - 1)];
+		for (const float Ms : TimedMs)
+		{
+			Stats.SlowFrames += Ms > 50.f ? 1 : 0;
+			Stats.Hitches += Ms > 100.f ? 1 : 0;
+		}
+	}
+
+	int32 CountFlashes(const TArray<float>& Diffs, const TArray<bool>& Turning, float& OutMedian, float Factor, float Floor)
+	{
+		TArray<float> Steady;
+		for (int32 I = 0; I < Diffs.Num(); ++I)
+		{
+			if (!Turning.IsValidIndex(I) || !Turning[I]) Steady.Add(Diffs[I]);
+		}
+		OutMedian = 0.f;
+		if (Steady.IsEmpty()) return 0;
+		Steady.Sort();
+		OutMedian = Steady[Steady.Num() / 2];
+		const float Limit = FMath::Max(Floor, Factor * OutMedian);
+		int32 Count = 0;
+		for (const float D : Steady)
+		{
+			Count += D > Limit ? 1 : 0;
+		}
+		return Count;
+	}
+}
+
+AOsdsPreflight::AOsdsPreflight()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	// Before the player controller reads its input this frame.
+	PrimaryActorTick.TickGroup = TG_PrePhysics;
+	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+}
+
+void AOsdsPreflight::BeginPlay()
+{
+	Super::BeginPlay();
+	const TCHAR* Cmd = FCommandLine::Get();
+	FParse::Value(Cmd, TEXT("OsdsPreflightSeconds="), DriveSeconds);
+	DriveSeconds = FMath::Clamp(DriveSeconds, 5.f, 600.f);
+	bNoFrames = FParse::Param(Cmd, TEXT("OsdsPreflightNoFrames"));
+	bForceSpin = FParse::Param(Cmd, TEXT("OsdsPreflightForceSpin"));
+	double Kmh = 0.0;
+	if (FParse::Value(Cmd, TEXT("OsdsPreflightKmh="), Kmh) && Kmh > 0.0)
+	{
+		SpeedOverrideMps = FMath::Clamp(Kmh, 10.0, 300.0) / 3.6;
+	}
+	// -OsdsPreflightKeen: a keen driver on an empty road (the owner's acceptance drive): no
+	// speed limit, corners at 75 % of the car's own skidpad grip, brakes at 70 % of it, up to 45 m/s,
+	// looking 200 m ahead, traffic off.
+	bKeen = FParse::Param(Cmd, TEXT("OsdsPreflightKeen"));
+	if (bKeen)
+	{
+		if (IConsoleVariable* Cars = IConsoleManager::Get().FindConsoleVariable(TEXT("osds.Traffic.Cars"))) Cars->Set(0, ECVF_SetByCode);
+	}
+	// -OsdsPreflightStopAtJunction=N: stop at the first stop line ahead (a road this one gives
+	// way to), hold N s on the parking brake, then pull out: the gap-acceptance case for the traffic.
+	FParse::Value(Cmd, TEXT("OsdsPreflightStopAtJunction="), StopAtJunctionS);
+	StopAtJunctionS = FMath::Clamp(StopAtJunctionS, 0.f, 120.f);
+	Stats.JunctionHoldAskedS = StopAtJunctionS;
+	FParse::Value(Cmd, TEXT("OsdsPreflightRoad="), RoadName);
+	FParse::Value(Cmd, TEXT("OsdsCar="), CarId);
+	if (!FParse::Value(Cmd, TEXT("OsdsPreflightOut="), OutputDir))
+	{
+		OutputDir = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Preflight"), FString::Printf(TEXT("manual-%s"), *FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S"))));
+	}
+	OutputDir = FPaths::ConvertRelativePathToFull(OutputDir);
+	IFileManager::Get().MakeDirectory(*FPaths::Combine(OutputDir, TEXT("frames")), true);
+	// -OsdsReview: full-size frames, sidecars and close-ups for a person to look at (scripts\launch-review.ps1).
+	if (FParse::Param(FCommandLine::Get(), TEXT("OsdsReview")))
+	{
+		if (FParse::Param(FCommandLine::Get(), TEXT("OsdsPreflightNoFrames")))
+		{
+			UE_LOG(LogOsdsPreflight, Warning, TEXT("Pre-flight: -OsdsReview needs the frames; no review evidence with -OsdsPreflightNoFrames"));
+		}
+		else
+		{
+			Review.Begin(OutputDir);
+		}
+	}
+	FString Start;
+	if (FParse::Value(Cmd, TEXT("OsdsStart="), Start, /*bShouldStopOnSeparator=*/ false))
+	{
+		FString A, B;
+		if (Start.Split(TEXT(","), &A, &B))
+		{
+			RequestedLat = FCString::Atod(*A.TrimStartAndEnd());
+			RequestedLon = FCString::Atod(*B.TrimStartAndEnd());
+			bRequestedStart = true;
+		}
+	}
+	Started = FPlatformTime::Seconds();
+	StageStarted = Started;
+	UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: %s with %s, %.0f s -> %s"), *RoadName, *CarId, DriveSeconds, *OutputDir);
+}
+
+void AOsdsPreflight::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (FrameHandle.IsValid())
+	{
+		UGameViewportClient::OnScreenshotCaptured().Remove(FrameHandle);
+		FrameHandle.Reset();
+	}
+	if (AOsdsWorldStreamer* Stream = RebaseStream.Get())
+	{
+		Stream->OnRebased.Remove(RebaseHandle);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void AOsdsPreflight::OnRebased(const FVector& OffsetCm)
+{
+	LastCarCm += OffsetCm;
+	for (TPair<TWeakObjectPtr<AActor>, FVector>& Car : KnownCars)
+	{
+		Car.Value += OffsetCm;
+	}
+	for (TPair<TWeakObjectPtr<AActor>, FTrafficWatch>& Car : TrafficWatch)
+	{
+		Car.Value.LastCm += OffsetCm;
+	}
+}
+
+double AOsdsPreflight::DistanceToStopLine(const FCursor& Here, FString& OutCrossName) const
+{
+	if (!Here.IsValid() || !Lines[Here.Line].Ribbon) return -1.0;
+	const FOsdsRibbon& Own = *Lines[Here.Line].Ribbon;
+	FCursor C = Here;
+	constexpr double StepM = 2.0;
+	for (int32 Step = 0; Step <= 30; ++Step)
+	{
+		if (Step > 0 && !Walk(C, StepM * 100.0)) break;
+		const FVector2d P = PointAt(C);
+		// The approach's heading (the robot's route can turn onto the crossing road ahead).
+		const FVector2d Heading = TangentAt(Here);
+		for (int32 L = 0; L < Lines.Num(); ++L)
+		{
+			const FLine& Other = Lines[L];
+			if (L == Here.Line || !Other.Ribbon) continue;
+			if (!Own.Name.IsEmpty() && Other.Ribbon->Name == Own.Name) continue;
+			if (!OsdsLanes::ApproachStops(Own.Rank, Own.bMajor, Other.Ribbon->Rank)) continue;
+			for (int32 I = 0; I + 1 < Other.P.Num(); ++I)
+			{
+				const FVector2d A = Other.P[I], B = Other.P[I + 1];
+				// A road that runs along ours (its continuation across a tile seam, a parallel carriageway) is no crossing.
+				if (FMath::Abs(FVector2d::DotProduct((B - A).GetSafeNormal(), Heading)) > 0.85) continue;
+				const double Len2 = FMath::Max((B - A).SizeSquared(), 1.0);
+				const double Tt = FMath::Clamp(FVector2d::DotProduct(P - A, B - A) / Len2, 0.0, 1.0);
+				const double HalfWCm = FMath::Lerp(Other.HalfW[I], Other.HalfW[I + 1], Tt) * 100.0;
+				if (FVector2d::Distance(P, FMath::Lerp(A, B, Tt)) < HalfWCm)
+				{
+					// The first point of the path inside the crossing carriageway: the painted stop line
+					// stands the crosswalk's setback before it, as the traffic stops.
+					OutCrossName = Other.Ribbon->Name.IsEmpty() ? Other.Ribbon->Class : Other.Ribbon->Name;
+					return FMath::Max(0.0, Step * StepM - OsdsLanes::StopLineSetbackM);
+				}
+			}
+		}
+	}
+	return -1.0;
+}
+
+void AOsdsPreflight::WatchTraffic(const AOsdsWorldStreamer* Stream, APawn* Pawn, const FVector& CarCm, const FVector& Forward, double Speed)
+{
+	using namespace OsdsPreflightRules;
+	const double Now = Stats.DriveSeconds;
+	const double OurYaw = Pawn->GetActorRotation().Yaw;
+	for (TActorIterator<AOsdsTrafficCar> It(GetWorld()); It; ++It)
+	{
+		AOsdsTrafficCar* Car = *It;
+		const FVector Pos = Car->GetActorLocation();
+		FTrafficWatch& W = TrafficWatch.FindOrAdd(TWeakObjectPtr<AActor>(Car));
+		// A car moved far in one sample was removed and placed again: its history starts again.
+		if (W.bHasPrev && FVector::Dist(W.LastCm, Pos) > 3000.0)
+		{
+			W = FTrafficWatch();
+		}
+		const FVector D = Pos - CarCm;
+		const double AlongM = FVector::DotProduct(D, Forward) / 100.0;
+		const double SideM = (Forward.X * D.Y - Forward.Y * D.X) / 100.0;
+		const double DzM = D.Z / 100.0;
+		const double Rel = FMath::FindDeltaAngleDegrees(OurYaw, Car->GetActorRotation().Yaw);
+		const double PrevSide = W.bHasPrev ? W.PrevSideM : SideM;
+
+		W.TimeYaw.Add(FVector2d(Now, Car->GetActorRotation().Yaw));
+		while (W.TimeYaw.Num() > 1 && Now - W.TimeYaw[0].X > TurnRoundWindowS + 0.5) W.TimeYaw.RemoveAt(0);
+		if (!W.bTurnRoundCounted && Car->Speed > 0.5 && IsTurnRound(W.TimeYaw))
+		{
+			W.bTurnRoundCounted = true;
+			++Stats.TrafficTurnRounds;
+			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: traffic car %s turned round (%.0f m away, ribbon %d of tile %d_%d, frame %d)"),
+				*Car->GetName(), D.Size() / 100.0, Car->Ribbon, Car->Tile.X, Car->Tile.Y, FrameIndex);
+			Review.Event(TEXT("traffic turn-round"), Stats.DriveSeconds);
+		}
+		if (Now - W.LastCutInS > 5.0 && IsCutIn(AlongM, SideM, PrevSide, Rel, Speed, Car->LengthM))
+		{
+			W.LastCutInS = Now;
+			++Stats.TrafficCutIns;
+			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: traffic cut-in: %s %.1f m ahead, %.1f m aside (was %.1f m), heading %+.0f deg to ours, at %.1f m/s (frame %d)"),
+				*Car->GetName(), AlongM, SideM, PrevSide, Rel, Speed, FrameIndex);
+			Review.Event(TEXT("traffic cut-in"), Stats.DriveSeconds);
+		}
+		if (!W.bOverlapCounted && FMath::Abs(DzM) < 2.0 && Overlaps(AlongM, SideM, Car->LengthM))
+		{
+			W.bOverlapCounted = true;
+			++Stats.TrafficOverlaps;
+			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: traffic car %s inside our car: %.1f m ahead, %.1f m aside, heading %+.0f deg (frame %d)"),
+				*Car->GetName(), AlongM, SideM, Rel, FrameIndex);
+			Review.Event(TEXT("traffic through our car"), Stats.DriveSeconds);
+		}
+		if (!W.bAtGradeCounted && Stream)
+		{
+			const AOsdsWorldTile* Tile = Stream->GetTile(Car->Tile);
+			const FOsdsTileBuild* Build = Tile ? Tile->GetBuild() : nullptr;
+			const FString Class = Build && Build->Roads.Ribbons.IsValidIndex(Car->Ribbon) ? Build->Roads.Ribbons[Car->Ribbon].Class : FString();
+			if (IsAtGradeMotorway(Class, AlongM, SideM, DzM, Rel))
+			{
+				W.bAtGradeCounted = true;
+				++Stats.TrafficAtGrade;
+				UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: motorway traffic at grade: %s on \"%s\" crosses our road %.1f m ahead, %.1f m aside, %.1f m up, heading %+.0f deg (frame %d)"),
+					*Car->GetName(), *Build->Roads.Ribbons[Car->Ribbon].Name, AlongM, SideM, DzM, Rel, FrameIndex);
+				Review.Event(TEXT("motorway traffic at grade"), Stats.DriveSeconds);
+			}
+		}
+		W.PrevSideM = SideM;
+		W.LastCm = Pos;
+		W.bHasPrev = true;
+	}
+}
+
+void AOsdsPreflight::GatherLines(const AOsdsWorldStreamer* Stream, const FVector& CarCm)
+{
+	Lines.Reset();
+	const FIntPoint Here = Stream->GetFrame().TileAtWorldCm(CarCm);
+	for (int32 DX = -1; DX <= 1; ++DX)
+	{
+		for (int32 DY = -1; DY <= 1; ++DY)
+		{
+			const AOsdsWorldTile* Tile = Stream->GetTile(Here + FIntPoint(DX, DY));
+			const FOsdsTileBuild* Build = Tile ? Tile->GetBuild() : nullptr;
+			if (!Build) continue;
+			const FVector2d Origin(Tile->GetActorLocation().X, Tile->GetActorLocation().Y);
+			for (const FOsdsRibbon& Ribbon : Build->Roads.Ribbons)
+			{
+				if (Ribbon.St.Num() < 2 || Ribbon.bService) continue;
+				FLine& Line = Lines.AddDefaulted_GetRef();
+				Line.Class = Ribbon.Class;
+				Line.Travel = Ribbon.St[0].Travel;
+				Line.Ribbon = &Ribbon;
+				for (const FOsdsRibbonStation& S : Ribbon.St)
+				{
+					Line.P.Add(Origin + S.C * 100.0);
+					Line.HalfW.Add(S.HalfW);
+				}
+			}
+		}
+	}
+}
+
+AOsdsPreflight::FCursor AOsdsPreflight::FindCursor(const FVector2d& CarXY, const FVector2d& Forward) const
+{
+	FCursor Best;
+	double BestScore = 3000.0;
+	for (int32 L = 0; L < Lines.Num(); ++L)
+	{
+		const TArray<FVector2d>& P = Lines[L].P;
+		for (int32 I = 0; I + 1 < P.Num(); ++I)
+		{
+			const FVector2d AB = P[I + 1] - P[I];
+			const double Len2 = AB.SquaredLength();
+			if (Len2 < 1.0) continue;
+			const double T = FMath::Clamp(FVector2d::DotProduct(CarXY - P[I], AB) / Len2, 0.0, 1.0);
+			const double Dist = FVector2d::Distance(CarXY, P[I] + AB * T);
+			const double Align = FVector2d::DotProduct(AB / FMath::Sqrt(Len2), Forward);
+			if (FMath::Abs(Align) < 0.5) continue;
+			// Near and parallel wins; a crossing road under the car loses to the one it drives along.
+			const double Score = Dist + (1.0 - FMath::Abs(Align)) * 800.0;
+			if (Score < BestScore)
+			{
+				BestScore = Score;
+				Best.Line = L;
+				Best.Seg = I;
+				Best.T = T;
+				Best.Dir = Align >= 0.0 ? 1 : -1;
+			}
+		}
+	}
+	return Best;
+}
+
+FVector2d AOsdsPreflight::PointAt(const FCursor& C) const
+{
+	const TArray<FVector2d>& P = Lines[C.Line].P;
+	return P[C.Seg] + (P[C.Seg + 1] - P[C.Seg]) * C.T;
+}
+
+FVector2d AOsdsPreflight::TangentAt(const FCursor& C) const
+{
+	const TArray<FVector2d>& P = Lines[C.Line].P;
+	return (P[C.Seg + 1] - P[C.Seg]).GetSafeNormal() * static_cast<double>(C.Dir);
+}
+
+bool AOsdsPreflight::Walk(FCursor& C, double DistanceCm) const
+{
+	double Left = DistanceCm;
+	for (int32 Guard = 0; Guard < 400 && C.IsValid(); ++Guard)
+	{
+		const TArray<FVector2d>& P = Lines[C.Line].P;
+		const double SegLen = FMath::Max(FVector2d::Distance(P[C.Seg], P[C.Seg + 1]), 1.0);
+		const double Room = (C.Dir > 0 ? 1.0 - C.T : C.T) * SegLen;
+		if (Left <= Room)
+		{
+			C.T += C.Dir * Left / SegLen;
+			return true;
+		}
+		Left -= Room;
+		if (C.Dir > 0 && C.Seg + 2 < P.Num()) { ++C.Seg; C.T = 0.0; continue; }
+		if (C.Dir < 0 && C.Seg > 0) { --C.Seg; C.T = 1.0; continue; }
+		// The end of this ribbon: go on along the ribbon that starts or ends here, straightest first.
+		C.T = C.Dir > 0 ? 1.0 : 0.0;
+		const FVector2d End = PointAt(C);
+		const FVector2d Heading = TangentAt(C);
+		FCursor Next;
+		double BestDot = -0.2;
+		for (int32 L = 0; L < Lines.Num(); ++L)
+		{
+			if (L == C.Line) continue;
+			const TArray<FVector2d>& Q = Lines[L].P;
+			if (FVector2d::Distance(Q[0], End) < 300.0)
+			{
+				const double Dot = FVector2d::DotProduct((Q[1] - Q[0]).GetSafeNormal(), Heading);
+				if (Dot > BestDot) { BestDot = Dot; Next.Line = L; Next.Seg = 0; Next.T = 0.0; Next.Dir = 1; }
+			}
+			if (FVector2d::Distance(Q.Last(), End) < 300.0)
+			{
+				const double Dot = FVector2d::DotProduct((Q[Q.Num() - 2] - Q.Last()).GetSafeNormal(), Heading);
+				if (Dot > BestDot) { BestDot = Dot; Next.Line = L; Next.Seg = Q.Num() - 2; Next.T = 1.0; Next.Dir = -1; }
+			}
+		}
+		// A ramp or a side road ends on another road's side, not at its end (a merge, a T-junction):
+		// go on along the road it meets, the way it heads, where that turns no more than about 50 deg.
+		// The robot had taken a ramp merge at Doraville, Georgia, for a dead end and braked from
+		// 28 m/s to a stand on the motorway.
+		if (!Next.IsValid())
+		{
+			double BestSide = 0.64;
+			for (int32 L = 0; L < Lines.Num(); ++L)
+			{
+				if (L == C.Line) continue;
+				const TArray<FVector2d>& Q = Lines[L].P;
+				for (int32 J = 0; J + 1 < Q.Num(); ++J)
+				{
+					const FVector2d A = Q[J], B = Q[J + 1];
+					const double Len2 = FMath::Max((B - A).SizeSquared(), 1.0);
+					const double Tt = FMath::Clamp(FVector2d::DotProduct(End - A, B - A) / Len2, 0.0, 1.0);
+					if (FVector2d::Distance(End, FMath::Lerp(A, B, Tt)) > 600.0) continue;
+					const FVector2d Along = (B - A).GetSafeNormal();
+					for (const int32 Dir : { 1, -1 })
+					{
+						const double Dot = FVector2d::DotProduct(Along * static_cast<double>(Dir), Heading);
+						if (Dot > BestSide) { BestSide = Dot; Next.Line = L; Next.Seg = J; Next.T = Tt; Next.Dir = Dir; }
+					}
+				}
+			}
+		}
+		if (!Next.IsValid())
+		{
+			return false;
+		}
+		C = Next;
+	}
+	return C.IsValid();
+}
+
+void AOsdsPreflight::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	const double Now = FPlatformTime::Seconds();
+	AOsdsPlayerController* Player = Cast<AOsdsPlayerController>(UGameplayStatics::GetPlayerController(this, 0));
+	APawn* Pawn = Player ? Player->GetPawn() : nullptr;
+	AOsdsGameMode* Mode = GetWorld()->GetAuthGameMode<AOsdsGameMode>();
+	AOsdsWorldStreamer* Stream = Mode ? Mode->GetStreamer() : nullptr;
+
+	// Until the drive starts the car stands on its parking brake: an automatic creeps in Drive, and a
+	// car placed on a slope rolls (the Mustang crept 3.7 m onto the grass bank at Welch, West
+	// Virginia, while the tiles and shaders finished). The cockpit test holds it itself while it runs.
+	if ((Stage == EStage::WaitReady || Stage == EStage::Settle) && Player && Pawn && !bHoldingParkingBrake)
+	{
+		bool bCockpitTestRunning = false;
+		for (TActorIterator<AOsdsCockpitTest> It(GetWorld()); It; ++It)
+		{
+			bCockpitTestRunning |= !It->IsFinished();
+		}
+		if (!bCockpitTestRunning)
+		{
+			bHoldingParkingBrake = true;
+			Player->InjectKey(EKeys::Gamepad_FaceButton_Right, true);
+		}
+	}
+	switch (Stage)
+	{
+	case EStage::WaitReady:
+	{
+		const bool bShadersBusy = GShaderCompilingManager && GShaderCompilingManager->GetNumRemainingJobs() > 0;
+		const bool bTiles = !Stream || (Pawn && Stream->AreTilesReadyAround(Pawn->GetActorLocation(), 1));
+		const bool bPlaced = Pawn && (!Mode || Mode->IsDriveReady());
+		bool bViewDone = true;
+		for (TActorIterator<AOsdsViewCheck> It(GetWorld()); It; ++It)
+		{
+			bViewDone &= It->IsFinished();
+		}
+		// The cockpit steer test first (the car at rest), then the drive.
+		for (TActorIterator<AOsdsCockpitTest> It(GetWorld()); It; ++It)
+		{
+			bViewDone &= It->IsFinished();
+		}
+		if ((bPlaced && bTiles && !bShadersBusy && bViewDone) || Now - Started > ReadyTimeoutS)
+		{
+			Stage = EStage::Settle;
+			StageStarted = Now;
+		}
+		break;
+	}
+	case EStage::Settle:
+		if (Now - StageStarted > SettleS && Pawn && Stream)
+		{
+			// What is in the world when the drive starts is not a pop-in.
+			const FIntPoint Here = Stream->GetFrame().TileAtWorldCm(Pawn->GetActorLocation());
+			for (int32 DX = -3; DX <= 3; ++DX)
+			{
+				for (int32 DY = -3; DY <= 3; ++DY)
+				{
+					const AOsdsWorldTile* Tile = Stream->GetTile(Here + FIntPoint(DX, DY));
+					if (Tile && Tile->GetBuild()) KnownTiles.Add(Here + FIntPoint(DX, DY));
+				}
+			}
+			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+			{
+				if (It->IsA<AOsdsTrafficCar>() || It->IsA<AOsdsCarPresentationActor>()) KnownCars.Add(*It, It->GetActorLocation());
+			}
+			RebaseStream = Stream;
+			RebaseHandle = Stream->OnRebased.AddUObject(this, &AOsdsPreflight::OnRebased);
+			FrameHandle = UGameViewportClient::OnScreenshotCaptured().AddUObject(this, &AOsdsPreflight::OnFrame);
+			LastYawDeg = Pawn->GetActorRotation().Yaw;
+			Stage = EStage::Drive;
+			StageStarted = Now;
+			Stats.DriveSeconds = 0.f;
+	PoseLogNext = 0;
+		}
+		else if (Now - StageStarted > 60.0)
+		{
+			Finish();
+		}
+		break;
+	case EStage::Drive:
+		if (!Player || !Pawn)
+		{
+			Finish();
+			break;
+		}
+		Stats.DriveSeconds += DeltaSeconds;
+		DriveTick(Player, DeltaSeconds);
+		if (bForceSpin)
+		{
+			// The negative test: at speed, a full yank of the stick with the handbrake on for 2 s.
+			// The run must FAIL with a spin; it overrides what the robot asked for this frame.
+			// It starts once the car is above 12 m/s (or after 25 s) and then holds for 2.5 s whatever the speed.
+			const bool bAtSpeed = Player->GetTelemetry().BodyVelocityMps.X > 12.0 || Stats.DriveSeconds > 25.f;
+			const bool bYank = (ForceSpinClock > 0.f || bAtSpeed) && ForceSpinClock < 2.5f;
+			if (bYank)
+			{
+				// A handbrake turn alone does not always turn the car round: on the first frame the body
+				// also gets a 240 deg/s yaw kick, so the test always has a spin to find.
+				if (ForceSpinClock == 0.f)
+				{
+					if (UPrimitiveComponent* Body = Cast<UPrimitiveComponent>(Pawn->GetRootComponent()))
+					{
+						Body->SetPhysicsAngularVelocityInDegrees(FVector(0.0, 0.0, 240.0), true);
+					}
+				}
+				ForceSpinClock += DeltaSeconds;
+				Stats.bForcedSpin = true;
+				Player->InjectAxis(EKeys::Gamepad_LeftX, 1.f);
+				Player->InjectAxis(EKeys::Gamepad_RightTriggerAxis, 0.f);
+				Player->InjectAxis(EKeys::Gamepad_LeftTriggerAxis, 0.f);
+			}
+			if (bYank != bForceSpinBrake)
+			{
+				Player->InjectKey(EKeys::Gamepad_FaceButton_Right, bYank);
+				bForceSpinBrake = bYank;
+				UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: forced spin %s at %.0f m"), bYank ? TEXT("starts") : TEXT("ends"), PathM);
+			}
+		}
+		MeasureTick(Player, DeltaSeconds);
+		{
+			// The real frame time (DeltaSeconds can be clamped); a long one is a stall the player sees.
+			const float Ms = static_cast<float>(FApp::GetDeltaTime() * 1000.0);
+			FrameMs.Add(Ms);
+			// The rules judge the frames after the warm-up that no screenshot of the robot's own touched.
+			if (CaptureSkip > 0)
+			{
+				--CaptureSkip;
+			}
+			else if (Stats.DriveSeconds > OsdsPreflightRules::FrameWarmupS)
+			{
+				TimedFrameMs.Add(Ms);
+			}
+			if (Ms > 50.f)
+			{
+				UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: stall %.0f ms at %.0f m (%.0f km/h)"), Ms, PathM, Player->GetTelemetry().BodyVelocityMps.X * 3.6);
+			}
+			if (Ms > 100.f && Stats.DriveSeconds > OsdsPreflightRules::FrameWarmupS && CaptureSkip == 0)
+			{
+				Review.Event(FString::Printf(TEXT("hitch %.0f ms"), Ms), Stats.DriveSeconds);
+			}
+		}
+		Review.Tick(*Player, Stats.DriveSeconds, DeltaSeconds, Stick);
+		FrameClock += DeltaSeconds;
+		if (!bNoFrames && FrameClock >= FrameIntervalS && !bFramePending)
+		{
+			FrameClock = 0.f;
+			RequestFrame(Player);
+		}
+		if (Stats.DriveSeconds >= DriveSeconds)
+		{
+			Player->InjectAxis(EKeys::Gamepad_RightTriggerAxis, 0.f);
+			Player->InjectAxis(EKeys::Gamepad_LeftX, 0.f);
+			Finish();
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+void AOsdsPreflight::DriveTick(AOsdsPlayerController* Player, float DeltaSeconds)
+{
+	APawn* Pawn = Player->GetPawn();
+	const AOsdsGameMode* Mode = GetWorld()->GetAuthGameMode<AOsdsGameMode>();
+	const AOsdsWorldStreamer* Stream = Mode ? Mode->GetStreamer() : nullptr;
+	if (!Stream || !Pawn)
+	{
+		return;
+	}
+	const FVector CarCm = Pawn->GetActorLocation();
+	const FVector2d Car(CarCm.X, CarCm.Y);
+	const FVector2d Forward = FVector2d(Pawn->GetActorForwardVector().X, Pawn->GetActorForwardVector().Y).GetSafeNormal();
+	const double Speed = Player->GetTelemetry().BodyVelocityMps.X;
+	// The yaw rate from the frame's change of heading jumps with uneven frames and single-step
+	// contacts (50-196 deg/s spikes in the Dragon's hairpins), and the steering answered each one:
+	// the wheel sawed. A driver feels the car's turn smoothly: the rate, low-passed (0.1 s).
+	const double RawYawRate = FMath::DegreesToRadians(FMath::FindDeltaAngleDegrees(LastYawDeg, Pawn->GetActorRotation().Yaw)) / FMath::Max(DeltaSeconds, 1e-3f);
+	SmoothedYawRate += (FMath::Clamp(RawYawRate, -2.0, 2.0) - SmoothedYawRate) * (1.0 - FMath::Exp(-FMath::Max(DeltaSeconds, 0.f) / 0.1));
+	const double YawRate = SmoothedYawRate;
+	LastYawDeg = Pawn->GetActorRotation().Yaw;
+	GatherLines(Stream, CarCm);
+	const FCursor Here = FindCursor(Car, Forward);
+	float Throttle = 0.f, Brake = 0.f;
+	if (!Here.IsValid())
+	{
+		// No road near: stop and wait.
+		Brake = Speed > 0.5 ? 0.4f : 0.f;
+		Player->InjectAxis(EKeys::Gamepad_RightTriggerAxis, 0.f);
+		Player->InjectAxis(EKeys::Gamepad_LeftTriggerAxis, Brake);
+		Player->InjectAxis(EKeys::Gamepad_LeftX, 0.f);
+		return;
+	}
+
+	// Steering: pure pursuit to the right lane's centre ahead, as a yaw rate the stick follows.
+	const double LookM = FMath::Clamp(6.0 + 0.8 * FMath::Max(Speed, 0.0), 8.0, 30.0);
+	FCursor Look = Here;
+	Walk(Look, LookM * 100.0);
+	const FLine& Line = Lines[Look.Line];
+	// The rightmost travel lane as the traffic drives it: inside any parking lane, along the station's R.
+	const int32 Station = Look.Dir > 0 ? Look.Seg : Look.Seg + 1;
+	const double LaneM = OsdsTrafficModel::LaneOffsetM(*Line.Ribbon, Station, Look.Dir);
+	const FVector2d Target = PointAt(Look) + Line.Ribbon->St[Station].R * LaneM * 100.0;
+	const FVector2d ToTarget = Target - Car;
+	const double Alpha = FMath::Atan2(Forward.X * ToTarget.Y - Forward.Y * ToTarget.X, FVector2d::DotProduct(Forward, ToTarget));
+	const double Curvature = 2.0 * FMath::Sin(Alpha) / LookM;
+	const double YawError = Speed * Curvature - YawRate;
+	if (Speed < 1.0)
+	{
+		SteerIntegral = 0.f;
+	}
+	else
+	{
+		SteerIntegral = FMath::Clamp(SteerIntegral + static_cast<float>(1.5 * YawError * DeltaSeconds), -1.f, 1.f);
+	}
+	// Feed-forward, per car: the road-wheel angle of the curve at this car's wheelbase, over the
+	// angle full stick gives now (the shaper's range at this speed, else the car's full lock).
+	double WheelbaseM = 2.4;
+	double FullLockRad = 0.61;
+	TOptional<FOsdsVehicleSetup> RobotSetup;
+	if (const IOsdsVehicleControl* Control = Cast<IOsdsVehicleControl>(Pawn))
+	{
+		RobotSetup = Control->GetVehicleSetup();
+		WheelbaseM = RobotSetup->WheelbaseM;
+		FullLockRad = RobotSetup->ParkingRackAngleRad;
+	}
+	const double WheelRad = FMath::Atan(Curvature * WheelbaseM);
+	const double RangeRad = WheelRad >= 0.0 ? Player->GetShaper().GetRangeRightRad() : Player->GetShaper().GetRangeLeftRad();
+	const double FeedForward = WheelRad / FMath::Max(FMath::Abs(RangeRad) > 0.01 ? FMath::Abs(RangeRad) : FullLockRad, 0.05);
+	// The wanted command is a share of the range, linear in the wheel angle; the pad's own shaping
+	// (dead zones, the fine centre, the car's quickness) is not. Sent as it was, a 0.28 stick asked
+	// for a third of the angle meant, and the robot ran wide in a 25 mph left at Bixby Creek. The
+	// stick that gives the wanted command, through the same shaping a player's thumb goes through.
+	const double WantCommand = FMath::Clamp(FeedForward + SteerIntegral + 0.4 * YawError, -1.0, 1.0);
+	const float WantStick = RobotSetup.IsSet()
+		? static_cast<float>(OsdsShaping::PadStickForCommand(*RobotSetup, WantCommand, Speed))
+		: static_cast<float>(WantCommand);
+	// A hand moves the stick at most about 4 full widths a second (lock to lock in half a second).
+	const float MaxStep = 4.f * FMath::Max(DeltaSeconds, 0.f);
+	Stick = LastStick + FMath::Clamp(WantStick - LastStick, -MaxStep, MaxStep);
+	LastStick = Stick;
+
+	// Speed: the road's limit, slower for the curves ahead and for a car ahead.
+	// The keen pace from the car's own grip (its published skidpad).
+	double Grip = 1.0;
+	if (const AOsdsVehicle* Driven = Cast<AOsdsVehicle>(Player->GetPawn())) Grip = FMath::Clamp(Driven->GetRealCar().TargetSkidpadG, 0.5, 1.3);
+	const double Lat = bKeen ? 0.7 * Grip * 9.80665 : LateralAccel;
+	// Braking done early, mostly in a straight line, as a quick driver does on a road.
+	const double Decel = bKeen ? 0.55 * Grip * 9.80665 : BrakeAccel;
+	double TargetMps = bKeen ? 45.0 : FMath::Min(OsdsTrafficModel::SpeedLimitMps(Line.Class), MaxSpeedMps);
+	if (TargetMps <= 1.0) TargetMps = 13.4;
+	if (SpeedOverrideMps > 0.0) TargetMps = SpeedOverrideMps;
+	FCursor Ahead = Here;
+	FVector2d PrevTangent = TangentAt(Ahead);
+	double CurveDecelNeeded = 0.0;
+	for (int32 Step = 1; Step <= (bKeen ? 40 : 16); ++Step)
+	{
+		const double S = Step * 5.0;
+		if (!Walk(Ahead, 500.0))
+		{
+			// A dead end: be able to stop before it.
+			TargetMps = FMath::Min(TargetMps, FMath::Sqrt(2.0 * Decel * FMath::Max(0.0, S - 10.0)));
+			break;
+		}
+		const FVector2d T = TangentAt(Ahead);
+		const double Turn = FMath::Acos(FMath::Clamp(FVector2d::DotProduct(PrevTangent, T), -1.0, 1.0));
+		PrevTangent = T;
+		const double Kappa = FMath::Max(Turn / 5.0, 1e-4);
+		const double CurveMps = FMath::Sqrt(Lat / Kappa);
+		TargetMps = FMath::Min(TargetMps, FMath::Sqrt(CurveMps * CurveMps + 2.0 * Decel * FMath::Max(0.0, S - 5.0)));
+		// The deceleration this curve asks for from here (a driver sees the bend and brakes for it).
+		CurveDecelNeeded = FMath::Max(CurveDecelNeeded, (Speed * Speed - CurveMps * CurveMps) / (2.0 * FMath::Max(S - 5.0, 2.0)));
+	}
+	// Traffic ahead in this lane (traffic cars do not all block traces): keep a 2 s gap plus 6 m.
+	for (TActorIterator<AOsdsTrafficCar> It(GetWorld()); It; ++It)
+	{
+		const FVector2d D = FVector2d(It->GetActorLocation().X, It->GetActorLocation().Y) - Car;
+		const double AlongM = FVector2d::DotProduct(D, Forward) / 100.0;
+		const double SideM = FMath::Abs(Forward.X * D.Y - Forward.Y * D.X) / 100.0;
+		if (AlongM < 1.0 || AlongM > 80.0 || SideM > 2.2) continue;
+		const double GapM = AlongM - 4.5;
+		const double Wanted = 6.0 + 2.0 * Speed;
+		TargetMps = FMath::Min(TargetMps, FMath::Max(0.0, It->Speed + 0.5 * (GapM - Wanted)));
+	}
+	{
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(OsdsPreflightAhead), false);
+		Params.AddIgnoredActor(Pawn);
+		const FVector2d D2 = ToTarget.GetSafeNormal();
+		const FVector Dir(D2.X, D2.Y, 0.0);
+		const FVector From = CarCm + FVector(Forward.X, Forward.Y, 0.0) * 250.0 + FVector(0.0, 0.0, 60.0);
+		const double Range = FMath::Max(2000.0, 300.0 * Speed);
+		FHitResult Hit;
+		// Only a car in the robot's own path stops it (within 1.8 m of its line ahead): the line
+		// toward the steering target can cross parked cars beside a merge or a bend.
+		if (GetWorld()->LineTraceSingleByChannel(Hit, From, From + Dir * Range, ECC_Visibility, Params) && IsCarActor(Hit.GetActor()))
+		{
+			const FVector2d ToHit = FVector2d(Hit.GetActor()->GetActorLocation().X - CarCm.X, Hit.GetActor()->GetActorLocation().Y - CarCm.Y) / 100.0;
+			if (FMath::Abs(Forward.X * ToHit.Y - Forward.Y * ToHit.X) < 1.8)
+			{
+				TargetMps = FMath::Min(TargetMps, FMath::Max(0.0, (Hit.Distance / 100.0 - 6.0) / 1.8));
+			}
+		}
+	}
+	// The gap-acceptance case: stop at the first stop line, hold, then pull out as a driver would.
+	if (StopAtJunctionS > 0.f && !bJunctionDone)
+	{
+		FString Cross;
+		const double StopM = DistanceToStopLine(Here, Cross);
+		if (StopM >= 0.0)
+		{
+			TargetMps = FMath::Min(TargetMps, FMath::Sqrt(2.0 * Decel * FMath::Max(0.0, StopM - 0.5)));
+			if (StopM < 4.0 && Speed < 0.3)
+			{
+				TargetMps = 0.0;
+				if (JunctionHeldS == 0.0)
+				{
+					JunctionCrossName = Cross;
+					UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: stopped at the stop line for %s, %.1f m to it, at %.0f m; holding %.0f s"), *Cross, StopM, PathM, StopAtJunctionS);
+					Review.Event(TEXT("junction stop"), Stats.DriveSeconds);
+				}
+				JunctionHeldS += DeltaSeconds;
+				Stats.JunctionHoldS = static_cast<float>(JunctionHeldS);
+				if (JunctionHeldS >= StopAtJunctionS)
+				{
+					bJunctionDone = true;
+					UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: pulls out across %s after %.1f s"), *JunctionCrossName, JunctionHeldS);
+					Review.Event(TEXT("junction go"), Stats.DriveSeconds);
+				}
+			}
+		}
+	}
+	const double Error = TargetMps - Speed;
+	if (Error > 0.0)
+	{
+		Throttle = static_cast<float>(FMath::Clamp(0.2 + 0.35 * Error, 0.0, 1.0));
+	}
+	else if (Error < -0.8 && Speed > 0.5)
+	{
+		Brake = static_cast<float>(FMath::Clamp(0.2 * -Error, 0.05, 1.0));
+	}
+	// Braking for a bend: the pedal for the deceleration it needs, not only for the speed already
+	// too high. Braking on the error alone trailed the plan by the error that made the pedal (Bixby
+	// Creek, CA-1: into a 27 mph left at 33 mph, 0.36 brake, wide onto the cut bank). Full pedal
+	// is about the car's grip in g; on the plan's own profile the speed meets the bend.
+	if (CurveDecelNeeded > 0.5 && Speed > 3.0)
+	{
+		Throttle = 0.f;
+		const double FullPedalDecel = FMath::Max(Grip, 0.5) * 9.80665;
+		Brake = FMath::Max(Brake, static_cast<float>(FMath::Clamp(CurveDecelNeeded / FullPedalDecel + 0.1 * FMath::Max(-Error, 0.0), 0.0, 1.0)));
+	}
+	// What a driver does at the limit: no harder braking than the grip the corner leaves (the
+	// friction circle), and a lift as soon as the car starts to slide.
+	const FVector Body = Player->GetTelemetry().BodyVelocityMps;
+	const double LateralG = FMath::Abs(Speed * YawRate) / 9.80665;
+	const double SlipDeg = Speed > 3.0 ? FMath::RadiansToDegrees(FMath::Atan2(FMath::Abs(Body.Y), FMath::Abs(Body.X))) : 0.0;
+	if (bKeen)
+	{
+		const double Used = FMath::Clamp(LateralG / FMath::Max(Grip, 0.5), 0.0, 1.0);
+		Brake = FMath::Min(Brake, static_cast<float>(FMath::Sqrt(FMath::Max(0.0, 1.0 - Used * Used))));
+		if (SlipDeg > 4.0) Throttle = 0.f;
+		else if (Used > 0.6) Throttle = FMath::Min(Throttle, 0.55f);
+	}
+	TelemetryClock += DeltaSeconds;
+	if (TelemetryClock >= 0.25f)
+	{
+		TelemetryClock = 0.f;
+		const FOsdsDriveTelemetry& T = Player->GetTelemetry();
+		UE_LOG(LogOsdsPreflight, Display, TEXT("ROBOT t %.2f v %.1f target %.1f stick %+.2f thr %.2f brk %.2f yaw %+.1f deg/s lat %.2f g slip %.1f deg gear %d rpm %.0f"),
+			GetWorld()->GetTimeSeconds(), Speed, TargetMps, Stick, Throttle, Brake, FMath::RadiansToDegrees(YawRate), LateralG, SlipDeg, T.Gear, T.EngineSpeedRpm);
+	}
+	// Stopping for a car ahead or one crossing: the last metre on the parking brake (B), as a driver
+	// holds the car at a junction. The brake trigger held at a standstill selects reverse in the
+	// automatic, and the robot reversed away from a car crossing in front of it at Ocean Drive.
+	const bool bHold = TargetMps < 0.5 && Speed < 1.5;
+	if (bHold)
+	{
+		Brake = 0.f;
+		Throttle = 0.f;
+	}
+	if (bHold != bHoldingParkingBrake)
+	{
+		bHoldingParkingBrake = bHold;
+		Player->InjectKey(EKeys::Gamepad_FaceButton_Right, bHold);
+	}
+	Player->InjectAxis(EKeys::Gamepad_RightTriggerAxis, Throttle);
+	Player->InjectAxis(EKeys::Gamepad_LeftTriggerAxis, Brake);
+	Player->InjectAxis(EKeys::Gamepad_LeftX, Stick);
+}
+
+void AOsdsPreflight::MeasureTick(AOsdsPlayerController* Player, float DeltaSeconds)
+{
+	APawn* Pawn = Player->GetPawn();
+	const AOsdsGameMode* Mode = GetWorld()->GetAuthGameMode<AOsdsGameMode>();
+	const AOsdsWorldStreamer* Stream = Mode ? Mode->GetStreamer() : nullptr;
+	if (!Stream || !Pawn)
+	{
+		return;
+	}
+	const FVector CarCm = Pawn->GetActorLocation();
+	const FVector Forward = FVector(Pawn->GetActorForwardVector().X, Pawn->GetActorForwardVector().Y, 0.0).GetSafeNormal();
+	const double Speed = Player->GetTelemetry().BodyVelocityMps.X;
+	if (bHasLastCar)
+	{
+		PathM += FVector::Dist2D(CarCm, LastCarCm) / 100.0;
+	}
+	LastCarCm = CarCm;
+	bHasLastCar = true;
+	SpeedSum += Speed;
+	++SpeedSamples;
+
+	// A spin, as the drive robot measures it: the rear axle's slip angle above 5 m/s, and a slide backwards.
+	if (const AOsdsVehicle* Car = Cast<AOsdsVehicle>(Pawn); Car && Car->GetVehicleMovement())
+	{
+		FOsdsVehicleTelemetry T;
+		Car->GetVehicleMovement()->CopyTelemetry(T);
+		const FVector V = T.BodyVelocityLocalMps;
+		const FVector W = T.BodyAngularVelocityLocalRadPerSecond;
+		const FOsdsVehicleSetup Setup = Car->GetVehicleSetup();
+		const double ToRearAxleM = Setup.WheelbaseM - Setup.CenterOfMassToFrontAxleM;
+		if (V.X > 5.0)
+		{
+			const double RearSlipDeg = FMath::Abs(FMath::RadiansToDegrees(FMath::Atan2(V.Y - W.Z * ToRearAxleM, V.X)));
+			if (RearSlipDeg > Stats.PeakRearSlipDeg && RearSlipDeg > OsdsPreflightRules::MaxRearSlipDeg)
+			{
+				UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: rear slip %.0f deg at %.0f m (frame %d)"), RearSlipDeg, PathM, FrameIndex);
+				Review.Event(TEXT("spin"), Stats.DriveSeconds);
+			}
+			Stats.PeakRearSlipDeg = FMath::Max(Stats.PeakRearSlipDeg, static_cast<float>(RearSlipDeg));
+		}
+		Stats.PeakYawDps = FMath::Max(Stats.PeakYawDps, static_cast<float>(FMath::Abs(FMath::RadiansToDegrees(W.Z))));
+		// Backwards counts once the car has driven (a roll-back on a slope at the start is not a spin).
+		bHasDriven = bHasDriven || V.X > 5.0;
+		ReverseNow = bHasDriven && V.X < -2.0 ? ReverseNow + DeltaSeconds : 0.f;
+		Stats.ReversedSeconds = FMath::Max(Stats.ReversedSeconds, ReverseNow);
+		// Falls and flips: wheels off the ground at speed, the body past 60 deg of roll or pitch.
+		AirborneNow = (V.X > 5.0 && T.WheelContactCount < 3) ? AirborneNow + DeltaSeconds : 0.f;
+		Stats.AirborneSeconds = FMath::Max(Stats.AirborneSeconds, AirborneNow);
+		const FRotator Attitude = Pawn->GetActorRotation();
+		FlippedNow = (FMath::Abs(Attitude.Roll) > 60.f || FMath::Abs(Attitude.Pitch) > 60.f) ? FlippedNow + DeltaSeconds : 0.f;
+		Stats.FlippedSeconds = FMath::Max(Stats.FlippedSeconds, FlippedNow);
+		// Stability control: how often it acts, and whether it acts on a straight road.
+		if (T.bStabilityControlActive) Stats.EscSeconds += DeltaSeconds;
+		const bool bStraight = V.X > 15.0 && FMath::Abs(T.SteeringInput) < 0.05;
+		if (bStraight && T.bStabilityControlActing && EscStraightNow == 0.f)
+		{
+			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: stability control on a straight road at %.0f m: %.1f m/s, yaw %.3f rad/s, reference %.3f, oversteer %.3f, understeer %.3f, side slip %.1f deg, steering %.3f, wheels %d"),
+				PathM, V.X, T.EscYawRadPerS, T.EscReferenceYawRadPerS, T.EscOversteer, T.EscUndersteer,
+				FMath::RadiansToDegrees(FMath::Atan2(V.Y, FMath::Max(V.X, 1.0))), T.SteeringInput, T.WheelContactCount);
+		}
+		// Acting now (a brake pulse or a cut), not the lamp's hold after a catch in the bend before.
+		EscStraightNow = (bStraight && T.bStabilityControlActing) ? EscStraightNow + DeltaSeconds : 0.f;
+		if (bStraight && T.bStabilityControlActing) Stats.EscStraightSeconds += DeltaSeconds;
+		Stats.EscStraightLongestS = FMath::Max(Stats.EscStraightLongestS, EscStraightNow);
+	}
+
+	// A run-off: how far the car's centre is past the paved edge of the ribbon it drives along
+	// (the lines DriveTick gathered this frame); no aligned road within 30 m counts as 30 m.
+	if (!Lines.IsEmpty())
+	{
+		const FVector2d Car2(CarCm.X, CarCm.Y);
+		const FCursor Near = FindCursor(Car2, FVector2d(Forward.X, Forward.Y));
+		const double PastEdgeM = Near.IsValid() ? FVector2d::Distance(Car2, PointAt(Near)) / 100.0 - Lines[Near.Line].HalfW[Near.Seg] : 30.0;
+		Stats.MaxOffRibbonM = FMath::Max(Stats.MaxOffRibbonM, static_cast<float>(PastEdgeM));
+		const bool bOff = PastEdgeM > OsdsPreflightRules::MaxOffRibbonM;
+		if (bOff && OffRibbonNow == 0.f)
+		{
+			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: %.1f m past the road edge at %.0f m (frame %d)"), PastEdgeM, PathM, FrameIndex);
+			Review.Event(TEXT("run-off"), Stats.DriveSeconds);
+		}
+		OffRibbonNow = bOff ? OffRibbonNow + DeltaSeconds : 0.f;
+		Stats.OffRibbonSeconds = FMath::Max(Stats.OffRibbonSeconds, OffRibbonNow);
+		// The pose at drive frame 0 and at 0.1, 0.5 and 1.0 s: where the car really is, and what the
+		// judge measures it against (a start that fails at frame 0 can be read from this).
+		static const float PoseTimes[] = {0.f, 0.1f, 0.5f, 1.0f};
+		while (PoseLogNext < UE_ARRAY_COUNT(PoseTimes) && Stats.DriveSeconds >= PoseTimes[PoseLogNext])
+		{
+			double Lon = 0.0, Lat = 0.0;
+			if (Stream) Stream->GetFrame().WorldCmToLonLat(CarCm, Lon, Lat);
+			const FIntPoint Tile = Stream ? Stream->GetFrame().TileAtWorldCm(CarCm) : FIntPoint::ZeroValue;
+			const FOsdsRibbon* Ribbon = Near.IsValid() ? Lines[Near.Line].Ribbon : nullptr;
+			UE_LOG(LogOsdsPreflight, Display, TEXT("PREFLIGHT POSE t=%.2f X=%.1f Y=%.1f Z=%.1f lat=%.6f lon=%.6f heading=%.1f tile=%d_%d judge_line=%d seg=%d ribbon=\"%s\" class=%s centreline=%.2fm half_width=%.2fm past_edge=%.2fm"),
+				Stats.DriveSeconds, CarCm.X, CarCm.Y, CarCm.Z, Lat, Lon, Pawn->GetActorRotation().Yaw, Tile.X, Tile.Y,
+				Near.IsValid() ? Near.Line : -1, Near.IsValid() ? Near.Seg : -1, Ribbon ? *Ribbon->Name : TEXT("-"), Ribbon ? *Ribbon->Class : TEXT("-"),
+				Near.IsValid() ? FVector2d::Distance(Car2, PointAt(Near)) / 100.0 : -1.0, Near.IsValid() ? Lines[Near.Line].HalfW[Near.Seg] : -1.0, PastEdgeM);
+			++PoseLogNext;
+		}
+	}
+
+	// The road surface: the tile's own collision under a point, or a bridge deck above it.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(OsdsPreflightGround), true);
+	Params.bReturnFaceIndex = true;
+	Params.AddIgnoredActor(Pawn);
+	auto SurfaceAt = [&](const FVector& At, double& OutZm) -> bool
+	{
+		const FVector From = At + FVector(0.0, 0.0, 300.0);
+		const FVector To = At - FVector(0.0, 0.0, 800.0);
+		FHitResult Hit;
+		if (GetWorld()->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Params) && Hit.GetActor() && Hit.GetActor()->IsA<AOsdsBridges>())
+		{
+			OutZm = Hit.ImpactPoint.Z / 100.0;
+			return true;
+		}
+		// The tile under the point, and its neighbours: within a few centimetres of a tile edge the
+		// point's own tile can miss while the road there is the neighbour's mesh (it read as a
+		// 1.3 m "gap" at a border on CA-1 in the v2.0.2 pre-flight). Take the highest hit.
+		const FIntPoint Home = Stream->GetFrame().TileAtWorldCm(At);
+		bool bAny = false, bRoad = false;
+		double Best = TNumericLimits<double>::Lowest();
+		for (int32 DY = -1; DY <= 1; ++DY)
+		for (int32 DX = -1; DX <= 1; ++DX)
+		{
+			const AOsdsWorldTile* Tile = Stream->GetTile(Home + FIntPoint(DX, DY));
+			if (!Tile || !Tile->Mesh) continue;
+			FHitResult TileHit;
+			if (!Tile->Mesh->LineTraceComponent(TileHit, From, To, Params)) continue;
+			if (TileHit.ImpactPoint.Z / 100.0 <= Best) continue;
+			Best = TileHit.ImpactPoint.Z / 100.0;
+			bAny = true;
+			bRoad = IsRoadLayer(Tile->LayerAtFace(TileHit.FaceIndex));
+		}
+		if (!bAny) return false;
+		OutZm = Best;
+		return bRoad;
+	};
+	// The surface under the car's centre: the path the wheels ride. A point straight ahead
+	// leaves the paved edge in a hairpin and reads as a gap that is not there.
+	double UnderZm = 0.0;
+	const bool bUnderRoad = SurfaceAt(CarCm, UnderZm);
+	Surface.Add(FVector2f(static_cast<float>(PathM), static_cast<float>(UnderZm)));
+	SurfaceIsRoad.Add(bUnderRoad ? 1 : 0);
+	{
+		double Lon = 0.0, Lat = 0.0;
+		if (Stream) Stream->GetFrame().WorldCmToLonLat(CarCm, Lon, Lat);
+		SurfaceLatLon.Add(FVector2d(Lat, Lon));
+		Review.SetPosition(Lat, Lon, Pawn->GetActorRotation().Yaw, PathM);
+	}
+	OffRoadNow = bUnderRoad ? 0.f : OffRoadNow + DeltaSeconds;
+	Stats.OffRoadSeconds = FMath::Max(Stats.OffRoadSeconds, OffRoadNow);
+
+	// Jolts: vertical acceleration of the body, from its velocity.
+	const double Vz = Player->GetTelemetry().BodyVelocityMps.Z;
+	if (bHasLastVz && DeltaSeconds > 1e-3f && DeltaSeconds < 0.1f && JoltCooldown <= 0.f)
+	{
+		const double Az = (Vz - LastVz) / DeltaSeconds;
+		if (FMath::Abs(Az) > OsdsPreflightRules::JoltMps2)
+		{
+			++Stats.Jolts;
+			JoltCooldown = 0.3f;
+			const FOsdsWorldFrame& Frame = Stream->GetFrame();
+			const bool bBorder = Frame.TileAtWorldCm(CarCm + Forward * 800.0) != Frame.TileAtWorldCm(CarCm - Forward * 800.0);
+			Stats.BorderJolts += bBorder ? 1 : 0;
+			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight jolt %.1f m/s^2 at %.0f m%s (frame %d)"), Az, PathM, bBorder ? TEXT(" at a tile border") : TEXT(""), FrameIndex);
+			Review.Event(TEXT("jolt"), Stats.DriveSeconds);
+		}
+	}
+	JoltCooldown -= DeltaSeconds;
+	LastVz = Vz;
+	bHasLastVz = true;
+
+	// Pop-in and stuck traffic, ten times a second.
+	PopClock += DeltaSeconds;
+	if (PopClock < 0.1f)
+	{
+		return;
+	}
+	PopClock = 0.f;
+	const FVector Eye = Player->PlayerCameraManager ? Player->PlayerCameraManager->GetCameraLocation() : CarCm;
+	const FVector LookDir = Player->PlayerCameraManager ? Player->PlayerCameraManager->GetCameraRotation().Vector() : Forward;
+	const double RangeCm = OsdsPreflightRules::PopInRangeM * 100.0;
+	const FOsdsWorldFrame& Frame = Stream->GetFrame();
+	const FIntPoint Here = Frame.TileAtWorldCm(CarCm);
+	for (int32 DX = -2; DX <= 2; ++DX)
+	{
+		for (int32 DY = -2; DY <= 2; ++DY)
+		{
+			const FIntPoint Id = Here + FIntPoint(DX, DY);
+			const AOsdsWorldTile* Tile = Stream->GetTile(Id);
+			if (!Tile || !Tile->GetBuild() || KnownTiles.Contains(Id)) continue;
+			KnownTiles.Add(Id);
+			Review.Event(FString::Printf(TEXT("tile built %d_%d"), Id.X, Id.Y), Stats.DriveSeconds);
+			const FVector A = Frame.TileOriginCm(Id);
+			const FVector B = Frame.TileOriginCm(Id + FIntPoint(1, 1));
+			const FBox2D Box(FVector2D(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y)), FVector2D(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y)));
+			const double Dist = FMath::Sqrt(Box.ComputeSquaredDistanceToPoint(FVector2D(Eye.X, Eye.Y)));
+			if (Dist < RangeCm)
+			{
+				++Stats.TilePopIns;
+				Review.Event(TEXT("tile pop-in"), Stats.DriveSeconds);
+				UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight pop-in: tile %d_%d built %.0f m from the camera (frame %d)"), Id.X, Id.Y, Dist / 100.0, FrameIndex);
+			}
+		}
+	}
+	WatchTraffic(Stream, Pawn, CarCm, Forward, Speed);
+	FCollisionQueryParams SightParams(SCENE_QUERY_STAT(OsdsPreflightSight), false);
+	SightParams.AddIgnoredActor(Pawn);
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		AActor* Car = *It;
+		AOsdsTrafficCar* Traffic = Cast<AOsdsTrafficCar>(Car);
+		if (!Traffic && !Car->IsA<AOsdsCarPresentationActor>()) continue;
+		// Not stuck: a car waiting behind the player (reason 2), or one that has stood since before
+		// the drive began (queued behind the player's car while the tiles built and the car settled).
+		if (Traffic && Traffic->StandS > 20.0 && Traffic->StopState != 2 && Traffic->Why != 3 && Traffic->Why != 2 &&
+			Traffic->StandS < Stats.DriveSeconds && !StuckCars.Contains(Car))
+		{
+			StuckCars.Add(Car);
+			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: traffic car %s stuck %.0f s (reason %d) %.0f m away (frame %d)"), *Car->GetName(), Traffic->StandS, Traffic->Why, FVector::Dist(Car->GetActorLocation(), CarCm) / 100.0, FrameIndex);
+		}
+		const FVector Pos = Car->GetActorLocation();
+		const FVector* Known = KnownCars.Find(Car);
+		const bool bAppeared = !Known || FVector::Dist(*Known, Pos) > 3000.0;
+		KnownCars.Add(Car, Pos);
+		if (!bAppeared) continue;
+		const FVector To = Pos + FVector(0.0, 0.0, 80.0) - Eye;
+		const double Dist = To.Size();
+		if (Dist > RangeCm || FVector::DotProduct(To / FMath::Max(Dist, 1.0), LookDir) < FMath::Cos(FMath::DegreesToRadians(55.0))) continue;
+		FCollisionQueryParams Sight = SightParams;
+		Sight.AddIgnoredActor(Car);
+		FHitResult Block;
+		if (GetWorld()->LineTraceSingleByChannel(Block, Eye, Eye + To * 0.95, ECC_Visibility, Sight) && !IsCarActor(Block.GetActor())) continue;
+		++Stats.CarPopIns;
+		Review.Event(TEXT("car pop-in"), Stats.DriveSeconds);
+		UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight pop-in: car %s appeared %.0f m in front of the camera (frame %d)"), *Car->GetName(), Dist / 100.0, FrameIndex);
+	}
+}
+
+void AOsdsPreflight::RequestFrame(APlayerController* Player)
+{
+	// Where the sky is: view rays that hit nothing (the car itself counts as a hit: its roof is not sky).
+	PendingSky.Reset();
+	int32 SizeX = 0, SizeY = 0;
+	Player->GetViewportSize(SizeX, SizeY);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(OsdsPreflightSky), false);
+	for (int32 J = 0; J < SkyGridY; ++J)
+	{
+		for (int32 I = 0; I < SkyGridX; ++I)
+		{
+			const FVector2D Screen((I + 0.5) / SkyGridX * SizeX, (J + 0.5) / SkyGridY * SizeY);
+			FVector Origin, Direction;
+			if (!UGameplayStatics::DeprojectScreenToWorld(Player, Screen, Origin, Direction) || Direction.Z <= 0.0) continue;
+			FHitResult Hit;
+			if (!GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * 200000.0, ECC_Visibility, Params))
+			{
+				PendingSky.Add(FVector2D(Screen.X / FMath::Max(SizeX, 1), Screen.Y / FMath::Max(SizeY, 1)));
+			}
+		}
+	}
+	PendingRotation = Player->PlayerCameraManager ? Player->PlayerCameraManager->GetCameraRotation() : FRotator::ZeroRotator;
+	bFramePending = true;
+	// The read-back and the JPEG slow the next frames: the frame-time rules do not judge them.
+	CaptureSkip = FMath::Max(CaptureSkip, 2);
+	if (Review.WantsShot())
+	{
+		if (AOsdsPlayerController* SimPlayer = Cast<AOsdsPlayerController>(Player))
+		{
+			Review.PrepareShot(*SimPlayer, Stats.DriveSeconds);
+		}
+	}
+	FScreenshotRequest::RequestScreenshot(FPaths::Combine(OutputDir, TEXT("frames"), TEXT("request.png")), true, false);
+}
+
+void AOsdsPreflight::OnFrame(int32 Width, int32 Height, const TArray<FColor>& Pixels)
+{
+	if (!bFramePending || Width < ThumbW || Height < ThumbH || Pixels.Num() < Width * Height)
+	{
+		bFramePending = false;
+		return;
+	}
+	bFramePending = false;
+	CaptureSkip = FMath::Max(CaptureSkip, 1);
+	// The JPEG on a worker thread: on the game thread it stalled the frame a person watches.
+	{
+		TArray<FColor> Copy = Pixels;
+		const FString JpegPath = FPaths::Combine(OutputDir, TEXT("frames"), FString::Printf(TEXT("%05d.jpg"), FrameIndex));
+		JpegJobs.Add(Async(EAsyncExecution::ThreadPool, [Copy = MoveTemp(Copy), Width, Height, JpegPath]()
+		{
+			TArray64<uint8> Jpeg;
+			if (FImageUtils::CompressImage(Jpeg, TEXT("jpg"), FImageView(Copy.GetData(), Width, Height), 85))
+			{
+				FFileHelper::SaveArrayToFile(Jpeg, *JpegPath);
+			}
+		}));
+		JpegJobs.RemoveAll([](const TFuture<void>& Job) { return Job.IsReady(); });
+	}
+	Review.OnFrame(Width, Height, Pixels);
+	++FrameIndex;
+	Stats.Frames = FrameIndex;
+
+	// A small luminance picture for the change between frames (four pixels a cell).
+	TArray<float> Thumb;
+	Thumb.SetNumZeroed(ThumbW * ThumbH);
+	for (int32 TY = 0; TY < ThumbH; ++TY)
+	{
+		for (int32 TX = 0; TX < ThumbW; ++TX)
+		{
+			const int32 X0 = TX * Width / ThumbW, Y0 = TY * Height / ThumbH;
+			const int32 X1 = FMath::Min(X0 + Width / ThumbW / 2, Width - 1), Y1 = FMath::Min(Y0 + Height / ThumbH / 2, Height - 1);
+			Thumb[TY * ThumbW + TX] = 0.25f * (Luma(Pixels[Y0 * Width + X0]) + Luma(Pixels[Y0 * Width + X1]) + Luma(Pixels[Y1 * Width + X0]) + Luma(Pixels[Y1 * Width + X1]));
+		}
+	}
+	if (LastThumb.Num() == Thumb.Num())
+	{
+		// The share (%) of the picture that changed by more than 40 of 255: a flash or an exposure
+		// jump changes most of it at once; a car passing close beside a still camera does not.
+		int32 Changed = 0;
+		for (int32 K = 0; K < Thumb.Num(); ++K) Changed += FMath::Abs(Thumb[K] - LastThumb[K]) > 40.f ? 1 : 0;
+		FrameDiffs.Add(100.f * Changed / Thumb.Num());
+		const FRotator Delta = (PendingRotation - LastFrameRotation).GetNormalized();
+		FrameTurning.Add(FMath::Abs(Delta.Yaw) > 6.0 || FMath::Abs(Delta.Pitch) > 4.0);
+	}
+	LastThumb = MoveTemp(Thumb);
+	LastFrameRotation = PendingRotation;
+
+	// White sky: the mean of 3 x 3 pixels round each sky ray.
+	for (const FVector2D& UV : PendingSky)
+	{
+		const int32 CX = FMath::Clamp(FMath::RoundToInt32(UV.X * Width), 1, Width - 2);
+		const int32 CY = FMath::Clamp(FMath::RoundToInt32(UV.Y * Height), 1, Height - 2);
+		float L = 0.f;
+		for (int32 DY = -1; DY <= 1; ++DY)
+		{
+			for (int32 DX = -1; DX <= 1; ++DX)
+			{
+				L += Luma(Pixels[(CY + DY) * Width + CX + DX]);
+			}
+		}
+		SkyWhite += L / 9.f >= OsdsPreflightRules::WhiteLuma ? 1 : 0;
+		++Stats.SkySamples;
+	}
+}
+
+void AOsdsPreflight::Finish()
+{
+	// Every frame on disk before the script makes the video.
+	for (TFuture<void>& Job : JpegJobs) Job.Wait();
+	JpegJobs.Reset();
+	if (Stage == EStage::Done)
+	{
+		return;
+	}
+	Stage = EStage::Done;
+	if (FrameHandle.IsValid())
+	{
+		UGameViewportClient::OnScreenshotCaptured().Remove(FrameHandle);
+		FrameHandle.Reset();
+	}
+	using namespace OsdsPreflightRules;
+	Stats.DistanceM = static_cast<float>(PathM);
+	Stats.MeanSpeedMps = SpeedSamples > 0 ? static_cast<float>(SpeedSum / SpeedSamples) : 0.f;
+	Stats.SkyWhitePercent = Stats.SkySamples > 0 ? 100.f * SkyWhite / Stats.SkySamples : 0.f;
+	Stats.FlashFrames = CountFlashes(FrameDiffs, FrameTurning, Stats.MedianFrameDiff);
+	Stats.StuckTraffic = StuckCars.Num();
+
+	// Steps along the road samples only; a gap is a short run of samples off the road between road samples.
+	TArray<FVector2f> RoadOnly;
+	for (int32 I = 0; I < Surface.Num(); ++I)
+	{
+		if (SurfaceIsRoad[I]) RoadOnly.Add(Surface[I]);
+	}
+	TArray<int32> StepAt;
+	Stats.RoadSteps = CountSteps(RoadOnly, Stats.MaxStepCm, 1.f, &StepAt);
+	// Where each counted step is, for the road-step check to find it again.
+	{
+		TArray<FVector2d> RoadLatLon;
+		for (int32 I = 0; I < Surface.Num(); ++I) if (SurfaceIsRoad[I] && SurfaceLatLon.IsValidIndex(I)) RoadLatLon.Add(SurfaceLatLon[I]);
+		for (const int32 I : StepAt)
+		{
+			if (RoadLatLon.Num() == RoadOnly.Num()) UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: road step at %.0f m, %.6f, %.6f"), RoadOnly[I].X, RoadLatLon[I].X, RoadLatLon[I].Y);
+		}
+	}
+	for (int32 I = 1; I < Surface.Num(); ++I)
+	{
+		if (SurfaceIsRoad[I] || !SurfaceIsRoad[I - 1]) continue;
+		int32 J = I;
+		while (J < Surface.Num() && !SurfaceIsRoad[J]) ++J;
+		if (J < Surface.Num() && Surface[J].X - Surface[I - 1].X < 1.5f)
+		{
+			++Stats.RoadGaps;
+			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: no road surface for %.2f m at %.0f m"), Surface[J].X - Surface[I - 1].X, Surface[I].X);
+		}
+		I = J;
+	}
+
+	const AOsdsGameMode* Mode = GetWorld()->GetAuthGameMode<AOsdsGameMode>();
+	FString Place;
+	if (Mode)
+	{
+		Place = Mode->GetPlace().Title;
+		Stats.bStartByNearestRoad = Mode->StartedByNearestRoad();
+		if (bRequestedStart)
+		{
+			// About 111 km a degree; a start 3 km off the asked point is another place.
+			const double DLat = (Mode->GetPlace().Lat - RequestedLat) * 111.0;
+			const double DLon = (Mode->GetPlace().Lon - RequestedLon) * 111.0 * FMath::Cos(FMath::DegreesToRadians(RequestedLat));
+			Stats.bFellBack = FMath::Sqrt(DLat * DLat + DLon * DLon) > 3.0;
+		}
+	}
+	for (TActorIterator<AOsdsViewCheck> It(GetWorld()); It; ++It)
+	{
+		Stats.bViewCheckRan = It->IsFinished();
+		Stats.bViewCheckPassed = It->HasPassed();
+		Stats.ViewCheckReasons = It->GetReasons();
+	}
+	if (const UOsdsEnvironmentSubsystem* Environments = UOsdsEnvironmentSubsystem::Get(GetWorld()))
+	{
+		if (const AOsdsEnvironment* Environment = Environments->GetEnvironment())
+		{
+			Stats.ReferenceEV100 = Environment->GetReferenceEV100();
+		}
+	}
+
+	// Frame times: the median, the 1 % worst, the worst, and how many frames a player sees as a hitch.
+	FString FrameLine = TEXT("none");
+	if (FrameMs.Num() > 0)
+	{
+		TArray<float> Sorted = FrameMs;
+		Sorted.Sort();
+		auto Pct = [&](double Q) { return Sorted[FMath::Clamp(FMath::FloorToInt32(Q * (Sorted.Num() - 1)), 0, Sorted.Num() - 1)]; };
+		int32 Over33 = 0, Over50 = 0, Over100 = 0;
+		for (float Ms : FrameMs) { Over33 += Ms > 33.4f; Over50 += Ms > 50.f; Over100 += Ms > 100.f; }
+		FrameLine = FString::Printf(TEXT("frames=%d p50=%.1fms p99=%.1fms worst=%.0fms over33=%d over50=%d over100=%d"),
+			FrameMs.Num(), Pct(0.5), Pct(0.99), Sorted.Last(), Over33, Over50, Over100);
+	}
+	UE_LOG(LogOsdsPreflight, Display, TEXT("PREFLIGHT FRAMES road=%s car=%s mean=%.1fm/s %s"), *RoadName, *CarId, Stats.MeanSpeedMps, *FrameLine);
+
+	MeasureFrames(TimedFrameMs, Stats);
+	const FString Reasons = Judge(Stats);
+	const bool bPass = Reasons.IsEmpty();
+	Review.Finish(bPass ? TEXT("PASS") : TEXT("FAIL"), Reasons);
+	UE_LOG(LogOsdsPreflight, Display,
+		TEXT("PREFLIGHT %s road=%s car=%s place=\"%s\" distance=%.0fm mean=%.1fm/s offroad=%.1fs rear_slip=%.1fdeg backwards=%.1fs past_edge=%.1fm/%.1fs frame_p95=%.1fms hitches=%d sky_white=%.0f%% tile_popin=%d car_popin=%d flashes=%d steps=%d max_step=%.1fcm gaps=%d jolts=%d border_jolts=%d stuck=%d cut_ins=%d through=%d turn_rounds=%d at_grade=%d junction_hold=%.1fs frames=%d reasons=%s"),
+		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place, Stats.DistanceM, Stats.MeanSpeedMps, Stats.OffRoadSeconds,
+		Stats.PeakRearSlipDeg, Stats.ReversedSeconds, Stats.MaxOffRibbonM, Stats.OffRibbonSeconds, Stats.FrameP95Ms, Stats.Hitches, Stats.SkyWhitePercent,
+		Stats.TilePopIns, Stats.CarPopIns, Stats.FlashFrames, Stats.RoadSteps, Stats.MaxStepCm, Stats.RoadGaps, Stats.Jolts, Stats.BorderJolts,
+		Stats.StuckTraffic, Stats.TrafficCutIns, Stats.TrafficOverlaps, Stats.TrafficTurnRounds, Stats.TrafficAtGrade, Stats.JunctionHoldS,
+		Stats.Frames, bPass ? TEXT("ok") : *Reasons);
+
+	auto B = [](bool bValue) { return bValue ? TEXT("true") : TEXT("false"); };
+	const FString Json = FString::Printf(TEXT("{\n")
+		TEXT("  \"result\": \"%s\", \"road\": \"%s\", \"car\": \"%s\", \"place\": \"%s\",\n")
+		TEXT("  \"drive_seconds\": %.1f, \"distance_m\": %.1f, \"mean_speed_mps\": %.2f, \"offroad_seconds\": %.2f, \"fell_back\": %s,\n")
+		TEXT("  \"viewcheck_ran\": %s, \"viewcheck_passed\": %s, \"viewcheck_reasons\": \"%s\",\n")
+		TEXT("  \"sky_samples\": %d, \"sky_white_percent\": %.1f, \"reference_ev100\": %.2f,\n")
+		TEXT("  \"tile_popins\": %d, \"car_popins\": %d, \"flash_frames\": %d, \"median_frame_diff\": %.2f,\n")
+		TEXT("  \"road_steps\": %d, \"max_step_cm\": %.1f, \"road_gaps\": %d, \"jolts\": %d, \"border_jolts\": %d,\n")
+		TEXT("  \"stuck_traffic\": %d, \"traffic_cut_ins\": %d, \"traffic_through_our_car\": %d, \"traffic_turn_rounds\": %d, \"motorway_traffic_at_grade\": %d,\n")
+		TEXT("  \"junction_hold_asked_s\": %.1f, \"junction_hold_s\": %.1f, \"junction_cross\": \"%s\", \"frames\": %d,\n")
+		TEXT("  \"peak_rear_slip_deg\": %.1f, \"peak_yaw_dps\": %.1f, \"backwards_seconds\": %.2f, \"forced_spin\": %s,\n")
+		TEXT("  \"max_past_edge_m\": %.2f, \"past_edge_seconds\": %.2f,\n")
+		TEXT("  \"airborne_seconds\": %.2f, \"flipped_seconds\": %.2f, \"esc_seconds\": %.2f, \"esc_straight_seconds\": %.2f, \"esc_straight_longest_s\": %.2f,\n")
+		TEXT("  \"timed_frames\": %d, \"frame_p95_ms\": %.1f, \"frames_over_50ms\": %d, \"hitches_over_100ms\": %d,\n")
+		TEXT("  \"reasons\": \"%s\"\n}\n"),
+		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place.ReplaceCharWithEscapedChar(),
+		Stats.DriveSeconds, Stats.DistanceM, Stats.MeanSpeedMps, Stats.OffRoadSeconds, B(Stats.bFellBack),
+		B(Stats.bViewCheckRan), B(Stats.bViewCheckPassed), *Stats.ViewCheckReasons,
+		Stats.SkySamples, Stats.SkyWhitePercent, Stats.ReferenceEV100,
+		Stats.TilePopIns, Stats.CarPopIns, Stats.FlashFrames, Stats.MedianFrameDiff,
+		Stats.RoadSteps, Stats.MaxStepCm, Stats.RoadGaps, Stats.Jolts, Stats.BorderJolts,
+		Stats.StuckTraffic, Stats.TrafficCutIns, Stats.TrafficOverlaps, Stats.TrafficTurnRounds, Stats.TrafficAtGrade,
+		Stats.JunctionHoldAskedS, Stats.JunctionHoldS, *JunctionCrossName.ReplaceCharWithEscapedChar(), Stats.Frames,
+		Stats.PeakRearSlipDeg, Stats.PeakYawDps, Stats.ReversedSeconds, B(Stats.bForcedSpin),
+		Stats.MaxOffRibbonM, Stats.OffRibbonSeconds,
+		Stats.AirborneSeconds, Stats.FlippedSeconds, Stats.EscSeconds, Stats.EscStraightSeconds, Stats.EscStraightLongestS,
+		Stats.TimedFrames, Stats.FrameP95Ms, Stats.SlowFrames, Stats.Hitches,
+		bPass ? TEXT("ok") : *Reasons);
+	FFileHelper::SaveStringToFile(Json, *FPaths::Combine(OutputDir, TEXT("preflight.json")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+
+	if (FParse::Param(FCommandLine::Get(), TEXT("OsdsKeepOpen")))
+	{
+		return;
+	}
+	if (APlayerController* Player = UGameplayStatics::GetPlayerController(this, 0))
+	{
+		Player->ConsoleCommand(TEXT("quit"));
+	}
+	else
+	{
+		FPlatformMisc::RequestExit(false);
+	}
+}

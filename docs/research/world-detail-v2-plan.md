@@ -97,7 +97,7 @@ Dragon p95 16.7 ms, Ocean Drive p95 16.8 ms):
 - Albedo and saturation limits on lawns and meadows (ground and landscape).
 - Roof colour from the aerial photograph inside each footprint; OSM guard rails.
 - Scan core (SCN1 v3, rules-only scan, disk cache, class-map view) and the eye fusion;
-  opt-in with `-SimCruiseScan` / `-SimCruiseScanView` / `-SimCruiseScanEye=<name>`, off by default.
+  opt-in with `-OsdsScan` / `-OsdsScanView` / `-OsdsScanEye=<name>`, off by default.
 
 Moves to v2.0.4 (on `world-detail-v2`; they cost frame time in the first measurements and
 need a profile at a true 75 % before they ship):
@@ -127,7 +127,7 @@ test to free the GPU, then one run measures the branch against main):
   wide at 33 m, 8 m at 92 m) and one level draws outside the bands; the 4 m crown margin and
   its 16 and 24 m of double drawing are gone.
 
-TINT in the material (step 3): `SimCruiseScan::MatchTints` takes each tile's grass, soil, sand
+TINT in the material (step 3): `OsdsScan::MatchTints` takes each tile's grass, soil, sand
 and paving hues from its own aerial photograph on every build (no model, about 2 ms), the scan's
 TINT starts from it and an eye overrides it; the ground reads all four.
 

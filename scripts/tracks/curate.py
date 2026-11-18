@@ -162,7 +162,7 @@ def main():
         out.append(e)
         print(f"{tid:15} {a['mapped_mi']:6.3f} mi mapped / {miles} published, start {a['start']} bearing {a['bearing']}")
     out += STREETS
-    doc = dict(version=1, note='Race tracks of the pause menu (SimCruiseTracks), made by scripts/tracks/curate.py. Start points, bearings, centres and oval loops come from OpenStreetMap highway=raceway ways (ODbL); lengths and banking are the published figures of each track (Wikipedia infobox, November 2026). OSDS is not affiliated with or endorsed by any track or racing series.', tracks=out)
+    doc = dict(version=1, note='Race tracks of the pause menu (OsdsTracks), made by scripts/tracks/curate.py. Start points, bearings, centres and oval loops come from OpenStreetMap highway=raceway ways (ODbL); lengths and banking are the published figures of each track (Wikipedia infobox, November 2026). OSDS is not affiliated with or endorsed by any track or racing series.', tracks=out)
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(root, 'data', 'tracks', 'tracks.json')
     os.makedirs(os.path.dirname(path), exist_ok=True)

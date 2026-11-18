@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds, cooks and stages a Windows build of SimCruise in Saved\Package\Windows.
+  Builds, cooks and stages a Windows build of OSDS in Saved\Package\Windows.
 
 .DESCRIPTION
   Saves the code-built materials first (a cooked game cannot compile them), runs
@@ -8,7 +8,7 @@
   from disk rather than from its .pak: data\ (car definitions, bundled tiles and
   art), the car presentation profile and calibration overlays, and the map
   helper (tools\atlas.exe) when it is present. The result runs with
-  Saved\Package\Windows\SimCruise.exe and starts on the bundled Miami Beach streets.
+  Saved\Package\Windows\OSDS.exe and starts on the bundled Miami Beach streets.
 
 .PARAMETER Configuration
   Development (default) or Shipping.
@@ -38,13 +38,13 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Out = Join-Path $Root 'Saved\Package'
 
 if (-not $SkipMaterials -and -not $NoBuild) {
     Write-Host 'Saving the generated materials'
-    & (Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe') $Project -run=SimCruiseBuildWorldMaterials -unattended -nop4 -nosplash | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "SimCruiseBuildWorldMaterials failed ($LASTEXITCODE)" }
+    & (Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe') $Project -run=OsdsBuildWorldMaterials -unattended -nop4 -nosplash | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "OsdsBuildWorldMaterials failed ($LASTEXITCODE)" }
 }
 
 if (-not $NoBuild) {
@@ -57,15 +57,15 @@ Write-Host "BuildCookRun Win64 $Configuration"
 if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 }
 
-$Game = Join-Path $Out 'Windows\SimCruise'
+$Game = Join-Path $Out 'Windows\OSDS'
 if (-not (Test-Path $Game)) { throw "No staged game at $Game" }
 
 # The runtimes a clean Windows does not have (scripts\dep-check.py lists the DLLs): the
 # Visual C++ 2015-2022 x64 runtime (MSVCP140, MSVCP140_1, VCRUNTIME140, VCRUNTIME140_1) and
 # GameInput (racing wheels). -prereqs stages Microsoft's redistributable installers from the
 # engine; they are copied here too, so a -NoBuild run or an older package also has them. The
-# launcher SimCruise.exe offers to run them when they are missing, and the installer runs them
-# (packaging\windows\simcruise.iss). Terms: licenses\microsoft-redistributables.md.
+# launcher OSDS.exe offers to run them when they are missing, and the installer runs them
+# (packaging\windows\osds.iss). Terms: licenses\microsoft-redistributables.md.
 $Redist = Join-Path $Out 'Windows\Engine\Extras\Redist\en-us'
 New-Item -ItemType Directory -Force $Redist | Out-Null
 # vc_redist.arm64.exe: the launcher asks for it on Windows on Arm (the game runs there in emulation).
@@ -157,9 +157,9 @@ if ($Zip) {
     # a folder named after the zip); local test runs' Saved folder and debug symbols stay out.
     $Tar = Join-Path $env:SystemRoot 'System32\tar.exe'
     $Top = Get-ChildItem $Windows -Name
-    & $Tar -a -c -f $Archive -C $Windows --exclude '*.pdb' --exclude 'SimCruise/Saved' @Top
+    & $Tar -a -c -f $Archive -C $Windows --exclude '*.pdb' --exclude 'OSDS/Saved' @Top
     if ($LASTEXITCODE -ne 0) { throw "Zipping failed ($LASTEXITCODE)" }
     Write-Host "ZIPPED: $Archive ($([Math]::Round((Get-Item $Archive).Length / 1MB)) MB)"
 }
 $global:LASTEXITCODE = 0
-Write-Host "PACKAGED: $(Join-Path $Out 'Windows\SimCruise.exe')"
+Write-Host "PACKAGED: $(Join-Path $Out 'Windows\OSDS.exe')"

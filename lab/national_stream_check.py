@@ -1,7 +1,7 @@
 import math,json,os,sys,tempfile,subprocess
 from pathlib import Path
-# The compiled atlas helper: first argument, else SIMCRUISE_ATLAS, else tools/atlas.
-game=Path(sys.argv[1] if len(sys.argv)>1 else os.environ.get('SIMCRUISE_ATLAS','../tools/atlas')).resolve()
+# The compiled atlas helper: first argument, else OSDS_ATLAS, else tools/atlas.
+game=Path(sys.argv[1] if len(sys.argv)>1 else os.environ.get('OSDS_ATLAS','../tools/atlas')).resolve()
 lon,lat=-100.168317,37.779225
 x=math.floor((lon+180)/360*65536);y=math.floor((1-math.asinh(math.tan(math.radians(lat)))/math.pi)*32768)
 with tempfile.TemporaryDirectory() as d:

@@ -5,7 +5,7 @@
 .DESCRIPTION
   The game builds any place in the US as you drive, so a review must not only look at the hero
   roads. Each place type has three areas where roads are common; a seeded random number picks an
-  area and a point in it, and the game puts the car on the nearest road (-SimCruiseStart without a
+  area and a point in it, and the game puts the car on the nearest road (-OsdsStart without a
   road name). The same seed gives the same points, so a failure repeats.
 #>
 
@@ -80,7 +80,7 @@ function Get-RandomUSPlaces([int]$Count, [int]$Seed, [string]$Root = (Split-Path
   the client, thumbnails rather than originals. Returns the attribution text or $null.
 #>
 function Save-CommonsPhoto([string]$RunDir, [double]$Lat, [double]$Lon, [int]$RadiusM = 10000) {
-    $Ua = @{ 'User-Agent' = 'SimCruiseReview/1.0 (game test review; contact via the SimCruise project)' }
+    $Ua = @{ 'User-Agent' = 'OsdsReview/1.0 (game test review; contact via the OSDS project)' }
     try {
         $Geo = Invoke-RestMethod -Headers $Ua -TimeoutSec 20 -Uri ("https://commons.wikimedia.org/w/api.php?action=query&list=geosearch&gsnamespace=6&gslimit=10&format=json&gsradius={0}&gscoord={1}|{2}" -f $RadiusM, $Lat, $Lon)
         foreach ($Hit in @($Geo.query.geosearch)) {

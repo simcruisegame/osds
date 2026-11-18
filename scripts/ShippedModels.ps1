@@ -11,9 +11,9 @@ $script:ShippedModels = @(
 )
 
 function Get-UnshippableModels {
-    # The zip entries (tar -t, "SimCruise/..." or "SimCruise\...") that are model weights not on the list.
+    # The zip entries (tar -t, "OSDS/..." or "OSDS\...") that are model weights not on the list.
     param([string[]]$Listing)
-    $Allowed = @($script:ShippedModels | ForEach-Object { 'SimCruise/' + $_ })
+    $Allowed = @($script:ShippedModels | ForEach-Object { 'OSDS/' + $_ })
     @($Listing | ForEach-Object { $_ -replace '\\', '/' } | Where-Object {
         ($_ -match '(?i)\.onnx$' -and $Allowed -notcontains $_) -or $_ -match '(?i)cityscapes'
     })

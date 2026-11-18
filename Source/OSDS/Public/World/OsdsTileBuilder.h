@@ -1,0 +1,297 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "World/OsdsRoadNetwork.h"
+#include "World/OsdsScan.h"
+
+struct FOsdsTileData;
+class FStaticMeshRenderData;
+
+/** Mesh layers of a tile; each becomes one section of the tile's mesh component. */
+enum class EOsdsTileLayer : uint8
+{
+	Terrain = 0,
+	Asphalt,
+	Concrete,
+	Paint,
+	Water,
+	Building,
+	Props,      // street furniture and palm trunks (opaque, the building material's kinds)
+	Foliage,    // palm fronds (masked, two-sided)
+	Signs,      // lettering on the facades: no mesh, the material of the tile's text components
+	Count
+};
+
+/**
+ * Surface kinds the building, props and foliage materials branch on (UV1.x).
+ * UV0 carries (metres along the face, metres above the building's ground).
+ */
+namespace OsdsSurfaceKind
+{
+	inline constexpr float Wall = 0.f;        // stucco with windows on the storey grid
+	inline constexpr float Trim = 1.f;        // plain stucco: eyebrows, bands, fins, soffits
+	inline constexpr float Roof = 2.f;
+	inline constexpr float Neon = 3.f;        // glowing tube, colour in the vertex colour
+	inline constexpr float Storefront = 4.f;  // ground-floor glass behind a porch
+	inline constexpr float Terrazzo = 5.f;    // porch floor and steps
+	inline constexpr float Metal = 6.f;       // painted or galvanised poles
+	inline constexpr float Bark = 7.f;        // palm trunk
+	inline constexpr float LampGlass = 8.f;   // luminaire lens, lit at night
+	inline constexpr float Railing = 9.f;     // balcony glass
+	inline constexpr float Frond = 10.f;      // palm leaf card
+	inline constexpr float WallFront = 11.f;  // a street facade: shopfront glass in the ground storey
+	inline constexpr float DecoFront = 12.f;  // an Art Deco hotel's street facade with shops, washed in coloured light at night
+	inline constexpr float DecoUpper = 13.f;  // an Art Deco street facade above a porch, washed in coloured light at night
+}
+
+/**
+ * A wall's windows by its role (side, back, garage): the fraction added to a window-grid kind in
+ * UV1.x (the shaders round the kind). The share of the wall's bays that have a window, in ninths,
+ * and whether a house's windows come in pairs. No fraction: every bay.
+ */
+namespace OsdsWindowRole
+{
+	inline float Encode(double Share, bool bPairs)
+	{
+		const int32 Q = FMath::Clamp(FMath::RoundToInt(Share * 9.0), 0, 9);
+		return (static_cast<float>((bPairs ? 10 : 0) + Q) + 0.5f) / 48.f;
+	}
+}
+
+/**
+ * What a building's walls are built of: the integer part of UV1.y on the building mesh (the
+ * fraction is the building's seed). The building shader draws its coursing on the wall kinds.
+ */
+namespace OsdsWallMaterial
+{
+	inline constexpr int32 Render = 0;    // painted render or stucco: the plain wall
+	inline constexpr int32 Brick = 1;     // US modular brick, running bond
+	inline constexpr int32 Siding = 2;    // lap siding (wood, vinyl, fibre cement)
+	inline constexpr int32 Block = 3;     // concrete block (CMU), painted or bare
+	inline constexpr int32 Stone = 4;     // ashlar stone
+	inline constexpr int32 Concrete = 5;  // cast or precast concrete panels
+	inline constexpr int32 Metal = 6;     // ribbed metal panels
+
+	/** The UV1.y a building writes: its material plus its 0-1 seed, put mid-bin of the shader's 4096 seed bins. */
+	inline float Pack(int32 Material, float Seed01)
+	{
+		const float Bin = FMath::Clamp(FMath::FloorToFloat(Seed01 * 4096.f), 0.f, 4095.f);
+		return static_cast<float>(Material) + (Bin + 0.5f) / 4096.f;
+	}
+}
+
+/** Plain mesh buffers in tile-local centimetres (x east, y south, z up). */
+struct OSDS_API FOsdsMeshData
+{
+	TArray<FVector> Positions;
+	TArray<FVector> Normals;
+	TArray<FLinearColor> Colors;
+	TArray<int32> Indices;
+	/** Optional texture coordinates: empty, or one per position. */
+	TArray<FVector2D> UV0;
+	TArray<FVector2D> UV1;
+
+	bool IsEmpty() const { return Indices.Num() == 0; }
+	int32 NumTriangles() const { return Indices.Num() / 3; }
+	int32 Add(const FVector& P, const FVector& N, const FLinearColor& C = FLinearColor::White);
+	/** A vertex with both texture coordinates (layers that use them use them for every vertex). */
+	int32 Add(const FVector& P, const FVector& N, const FLinearColor& C, const FVector2D& InUV0, const FVector2D& InUV1);
+	/** Add a triangle whose front face looks along Facing (Unreal's winding). */
+	void Tri(int32 A, int32 B, int32 C, const FVector& Facing);
+	void Quad(int32 A, int32 B, int32 C, int32 D, const FVector& Facing) { Tri(A, B, C, Facing); Tri(A, C, D, Facing); }
+};
+
+/** Land-cover mask channels (tile UV, north-west origin). */
+namespace OsdsGroundMask
+{
+	inline constexpr int32 Size = 1024;   // ~0.54 m per texel on a 550 m tile
+	// R vegetation, G sand, B paved paths, A water.
+}
+
+/** One placed palm: a shared mesh variant, tile-local position (cm), yaw and scale. */
+struct FOsdsPalmInstance
+{
+	FVector LocationCm = FVector::ZeroVector;
+	float YawDeg = 0.f;
+	float Scale = 1.f;
+	uint8 Variant = 0;
+};
+
+/** A CARLA model placed by rule (OsdsCarlaCatalog entry), tile cm. */
+struct FOsdsPropInstance
+{
+	int32 Entry = INDEX_NONE;
+	FVector LocationCm = FVector::ZeroVector;
+	float YawDeg = 0.f;
+	float Scale = 1.f;
+};
+
+/** A parked car: on the ground at a stall's centre (tile cm), facing the traffic beside it. */
+struct FOsdsParkedCar
+{
+	FVector LocationCm = FVector::ZeroVector;
+	float YawDeg = 0.f;
+	/** Stable random bytes for this stall: which car, and which colour. */
+	uint8 Pick = 0;
+	uint8 Colour = 0;
+};
+
+/**
+ * Lettering on a facade: a named place's sign (FOsdsPoi), drawn on the game thread
+ * as a text component in the Signs layer's material.
+ */
+struct FOsdsSign
+{
+	FString Text;
+	/** Centre of the lettering, tile cm, just proud of the wall. */
+	FVector LocationCm = FVector::ZeroVector;
+	/** The way the letters face (out of the wall), degrees about z. */
+	float YawDeg = 0.f;
+	/** Cap height, cm. */
+	float LetterCm = 50.f;
+	/** The widest (or, stacked, the tallest) the lettering may be, cm. */
+	float MaxSpanCm = 1000.f;
+	/** Letters one above the other: a vertical blade on a tower. */
+	bool bStacked = false;
+	/** Neon tubes (lit day and night) or painted letters (lit at night by the facade's lamps). */
+	bool bNeon = false;
+	FLinearColor Colour = FLinearColor::White;
+};
+
+/** Everything one tile needs on the game thread; built off it. */
+/** A decoded zoom-14 aerial photograph (sRGB pixels), shared read-only by the tile builds. */
+struct OSDS_API FOsdsAerialImage
+{
+	FString Key;
+	int32 Width = 0;
+	int32 Height = 0;
+	TArray<FColor> Pixels;
+};
+
+/**
+ * The photographs the tile builds read (roof colours), decoded once on a worker and kept on the
+ * CPU for the tiles of the same zoom-14 cell (thread-safe; the 8 most recent).
+ */
+namespace OsdsAerialCache
+{
+	OSDS_API TSharedPtr<const FOsdsAerialImage, ESPMode::ThreadSafe> Find(const FString& Key);
+	OSDS_API void Put(const FString& Key, int32 Width, int32 Height, const TArray<FColor>& Pixels);
+	/** The cached image, else decoded from Path (empty: none) and cached. */
+	OSDS_API TSharedPtr<const FOsdsAerialImage, ESPMode::ThreadSafe> Load(const FString& Key, const FString& Path);
+}
+
+namespace OsdsRoadCheck { struct FTopSurface; }
+
+struct OSDS_API FOsdsTileBuild
+{
+	FIntPoint Tile = FIntPoint::ZeroValue;
+	double TileSizeM = 0.0;
+	FOsdsMeshData Layers[static_cast<int32>(EOsdsTileLayer::Count)];
+	TArray<FColor> Mask;                   // OsdsGroundMask::Size^2, linear
+	TArray<TArray<FColor>> MaskMips;       // its mip chain, built on the worker (drawn runs)
+	FString AerialKey;
+	FOsdsRoadNetwork Roads;
+
+	// Fine terrain grid (metres), (TerrainN+1)^2, after road conditioning.
+	int32 TerrainN = 0;
+	TArray<float> TerrainHeights;
+	TArray<float> NaturalHeights;
+
+	// Road ends on this tile's edges (seam contracts for neighbours built later).
+	TArray<FOsdsSeamEnd> SeamEnds;
+
+	// Every top-surface vertex of every carriageway, tile cm (collision checks).
+	TArray<FVector> CarriagewayPoints;
+
+	/**
+	 * What is drawn, ready-made on the worker: the layers as one static mesh's render data
+	 * (vertex and index buffers, one section per non-empty layer; RenderSlots maps section
+	 * to layer). Null in headless runs.
+	 */
+	TUniquePtr<FStaticMeshRenderData> RenderData;
+	TArray<int32> RenderSlots;
+
+	/** The context record of every ~32 m of road (OsdsCellContext), baked before the detail. */
+	TSharedPtr<const struct FOsdsTileContext, ESPMode::ThreadSafe> Context;
+
+	/** The tile scan (OsdsScan), when -OsdsScan or -OsdsScanView asks for it (no reader uses it yet). */
+	TSharedPtr<const struct FOsdsTileScan, ESPMode::ThreadSafe> Scan;
+
+	/**
+	 * The road layer's faces, binned (OsdsRoadCheck::FTopSurface), made on the worker. An
+	 * installed tile hands its layers' triangles to the collision and empties them
+	 * (AOsdsWorldTile::Install), so the start pick reads the road faces here: with the
+	 * emptied layer it found no road under any start and the game fell back to the nearest
+	 * road (Welch, WV, nose at the bank, v2.0.3 release-4).
+	 */
+	TSharedPtr<const OsdsRoadCheck::FTopSurface, ESPMode::ThreadSafe> RoadTops;
+
+	/**
+	 * TINT by colour match (OsdsScan::MatchTints): the place's own grass, soil, sand and
+	 * paving hues from its aerial photograph, x1.0 where there is no photograph or too little of
+	 * a class. Always made (cheap); the scan's TINT starts from it and an eye may override it.
+	 */
+	OsdsScan::FTint Tint[64];
+
+	/** Palms to instance on this tile. */
+	TArray<FOsdsPalmInstance> PalmInstances;
+
+	/** CARLA models placed by rule: roadside grass and bushes, props (OsdsCarlaCatalog). */
+	TArray<FOsdsPropInstance> PropInstances;
+
+	/** Parked cars in the painted stalls of parking lanes. */
+	TArray<FOsdsParkedCar> ParkedCars;
+
+	/** Lettering of the named places on their buildings. */
+	TArray<FOsdsSign> Signs;
+
+	/** Street-light sources (tile cm, the lamp head's lens centre) for the night light pool. */
+	TArray<FVector> LampPointsCm;
+
+	int32 ConditionedVertices = 0;
+	int32 MarkingQuads = 0;
+	int32 StopSigns = 0;
+	int32 Buildings = 0;
+	int32 Palms = 0;
+	int32 StreetLights = 0;
+	double MinHeightM = 0.0;
+	double MaxHeightM = 0.0;
+	double BuildMs = 0.0;
+
+	FOsdsMeshData& Layer(EOsdsTileLayer L) { return Layers[static_cast<int32>(L)]; }
+	const FOsdsMeshData& Layer(EOsdsTileLayer L) const { return Layers[static_cast<int32>(L)]; }
+	int32 NumTriangles() const;
+
+	/** Terrain height (m) of the fine grid at tile metres (matches the mesh). */
+	double TerrainHeightAt(const FVector2d& P) const;
+};
+
+namespace OsdsTileBuilder
+{
+	/** Build terrain, road ribbons, curbs, markings, water and the ground mask. Thread-safe, pure. */
+	/** Aerial: the tile's photograph when it is on disk already (roof colours); null builds by the rules. */
+	OSDS_API TSharedRef<FOsdsTileBuild> Build(const FOsdsTileData& Data, double TileSizeM, const TArray<FOsdsSeamEnd>& NeighbourEnds = TArray<FOsdsSeamEnd>(),
+		const FOsdsAerialImage* Aerial = nullptr);
+
+	/** Seam contracts of built edge neighbours, moved into the frame of Tile. */
+	OSDS_API TArray<FOsdsSeamEnd> NeighbourContracts(const FIntPoint& Tile, double TileSizeM, TFunctionRef<const FOsdsTileBuild*(const FIntPoint&)> Find);
+
+	/**
+	 * Collapse points of an offset line that would run backwards on the inside of a
+	 * bend tighter than the offset (the drawn edge never folds over itself).
+	 */
+	OSDS_API void UnfoldLine(TArray<FVector2d>& Line, const TArray<FVector2d>& Tangents);
+
+	/** A static mesh's render data from mesh buffers (any thread; one section per part, 2 UV sets, colours). */
+	OSDS_API TUniquePtr<FStaticMeshRenderData> MakeRenderData(const TArray<const FOsdsMeshData*>& Parts);
+
+	/** Ear-clip a simple polygon (any winding); false if it could not be clipped. */
+	OSDS_API bool Triangulate(const TArray<FVector2d>& Ring, TArray<int32>& OutIndices);
+
+	/** World-anchored texture offset (m) for a tile: (tile * size) mod Period, so detail textures run on across seams. */
+	/** The ground materials' anchor period: every pattern period divides it (SeamCode, OsdsWorldResources.cpp). */
+	inline constexpr double TextureAnchorPeriodM = 1664.0;
+	OSDS_API FVector2d TextureAnchorM(const FIntPoint& Tile, double TileSizeM, double PeriodM = TextureAnchorPeriodM);
+}

@@ -1,6 +1,6 @@
 # Clean PC test of the installer
 
-The release criterion: a person downloads the installer from GitHub on any PC, it installs the game and the Microsoft parts that the game needs, and the person can play. This test proves it on a PC that never had SimCruise, Unreal Engine or Visual Studio. The release PC cannot prove it: it has the Visual C++ runtime and GameInput already.
+The release criterion: a person downloads the installer from GitHub on any PC, it installs the game and the Microsoft parts that the game needs, and the person can play. This test proves it on a PC that never had OSDS, Unreal Engine or Visual Studio. The release PC cannot prove it: it has the Visual C++ runtime and GameInput already.
 
 Do the test on one of these:
 
@@ -26,14 +26,14 @@ Test-Path C:\Windows\System32\vcruntime140_1.dll; Test-Path C:\Windows\System32\
 4. Select **Install for me only**.
 5. Make sure that the page "Information" tells you about the internet, the Microsoft parts and the PC that you need.
 6. Click through to the end. After the files are copied, Windows asks for permission twice (Visual C++ runtime, then GameInput). Click **Yes** both times.
-7. On the last page, keep **Launch SimCruise** ticked and click **Finish**.
+7. On the last page, keep **Launch OSDS** ticked and click **Finish**.
 8. Drive for one minute on Ocean Drive. Press Esc and quit.
 9. Run the command from "Before you start" again. Both lines must now say `True`.
-10. Disconnect the internet. Start SimCruise from the Start menu. The game must start on Ocean Drive, Miami Beach. Connect the internet again.
-11. Uninstall: **Settings > Apps > Installed apps > SimCruise > Uninstall**. When it asks "Do you also want to delete your SimCruise settings ...", click **No**.
-12. Open `%LOCALAPPDATA%\SimCruise` in File Explorer. Only `Saved\SimCruise`, `Saved\Config` (and `Saved\Screenshots`, if you took screenshots) may be there. `map-cache`, `Saved\Live` and `Saved\Logs` must be gone.
+10. Disconnect the internet. Start OSDS from the Start menu. The game must start on Ocean Drive, Miami Beach. Connect the internet again.
+11. Uninstall: **Settings > Apps > Installed apps > OSDS > Uninstall**. When it asks "Do you also want to delete your OSDS settings ...", click **No**.
+12. Open `%LOCALAPPDATA%\OSDS` in File Explorer. Only `Saved\OSDS`, `Saved\Config` (and `Saved\Screenshots`, if you took screenshots) may be there. `map-cache`, `Saved\Live` and `Saved\Logs` must be gone.
 
-Optional, the "No" path: on a second clean PC, click **No** in step 6. The installer must show a message that names the missing parts and says how to install them. Then start SimCruise: the launcher must ask to install the Visual C++ runtime. Click **Yes**; the game must then start.
+Optional, the "No" path: on a second clean PC, click **No** in step 6. The installer must show a message that names the missing parts and says how to install them. Then start OSDS: the launcher must ask to install the Visual C++ runtime. Click **Yes**; the game must then start.
 
 ## Pass and fail
 
@@ -48,10 +48,10 @@ Optional, the "No" path: on a second clean PC, click **No** in step 6. The insta
 ## The logs, when something fails
 
 - Installer log: run the installer from PowerShell with a log, then attach the log file to the issue:
-  `.\OSDS-<version>-windows-x64-setup.exe /LOG="$env:USERPROFILE\Desktop\simcruise-setup.log"`.
+  `.\OSDS-<version>-windows-x64-setup.exe /LOG="$env:USERPROFILE\Desktop\osds-setup.log"`.
   The lines "Visual C++ runtime:" and "GameInput:" tell what it found and the exit code of each Microsoft installer.
-- Game log: `%LOCALAPPDATA%\SimCruise\Saved\Logs\SimCruise.log`.
-- Crash: `%LOCALAPPDATA%\SimCruise\Saved\Crashes`.
+- Game log: `%LOCALAPPDATA%\OSDS\Saved\Logs\OSDS.log`.
+- Crash: `%LOCALAPPDATA%\OSDS\Saved\Crashes`.
 
 Also write down the Windows version (`winver`), the graphics card (**Task Manager > Performance > GPU**) and the memory.
 

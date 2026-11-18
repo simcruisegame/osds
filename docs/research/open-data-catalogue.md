@@ -1,4 +1,4 @@
-# Open data catalogue for SimCruise (sweep 2)
+# Open data catalogue for OSDS (sweep 2)
 
 Free data that helps "drive anywhere in the US and it feels like I'm really driving there". Each domain had a scanner and a verifier, both checked on 2026-11-08. Figures are the verifier's corrected values. Sources from sweep 1 appear only where a better access path turned up.
 
@@ -183,7 +183,7 @@ Verifiers found these but did not run them through a full scanner pass. Check th
 
 | Lead | Licence | What it adds | d | Link |
 |---|---|---|---|---|
-| Overture base "infrastructure" layer | ODbL (credit OSM) | Every pylon, power line, substation, mast, water tower, street lamp, guard rail and toll booth. OpenFreeMap has none of these, and the layer is on the PMTiles host SimCruise already reads | 3 | https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/2026-10-21.0/base.pmtiles |
+| Overture base "infrastructure" layer | ODbL (credit OSM) | Every pylon, power line, substation, mast, water tower, street lamp, guard rail and toll booth. OpenFreeMap has none of these, and the layer is on the PMTiles host OSDS already reads | 3 | https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/2026-10-21.0/base.pmtiles |
 | USGS solar PV database (USPVDB) | Public domain | Panel rows with real axis and tilt inside real fenced footprints | 2-3 | https://energy.usgs.gov/uspvdb/ |
 | USGS RCMAP rangeland cover | CC0 | Bare ground, sagebrush and cheatgrass between shrubs in the West | 2 | https://www.mrlc.gov/geoserver/ows |
 | NWS/NCEP opengeo radar WMS | Public domain | Official precip type and reflectivity, including AK, HI and PR, with no decoding; fallback for IEM | 1 | https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows |

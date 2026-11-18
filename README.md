@@ -12,16 +12,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/simcruisegame/simcruise/releases/latest"><b>Download for Windows</b></a>
-  · <a href="https://simcruisegame.github.io/simcruise/">Website</a>
+  <a href="https://github.com/simcruisegame/osds/releases/latest"><b>Download for Windows</b></a>
+  · <a href="https://simcruisegame.github.io/osds/">Website</a>
   · <a href="docs/controls.md">Controls</a>
   · <a href="CHANGELOG.md">What's new</a>
   · <a href="docs/technical-deep-dive.md">How it works</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/simcruisegame/simcruise/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/simcruisegame/simcruise?include_prereleases&sort=semver"></a>
-  <a href="https://github.com/simcruisegame/simcruise/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/simcruisegame/simcruise/total"></a>
+  <a href="https://github.com/simcruisegame/osds/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/simcruisegame/osds?include_prereleases&sort=semver"></a>
+  <a href="https://github.com/simcruisegame/osds/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/simcruisegame/osds/total"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/code-MIT-blue"></a>
   <a href="https://www.unrealengine.com/"><img alt="Made with Unreal Engine 5.8" src="https://img.shields.io/badge/Unreal_Engine-5.8-0e1128?logo=unrealengine&logoColor=white"></a>
 </p>
@@ -32,7 +32,7 @@
 
 ## TL;DR
 
-- **Download** the setup from [Releases](https://github.com/simcruisegame/simcruise/releases/latest), install, play. Windows 10/11, DirectX 12 GPU with 6 GB, 16 GB RAM, internet ([details](docs/install.md)).
+- **Download** the setup from [Releases](https://github.com/simcruisegame/osds/releases/latest), install, play. Windows 10/11, DirectX 12 GPU with 6 GB, 16 GB RAM, internet ([details](docs/install.md)).
 - **Drive anywhere:** press `/` and type a US place. Tab (Menu on the pad) opens the pause menu: GPS route, famous roads, car, view, settings.
 - **No account, no keys, no telemetry.** Only free public data, cached on your disk.
 - **Early days.** It is a driving simulator, not a racing game. No moving traffic for now. See [known issues](#known-issues).
@@ -88,15 +88,15 @@ More in [docs/images/](docs/images/).
 Needs Unreal Engine 5.8, Visual Studio 2022 Build Tools (C++ game workload) and [Bun](https://bun.com/). In PowerShell, editor closed:
 
 ```powershell
-& 'C:\Program Files\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat' SimCruiseEditor Win64 Development -Project="$PWD\SimCruise.uproject" -WaitMutex
-& 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe' "$PWD\SimCruise.uproject" -game
+& 'C:\Program Files\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat' OSDSEditor Win64 Development -Project="$PWD\OSDS.uproject" -WaitMutex
+& 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe' "$PWD\OSDS.uproject" -game
 ```
 
-Tests: `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` (add `-Filter SimCruise.Vehicle` for one part). Options, captures and packaging: [docs/unreal-building.md](docs/unreal-building.md).
+Tests: `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` (add `-Filter OSDS.Vehicle` for one part). Options, captures and packaging: [docs/unreal-building.md](docs/unreal-building.md).
 
 | Folder | What |
 |---|---|
-| `Source/SimCruise/` | The game (C++): car physics, world, menus, tests |
+| `Source/OSDS/` | The game (C++): car physics, world, menus, tests |
 | `helper/` | Map helper (Bun): turns public data into tiles |
 | `data/` | Car data, car models, the bundled offline tiles |
 | `scripts/` | Build, test, package, release |

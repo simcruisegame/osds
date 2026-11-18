@@ -33,17 +33,17 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
 if ($Exe) { $Editor = (Resolve-Path $Exe).Path }
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
 $Roads = @($Roads | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 # The same starts as scripts\preflight.ps1.
 $Defs = @{
-    'ocean-drive' = @('-SimCruiseBundledStart')
-    'dragon'      = @('-SimCruiseStart=35.4792763,-83.9327265', '"-SimCruiseStartRoad=Calderwood Highway"')
-    'nebraska'    = @('-SimCruiseStart=40.56724,-96.5909', '"-SimCruiseStartRoad=Princeton Road"')
-    'big-sur'     = @('-SimCruiseStart=36.363197,-121.900041', '"-SimCruiseStartRoad=Cabrillo Highway"')
+    'ocean-drive' = @('-OsdsBundledStart')
+    'dragon'      = @('-OsdsStart=35.4792763,-83.9327265', '"-OsdsStartRoad=Calderwood Highway"')
+    'nebraska'    = @('-OsdsStart=40.56724,-96.5909', '"-OsdsStartRoad=Princeton Road"')
+    'big-sur'     = @('-OsdsStart=36.363197,-121.900041', '"-OsdsStartRoad=Cabrillo Highway"')
 }
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $RunDir = Join-Path $Root "Saved\FrameCheck\$Stamp"
@@ -54,11 +54,11 @@ foreach ($Road in $Roads) {
     $Out = Join-Path $RunDir $Road
     New-Item -ItemType Directory -Force $Out | Out-Null
     $Log = Join-Path $Out 'game.log'
-    $Args = @("`"$Project`"", '-game', '-SimCruiseWorld', '-SimCruiseNoLive', '-SimCruiseNoNeural', "-SimCruiseGraphics=$Graphics", "-SimCruiseUtc=$Utc",
-        "-SimCruiseCar=$Car", '-SimCruisePreflight', '-SimCruisePreflightNoFrames', "-SimCruisePreflightKmh=$Kmh", "-SimCruisePreflightRoad=$Road",
-        "-SimCruisePreflightSeconds=$Seconds", "`"-SimCruisePreflightOut=$Out`"", '-NoLiveCoding', '-windowed', "-ResX=$ResX", "-ResY=$ResY",
+    $Args = @("`"$Project`"", '-game', '-OsdsWorld', '-OsdsNoLive', '-OsdsNoNeural', "-OsdsGraphics=$Graphics", "-OsdsUtc=$Utc",
+        "-OsdsCar=$Car", '-OsdsPreflight', '-OsdsPreflightNoFrames', "-OsdsPreflightKmh=$Kmh", "-OsdsPreflightRoad=$Road",
+        "-OsdsPreflightSeconds=$Seconds", "`"-OsdsPreflightOut=$Out`"", '-NoLiveCoding', '-windowed', "-ResX=$ResX", "-ResY=$ResY",
         '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + $Defs[$Road]
-    if ($Exe) { $Args = $Args[2..($Args.Count - 1)] + '-SimCruiseWorld' }
+    if ($Exe) { $Args = $Args[2..($Args.Count - 1)] + '-OsdsWorld' }
     if ($ExtraArgs) { $Args += $ExtraArgs }
     if (-not (Enter-EditorLock -TimeoutMinutes $LockTimeoutMinutes -Why "frame check $Road on $Root")) { exit 1 }
     try {

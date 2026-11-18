@@ -1,6 +1,6 @@
 // Wikimedia Commons lookups for reference photos (author, licence, page); images stay out of the repo.
 // usage: bun commons.mjs search "query" | cat "Category:..." | info "File:..." [thumbwidth] [outdir]
-const UA = {"User-Agent":"SimCruiseTasteTest/1.0 (reference research)"};
+const UA = {"User-Agent":"OsdsTasteTest/1.0 (reference research)"};
 const api = "https://commons.wikimedia.org/w/api.php?format=json&";
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const _f=globalThis.fetch;globalThis.fetch=async(u,o)=>{for(let i=0;i<6;i++){const r=await _f(u,o);if(r.status!==429&&r.ok)return r;await sleep(4000*(i+1));}return _f(u,o)};
