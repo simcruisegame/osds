@@ -21,6 +21,7 @@
 #include "Engine/StaticMesh.h"
 #include "Materials/Material.h"
 #include "StaticMeshResources.h"
+#include "RenderUtils.h"
 #include "Misc/App.h"
 #include "Engine/StaticMesh.h"
 #include "Components/BoxComponent.h"
@@ -226,6 +227,16 @@ void AOsdsWorldTile::Install(const TSharedRef<FOsdsTileBuild>& InBuild, UOsdsWor
 			Static->GetStaticMaterials().Add_GetRef(FStaticMaterial(UMaterial::GetDefaultMaterial(MD_Surface), *FString::Printf(TEXT("Layer%d"), InBuild->RenderSlots[Slot]))).UVChannelData = FMeshUVChannelInfo(1.f);
 		}
 		Static->SetRenderData(MoveTemp(InBuild->RenderData));
+#if RHI_RAYTRACING
+		// A mesh built at runtime has no ray tracing representation (the editor's build makes
+		// one from the derived-data cache). Without it the engine left every tile out of the
+		// ray tracing scene, with an ensure each run, so hardware Lumen saw no streets or
+		// buildings (overnight QA 2026-11-17: 110 of 110 runs). The tile's one LOD is used as is.
+		if (IsRayTracingAllowed() && Static->bSupportRayTracing)
+		{
+			Static->GetRenderData()->InitializeRayTracingRepresentationFromRenderingLODs();
+		}
+#endif
 		Static->InitResources();
 		Static->CalculateExtendedBounds();
 		RenderSlots = InBuild->RenderSlots;

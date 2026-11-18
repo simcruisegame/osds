@@ -45,6 +45,27 @@ public:
 		double CabinInletGain = 0.5;
 		/** Overrun pops and crackle, 0..1: 0 for a stock exhaust (a stock NB Miata does not pop). */
 		double PopAmount = 1.0;
+		/** An electric car's motor speed (rpm); unused by combustion voices. */
+		double MotorRpm = 0.0;
+	};
+
+	/**
+	 * Per-car colour of the exhaust (estimates unless a car's profile names a source): the
+	 * muffler body's resonance, the pipe's rasp and its level, the cam's idle lope (cycle-to-
+	 * cycle variation, 0 for a stock cam) and the pickups' low-pass (one-pole coefficients at
+	 * 22.05 kHz; higher is brighter).
+	 */
+	struct FTone
+	{
+		double BodyHz = 180.0;
+		double BodyQ = 1.5;
+		double RaspHz = 1900.0;
+		double RaspGain = 1.0;
+		double Lope = 0.0;
+		/** Multi-bank layouts: how much each cylinder's pulse differs from the others (fixed, 0..0.3): the half orders a real engine has at idle. */
+		double CylinderSpread = 0.0;
+		double CabinFilter = 0.25;
+		double ExteriorFilter = 0.52;
 	};
 
 	FOsdsInlineFourSynth();
@@ -58,7 +79,18 @@ public:
 	 * (0 or 1) of each event in firing order.
 	 */
 	void ConfigureCrossPlaneV8(const TArray<int32>& BankOfEvent, double NearGain, double FarGain);
-	bool IsV8() const { return bV8; }
+	/**
+	 * Any evenly firing multi-cylinder layout: BankOfEvent.Num() events per 720 crank degrees
+	 * (6 for a V6, 8 for a V8), each heard through its bank's pipe. A 60-degree V6 alternates
+	 * banks, which puts energy at the 1.5 engine order (rpm / 40 Hz) under its firing order
+	 * (rpm / 20 Hz): the V6's growl.
+	 */
+	void ConfigureEvenFiring(const TArray<int32>& BankOfEvent, double NearGain, double FarGain);
+	void SetTone(const FTone& InTone) { Tone = InTone; }
+	const FTone& GetTone() const { return Tone; }
+	bool IsV8() const { return Events == 8; }
+	/** Firing events per engine cycle (720 degrees): 4 for the inline four. */
+	int32 GetEvents() const { return Events; }
 
 	/** Mono samples at SampleRate, within +-0.94. Inputs are smoothed over 25 ms. */
 	void Render(float* Out, int32 Frames, const FInputs& In);
@@ -68,9 +100,11 @@ private:
 	static constexpr int32 Mask = Size - 1;
 
 	TArray<float> ExhaustLight, ExhaustLoad, Intake, PulseWindow;
-	/** V8: the exhaust over a whole engine cycle (720 degrees), eight events with their banks' gains. */
+	/** Multi-bank layouts: the exhaust over a whole engine cycle (720 degrees), each event with its bank's gain. */
 	TArray<float> CycleLight, CycleLoad;
 	bool bV8 = false;
+	int32 Events = 4;
+	FTone Tone;
 	double Phase = 0.0, FiringHz = 0.0, Charge = 0.0, Pull = 0.0, Overrun = 0.0, Gain = 0.0;
 	int64 RandomState = 38791;
 	double NoiseLow = 0.0, NoiseSlow = 0.0, OutputLow = 0.0, Boom = 0.0, PulseGain = 1.0, Throttle = 0.0;

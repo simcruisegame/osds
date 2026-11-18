@@ -116,6 +116,9 @@ const TArray<FRowInfo>& SOsdsPauseMenu::Rows(int32 InPage)
 	};
 	static const TArray<FRowInfo> Settings = {
 		Row(EOsdsMenuRow::Sound, EKind::Value, EIcon::Sound, TEXT("Sound"), TEXT("The engine and the road"), TEXT("Turn the sound on or off.")),
+		Row(EOsdsMenuRow::MasterVolume, EKind::Slider, EIcon::Sound, TEXT("Master volume"), TEXT(""), TEXT("How loud the whole game is.")),
+		Row(EOsdsMenuRow::EngineVolume, EKind::Slider, EIcon::Sound, TEXT("Engine volume"), TEXT(""), TEXT("How loud your car's engine and turbo are.")),
+		Row(EOsdsMenuRow::WorldVolume, EKind::Slider, EIcon::Sound, TEXT("World volume"), TEXT(""), TEXT("How loud the tyres, the road, the wind and other cars are.")),
 		Row(EOsdsMenuRow::HudLevel, EKind::Value, EIcon::Hud, TEXT("HUD"), TEXT("Off, Glance or Full"), TEXT("Glance shows the speed and fades while you cruise. Full shows all the readouts.")),
 		Row(EOsdsMenuRow::HudMap, EKind::Value, EIcon::Map, TEXT("Map"), TEXT("With route or always"), TEXT("The round map in the corner. With route shows it only while the GPS has a route.")),
 		Row(EOsdsMenuRow::SpeedUnits, EKind::Segmented, EIcon::Hud, TEXT("Speed units"), TEXT(""), TEXT("The units of the speed on the HUD and of the GPS distances: mph and miles, or km/h and kilometres.")),

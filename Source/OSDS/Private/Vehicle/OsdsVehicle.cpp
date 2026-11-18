@@ -12,6 +12,7 @@
 #include "Environment/OsdsEnvironmentSubsystem.h"
 #include "Gameplay/OsdsHaptics.h"
 #include "Audio/OsdsEngineSoundComponent.h"
+#include "Audio/OsdsAudioMix.h"
 #include "Presentation/OsdsPresentationProfile.h"
 #include "AudioDevice.h"
 #include "Gameplay/OsdsPlayerCameraManager.h"
@@ -518,32 +519,38 @@ void AOsdsVehicle::UpdateEngineSound(const FOsdsVehicleTelemetry& Telemetry, boo
 {
 	const AOsdsPlayerController* Player = Cast<AOsdsPlayerController>(GetController());
 	const bool bElectric = VehicleMovement->GetCarDefinition().EngineKind == TEXT("electric");
-	// An electric car has no combustion sound (a motor voice is future work); headless
-	// runs have no audio device.
+	// Headless runs have no audio device.
 	const bool bSound = Player && Player->IsSoundOn() && GetWorld() && GetWorld()->GetAudioDevice().IsValid();
 	UpdateRoadNoise(Telemetry, bInSeat, bSound && CVarRoadNoise.GetValueOnGameThread() != 0, DeltaSeconds);
-	const bool bWant = bSound && !bElectric && CVarEngineSound.GetValueOnGameThread() != 0;
+	const bool bWant = bSound && CVarEngineSound.GetValueOnGameThread() != 0;
 	if (!bWant)
 	{
 		if (EngineSound && EngineSound->IsPlaying()) EngineSound->Stop();
 		return;
 	}
+	const FOsdsCarPresentationProfile* Profile = CarModel ? CarModel->GetProfile() : nullptr;
 	if (!EngineSound)
 	{
 		EngineSound = NewObject<UOsdsEngineSoundComponent>(this, TEXT("EngineSound"));
 		EngineSound->SetupAttachment(GetRootComponent());
-		// The Godot mix: the Engine bus at -6 dB and its trim at -6 dB (RoadNoise.gd).
-		EngineSound->SetVolumeMultiplier(0.25f);
-		// The car's own engine layout (a V8's firing order), else the inline four.
-		if (const FOsdsCarPresentationProfile* Profile = CarModel ? CarModel->GetProfile() : nullptr)
+		// The car's own voice (layout, tone, turbo, recording; an electric car's motor), else the inline four.
+		FOsdsEngineVoiceSpec Spec;
+		if (Profile && Profile->EngineSound.IsSet()) Spec = Profile->EngineSound->Voice;
+		if (bElectric && !Spec.IsElectric())
 		{
-			if (Profile->EngineSound.IsSet())
-			{
-				EngineSound->ConfigureCrossPlaneV8(Profile->EngineSound->BankOfEvent, Profile->EngineSound->NearGain, Profile->EngineSound->FarGain);
-			}
+			Spec = FOsdsEngineVoiceSpec();
+			Spec.Layout = TEXT("electric");
+			Spec.Motor = FOsdsEngineVoiceSpec::FMotor();
 		}
+		if (bElectric && Spec.Motor.IsSet() && VehicleMovement->GetCarDefinition().ElectricMotorMaximumSpeedRpm > 0.0)
+		{
+			Spec.Motor->MaxRpm = VehicleMovement->GetCarDefinition().ElectricMotorMaximumSpeedRpm;
+		}
+		EngineSound->ConfigureVoice(Spec);
 		EngineSound->RegisterComponent();
 	}
+	// The Godot mix: the Engine bus at -6 dB and its trim at -6 dB (RoadNoise.gd), times the menu's levels.
+	EngineSound->SetVolumeMultiplier(0.25f * OsdsAudioMix::Engine());
 	FOsdsInlineFourSynth::FInputs In;
 	In.Rpm = Telemetry.EngineRpm;
 	In.Combustion = Telemetry.SoundCombustion;
@@ -551,19 +558,25 @@ void AOsdsVehicle::UpdateEngineSound(const FOsdsVehicleTelemetry& Telemetry, boo
 	In.Pedal = Telemetry.SoundThrottle;
 	In.bStalled = Telemetry.bStalled;
 	In.bCabin = bInSeat;
+	if (bElectric)
+	{
+		// The motor turns with the wheels through its single reduction.
+		double Wheel = 0.0;
+		for (const FOsdsWheelTelemetry& W : Telemetry.Wheels) Wheel += FMath::Abs(W.AngularSpeedRadPerSecond);
+		Wheel /= FMath::Max(Telemetry.Wheels.Num(), 1);
+		In.MotorRpm = Wheel * VehicleMovement->GetCarDefinition().FinalDriveRatio * 60.0 / UE_DOUBLE_TWO_PI;
+		In.bStalled = false;
+	}
 	// The limiter's stutter at this car's own fuel cut (NB 7250, Mustang 5000, C8 6600 rpm).
 	In.LimiterRpm = VehicleMovement->GetCarDefinition().FuelCutSpeedRpm - 25.0;
 	In.PopAmount = VehicleMovement->GetCarDefinition().ExhaustPopAmount;
 	// The intake's distance from the ear: a mid engine right behind the seats is louder inside.
-	if (const FOsdsCarPresentationProfile* Profile = CarModel ? CarModel->GetProfile() : nullptr)
-	{
-		if (Profile->EngineSound.IsSet()) In.CabinInletGain = 0.5 * 2.0 / FMath::Max(Profile->EngineSound->CabinEngineDistanceM, 0.5);
-	}
+	if (Profile && Profile->EngineSound.IsSet()) In.CabinInletGain = 0.5 * 2.0 / FMath::Max(Profile->EngineSound->CabinEngineDistanceM, 0.5);
 	EngineSound->SetEngineState(In);
 	if (!EngineSound->IsPlaying())
 	{
 		EngineSound->Start();
-		UE_LOG(LogOsdsVehiclePawn, Display, TEXT("Engine sound playing (%s voice, %d Hz, %s pickup)"), EngineSound->IsV8() ? TEXT("cross-plane V8") : TEXT("inline-four"), FOsdsInlineFourSynth::SampleRate, bInSeat ? TEXT("cabin") : TEXT("exterior"));
+		UE_LOG(LogOsdsVehiclePawn, Display, TEXT("Engine sound playing (%s, %d Hz, %s pickup)"), EngineSound->GetVoice().Describe(), EngineSound->GetVoice().GetSampleRate(), bInSeat ? TEXT("cabin") : TEXT("exterior"));
 	}
 }
 
@@ -632,6 +645,7 @@ void AOsdsVehicle::UpdateRoadNoise(const FOsdsVehicleTelemetry& Telemetry, bool 
 	if (bAnyKerb) In.Bump = FMath::Max(In.Bump, 0.6);
 	// The wind noise follows the air past the car, not the road: a head wind is louder.
 	In.AirSpeedMps = (FVector(GetVelocity()) / 100.0 - AirWindMps).Size();
+	RoadNoise->SetVolumeMultiplier(OsdsAudioMix::World());
 	RoadNoise->SetRoadState(In);
 	if (!RoadNoise->IsPlaying())
 	{

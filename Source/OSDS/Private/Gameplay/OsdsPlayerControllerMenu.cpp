@@ -63,6 +63,7 @@ namespace
 	}
 
 	const TArray<float>& HeadLadder() { static const TArray<float> L = { 0.f, 0.25f, 0.5f, 0.75f, 1.f }; return L; }
+	const TArray<float>& VolumeLadder() { static const TArray<float> L = { 0.f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.f }; return L; }
 	const TArray<float>& RumbleLadder() { static const TArray<float> L = { 0.f, 0.3f, 0.6f, 1.f }; return L; }
 	const TArray<float>& SteerLadder() { static const TArray<float> L = { 0.6f, 0.8f, 1.f, 1.25f, 1.5f }; return L; }
 	const TArray<float>& DeadLadder() { static const TArray<float> L = { 0.f, 0.05f, 0.1f, 0.15f }; return L; }
@@ -239,6 +240,12 @@ FOsdsMenuState AOsdsPlayerController::MenuState() const
 	Set(EOsdsMenuRow::EyeDistance, FString::FromInt(FMath::RoundToInt(Eye)), TEXT("cm"), LadderFraction(EyeLadder(), Eye));
 	Set(EOsdsMenuRow::Seat, FString())->bUnavailable = !bSeatMenuReady();
 	Set(EOsdsMenuRow::Sound, bSoundOn ? TEXT("On") : TEXT("Off"));
+	for (const TPair<EOsdsMenuRow, const TCHAR*>& V : { TPair<EOsdsMenuRow, const TCHAR*>(EOsdsMenuRow::MasterVolume, TEXT("osds.Audio.MasterVolume")),
+		TPair<EOsdsMenuRow, const TCHAR*>(EOsdsMenuRow::EngineVolume, TEXT("osds.Audio.EngineVolume")), TPair<EOsdsMenuRow, const TCHAR*>(EOsdsMenuRow::WorldVolume, TEXT("osds.Audio.WorldVolume")) })
+	{
+		const float Level = MenuVar(V.Value, 1.f);
+		Set(V.Key, FString::FromInt(FMath::RoundToInt(Level * 100.f)), TEXT("%"), Along(VolumeLadder(), Level), 1.f);
+	}
 	Set(EOsdsMenuRow::HudLevel, AfterDot(1));
 	Set(EOsdsMenuRow::HudMap, FOsdsDriveHud::IsMapAlways() ? TEXT("Always") : TEXT("With route"));
 	Set(EOsdsMenuRow::SpeedUnits, OsdsSpeedUnits::Label(OsdsSpeedUnits::Get()))->Chosen = OsdsSpeedUnits::Get() == EOsdsSpeedUnits::Kmh ? 1 : 0;
@@ -351,6 +358,9 @@ void AOsdsPlayerController::MenuAction(EOsdsMenuRow Row, int32 Dir)
 	case EOsdsMenuRow::ScreenSize: StepLadder(TEXT("osds.Lens.ScreenInches"), ScreenLadder(), Dir, -1.f, TEXT("screen_tenths_inch"), 10.f); break;
 	case EOsdsMenuRow::EyeDistance: StepLadder(TEXT("osds.Lens.ViewDistanceCm"), EyeLadder(), Dir, -1.f, TEXT("view_distance_cm"), 1.f); break;
 	case EOsdsMenuRow::Sound: OnToggleSound(); break;
+	case EOsdsMenuRow::MasterVolume: StepLadder(TEXT("osds.Audio.MasterVolume"), VolumeLadder(), Dir, 1.f, TEXT("master_volume"), 100.f); break;
+	case EOsdsMenuRow::EngineVolume: StepLadder(TEXT("osds.Audio.EngineVolume"), VolumeLadder(), Dir, 1.f, TEXT("engine_volume"), 100.f); break;
+	case EOsdsMenuRow::WorldVolume: StepLadder(TEXT("osds.Audio.WorldVolume"), VolumeLadder(), Dir, 1.f, TEXT("world_volume"), 100.f); break;
 	case EOsdsMenuRow::HudLevel: OnCycleHud(); break;
 	case EOsdsMenuRow::HudMap:
 		// Two values: left is With route, right is Always, A switches.

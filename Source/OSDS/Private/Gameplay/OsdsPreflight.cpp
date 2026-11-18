@@ -1116,6 +1116,34 @@ void AOsdsPreflight::MeasureTick(AOsdsPlayerController* Player, float DeltaSecon
 			const bool bBorder = Frame.TileAtWorldCm(CarCm + Forward * 800.0) != Frame.TileAtWorldCm(CarCm - Forward * 800.0);
 			Stats.BorderJolts += bBorder ? 1 : 0;
 			UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight jolt %.1f m/s^2 at %.0f m%s (frame %d)"), Az, PathM, bBorder ? TEXT(" at a tile border") : TEXT(""), FrameIndex);
+			if (bBorder)
+			{
+				// What each surface says under the car and 4 m either side along its path: every
+				// tile's own mesh and the bridge decks, so a step between two tiles' builds of the
+				// same road (or a deck and the road it lands on) shows which one is off.
+				FString Heights;
+				for (int32 Along = -4; Along <= 4; Along += 4)
+				{
+					const FVector At = CarCm + Forward * (Along * 100.0);
+					Heights += FString::Printf(TEXT(" | %+d m:"), Along);
+					const FIntPoint Home = Frame.TileAtWorldCm(At);
+					for (int32 DY = -1; DY <= 1; ++DY)
+					for (int32 DX = -1; DX <= 1; ++DX)
+					{
+						const AOsdsWorldTile* Tile = Stream->GetTile(Home + FIntPoint(DX, DY));
+						FHitResult TileHit;
+						if (!Tile || !Tile->Mesh || !Tile->Mesh->LineTraceComponent(TileHit, At + FVector(0, 0, 300), At - FVector(0, 0, 800), Params)) continue;
+						Heights += FString::Printf(TEXT(" tile %d_%d %.2f"), Tile->GetTileId().X, Tile->GetTileId().Y, TileHit.ImpactPoint.Z / 100.0);
+					}
+					TArray<FHitResult> Hits;
+					GetWorld()->LineTraceMultiByChannel(Hits, At + FVector(0, 0, 300), At - FVector(0, 0, 800), ECC_Visibility, Params);
+					for (const FHitResult& H : Hits)
+					{
+						if (H.GetActor() && H.GetActor()->IsA<AOsdsBridges>()) Heights += FString::Printf(TEXT(" deck %.2f"), H.ImpactPoint.Z / 100.0);
+					}
+				}
+				UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight border surfaces (car body %.2f m):%s"), CarCm.Z / 100.0, *Heights);
+			}
 			Review.Event(TEXT("jolt"), Stats.DriveSeconds);
 		}
 	}
