@@ -1006,8 +1006,10 @@ namespace SimCruiseTileBuilder
 					int32 j = i;
 					while (j + 1 < NS && !RS.Cut[j + 1] && RS.Edge[j + 1] == Edge) ++j;
 					// The run spans stations i..j; extend to the exact crossing where a cut follows or precedes it.
-					const bool bCutStart = i > 0 && RS.Cut[i - 1];
-					const bool bCutEnd = j + 1 < NS && RS.Cut[j + 1];
+					// Run ends at a junction: a crossing carriageway cut, or the ribbon's own end (OSM splits
+					// streets at junctions) unless that end lies on a tile seam.
+					const bool bCutStart = (i > 0 && RS.Cut[i - 1]) || (i == 0 && !Ribbon.bStartOnBoundary);
+					const bool bCutEnd = (j + 1 < NS && RS.Cut[j + 1]) || (j == NS - 1 && !Ribbon.bEndOnBoundary);
 					TArray<FSection> Run;
 					if (i > 0 && RS.Cut[i - 1])
 					{
@@ -1149,6 +1151,7 @@ namespace SimCruiseTileBuilder
 				if (!bEnd) Algo::Reverse(Run);
 			};
 			TSet<int32> UsedEnds;
+			int32 Returns = 0, NoPartner = 0, BadAngle = 0, TooShort = 0;
 			for (int32 a = 0; a < Ends.Num(); ++a)
 			{
 				if (UsedEnds.Contains(a)) continue;
@@ -1165,20 +1168,21 @@ namespace SimCruiseTileBuilder
 					const FVector2d W = Bn.P - A.P;
 					const double T = (W.X * Bn.D.Y - W.Y * Bn.D.X) / Den;
 					const double U = (W.X * A.D.Y - W.Y * A.D.X) / Den;
-					if (T < -0.5 || U < -0.5 || T > 8.0 || U > 8.0) continue;
+					if (T < -3.0 || U < -3.0 || T > 10.0 || U > 10.0) continue;
 					if (Best == INDEX_NONE || T + U < BestT + BestU) { Best = b; BestT = T; BestU = U; BestK = A.P + A.D * T; }
 				}
-				if (Best == INDEX_NONE) continue;
+				if (Best == INDEX_NONE) { ++NoPartner; continue; }
 				const FEnd& A = Ends[a]; const FEnd& Bn = Ends[Best];
 				// The interior angle of the corner between the two curbs, and the tangent distance for R.
 				const FVector2d Ba = -A.D, Bb = -Bn.D;
 				const double Phi = FMath::Acos(FMath::Clamp(FVector2d::DotProduct(Ba, Bb), -1.0, 1.0));
-				if (Phi < FMath::DegreesToRadians(35.0) || Phi > FMath::DegreesToRadians(150.0)) continue;
+				if (Phi < FMath::DegreesToRadians(35.0) || Phi > FMath::DegreesToRadians(150.0)) { ++BadAngle; continue; }
 				const double LenA = RunLength(PendingRuns[A.Run].Run), LenB = RunLength(PendingRuns[Bn.Run].Run);
 				auto TanDist = [Phi](double Rr) { return Rr / FMath::Tan(0.5 * Phi); };
 				double Radius = 5.0;
 				while (Radius > 1.5 && (TanDist(Radius) - BestT > LenA - 1.0 || TanDist(Radius) - BestU > LenB - 1.0)) Radius -= 0.5;
-				if (Radius <= 1.5) continue;
+				if (Radius <= 1.5) { ++TooShort; continue; }
+				++Returns;
 				const double Dt = TanDist(Radius);
 				UsedEnds.Add(a); UsedEnds.Add(Best);
 				const float WalkA = PendingRuns[A.Run].Run[0].Sidewalk, WalkB = PendingRuns[Bn.Run].Run[0].Sidewalk;
@@ -1219,6 +1223,8 @@ namespace SimCruiseTileBuilder
 				for (const FVector& P : Fill) Rim.Add(Asphalt.Add(P, FVector::UpVector, CornerPaved));
 				for (int32 q = 0; q + 1 < Rim.Num(); ++q) Asphalt.Tri(Hub, Rim[q], Rim[q + 1], FVector::UpVector);
 			}
+			UE_LOG(LogTemp, Verbose, TEXT("CURBRETURNS tile %d_%d: %d curb ends, %d returns, %d without a partner, %d angle, %d too short"),
+				Data.Id.X, Data.Id.Y, Ends.Num(), Returns, NoPartner, BadAngle, TooShort);
 		}
 		for (const FPendingRun& PR : PendingRuns)
 		{
