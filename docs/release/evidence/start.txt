@@ -4,10 +4,10 @@
 The 20-minute soak (evidence/soak.txt) is a normal launch with no start flag: it started on "Broadway, Lower Broadway, Nashville, TN" and drove; the 4-minute offline run started on "Route 66 Oatman Road, Sitgreaves Pass, AZ". No crash.
 
 ## I3: travel to preset places
-The soak travelled to 3 presets with ASimCruiseGameMode::TravelTo (as the road atlas and the place search do): Monument Valley (US 163, UT), Capitol Avenue (Cheyenne, WY), Clay Center (Charleston, WV). Each loaded and the car drove on; worst frame after a travel 63 ms. No crash.
+The soak travelled to 3 presets with AOsdsGameMode::TravelTo (as the road atlas and the place search do): Monument Valley (US 163, UT), Capitol Avenue (Cheyenne, WY), Clay Center (Charleston, WV). Each loaded and the car drove on; worst frame after a travel 63 ms. No crash.
 
 ## I4: offline
-SimCruise-Win64-Shipping.exe -SimCruiseSoak=4 -SimCruiseSoakNoTravel -SimCruiseLiveOffline: every live-data request (weather, air, sea, aircraft, photos) goes to a closed local port. The game started, drove 4 minutes (16 recoveries, 5 camera changes), 0 non-finite states and exited with code 0.
+OSDS-Win64-Shipping.exe -OsdsSoak=4 -OsdsSoakNoTravel -OsdsLiveOffline: every live-data request (weather, air, sea, aircraft, photos) goes to a closed local port. The game started, drove 4 minutes (16 recoveries, 5 camera changes), 0 non-finite states and exited with code 0.
 Limit: the map helper (tools/atlas.exe) still had the network, so the start was a random pool road; the fall-back to the bundled Ocean Drive with the network fully off was not run in this release (it needs the network turned off for the whole PC). Known issue in the release notes.
 
 2026-11-12 12:19:06 SOAK start: 4.0 minutes, travel 0
@@ -21,4 +21,4 @@ Limit: the map helper (tools/atlas.exe) still had the network, so the start was 
 2026-11-12 12:23:06 SOAK DONE: 4.0 minutes, drove 1, 16 recoveries, 5 camera changes, 0 car changes, 0 travels, 0 non-finite states, peak 2526 MB used
 
 ## K2: smoke test
-scripts\release.ps1: SimCruise-Win64-Shipping.exe -SimCruiseShellSelfTest -windowed: exit code 0 (the self-test passed and the game exited).
+scripts\release.ps1: OSDS-Win64-Shipping.exe -OsdsShellSelfTest -windowed: exit code 0 (the self-test passed and the game exited).

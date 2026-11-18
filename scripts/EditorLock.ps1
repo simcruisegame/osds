@@ -13,12 +13,12 @@
   can run next to the GPU editor and next to each other.
 #>
 
-$script:EditorLockName = 'Global\SimCruiseEditor'
+$script:EditorLockName = 'Global\OSDSEditor'
 $script:EditorLock = $null
 # Every script that starts a game for a picture or driving test also takes the GPU test lock
 # (-GpuTest), before the editor lock: one GPU test at a time across all lanes, and the tests
 # queue in the order they asked.
-$script:GpuTestLockName = 'Global\SimCruiseGpuTest'
+$script:GpuTestLockName = 'Global\OsdsGpuTest'
 $script:GpuTestLock = $null
 
 <#
@@ -28,9 +28,9 @@ $script:GpuTestLock = $null
 #>
 function Get-TestWindowArgs([bool]$ShowWindow) {
     # A visible run: -FULLSCREEN is a borderless window at the screen's size in Unreal 5 (r.FullScreenMode 1,
-    # windowed fullscreen, the default; -SimCruiseBorderless also sets it in builds that have it),
+    # windowed fullscreen, the default; -OsdsBorderless also sets it in builds that have it),
     # so a focus change cannot minimise it or change the display mode.
-    if ($ShowWindow) { return @('-FULLSCREEN', '-SimCruiseBorderless') }
+    if ($ShowWindow) { return @('-FULLSCREEN', '-OsdsBorderless') }
     return @('-RenderOffScreen')
 }
 
@@ -39,7 +39,7 @@ function Enter-EditorLock {
     if ($GpuTest) {
         $script:GpuTestLock = New-Object System.Threading.Mutex($false, $script:GpuTestLockName)
         # Who holds the lock, for the people waiting (the mutex itself does not say).
-        $Holder = Join-Path $env:LOCALAPPDATA 'SimCruise\gpu-test-lock.txt'
+        $Holder = Join-Path $env:LOCALAPPDATA 'OSDS\gpu-test-lock.txt'
         $Start = Get-Date
         $Taken = $false
         while (-not $Taken) {
@@ -63,7 +63,7 @@ function Enter-EditorLock {
     Write-Host "Waiting for the editor lock ($Why)..."
     try {
         if (-not $script:EditorLock.WaitOne([TimeSpan]::FromMinutes($TimeoutMinutes))) {
-            Write-Host "Another SimCruise editor run held the lock for $TimeoutMinutes min. Gave up."
+            Write-Host "Another OSDS editor run held the lock for $TimeoutMinutes min. Gave up."
             Exit-EditorLock
             return $false
         }
@@ -86,7 +86,7 @@ function Exit-EditorLock {
         $script:GpuTestLock.Dispose()
         $script:GpuTestLock = $null
         # Free: the holder file names nobody (load.csv logs the holder).
-        $Holder = Join-Path $env:LOCALAPPDATA 'SimCruise\gpu-test-lock.txt'
+        $Holder = Join-Path $env:LOCALAPPDATA 'OSDS\gpu-test-lock.txt'
         try { Set-Content -Encoding utf8 $Holder '' } catch { }
     }
 }
@@ -94,17 +94,17 @@ function Exit-EditorLock {
 # Headless (-nullrhi) test runs use neither the GPU nor MCP port 8000, so they do not take
 # the one-editor lock. They take one of a few slots instead, so several worktrees can test at
 # once without running the PC out of memory. Each slot is its own named mutex
-# (Global\SimCruiseHeadless0, 1, ...), not one semaphore: Windows frees a mutex when its
+# (Global\OsdsHeadless0, 1, ...), not one semaphore: Windows frees a mutex when its
 # holder dies, while a semaphore count taken by a killed script would stay taken.
 $script:HeadlessSlot = $null
 $script:HeadlessSlotMax = 3
 
 function Get-HeadlessSlotCount {
-    # How many headless test editors may run at once: -Slots, else $env:SIMCRUISE_TEST_SLOTS,
+    # How many headless test editors may run at once: -Slots, else $env:OSDS_TEST_SLOTS,
     # else what the free memory allows (keeping ReserveGB free; at least 2 with 20 GB free), from 1 to 3.
     # EditorPeakGB: a full -nullrhi test run peaked at 6.1 GB (working set, 2026-11-12).
     param([int]$Requested = 0, [double]$EditorPeakGB = 6.5, [double]$ReserveGB = 8)
-    if ($Requested -le 0 -and $env:SIMCRUISE_TEST_SLOTS) { $Requested = [int]$env:SIMCRUISE_TEST_SLOTS }
+    if ($Requested -le 0 -and $env:OSDS_TEST_SLOTS) { $Requested = [int]$env:OSDS_TEST_SLOTS }
     if ($Requested -gt 0) { return [int][math]::Min([math]::Max($Requested, 1), $script:HeadlessSlotMax) }
     try { $FreeGB = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB } catch { return 1 }
     $N = [math]::Floor(($FreeGB - $ReserveGB) / $EditorPeakGB)
@@ -119,7 +119,7 @@ function Enter-HeadlessSlot {
     Write-Host "Waiting for a headless test slot (one of $Slots; $Why)..."
     while ($true) {
         for ($I = 0; $I -lt $Slots; $I++) {
-            $M = New-Object System.Threading.Mutex($false, "Global\SimCruiseHeadless$I")
+            $M = New-Object System.Threading.Mutex($false, "Global\OsdsHeadless$I")
             $Taken = $false
             try { $Taken = $M.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $Taken = $true }
             if ($Taken) {

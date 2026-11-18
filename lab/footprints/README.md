@@ -1,6 +1,6 @@
 # Independent building outlines
 
-> Former name: this study was written when SimCruise was called "Sunday Driver"; the app, paths and commands it mentions under that name are now SimCruise.
+> Former name: this study was written when OSDS was called "Sunday Driver"; the app, paths and commands it mentions under that name are now OSDS.
 
 The included districts add 19 clearance-tested footprints in Lovelock, Nevada and one in Colby, Kansas. Sixteen have a Microsoft model estimate for total height. Four have unknown height and render with a 3 m display assumption. Eave heights, façade details, roof pitch and building use remain unknown. The runtime preserves those statuses separately. A previously classified-lidar building takes precedence if both methods support the same geometry.
 

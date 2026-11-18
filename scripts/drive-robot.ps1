@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   For each car (default nb2001, nb2001_lowered, mustang65 and meridian_z) it builds nothing, takes the PC-wide editor
-  lock (scripts\editor.ps1), runs -SimCruiseDriveTest -SimCruiseDriveTestPad, and reads the
+  lock (scripts\editor.ps1), runs -OsdsDriveTest -OsdsDriveTestPad, and reads the
   DRIVETEST summary lines (peak rear-axle slip and yaw rate per manoeuvre). Each run is
   appended to Saved\DriveTest\history.csv with the commit, so a change in feel shows as a
   change in numbers.
@@ -51,9 +51,9 @@ foreach ($Car in $Cars) {
         $Tag = if ($Run.Cap -gt 0) { "$Car-$($Run.Cap)fps" } else { $Car }
         $Log = Join-Path $Out "robot-$Tag.log"
         $Csv = (Join-Path $Out "robot-$Tag.csv") -replace '\\', '/'
-        $Args = @('-game', '-SimCruiseWorld', '-SimCruiseBundledStart', "-SimCruiseCar=$Car", '-NoLiveCoding', '-SimCruiseNoLive', '-SimCruiseNoNeural',
-            '-SimCruiseDriveTest', '-SimCruiseDriveTestPad', "-SimCruiseDriveTestOut=$Csv", $(if ($ShowWindow) { '-windowed' } else { '-RenderOffScreen' }), '-ResX=1280', '-ResY=720', '-log', "-abslog=$Log")
-        if ($Run.Cap -gt 0) { $Args += "-SimCruiseDriveTestMaxFps=$($Run.Cap)" }
+        $Args = @('-game', '-OsdsWorld', '-OsdsBundledStart', "-OsdsCar=$Car", '-NoLiveCoding', '-OsdsNoLive', '-OsdsNoNeural',
+            '-OsdsDriveTest', '-OsdsDriveTestPad', "-OsdsDriveTestOut=$Csv", $(if ($ShowWindow) { '-windowed' } else { '-RenderOffScreen' }), '-ResX=1280', '-ResY=720', '-log', "-abslog=$Log")
+        if ($Run.Cap -gt 0) { $Args += "-OsdsDriveTestMaxFps=$($Run.Cap)" }
         Write-Host "Drive robot: $Tag"
         if (Test-Path $Log) { Remove-Item $Log -Force }
         # A hung or crashed run is stopped after 15 min (editor.ps1 adds -unattended to -game runs).

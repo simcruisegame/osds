@@ -361,7 +361,7 @@ def plate(uv, w, h, o):
     c = paint.Canvas(w, h, "#efeee8")
     c.rect(0.03, 0.06, 0.97, 0.94, "#1d3c8a", 1.0)
     c.rect(0.05, 0.1, 0.95, 0.9, "#efeee8", 1.0)
-    # SIMCRUISE wordmark as simple bars (no real registration)
+    # OSDS wordmark as simple bars (no real registration)
     x = 0.12
     for k in range(8):
         c.rect(x, 0.32, x + 0.07, 0.68, "#1d3c8a", 1.0, r=0.01); x += 0.095

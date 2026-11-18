@@ -4,10 +4,10 @@
 
 .DESCRIPTION
   Two parts, each logging every control as PADNAV REACHED or PADNAV UNREACHABLE:
-    1. Headless: the automation test SimCruise.UI.PadNavigation (scripts\check.ps1 -Filter). The
+    1. Headless: the automation test OSDS.UI.PadNavigation (scripts\check.ps1 -Filter). The
        menu sits in a hidden Slate window with the game's focus (SetUserFocus, user 0); pad keys go
        through FSlateApplication.
-    2. In the game (-SimCruisePadReview, ASimCruisePadReview): the real game at Ocean Drive, off
+    2. In the game (-OsdsPadReview, AOsdsPadReview): the real game at Ocean Drive, off
        screen, the menus opened by the player controller as the player opens them, pad keys
        through FSlateApplication, the pad's focus logged after every press (PADWALK), frames of
        each screen. On the road atlas and "Where to?" the frames before and after the D-pad are
@@ -55,11 +55,11 @@ function Add-Rows([string]$Log, [string]$Part) {
 }
 
 # 1. Headless.
-$CheckArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'check.ps1'), '-Filter', 'SimCruise.UI.PadNavigation', '-NoViewCheck')
+$CheckArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'check.ps1'), '-Filter', 'OSDS.UI.PadNavigation', '-NoViewCheck')
 if ($NoBuild) { $CheckArgs += '-NoBuild' }
 & powershell @CheckArgs | Out-File -Encoding utf8 (Join-Path $OutDir 'check.txt')
 $TestLog = Join-Path $OutDir 'test.log'
-$CheckLog = Join-Path $Root 'Saved\Logs\SimCruiseChecks.log'
+$CheckLog = Join-Path $Root 'Saved\Logs\OsdsChecks.log'
 if (Test-Path $CheckLog) { Copy-Item $CheckLog $TestLog -Force }
 Add-Rows $TestLog 'headless'
 
@@ -70,9 +70,9 @@ if (-not $NoGame) {
     New-Item -ItemType Directory -Force $GameDir | Out-Null
     $Log = Join-Path $GameDir 'game.log'
     $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
-    $Project = Join-Path $Root 'SimCruise.uproject'
-    $GameArgs = @("`"$Project`"", '-game', '-SimCruiseWorld', '-SimCruiseBundledStart', '-SimCruiseNoLive', '-SimCruiseNoNeural', '-SimCruiseGraphics=ultra',
-        '-SimCruiseUtc=2026-11-12T17:00:00Z', "`"-SimCruisePadReview=$GameDir`"", "-SimCruisePadForbid=$(($ForbiddenNames | ForEach-Object { $_ -split ',' }) -join ',')", "-SimCruisePadCarName=$($CarName -replace ' ', '_')", '-DPCVars=simcruise.Traffic.Cars=0', '-NoLiveCoding', '-nosplash', '-unattended',
+    $Project = Join-Path $Root 'OSDS.uproject'
+    $GameArgs = @("`"$Project`"", '-game', '-OsdsWorld', '-OsdsBundledStart', '-OsdsNoLive', '-OsdsNoNeural', '-OsdsGraphics=ultra',
+        '-OsdsUtc=2026-11-12T17:00:00Z', "`"-OsdsPadReview=$GameDir`"", "-OsdsPadForbid=$(($ForbiddenNames | ForEach-Object { $_ -split ',' }) -join ',')", "-OsdsPadCarName=$($CarName -replace ' ', '_')", '-DPCVars=osds.Traffic.Cars=0', '-NoLiveCoding', '-nosplash', '-unattended',
         '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution)
     $env:UE_SKIP_UBT_SDK_SETUP = '1'
     if (Enter-EditorLock -GpuTest -TimeoutMinutes $LockTimeoutMinutes -Why "pad review on $Root") {

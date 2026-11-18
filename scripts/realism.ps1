@@ -6,7 +6,7 @@
 .DESCRIPTION
   Builds the editor target, fetches each pose's photograph into Saved\Realism\photos (never
   committed), opens the game once per pose under the PC-wide editor lock with
-  -SimCruiseDriveCapture -SimCruiseRealismPose at the photograph's time and size (moving traffic
+  -OsdsDriveCapture -OsdsRealismPose at the photograph's time and size (moving traffic
   off), then runs lab\realism\score.py. One REALISM line per pose; the rows are appended to
   Saved\Realism\history.csv with the commit as the label. Exit 1 if a pose could not be scored.
 
@@ -34,7 +34,7 @@ param(
     [int]$LockTimeoutMinutes = 60,
     # Extra editor arguments for an A/B, e.g. '-DPCVars=r.DefaultFeature.LocalExposure.HighlightContrastScale=0.7'.
     [string]$ExtraArgs = '',
-    # Extra console commands run at start, e.g. 'SimCruise.Env.Look ExposureCompensation -0.1'.
+    # Extra console commands run at start, e.g. 'OSDS.Env.Look ExposureCompensation -0.1'.
     [string]$ExecExtra = '',
     [string]$EngineDir = $(if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:\Program Files\Epic Games\UE_5.8' })
 )
@@ -42,7 +42,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
 $BuildBat = Join-Path $EngineDir 'Engine\Build\BatchFiles\Build.bat'
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
@@ -64,7 +64,7 @@ foreach ($P in $Poses) {
     if ($P.photo.source -eq 'commons') {
         # Wikimedia Commons: the file at 1600 px across (a generic client name; links only in git).
         Write-Host "Fetching Commons $($P.photo.file) for $($P.name)"
-        Invoke-WebRequest -UseBasicParsing -UserAgent 'SimCruise-realism/1.0 (game development)' -OutFile $Photo `
+        Invoke-WebRequest -UseBasicParsing -UserAgent 'OSDS-realism/1.0 (game development)' -OutFile $Photo `
             -Uri "https://commons.wikimedia.org/wiki/Special:FilePath/$($P.photo.file)?width=1600"
         continue
     }
@@ -79,8 +79,8 @@ foreach ($P in $Poses) {
 
 # 2. The build.
 if (-not $NoBuild) {
-    Write-Host 'Building SimCruiseEditor (Win64 Development)...'
-    & $BuildBat SimCruiseEditor Win64 Development "-Project=$Project" -WaitMutex -NoHotReloadFromIDE | Out-Host
+    Write-Host 'Building OSDSEditor (Win64 Development)...'
+    & $BuildBat OSDSEditor Win64 Development "-Project=$Project" -WaitMutex -NoHotReloadFromIDE | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Host 'BUILD FAILED'; exit 1 }
 }
 
@@ -88,10 +88,10 @@ if (-not $NoBuild) {
 foreach ($P in $Poses) {
     $PoseArg = "$($P.name),$($P.lat),$($P.lon),$($P.heading),$($P.hfov)"
     if ($P.snap -or $P.pitch) { $PoseArg += ",$(if ($P.snap) { $P.snap } else { '-' }),$(if ($P.pitch) { $P.pitch } else { 0 })" }
-    $Start = if ($P.world -eq 'bundled') { '-SimCruiseWorld' } else { "-SimCruiseStart=$($P.lat),$($P.lon)" }
+    $Start = if ($P.world -eq 'bundled') { '-OsdsWorld' } else { "-OsdsStart=$($P.lat),$($P.lon)" }
     $ArgLine = "`"$Project`" -game -windowed -ResX=$($P.width) -ResY=$($P.height) -nosplash -unattended $Start " +
-        "-SimCruiseDriveCapture `"-SimCruiseDriveCaptureOut=$Captures`" -SimCruiseRealismPose=$PoseArg " +
-        "-SimCruiseUtc=$($P.utc) -SimCruiseGraphics=$Graphics `"-ExecCmds=simcruise.Traffic.Cars 0$(if ($ExecExtra) { ',' + $ExecExtra })`" -log=SimCruiseRealism.log -NoLiveCoding $ExtraArgs"
+        "-OsdsDriveCapture `"-OsdsDriveCaptureOut=$Captures`" -OsdsRealismPose=$PoseArg " +
+        "-OsdsUtc=$($P.utc) -OsdsGraphics=$Graphics `"-ExecCmds=osds.Traffic.Cars 0$(if ($ExecExtra) { ',' + $ExecExtra })`" -log=OsdsRealism.log -NoLiveCoding $ExtraArgs"
     if (-not (Enter-EditorLock -TimeoutMinutes $LockTimeoutMinutes -Why "realism capture $($P.name) on $Root")) { exit 1 }
     try {
         Write-Host "Capturing $($P.name)"

@@ -6,7 +6,7 @@ One full game test of a release candidate, for all the teams at once. The tools 
 
 - After each change: `scripts\check.ps1 -Tier fast` only (no game, no GPU). See [dev-loop.md](dev-loop.md).
 - At the cut-off, all lanes merge into one candidate (a commit or tag such as `rc-v2.0.3`, or `docs/team/cycles/rc.txt`). Then `scripts\release-test.ps1` tests that commit once. Do not start it on a commit that is not the candidate.
-- One GPU test at a time on the PC: the script takes the `Global\SimCruiseGpuTest` lock for each launch (`scripts\EditorLock.ps1 -GpuTest`). Other GPU tests wait. The lock holder is in `%LOCALAPPDATA%\SimCruise\gpu-test-lock.txt`.
+- One GPU test at a time on the PC: the script takes the `Global\OsdsGpuTest` lock for each launch (`scripts\EditorLock.ps1 -GpuTest`). Other GPU tests wait. The lock holder is in `%LOCALAPPDATA%\OSDS\gpu-test-lock.txt`.
 
 ## A re-test
 
@@ -26,13 +26,13 @@ An editor build compiles shaders the first time a place needs them, and a fresh 
 
 ## The GPU
 
-The release test owns the GPU while it runs: other lanes ask before they launch a game. Every game launch takes `Global\SimCruiseGpuTest` (`scripts\EditorLock.ps1`); the holder is in `%LOCALAPPDATA%\SimCruise\gpu-test-lock.txt` (empty when free) and in each `load.csv` row (`gpu_lock_holder`). `load.csv` also counts other lanes' builds (UnrealBuildTool, cl, link, shader workers) as load, and names each process's lane (`name#pid@lane`, from its command line); `summary.md` lists the other lanes with their first and last time.
+The release test owns the GPU while it runs: other lanes ask before they launch a game. Every game launch takes `Global\OsdsGpuTest` (`scripts\EditorLock.ps1`); the holder is in `%LOCALAPPDATA%\OSDS\gpu-test-lock.txt` (empty when free) and in each `load.csv` row (`gpu_lock_holder`). `load.csv` also counts other lanes' builds (UnrealBuildTool, cl, link, shader workers) as load, and names each process's lane (`name#pid@lane`, from its command line); `summary.md` lists the other lanes with their first and last time.
 
 `C:\aiwork\GPU-BUSY` holds one line while this lane uses the GPU (`holder=lane-view, start=<UTC>, end_estimate=<UTC>, purpose=<text>`); `release-test.ps1`, `start-compare.ps1` and `focus-check.ps1` set it and clear it in a finally block (`Set-GpuBusy` / `Clear-GpuBusy` in `scripts\EditorLock.ps1`). Other lanes call `scripts\gpu-wait.ps1` before a build or a game launch: it waits while the file is there (`-TimeoutMinutes`, default 120); a file whose end_estimate is more than 30 min past is stale, so it is ignored and logged.
 
 ## A quiet window
 
-Run the release test only in a quiet window: no build, test or game from another lane. Load from other lanes added about 2 ms to the frame p95. The script samples the PC every 30 s into `load.csv` (`scripts\LoadWatch.ps1`): the other Unreal and SimCruise processes and the GPU use of other processes. When another Unreal or SimCruise process ran, or other GPU use averaged over 5 %, the summary says **NOT QUIET** and the frame-time rows in the picture and ai reports are marked NOT QUIET: they are not valid for sign-off.
+Run the release test only in a quiet window: no build, test or game from another lane. Load from other lanes added about 2 ms to the frame p95. The script samples the PC every 30 s into `load.csv` (`scripts\LoadWatch.ps1`): the other Unreal and OSDS processes and the GPU use of other processes. When another Unreal or OSDS process ran, or other GPU use averaged over 5 %, the summary says **NOT QUIET** and the frame-time rows in the picture and ai reports are marked NOT QUIET: they are not valid for sign-off.
 
 ## Run it
 
@@ -65,7 +65,7 @@ Each place is one game (`scripts\launch-review.ps1`) at the Ultra preset and the
 
 Places: the four hero roads (Ocean Drive, the Dragon, Nebraska, Big Sur) and the random US places. The three cars (the 1999 roadster, the Mustang, the Corvette) turn round the hero roads, so each car drives each hero road in three runs. Each random place gets one car. Each random place drives at its own local solar noon.
 
-Then the controller menu test (`scripts\pad-review.ps1`, automation test `SimCruise.UI.PadNavigation`), once. When the script is not there, the UI report says NOT RUN.
+Then the controller menu test (`scripts\pad-review.ps1`, automation test `OSDS.UI.PadNavigation`), once. When the script is not there, the UI report says NOT RUN.
 
 ## Test cases with their own launch
 
@@ -73,19 +73,19 @@ The world lane makes the game side. The release test starts each case, applies t
 
 | Case | Launch | The game writes | Gates | Teams |
 |---|---|---|---|---|
-| Standstill | Ocean Drive, `-SimCruiseStandstillTest` (`launch-review.ps1 -Case standstill`) | `standstill\t000.png`, `t005.png`, `t015.png`, `t060.png` (0, 5, 15 and 60 s after the stop), `wall.png` (1 m from a wall), `ground.png` (1 m from the ground) | Edge density and fine-detail energy (`scripts\detail-metrics.py`) rise at each step. The 60 s frame beside the place's reference photo (`side-by-side.png`) when one is in `data\reference\<road>\` (legal source only). | world, picture |
-| Speed | Nebraska (straight), then the Dragon, `-SimCruiseSpeedTest` (`-Case speed`) | `speed\speed.json`: `{"runs": [{"road", "kmh", "ai", "lead_m", "lead_s", "holes", "popin_spikes", "frame_median_ms", "frame_p95_ms", "hitches_2x"}]}`, one run per speed (50, 130, 240 km/h), AI workers on and off in the same launch | No holes. No pop-in spikes on the road ahead. On the Dragon, frame p95 with AI on is not more than 0.5 ms above AI off. No extra frames over 2x the median with AI on. Frame p95 not above 50 ms. | world, ai, picture |
+| Standstill | Ocean Drive, `-OsdsStandstillTest` (`launch-review.ps1 -Case standstill`) | `standstill\t000.png`, `t005.png`, `t015.png`, `t060.png` (0, 5, 15 and 60 s after the stop), `wall.png` (1 m from a wall), `ground.png` (1 m from the ground) | Edge density and fine-detail energy (`scripts\detail-metrics.py`) rise at each step. The 60 s frame beside the place's reference photo (`side-by-side.png`) when one is in `data\reference\<road>\` (legal source only). | world, picture |
+| Speed | Nebraska (straight), then the Dragon, `-OsdsSpeedTest` (`-Case speed`) | `speed\speed.json`: `{"runs": [{"road", "kmh", "ai", "lead_m", "lead_s", "holes", "popin_spikes", "frame_median_ms", "frame_p95_ms", "hitches_2x"}]}`, one run per speed (50, 130, 240 km/h), AI workers on and off in the same launch | No holes. No pop-in spikes on the road ahead. On the Dragon, frame p95 with AI on is not more than 0.5 ms above AI off. No extra frames over 2x the median with AI on. Frame p95 not above 50 ms. | world, ai, picture |
 
 ## The drive judge: road edge and run-off
 
-The pre-flight judge (`Source/SimCruise/Private/Gameplay/SimCruisePreflight.cpp`, limits in `SimCruisePreflightRules`, `SimCruisePreflight.h`) has two road checks. A world-lane test must use the same rules to agree with it.
+The pre-flight judge (`Source/OSDS/Private/Gameplay/OsdsPreflight.cpp`, limits in `OsdsPreflightRules`, `OsdsPreflight.h`) has two road checks. A world-lane test must use the same rules to agree with it.
 
 | Reason | Rule | Road data | Limit |
 |---|---|---|---|
 | `ran-off-<m>m-past-the-edge-for-<s>s` | The car's centre (the actor location, 2D) against the nearest point of the nearest heading-aligned line: the route lines the robot gathered this frame (`FindCursor` on the drive's `Lines`). Past-edge = distance to that centreline minus that segment's `HalfW`. No aligned line within 30 m counts as 30 m. | The road ribbons of the built tiles (`Build->Roads.Ribbons`: OSM centreline stations with their half width), service ribbons left out (`bService`). Not the drawn mesh. | more than `MaxOffRibbonM` = 2.0 m for longer than `MaxOffRibbonSeconds` = 0.5 s |
 | `left-the-road-<s>s` | The surface under the car's centre: a vertical trace on the tile meshes (the point's tile and its 8 neighbours, highest hit), or a bridge deck. It is road when the hit face is on a road layer (`IsRoadLayer(Tile->LayerAtFace)`). | The drawn mesh's road layer. | not road for longer than `MaxOffRoadSeconds` = 1.0 s |
 
-There is no launch grace: both checks run from the first drive frame (frame 0). The car's start pose comes from the start pick (`World/SimCruiseStartPick.cpp`). It takes public, non-service ribbons, and it requires each corner of the car to be within `HalfW - EdgeClearM` of its own ribbon's centreline. It does not check the drawn road layer or the route's first line.
+There is no launch grace: both checks run from the first drive frame (frame 0). The car's start pose comes from the start pick (`World/OsdsStartPick.cpp`). It takes public, non-service ribbons, and it requires each corner of the car to be within `HalfW - EdgeClearM` of its own ribbon's centreline. It does not check the drawn road layer or the route's first line.
 
 So a start the start pick accepts can still fail the judge at frame 0 in two ways:
 - The judge's nearest aligned route line is another ribbon (at a junction, the cross street, or a ribbon with a smaller `HalfW`).
@@ -95,7 +95,7 @@ Welch, 2026-11-14 (a97af50): the car was placed at about 37.4329 N, 81.5840 W, h
 
 ## The traffic judge
 
-Ten times a second the judge looks at each traffic car in our car's frame (Along: metres ahead of our centre, Side: metres to the side, centre to centre; heading relative to ours). Limits in `SimCruisePreflightRules` (`SimCruisePreflight.h`), tests in `SimCruise.Gameplay.Preflight.Traffic`. Each event has a line `Pre-flight: traffic ...` in the game log (the car's name, where it was) and an event frame in `review\`.
+Ten times a second the judge looks at each traffic car in our car's frame (Along: metres ahead of our centre, Side: metres to the side, centre to centre; heading relative to ours). Limits in `OsdsPreflightRules` (`OsdsPreflight.h`), tests in `OSDS.Gameplay.Preflight.Traffic`. Each event has a line `Pre-flight: traffic ...` in the game log (the car's name, where it was) and an event frame in `review\`.
 
 | Reason | Rule | Team, severity |
 |---|---|---|
@@ -103,13 +103,13 @@ Ten times a second the judge looks at each traffic car in our car's frame (Along
 | `traffic-through-our-car-<n>` | The bodies overlap: \|Along\| under 2.2 m + half its length - 0.3 m, \|Side\| under 1.6 m, height within 2 m. | driving, P1 |
 | `traffic-turn-round-<n>` | The car's heading changes by 150 deg or more within 3 s (unwrapped through 180 deg), while it moves (over 0.5 m/s). A car removed and placed again (more than 30 m in one sample) starts a new history. | driving, P2 |
 | `motorway-traffic-at-grade-<n>` | A car on a `motorway` ribbon is across our road (45 to 135 deg), on it (\|Side\| under 8 m, -10 to 60 m ahead), at our level (within 2.5 m). Motorways never cross a road at grade; an overpass is metres above or below. | driving, P2 |
-| `junction-hold-<s>s-of-<n>s` | Only with `-SimCruisePreflightStopAtJunction=N` (`launch-review.ps1 -StopAtJunction N`): the robot held less than N s at a stop line, so the gap-acceptance case did not run. | release, P2 |
+| `junction-hold-<s>s-of-<n>s` | Only with `-OsdsPreflightStopAtJunction=N` (`launch-review.ps1 -StopAtJunction N`): the robot held less than N s at a stop line, so the gap-acceptance case did not run. | release, P2 |
 
-The gap-acceptance case: with `-SimCruisePreflightStopAtJunction=N` the robot looks up to 60 m ahead along its route for the first point inside a crossing carriageway of a road its own road gives way to (the traffic's rule, `SimCruiseLanes::ApproachStops`: a higher rank, or an equal rank that is not a major road). It stops `StopLineSetbackM` (5.25 m) before it, holds N s on the parking brake, then pulls out without waiting for a gap. The traffic must leave it a full gap: no cut-in and no car through ours. `scripts\traffic-retest.ps1` runs the traffic cases (Detroit Woodward north and south, Doraville, one junction; Bixby south with `-WithBixby`).
+The gap-acceptance case: with `-OsdsPreflightStopAtJunction=N` the robot looks up to 60 m ahead along its route for the first point inside a crossing carriageway of a road its own road gives way to (the traffic's rule, `OsdsLanes::ApproachStops`: a higher rank, or an equal rank that is not a major road). It stops `StopLineSetbackM` (5.25 m) before it, holds N s on the parking brake, then pulls out without waiting for a gap. The traffic must leave it a full gap: no cut-in and no car through ours. `scripts\traffic-retest.ps1` runs the traffic cases (Detroit Woodward north and south, Doraville, one junction; Bixby south with `-WithBixby`).
 
 ## Graphics rule
 
-Review launches turn dynamic resolution off (console priority), so the 3D picture stays at the preset's screen percentage (75 for Ultra, from the preset) and the frame times are its honest cost; `-SimCruisePlayerRes` keeps the player's dynamic resolution. A launch is valid for sign-off only when the engine really had the top preset (Ultra), all `sg.*` levels at the top, the screen's own resolution, and a screen percentage, set and measured each frame, not below the preset's. A frame p95 over the budget at the fixed percentage is a FAIL for the picture and world teams, not a test fault. Else the run is **NOT VALID FOR SIGN-OFF**: the picture report has a P1 finding, the summary says so, and `scripts\review-check.ps1` and `scripts\playtest.ps1` refuse it.
+Review launches turn dynamic resolution off (console priority), so the 3D picture stays at the preset's screen percentage (75 for Ultra, from the preset) and the frame times are its honest cost; `-OsdsPlayerRes` keeps the player's dynamic resolution. A launch is valid for sign-off only when the engine really had the top preset (Ultra), all `sg.*` levels at the top, the screen's own resolution, and a screen percentage, set and measured each frame, not below the preset's. A frame p95 over the budget at the fixed percentage is a FAIL for the picture and world teams, not a test fault. Else the run is **NOT VALID FOR SIGN-OFF**: the picture report has a P1 finding, the summary says so, and `scripts\review-check.ps1` and `scripts\playtest.ps1` refuse it.
 
 ## Output
 
@@ -123,8 +123,8 @@ Review launches turn dynamic resolution off (console priority), so the 3D pictur
 | `teams\picture.md` | Frame times, hitches, white sky, the real graphics settings. |
 | `teams\world.md` | Road steps and gaps, pop-in, stuck traffic, the start place, the load time, the view check. |
 | `teams\ai.md` | The detail engine's AI workers: frame cost with AI on against off, detail lead at speed. |
-| Fallback ground | Ocean Drive, `-SimCruiseFailTiles=18180_27907,18181_27907` (the two tiles north of the start fail; `launch-review.ps1 -Case fallback`) | the log: `Forced tile failures`, `Fallback ground under tile` | The failure takes effect, fallback ground is laid, the drive judge passes, no road gaps; the last frames listed for the review (no hole or void). | world |
-| Eye fusion | Ocean Drive, a live drive with `-SimCruiseScanEye=satlas_landcover` (`-Case eye`) and the same drive with the eye off (`-Case eyeoff`). The dev model is read in place from `-EyeModelDir` (default `D:\sc\lane-detail\Saved\AI`) through a junction at `Saved\AI`; it is never copied into the repo. | the log: `Scan eye ready`, one `SCANEYE` line per tile read | The eye starts and reads tiles; frame p95 with the eye on is not more than 0.5 ms above eye off; no extra hitches; frames listed for the detail layer. | world, ai |
+| Fallback ground | Ocean Drive, `-OsdsFailTiles=18180_27907,18181_27907` (the two tiles north of the start fail; `launch-review.ps1 -Case fallback`) | the log: `Forced tile failures`, `Fallback ground under tile` | The failure takes effect, fallback ground is laid, the drive judge passes, no road gaps; the last frames listed for the review (no hole or void). | world |
+| Eye fusion | Ocean Drive, a live drive with `-OsdsScanEye=satlas_landcover` (`-Case eye`) and the same drive with the eye off (`-Case eyeoff`). The dev model is read in place from `-EyeModelDir` (default `D:\sc\lane-detail\Saved\AI`) through a junction at `Saved\AI`; it is never copied into the repo. | the log: `Scan eye ready`, one `SCANEYE` line per tile read | The eye starts and reads tiles; frame p95 with the eye on is not more than 0.5 ms above eye off; no extra hitches; frames listed for the detail layer. | world, ai |
 | No ensure with the eye on | the eye-on log | | No `Ensure condition failed`, `ensure(`, assert, fatal error or crash: any hit is a P0 for ai. | ai |
 | `teams\ui.md` | The controller menu test. |
 | `teams\release.md` | Crashes, hangs, engine errors, a drive that did not happen. |

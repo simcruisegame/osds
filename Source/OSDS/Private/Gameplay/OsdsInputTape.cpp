@@ -1,0 +1,913 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#include "Gameplay/OsdsInputTape.h"
+
+#include "Engine/World.h"
+#include "Gameplay/OsdsDriveTest.h"
+#include "Gameplay/OsdsGameMode.h"
+#include "Gameplay/OsdsPlayerController.h"
+#include "HAL/FileManager.h"
+#include "InputCoreTypes.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/App.h"
+#include "Misc/CommandLine.h"
+#include "Misc/DateTime.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Parse.h"
+#include "Misc/Paths.h"
+#include "Vehicle/OsdsUnits.h"
+#include "Vehicle/OsdsVehicle.h"
+#include "Vehicle/OsdsVehicleMovementComponent.h"
+#include "World/OsdsGeo.h"
+#include "World/OsdsWorldStreamer.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogOsdsInputTape, Log, All);
+
+namespace
+{
+	const TCHAR* TapeMagic = TEXT("# osds input tape 1");
+	const TCHAR* TapeColumns = TEXT("t,dt,pad_steer,key_steer,pad_throttle,pad_brake,key_throttle,key_brake,full_brake,handbrake,clutch,"
+		"wheel,wheel_rack_rad,wheel_throttle,wheel_brake,wheel_has_clutch,wheel_clutch,shift,manual");
+	constexpr int32 TapeColumnCount = 19;
+
+	/** The moving traffic (osds.Traffic.Cars above 0). */
+	bool IsTrafficOn()
+	{
+		const IConsoleVariable* Cars = IConsoleManager::Get().FindConsoleVariable(TEXT("osds.Traffic.Cars"));
+		return Cars && Cars->GetInt() > 0;
+	}
+
+	/** Traffic is not the same from run to run: a recording that is to replay the same drives without it. */
+	void TurnTrafficOff(const TCHAR* Why)
+	{
+		if (IConsoleVariable* Cars = IConsoleManager::Get().FindConsoleVariable(TEXT("osds.Traffic.Cars")))
+		{
+			if (Cars->GetInt() > 0)
+			{
+				Cars->Set(0, ECVF_SetByCode);
+				UE_LOG(LogOsdsInputTape, Display, TEXT("%s: traffic off (traffic does not drive the same way twice)"), Why);
+			}
+		}
+	}
+
+	FString DriveTestDir()
+	{
+		return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("DriveTest"));
+	}
+
+	/** Where the car's body stands on the ground: the ground point under it. */
+	FVector GroundUnder(const AOsdsVehicle& Vehicle)
+	{
+		const double BoxCentreCm = OsdsUnits::ToUnrealLength(Vehicle.GetVehicleMovement()->GetCarDefinition().CollisionShapeCenterYM);
+		return Vehicle.GetActorLocation() - Vehicle.GetActorQuat().RotateVector(FVector(0.0, 0.0, BoxCentreCm));
+	}
+}
+
+// --- FOsdsInputTape -----------------------------------------------------
+
+const FOsdsInputFrame* FOsdsInputTape::At(double TimeS, int32& Cursor) const
+{
+	if (Frames.IsEmpty() || TimeS > Frames.Last().TimeS + 1e-9)
+	{
+		return nullptr;
+	}
+	if (!Frames.IsValidIndex(Cursor) || (Cursor > 0 && Frames[Cursor - 1].TimeS >= TimeS))
+	{
+		Cursor = 0;
+	}
+	while (Cursor < Frames.Num() - 1 && Frames[Cursor].TimeS < TimeS - 1e-9)
+	{
+		++Cursor;
+	}
+	return &Frames[Cursor];
+}
+
+FString FOsdsInputTape::ToCsv() const
+{
+	TArray<FString> Lines;
+	Lines.Add(TapeMagic);
+	Lines.Add(FString::Printf(TEXT("# car=%s"), *CarId));
+	Lines.Add(FString::Printf(TEXT("# ground_cm=%.2f,%.2f,%.2f"), StartGroundCm.X, StartGroundCm.Y, StartGroundCm.Z));
+	Lines.Add(FString::Printf(TEXT("# yaw_deg=%.4f"), StartYawDeg));
+	if (bHasLonLat)
+	{
+		Lines.Add(FString::Printf(TEXT("# lonlat=%.8f,%.8f"), StartLonDeg, StartLatDeg));
+	}
+	Lines.Add(FString::Printf(TEXT("# start_speed_mps=%.3f"), StartSpeedMps));
+	if (bHasPlace)
+	{
+		// The place line holds numbers only; the title and street have lines of their own (they hold commas).
+		Lines.Add(FString::Printf(TEXT("# place=%.8f,%.8f"), PlaceLonDeg, PlaceLatDeg));
+		Lines.Add(FString::Printf(TEXT("# place_title=%s"), *PlaceTitle.Replace(TEXT("\n"), TEXT(" "))));
+		Lines.Add(FString::Printf(TEXT("# place_street=%s"), *PlaceStreet.Replace(TEXT("\n"), TEXT(" "))));
+		Lines.Add(FString::Printf(TEXT("# frame=%d,%d,%.6f"), FrameOriginTile.X, FrameOriginTile.Y, FrameTileSizeM));
+	}
+	if (!Traffic.IsEmpty())
+	{
+		Lines.Add(FString::Printf(TEXT("# traffic=%s"), *Traffic));
+	}
+	if (!Note.IsEmpty())
+	{
+		Lines.Add(FString::Printf(TEXT("# note=%s"), *Note.Replace(TEXT("\n"), TEXT(" "))));
+	}
+	Lines.Add(TapeColumns);
+	for (const FOsdsInputFrame& F : Frames)
+	{
+		const FOsdsRawControls& R = F.Raw;
+		Lines.Add(FString::Printf(TEXT("%.6f,%.6f,%.5f,%.0f,%.5f,%.5f,%d,%d,%d,%d,%d,%d,%.6f,%.5f,%.5f,%d,%.5f,%d,%d"),
+			F.TimeS, F.DeltaS, R.PadSteer, R.KeySteer, R.PadThrottle, R.PadBrake, R.bKeyThrottle ? 1 : 0, R.bKeyBrake ? 1 : 0,
+			R.bFullServiceBrake ? 1 : 0, R.bParkingBrake ? 1 : 0, R.bClutch ? 1 : 0, R.bWheel ? 1 : 0, R.WheelRackRad, R.WheelThrottle,
+			R.WheelBrake, R.bWheelClutch ? 1 : 0, R.WheelClutch, F.Shift, F.bManual ? 1 : 0));
+	}
+	return FString::Join(Lines, TEXT("\n")) + TEXT("\n");
+}
+
+bool FOsdsInputTape::FromCsv(const FString& Text, FOsdsInputTape& Out, FString& OutError)
+{
+	Out = FOsdsInputTape();
+	TArray<FString> Lines;
+	Text.ParseIntoArrayLines(Lines, true);
+	if (Lines.IsEmpty() || !Lines[0].TrimStartAndEnd().Equals(TapeMagic))
+	{
+		OutError = TEXT("not a OSDS input tape (first line)");
+		return false;
+	}
+	bool bColumns = false;
+	for (int32 LineIndex = 1; LineIndex < Lines.Num(); ++LineIndex)
+	{
+		const FString Line = Lines[LineIndex].TrimStartAndEnd();
+		if (Line.StartsWith(TEXT("#")))
+		{
+			FString Key, Value;
+			if (Line.RightChop(1).TrimStart().Split(TEXT("="), &Key, &Value))
+			{
+				TArray<FString> Parts;
+				Value.ParseIntoArray(Parts, TEXT(","));
+				if (Key == TEXT("car")) { Out.CarId = Value; }
+				else if (Key == TEXT("ground_cm") && Parts.Num() == 3) { Out.StartGroundCm = FVector(FCString::Atod(*Parts[0]), FCString::Atod(*Parts[1]), FCString::Atod(*Parts[2])); }
+				else if (Key == TEXT("yaw_deg")) { Out.StartYawDeg = FCString::Atod(*Value); }
+				else if (Key == TEXT("lonlat") && Parts.Num() == 2) { Out.bHasLonLat = true; Out.StartLonDeg = FCString::Atod(*Parts[0]); Out.StartLatDeg = FCString::Atod(*Parts[1]); }
+				else if (Key == TEXT("start_speed_mps")) { Out.StartSpeedMps = FCString::Atod(*Value); }
+				else if (Key == TEXT("place") && Parts.Num() == 2) { Out.bHasPlace = true; Out.PlaceLonDeg = FCString::Atod(*Parts[0]); Out.PlaceLatDeg = FCString::Atod(*Parts[1]); }
+				else if (Key == TEXT("place_title")) { Out.PlaceTitle = Value; }
+				else if (Key == TEXT("traffic")) { Out.Traffic = Value; }
+				else if (Key == TEXT("place_street")) { Out.PlaceStreet = Value; }
+				else if (Key == TEXT("frame") && Parts.Num() == 3) { Out.FrameOriginTile = FIntPoint(FCString::Atoi(*Parts[0]), FCString::Atoi(*Parts[1])); Out.FrameTileSizeM = FCString::Atod(*Parts[2]); }
+				else if (Key == TEXT("note")) { Out.Note = Value; }
+			}
+			continue;
+		}
+		if (!bColumns)
+		{
+			if (Line != TapeColumns)
+			{
+				OutError = FString::Printf(TEXT("line %d: expected the column names %s"), LineIndex + 1, TapeColumns);
+				return false;
+			}
+			bColumns = true;
+			continue;
+		}
+		TArray<FString> Cells;
+		Line.ParseIntoArray(Cells, TEXT(","), false);
+		if (Cells.Num() != TapeColumnCount)
+		{
+			OutError = FString::Printf(TEXT("line %d: %d values, expected %d"), LineIndex + 1, Cells.Num(), TapeColumnCount);
+			return false;
+		}
+		auto D = [&Cells](int32 I) { return FCString::Atod(*Cells[I]); };
+		auto B = [&Cells](int32 I) { return FCString::Atoi(*Cells[I]) != 0; };
+		FOsdsInputFrame F;
+		F.TimeS = D(0);
+		F.DeltaS = D(1);
+		F.Raw.PadSteer = FMath::Clamp(D(2), -1.0, 1.0);
+		F.Raw.KeySteer = FMath::Clamp(D(3), -1.0, 1.0);
+		F.Raw.PadThrottle = FMath::Clamp(D(4), 0.0, 1.0);
+		F.Raw.PadBrake = FMath::Clamp(D(5), 0.0, 1.0);
+		F.Raw.bKeyThrottle = B(6);
+		F.Raw.bKeyBrake = B(7);
+		F.Raw.bFullServiceBrake = B(8);
+		F.Raw.bParkingBrake = B(9);
+		F.Raw.bClutch = B(10);
+		F.Raw.bWheel = B(11);
+		F.Raw.WheelRackRad = D(12);
+		F.Raw.WheelThrottle = FMath::Clamp(D(13), 0.0, 1.0);
+		F.Raw.WheelBrake = FMath::Clamp(D(14), 0.0, 1.0);
+		F.Raw.bWheelClutch = B(15);
+		F.Raw.WheelClutch = FMath::Clamp(D(16), 0.0, 1.0);
+		F.Shift = FCString::Atoi(*Cells[17]);
+		F.bManual = B(18);
+		if (Out.Frames.Num() && F.TimeS < Out.Frames.Last().TimeS)
+		{
+			OutError = FString::Printf(TEXT("line %d: time goes backwards"), LineIndex + 1);
+			return false;
+		}
+		Out.Frames.Add(F);
+	}
+	if (Out.CarId.IsEmpty())
+	{
+		OutError = TEXT("no '# car=' line");
+		return false;
+	}
+	if (Out.Frames.IsEmpty())
+	{
+		OutError = TEXT("no frames");
+		return false;
+	}
+	return true;
+}
+
+bool FOsdsInputTape::Save(const FString& Path) const
+{
+	IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
+	return FFileHelper::SaveStringToFile(ToCsv(), *Path);
+}
+
+bool FOsdsInputTape::Load(const FString& Path, FOsdsInputTape& Out, FString& OutError)
+{
+	FString Text;
+	if (!FFileHelper::LoadFileToString(Text, *Path))
+	{
+		OutError = FString::Printf(TEXT("%s: cannot be read"), *Path);
+		return false;
+	}
+	if (!FromCsv(Text, Out, OutError))
+	{
+		OutError = FString::Printf(TEXT("%s: %s"), *Path, *OutError);
+		return false;
+	}
+	return true;
+}
+
+// --- FOsdsReplayStats ---------------------------------------------------
+
+void FOsdsReplayStats::Add(double TimeS, const FVector& PositionM, const FVector& VelocityLocalMps, double YawRateRadS, double RearAxleM, int32 Gear)
+{
+	if (!bHasStart)
+	{
+		bHasStart = true;
+		Start = PositionM;
+		Last = PositionM;
+		LastTimeS = TimeS;
+	}
+	const FVector Rel = PositionM - Start;
+	DistanceM += FVector2D(PositionM - Last).Size();
+	Last = PositionM;
+	const double Vx = VelocityLocalMps.X;
+	const double Vy = VelocityLocalMps.Y;
+	const double Speed = FVector2D(Vx, Vy).Size();
+	SpeedTimeSum += Speed * FMath::Max(TimeS - LastTimeS, 0.0);
+	LastTimeS = TimeS;
+	DurationS = TimeS;
+	// Body slip above 3 m/s (near a stop it is noise) and the rear axle's slip angle as the drive robot measures it (above 5 m/s
+	// for the rear axle: at walking pace geometry alone makes it large).
+	const double BetaDeg = Vx > 3.0 ? FMath::RadiansToDegrees(FMath::Atan2(Vy, Vx)) : 0.0;
+	const double RearDeg = Vx > 5.0 ? FMath::RadiansToDegrees(FMath::Atan2(Vy - YawRateRadS * RearAxleM, Vx)) : 0.0;
+	const double YawDps = FMath::RadiansToDegrees(YawRateRadS);
+	MaxSpeedKph = FMath::Max(MaxSpeedKph, Speed * 3.6);
+	MaxYawDps = FMath::Max(MaxYawDps, FMath::Abs(YawDps));
+	MaxBetaDeg = FMath::Max(MaxBetaDeg, FMath::Abs(BetaDeg));
+	MaxRearSlipDeg = FMath::Max(MaxRearSlipDeg, FMath::Abs(RearDeg));
+	if (LapTimeS < 0.0 && DistanceM > 200.0 && FVector2D(Rel).Size() < 15.0)
+	{
+		LapTimeS = TimeS;
+	}
+	Rows.Add(FString::Printf(TEXT("%.4f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.2f,%d"),
+		TimeS, Speed * 3.6, YawDps, BetaDeg, RearDeg, Rel.X, Rel.Y, Rel.Z, DistanceM, Gear));
+}
+
+FString FOsdsReplayStats::CsvHeader()
+{
+	return TEXT("t,speed_kph,yaw_rate_dps,beta_deg,rear_slip_deg,x_m,y_m,z_m,distance_m,gear");
+}
+
+FString FOsdsReplayStats::ToCsv() const
+{
+	return CsvHeader() + TEXT("\n") + FString::Join(Rows, TEXT("\n")) + TEXT("\n");
+}
+
+bool FOsdsReplayStats::SaveCsv(const FString& Path) const
+{
+	IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
+	return FFileHelper::SaveStringToFile(ToCsv(), *Path);
+}
+
+FString FOsdsReplayStats::Summary() const
+{
+	return FString::Printf(TEXT("seconds=%.2f distance_m=%.1f lap_time_s=%.2f max_kph=%.1f mean_kph=%.1f max_yaw_dps=%.1f max_beta_deg=%.1f max_rear_slip_deg=%.1f"),
+		DurationS, DistanceM, LapTimeS, MaxSpeedKph, DurationS > 0.0 ? SpeedTimeSum / DurationS * 3.6 : 0.0, MaxYawDps, MaxBetaDeg, MaxRearSlipDeg);
+}
+
+// --- FOsdsInputSteps ----------------------------------------------------
+
+namespace
+{
+	const TCHAR* StepsMagic = TEXT("# osds input steps 1");
+	const TCHAR* StepsColumns = TEXT("throttle,brake,steer,clutch,rack_rad,flags,gear,manual");
+	enum EStepFlags : int32 { StepThumb = 1, StepHandbrake = 2, StepFullBrake = 4, StepDirectRack = 8 };
+
+	/** A double in its shortest exact form: written and read back, it is the same bits. */
+	FString Exact(double Value)
+	{
+		return Value == 0.0 ? FString(TEXT("0")) : FString::Printf(TEXT("%.17g"), Value);
+	}
+}
+
+FString FOsdsInputSteps::ToCsv() const
+{
+	TStringBuilder<1 << 16> Out;
+	Out << StepsMagic << TEXT("\n# step_s=") << *Exact(StepS) << TEXT("\n") << StepsColumns << TEXT("\n");
+	for (const FRow& Row : Rows)
+	{
+		const FOsdsVehicleControls& C = Row.Controls;
+		const int32 Flags = (C.bThumbstickSteer ? StepThumb : 0) | (C.bHandbrake ? StepHandbrake : 0) |
+			(C.bFullBrake ? StepFullBrake : 0) | (C.bDirectRack ? StepDirectRack : 0);
+		Out << *Exact(C.Throttle) << TEXT(",") << *Exact(C.Brake) << TEXT(",") << *Exact(C.Steer) << TEXT(",") << *Exact(C.Clutch) << TEXT(",")
+			<< *Exact(C.RackAngleRad) << TEXT(",") << Flags << TEXT(",") << Row.Gear << TEXT(",") << (Row.bManual ? 1 : 0) << TEXT("\n");
+	}
+	return FString(Out.ToView());
+}
+
+bool FOsdsInputSteps::FromCsv(const FString& Text, FOsdsInputSteps& Out, FString& OutError)
+{
+	Out = FOsdsInputSteps();
+	TArray<FString> Lines;
+	Text.ParseIntoArrayLines(Lines);
+	if (Lines.Num() < 3 || !Lines[0].StartsWith(StepsMagic))
+	{
+		OutError = TEXT("not a OSDS input steps file");
+		return false;
+	}
+	TArray<FString> Cells;
+	for (int32 Index = 1; Index < Lines.Num(); ++Index)
+	{
+		const FString& Line = Lines[Index];
+		if (Line.StartsWith(TEXT("#")))
+		{
+			FString Value;
+			if (FParse::Value(*Line, TEXT("step_s="), Value))
+			{
+				Out.StepS = FCString::Atod(*Value);
+			}
+			continue;
+		}
+		if (Line.StartsWith(TEXT("throttle")))
+		{
+			continue;
+		}
+		Line.ParseIntoArray(Cells, TEXT(","), false);
+		if (Cells.Num() != 8)
+		{
+			OutError = FString::Printf(TEXT("line %d has %d columns, not 8"), Index + 1, Cells.Num());
+			return false;
+		}
+		FRow& Row = Out.Rows.AddDefaulted_GetRef();
+		Row.Controls.Throttle = FCString::Atod(*Cells[0]);
+		Row.Controls.Brake = FCString::Atod(*Cells[1]);
+		Row.Controls.Steer = FCString::Atod(*Cells[2]);
+		Row.Controls.Clutch = FCString::Atod(*Cells[3]);
+		Row.Controls.RackAngleRad = FCString::Atod(*Cells[4]);
+		const int32 Flags = FCString::Atoi(*Cells[5]);
+		Row.Controls.bThumbstickSteer = (Flags & StepThumb) != 0;
+		Row.Controls.bHandbrake = (Flags & StepHandbrake) != 0;
+		Row.Controls.bFullBrake = (Flags & StepFullBrake) != 0;
+		Row.Controls.bDirectRack = (Flags & StepDirectRack) != 0;
+		Row.Gear = FCString::Atoi(*Cells[6]);
+		Row.bManual = FCString::Atoi(*Cells[7]) != 0;
+	}
+	return true;
+}
+
+FString FOsdsInputSteps::PathFor(const FString& TapePath)
+{
+	return FPaths::Combine(FPaths::GetPath(TapePath), FPaths::GetBaseFilename(TapePath) + TEXT("-steps.csv"));
+}
+
+/** What the physics thread and the game thread share while steps are recorded or replayed. */
+struct FOsdsInputTapeDriver::FStepShared
+{
+	FCriticalSection Lock;
+	FOsdsInputSteps Steps;
+	/** Replay: the next row; the last step the tape had. */
+	int32 Next = 0;
+	std::atomic<bool> bEnded{ false };
+};
+
+void FOsdsInputTapeDriver::InstallStepRecorder(AOsdsVehicle& Vehicle)
+{
+	UOsdsVehicleMovementComponent* Movement = Vehicle.GetVehicleMovement();
+	if (!Movement)
+	{
+		return;
+	}
+	StepShared = MakeShared<FStepShared, ESPMode::ThreadSafe>();
+	TSharedPtr<FStepShared, ESPMode::ThreadSafe> Shared = StepShared;
+	Movement->SetPhysicsThreadDriver([Shared](FOsdsVehicleDriverContext& C)
+	{
+		FScopeLock Guard(&Shared->Lock);
+		Shared->Steps.StepS = C.DeltaTimeS;
+		FOsdsInputSteps::FRow& Row = Shared->Steps.Rows.AddDefaulted_GetRef();
+		Row.Controls = C.Controls;
+		Row.Gear = C.Sim.State.SelectedGear;
+		Row.bManual = C.Sim.State.bManual;
+	});
+}
+
+void FOsdsInputTapeDriver::InstallStepReplay(AOsdsVehicle& Vehicle, FOsdsInputSteps&& Steps)
+{
+	UOsdsVehicleMovementComponent* Movement = Vehicle.GetVehicleMovement();
+	if (!Movement)
+	{
+		return;
+	}
+	StepShared = MakeShared<FStepShared, ESPMode::ThreadSafe>();
+	StepShared->Steps = MoveTemp(Steps);
+	TSharedPtr<FStepShared, ESPMode::ThreadSafe> Shared = StepShared;
+	Movement->SetPhysicsThreadDriver([Shared](FOsdsVehicleDriverContext& C)
+	{
+		FScopeLock Guard(&Shared->Lock);
+		if (!Shared->Steps.Rows.IsValidIndex(Shared->Next))
+		{
+			// Past the tape: hands and feet off, the handbrake on.
+			C.Controls = FOsdsVehicleControls();
+			C.Controls.bHandbrake = true;
+			Shared->bEnded = true;
+			return;
+		}
+		const FOsdsInputSteps::FRow& Row = Shared->Steps.Rows[Shared->Next++];
+		if (Row.bManual != C.Sim.State.bManual)
+		{
+			C.Sim.SetManual(Row.bManual, C.Body.LinearVelocityMps.Size());
+		}
+		// The driver's own gear changes (the automatic chooses its gears itself, as it did then).
+		// Queue the change alongside this row's controls so the clutch gets its physics-step ramp
+		// before the shift is judged, just as it does for live input.
+		for (int32 Try = 0; Try < 4 && Row.bManual && C.Sim.State.SelectedGear != Row.Gear; ++Try)
+		{
+			C.Sim.QueueManualGearChange(Row.Gear > C.Sim.State.SelectedGear ? 1 : -1);
+		}
+		C.Controls = Row.Controls;
+	});
+	bStepReplay = true;
+}
+
+void FOsdsInputTapeDriver::RemoveStepDriver(AOsdsPlayerController& Player)
+{
+	if (!StepShared.IsValid())
+	{
+		return;
+	}
+	if (AOsdsVehicle* Vehicle = Cast<AOsdsVehicle>(Player.GetPawn()))
+	{
+		if (UOsdsVehicleMovementComponent* Movement = Vehicle->GetVehicleMovement())
+		{
+			Movement->SetPhysicsThreadDriver({});
+		}
+	}
+}
+
+// --- FOsdsInputTapeDriver -----------------------------------------------
+
+void FOsdsInputTapeDriver::Begin(AOsdsPlayerController& Player)
+{
+	const TCHAR* Cmd = FCommandLine::Get();
+	if (FParse::Value(Cmd, TEXT("OsdsReplayInput="), TapePath))
+	{
+		FString Error;
+		if (!FOsdsInputTape::Load(TapePath, Tape, Error))
+		{
+			UE_LOG(LogOsdsInputTape, Error, TEXT("REPLAY FAILED %s"), *Error);
+			Stage = EStage::Done;
+			Player.ConsoleCommand(TEXT("quit"));
+			return;
+		}
+		FString Car;
+		if (FParse::Value(Cmd, TEXT("OsdsReplayCar="), Car) && !Car.IsEmpty())
+		{
+			Tape.CarId = Car;
+		}
+		bPad = FParse::Param(Cmd, TEXT("OsdsReplayPad"));
+		OutPath = FPaths::Combine(DriveTestDir(), FString::Printf(TEXT("replay-%s.csv"), *FPaths::GetBaseFilename(TapePath)));
+		FParse::Value(Cmd, TEXT("OsdsReplayOut="), OutPath);
+		Stage = EStage::WaitCar;
+		StageStarted = FPlatformTime::Seconds();
+		UE_LOG(LogOsdsInputTape, Display, TEXT("Replay %s: %s, %d frames, %.1f s -> %s"), *TapePath, *Tape.CarId, Tape.Frames.Num(), Tape.GetDuration(), *OutPath);
+		if (!FParse::Param(Cmd, TEXT("OsdsReplayTraffic")))
+		{
+			TurnTrafficOff(TEXT("Replay"));
+		}
+		if (Tape.Traffic == TEXT("on"))
+		{
+			UE_LOG(LogOsdsInputTape, Warning, TEXT("Replay: the tape was recorded with traffic; the replay can take another path"));
+		}
+		return;
+	}
+	FString Path;
+	if (FParse::Value(Cmd, TEXT("OsdsRecordInput="), Path) && !Path.IsEmpty())
+	{
+		RecordPath = Path;
+		bRecordAtStart = true;
+	}
+	else if (FParse::Param(Cmd, TEXT("OsdsRecordInput")))
+	{
+		bRecordAtStart = true;
+	}
+	if (bRecordAtStart && !FParse::Param(Cmd, TEXT("OsdsRecordTraffic")))
+	{
+		TurnTrafficOff(TEXT("Input recording"));
+	}
+}
+
+void FOsdsInputTapeDriver::StartRecording(AOsdsPlayerController& Player)
+{
+	AOsdsVehicle* Vehicle = Cast<AOsdsVehicle>(Player.GetPawn());
+	if (!Vehicle || !Vehicle->GetVehicleMovement())
+	{
+		return;
+	}
+	Recording = FOsdsInputTape();
+	Recording.CarId = Vehicle->GetRealCar().Id;
+	Recording.StartGroundCm = GroundUnder(*Vehicle);
+	Recording.StartYawDeg = Vehicle->GetActorRotation().Yaw;
+	Recording.StartSpeedMps = Player.GetTelemetry().BodyVelocityMps.X;
+	Recording.Note = FString::Printf(TEXT("recorded %s"), *FDateTime::Now().ToString(TEXT("%Y-%m-%d %H:%M:%S")));
+	Recording.Traffic = IsTrafficOn() ? TEXT("on") : TEXT("off");
+	RecordPathStats = FOsdsReplayStats();
+	if (IsTrafficOn())
+	{
+		UE_LOG(LogOsdsInputTape, Warning, TEXT("Input recording with traffic on: a replay drives without traffic and can take another path"));
+	}
+	if (const AOsdsGameMode* Mode = Player.GetWorld()->GetAuthGameMode<AOsdsGameMode>())
+	{
+		Recording.bHasLonLat = Mode->WorldToLonLat(Recording.StartGroundCm, Recording.StartLonDeg, Recording.StartLatDeg);
+		// Where the drive is, so that a replay travels there first.
+		const FOsdsPlace& Place = Mode->GetPlace();
+		if (Mode->IsWorldDrive() && Place.IsValid())
+		{
+			Recording.bHasPlace = true;
+			Recording.PlaceTitle = Place.Title;
+			Recording.PlaceStreet = Place.Street;
+			Recording.PlaceLonDeg = Place.Lon;
+			Recording.PlaceLatDeg = Place.Lat;
+			if (const AOsdsWorldStreamer* Stream = Mode->GetStreamer())
+			{
+				Recording.FrameOriginTile = Stream->GetFrame().OriginTile;
+				Recording.FrameTileSizeM = Stream->GetFrame().TileSizeM;
+			}
+		}
+	}
+	RecordClock = 0.0;
+	PendingShift = 0;
+	bRecording = true;
+	// The physics steps too: what the car's model took on each, for a replay that does not drift.
+	bStepReplay = false;
+	InstallStepRecorder(*Vehicle);
+	Player.ShowMessage(IsTrafficOn() ? TEXT("Recording input (F9 stops) · traffic on: a replay can differ")
+		: (FMath::Abs(Recording.StartSpeedMps) > 0.5 ? TEXT("Recording input (F9 stops) · a replay starts at rest") : TEXT("Recording input (F9 stops)")), 3.f);
+}
+
+void FOsdsInputTapeDriver::StopRecording(AOsdsPlayerController& Player)
+{
+	if (!bRecording)
+	{
+		return;
+	}
+	bRecording = false;
+	RemoveStepDriver(Player);
+	const FString Path = !RecordPath.IsEmpty() ? RecordPath
+		: FPaths::Combine(DriveTestDir(), FString::Printf(TEXT("input-%s.csv"), *FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S"))));
+	RecordPath.Reset();
+	SaveRecording(Path);
+	const bool bSaved = FPaths::FileExists(Path);
+	Player.ShowMessage(bSaved ? FString::Printf(TEXT("Input saved: %s"), *FPaths::GetCleanFilename(Path)) : TEXT("Input recording could not be saved"), 4.f);
+}
+
+void FOsdsInputTapeDriver::End()
+{
+	if (bExactSteps)
+	{
+		FApp::SetUseFixedTimeStep(false);
+		bExactSteps = false;
+	}
+	if (bRecording)
+	{
+		bRecording = false;
+		const FString Path = !RecordPath.IsEmpty() ? RecordPath
+			: FPaths::Combine(DriveTestDir(), FString::Printf(TEXT("input-%s.csv"), *FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S"))));
+		UE_LOG(LogOsdsInputTape, Display, TEXT("Input recording at exit"));
+		SaveRecording(Path);
+	}
+}
+
+void FOsdsInputTapeDriver::Process(AOsdsPlayerController& Player, FOsdsRawControls& Raw, float DeltaSeconds)
+{
+	if (Stage != EStage::Off)
+	{
+		TickReplay(Player, Raw, DeltaSeconds);
+		return;
+	}
+	const AOsdsGameMode* Mode = Player.GetWorld()->GetAuthGameMode<AOsdsGameMode>();
+	const bool bPlaced = Player.GetPawn() && (!Mode || Mode->IsDriveReady());
+	if (bRecordAtStart && bPlaced)
+	{
+		bRecordAtStart = false;
+		StartRecording(Player);
+	}
+	else if (Player.WasInputKeyJustPressed(EKeys::F9) && bPlaced)
+	{
+		if (bRecording)
+		{
+			StopRecording(Player);
+			return;
+		}
+		StartRecording(Player);
+	}
+	if (!bRecording)
+	{
+		PendingShift = 0;
+		return;
+	}
+	RecordClock += DeltaSeconds;
+	FOsdsInputFrame& Frame = Recording.Frames.AddDefaulted_GetRef();
+	Frame.TimeS = RecordClock;
+	Frame.DeltaS = DeltaSeconds;
+	Frame.Raw = Raw;
+	Frame.Shift = PendingShift;
+	Frame.bManual = Player.GetTelemetry().bManualTransmission;
+	PendingShift = 0;
+	// The recorded drive's path, sampled as a replay samples its own.
+	if (const APawn* Pawn = Player.GetPawn())
+	{
+		const FOsdsDriveTelemetry& T = Player.GetTelemetry();
+		const FOsdsVehicleSetup& Setup = Player.GetCachedVehicleSetup();
+		RecordPathStats.Add(RecordClock, Pawn->GetActorLocation() / 100.0, T.BodyVelocityMps, T.BodyAngularVelocityRadPerS.Z,
+			Setup.WheelbaseM - Setup.CenterOfMassToFrontAxleM, T.Gear);
+	}
+}
+
+void FOsdsInputTapeDriver::SaveRecording(const FString& Path)
+{
+	const bool bSaved = Recording.Save(Path);
+	if (StepShared.IsValid() && !bStepReplay)
+	{
+		FScopeLock Guard(&StepShared->Lock);
+		const FString StepsPath = FOsdsInputSteps::PathFor(Path);
+		const bool bStepsSaved = FFileHelper::SaveStringToFile(StepShared->Steps.ToCsv(), *StepsPath);
+		UE_LOG(LogOsdsInputTape, Display, TEXT("Input steps: %d physics steps -> %s%s"), StepShared->Steps.Rows.Num(), *StepsPath, bStepsSaved ? TEXT("") : TEXT(" (NOT SAVED)"));
+	}
+	const FString PathCsv = FPaths::Combine(FPaths::GetPath(Path), FPaths::GetBaseFilename(Path) + TEXT("-path.csv"));
+	RecordPathStats.SaveCsv(PathCsv);
+	UE_LOG(LogOsdsInputTape, Display, TEXT("Input recording: %d frames, %.1f s, traffic %s -> %s%s; path %s (RECORDED %s)"), Recording.Frames.Num(), Recording.GetDuration(),
+		*Recording.Traffic, *Path, bSaved ? TEXT("") : TEXT(" (NOT SAVED)"), *PathCsv, *RecordPathStats.Summary());
+}
+
+void FOsdsInputTapeDriver::TickReplay(AOsdsPlayerController& Player, FOsdsRawControls& Raw, float DeltaSeconds)
+{
+	// The tape drives; nothing from the pad reaches the car.
+	Raw = FOsdsRawControls();
+	PendingShift = 0;
+	UWorld* World = Player.GetWorld();
+	AOsdsGameMode* Mode = World->GetAuthGameMode<AOsdsGameMode>();
+	AOsdsVehicle* Vehicle = Cast<AOsdsVehicle>(Player.GetPawn());
+	const double Now = FPlatformTime::Seconds();
+	auto Next = [this, Now](EStage NewStage) { Stage = NewStage; StageStarted = Now; StageFrames = 0; };
+	++StageFrames;
+	switch (Stage)
+	{
+	case EStage::WaitCar:
+		// As the drive robot waits: the car placed, the tiles round it built, no shaders compiling.
+		if (Vehicle && OsdsDriveRobot::IsReadyToDrive(World, Vehicle) && StageFrames > 30)
+		{
+			// The tape's place first: a drive recorded at another place travels there, waits for its
+			// tiles, then the car goes to the recorded start.
+			if (!bPad && !bTravelled && Mode)
+			{
+				bTravelled = true;
+				if (!Tape.bHasPlace)
+				{
+					UE_LOG(LogOsdsInputTape, Warning, TEXT("Replay: the tape has no place (an older recording); it replays at the game's start, %s"), *Mode->GetPlace().Title);
+				}
+				else
+				{
+					const double ToLon = Tape.bHasLonLat ? Tape.StartLonDeg : Tape.PlaceLonDeg;
+					const double ToLat = Tape.bHasLonLat ? Tape.StartLatDeg : Tape.PlaceLatDeg;
+					double HereLon = 0.0, HereLat = 0.0;
+					const bool bHere = Mode->WorldToLonLat(Vehicle->GetActorLocation(), HereLon, HereLat);
+					// About 111 km a degree.
+					const double Km = bHere ? FMath::Sqrt(FMath::Square((HereLat - ToLat) * 111.0) + FMath::Square((HereLon - ToLon) * 111.0 * FMath::Cos(FMath::DegreesToRadians(ToLat)))) : 1.0e9;
+					if (Km > 2.0)
+					{
+						// To the recorded start itself (its nearest road); the place's own street may be elsewhere.
+						const FOsdsPlace Target = FOsdsPlace::Make(ToLon, ToLat, Tape.PlaceTitle.IsEmpty() ? FString(TEXT("Recorded start")) : Tape.PlaceTitle,
+							Tape.bHasLonLat ? FString() : Tape.PlaceStreet);
+						UE_LOG(LogOsdsInputTape, Display, TEXT("Replay: travelling to the tape's place %s (%.6f, %.6f), %.0f km from here"), *Target.Title, ToLat, ToLon, bHere ? Km : -1.0);
+						Mode->TravelTo(Target);
+						Next(EStage::Travel);
+						break;
+					}
+				}
+			}
+			Next(EStage::Place);
+		}
+		else if (Now - StageStarted > 400.0)
+		{
+			UE_LOG(LogOsdsInputTape, Error, TEXT("REPLAY FAILED the car was not ready after 400 s"));
+			Stage = EStage::Done;
+			Player.ConsoleCommand(TEXT("quit"));
+		}
+		break;
+	case EStage::Travel:
+		// The new place's tiles are built and the car stands on its road.
+		if (Vehicle && StageFrames > 30 && (!Mode || Mode->IsDriveReady()) && OsdsDriveRobot::IsReadyToDrive(World, Vehicle))
+		{
+			UE_LOG(LogOsdsInputTape, Display, TEXT("Replay: arrived at %s after %.0f s"), Mode ? *Mode->GetPlace().Title : TEXT("-"), Now - StageStarted);
+			Next(EStage::Place);
+		}
+		else if (Now - StageStarted > 400.0)
+		{
+			UE_LOG(LogOsdsInputTape, Error, TEXT("REPLAY FAILED the tape's place did not load in 400 s"));
+			Stage = EStage::Done;
+			Player.ConsoleCommand(TEXT("quit"));
+		}
+		break;
+	case EStage::Place:
+	{
+		if (!Vehicle)
+		{
+			break;
+		}
+		if (Vehicle->GetRealCar().Id != Tape.CarId)
+		{
+			if (Mode && StageFrames == 1)
+			{
+				Mode->RespawnCar(&Player, Tape.CarId);
+			}
+			else if (StageFrames > 120)
+			{
+				UE_LOG(LogOsdsInputTape, Error, TEXT("REPLAY FAILED could not drive %s (the car is %s)"), *Tape.CarId, *Vehicle->GetRealCar().Id);
+				Stage = EStage::Done;
+				Player.ConsoleCommand(TEXT("quit"));
+			}
+			break;
+		}
+		if (bPad)
+		{
+			OsdsTestPad::Spawn(World, Vehicle);
+		}
+		else
+		{
+			FVector Ground = Tape.StartGroundCm;
+			const AOsdsWorldStreamer* Stream = Mode ? Mode->GetStreamer() : nullptr;
+			if (Tape.bHasLonLat && Stream && Stream->GetFrame().IsValid())
+			{
+				Ground = Stream->GetFrame().LonLatToWorldCm(Tape.StartLonDeg, Tape.StartLatDeg);
+				double Z = 0.0;
+				Ground.Z = Stream->SurfaceHeightAt(Ground, Z) ? Z : Tape.StartGroundCm.Z;
+			}
+			const double AwayM = FVector::Dist2D(Ground, Vehicle->GetActorLocation()) / 100.0;
+			if (AwayM < 500.0 && (!Stream || Stream->AreTilesReadyAround(Ground, 1)))
+			{
+				Vehicle->ResetAt(Ground + FVector(0.0, 0.0, 5.0), static_cast<float>(Tape.StartYawDeg));
+				double Lon = 0.0, Lat = 0.0;
+				const bool bGeo = Mode && Mode->WorldToLonLat(Ground, Lon, Lat);
+				UE_LOG(LogOsdsInputTape, Display, TEXT("REPLAY START place=\"%s\" lat=%.6f lon=%.6f yaw=%.1f (%.0f m from where the car stood)"),
+					Mode ? *Mode->GetPlace().Title : TEXT("-"), bGeo ? Lat : 0.0, bGeo ? Lon : 0.0, Tape.StartYawDeg, AwayM);
+			}
+			else
+			{
+				UE_LOG(LogOsdsInputTape, Warning, TEXT("Replay: the recorded start is %.0f m away and not built; replaying from where the car stands"), AwayM);
+			}
+		}
+		Next(EStage::Settle);
+		break;
+	}
+	case EStage::Settle:
+		// Hands off the wheel until the car has settled on its springs, with the handbrake on: a car
+		// that rolls down a slope while it settles starts the tape moving, and the replay drifts
+		// from the recording (which starts at rest). Not the brake trigger: held at rest it selects reverse.
+		Raw.bParkingBrake = true;
+		if (StageFrames > 60 && Now - StageStarted > 2.0)
+		{
+			Next(EStage::Replay);
+			Clock = 0.0;
+			Cursor = 0;
+			LastShiftFrame = -1;
+			Stats = FOsdsReplayStats();
+			ReplayIndex = 0;
+			// Frame for frame: each replay frame steps the game by the time its recorded frame took,
+			// so the physics sees the same steps (-OsdsReplayRealTime replays at this PC's own pace).
+			// Step for step when the tape has its physics steps (-OsdsReplayFrames: frame by frame).
+			bStepReplay = false;
+			FOsdsInputSteps Steps;
+			FString StepsText, StepsError;
+			const FString StepsPath = FOsdsInputSteps::PathFor(TapePath);
+			if (Vehicle && !FParse::Param(FCommandLine::Get(), TEXT("OsdsReplayFrames")) && FFileHelper::LoadFileToString(StepsText, *StepsPath))
+			{
+				if (FOsdsInputSteps::FromCsv(StepsText, Steps, StepsError) && Steps.Rows.Num() > 0)
+				{
+					UE_LOG(LogOsdsInputTape, Display, TEXT("Replay: %d physics steps of %.5f s from %s"), Steps.Rows.Num(), Steps.StepS, *StepsPath);
+					InstallStepReplay(*Vehicle, MoveTemp(Steps));
+				}
+				else
+				{
+					UE_LOG(LogOsdsInputTape, Warning, TEXT("Replay: %s unreadable (%s); replaying frame by frame"), *StepsPath, *StepsError);
+				}
+			}
+			bExactSteps = !bStepReplay && !FParse::Param(FCommandLine::Get(), TEXT("OsdsReplayRealTime")) && Tape.Frames.Num() > 0;
+			if (bExactSteps)
+			{
+				FApp::SetUseFixedTimeStep(true);
+				FApp::SetFixedDeltaTime(Tape.Frames[0].DeltaS);
+			}
+			UE_LOG(LogOsdsInputTape, Display, TEXT("Replay started: %s%s"), *Tape.CarId, bStepReplay ? TEXT(", step for step") : bExactSteps ? TEXT(", with the recorded frame times") : TEXT(", in real time"));
+		}
+		break;
+	case EStage::Replay:
+	{
+		if (!Vehicle)
+		{
+			FinishReplay(Player);
+			break;
+		}
+		const FOsdsInputFrame* Frame = nullptr;
+		if (bExactSteps)
+		{
+			// This frame took the recorded frame's time: take that frame, and give the next its time.
+			if (ReplayIndex >= Tape.Frames.Num())
+			{
+				FinishReplay(Player);
+				break;
+			}
+			Cursor = ReplayIndex;
+			Frame = &Tape.Frames[ReplayIndex++];
+			Clock = Frame->TimeS;
+			if (Tape.Frames.IsValidIndex(ReplayIndex))
+			{
+				FApp::SetFixedDeltaTime(Tape.Frames[ReplayIndex].DeltaS);
+			}
+		}
+		else
+		{
+			Clock += DeltaSeconds;
+			Frame = Tape.At(Clock, Cursor);
+			if (bStepReplay)
+			{
+				// The physics steps drive; the frames only pace the samples.
+				if (StepShared->bEnded)
+				{
+					FinishReplay(Player);
+					break;
+				}
+				if (!Frame && Tape.Frames.Num())
+				{
+					Frame = &Tape.Frames.Last();
+				}
+			}
+		}
+		if (!Frame)
+		{
+			FinishReplay(Player);
+			break;
+		}
+		Raw = Frame->Raw;
+		if (!bStepReplay && Frame->bManual != Player.GetTelemetry().bManualTransmission)
+		{
+			Vehicle->SetManualTransmission(Frame->bManual);
+		}
+		// Every gear change recorded up to this frame, in order (a slower replay skips none).
+		for (int32 Index = LastShiftFrame + 1; !bStepReplay && Index <= Cursor; ++Index)
+		{
+			const int32 Shift = Tape.Frames[Index].Shift;
+			for (int32 Step = 0; Step < FMath::Abs(Shift); ++Step)
+			{
+				Vehicle->RequestGearChange(Shift > 0 ? 1 : -1);
+			}
+		}
+		LastShiftFrame = Cursor;
+		const FOsdsDriveTelemetry& T = Player.GetTelemetry();
+		const FOsdsVehicleSetup& Setup = Player.GetCachedVehicleSetup();
+		Stats.Add(Clock, Vehicle->GetActorLocation() / 100.0, T.BodyVelocityMps, T.BodyAngularVelocityRadPerS.Z,
+			Setup.WheelbaseM - Setup.CenterOfMassToFrontAxleM, T.Gear);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void FOsdsInputTapeDriver::FinishReplay(AOsdsPlayerController& Player)
+{
+	Stage = EStage::Done;
+	RemoveStepDriver(Player);
+	if (bExactSteps)
+	{
+		FApp::SetUseFixedTimeStep(false);
+		bExactSteps = false;
+	}
+	const bool bSaved = Stats.SaveCsv(OutPath);
+	UE_LOG(LogOsdsInputTape, Display, TEXT("REPLAY car=%s tape=%s %s csv=%s%s"), *Tape.CarId, *FPaths::GetCleanFilename(TapePath), *Stats.Summary(),
+		*OutPath, bSaved ? TEXT("") : TEXT(" (NOT SAVED)"));
+	if (!FParse::Param(FCommandLine::Get(), TEXT("OsdsKeepOpen")))
+	{
+		Player.ConsoleCommand(TEXT("quit"));
+	}
+}

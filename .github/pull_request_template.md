@@ -12,7 +12,7 @@
 
 ## Checklist
 
-- [ ] `scripts\check.ps1` passes (this includes `SimCruise.Vehicle.CarTrack.<car>`, which keeps every car inside its calibration bands in `docs/cars.md`).
+- [ ] `scripts\check.ps1` passes (this includes `OSDS.Vehicle.CarTrack.<car>`, which keeps every car inside its calibration bands in `docs/cars.md`).
 - [ ] `sh scripts/check-helper.sh` passes if the helper changed.
 - [ ] No keys, tokens, personal paths or personal information are added.
 - [ ] New data or assets have their source and licence recorded in `licenses/` (and `Credits.txt` if bundled).

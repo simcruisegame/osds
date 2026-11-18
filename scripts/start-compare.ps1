@@ -72,12 +72,12 @@ foreach ($B in $Builds) {
         if (-not (Test-Path $Log)) { $Rows += "| $($P.Name) | $Hash | no log | | | | | | |"; continue }
         $T0 = Get-T (First $Log '^\[\d{4}\.\d\d\.\d\d-').Line
         $Origin = First $Log 'origin tile'
-        $TileFirst = First $Log 'LogSimCruiseWorld: Display: Tile \d+_\d+: '
-        $TileLast = Last $Log 'LogSimCruiseWorld: Display: Tile \d+_\d+: '
+        $TileFirst = First $Log 'LogOsdsWorld: Display: Tile \d+_\d+: '
+        $TileLast = Last $Log 'LogOsdsWorld: Display: Tile \d+_\d+: '
         $Model = First $Log 'Traffic model .*built before the drive in ([\d.]+) s'
         $Placed = First $Log 'Car placed.*after ([\d.]+) s'
-        $ModelsFirst = First $Log 'LogSimCruiseCarAssets'
-        $ModelsLast = Last $Log 'LogSimCruiseCarAssets'
+        $ModelsFirst = First $Log 'LogOsdsCarAssets'
+        $ModelsLast = Last $Log 'LogOsdsCarAssets'
         $Pre = if (Test-Path (Join-Path $Dir 'preflight.json')) { Get-Content (Join-Path $Dir 'preflight.json') -Raw | ConvertFrom-Json } else { $null }
         $Rev = if (Test-Path (Join-Path $Dir 'review.json')) { Get-Content (Join-Path $Dir 'review.json') -Raw | ConvertFrom-Json } else { $null }
         $Worst = Last $Log 'PREFLIGHT FRAMES .*worst=(\d+)ms'

@@ -64,9 +64,9 @@ try{
  r=await mappedGuardRails(X+1,Y+1,cache,cacheReader(cache,()=>{},ok),{env,...clock});
  assert.equal(r.status,'mapped');assert.equal(calls,1,'one query per z14 neighbourhood');
  // Offline mode and the fixture hook never touch the network.
- r=await mappedGuardRails(X+8,Y,cache,readBusy,{env:{SIMCRUISE_GUARD_RAILS:'offline'},...clock});
+ r=await mappedGuardRails(X+8,Y,cache,readBusy,{env:{OSDS_GUARD_RAILS:'offline'},...clock});
  assert.equal(r.status,'offline');
- r=await mappedGuardRails(X+8,Y,cache,readBusy,{env:{SIMCRUISE_GUARD_RAILS_FIXTURE:fixture.pathname.replace(/^\/(\w:)/,'$1')},...clock});
+ r=await mappedGuardRails(X+8,Y,cache,readBusy,{env:{OSDS_GUARD_RAILS_FIXTURE:fixture.pathname.replace(/^\/(\w:)/,'$1')},...clock});
  assert.equal(r.status,'fixture');
  console.log('PASS mapped rails: projection and clipping, mirror rotation with backoff, budget, negative cache, partial answers, neighbourhood cache');
 }finally{fs.rmSync(cache,{recursive:true,force:true})}

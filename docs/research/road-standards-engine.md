@@ -1,4 +1,4 @@
-<!-- Road standards engine: design for SimCruise. Written 2026-11-10 by the road-design lead from the knowledge base road-engineering.md, five research sweeps and a code audit of main 6cadf05 and roads/edge-authority faaf27d. Timings and costs marked "estimate" are not yet measured on the target laptop. -->
+<!-- Road standards engine: design for OSDS. Written 2026-11-10 by the road-design lead from the knowledge base road-engineering.md, five research sweeps and a code audit of main 6cadf05 and roads/edge-authority faaf27d. Timings and costs marked "estimate" are not yet measured on the target laptop. -->
 
 # Road standards engine: design
 
@@ -27,7 +27,7 @@ The plan has eight stages, each gated by headless checks (section 13). The estim
 
 ## 1. Goals, non-goals, acceptance
 
-**Goals.** A road in SimCruise should satisfy the eleven-point checklist in road-engineering.md section 10. In short:
+**Goals.** A road in OSDS should satisfy the eleven-point checklist in road-engineering.md section 10. In short:
 - smooth alignments within design-speed limits;
 - edges parallel to the centreline;
 - a crowned section with correct banking;
@@ -82,7 +82,7 @@ The car must still drive like the real car (owner memory, "driving realism first
 10. Curbs exist only where a sidewalk is mapped.
 11. Pavement tone is pulled toward the soil.
 
-**Ignore `scripts/simcruise/`.** It is an untracked older copy of the repo, not work in progress.
+**Ignore `scripts/osds/`.** It is an untracked older copy of the repo, not work in progress.
 
 ---
 
@@ -412,7 +412,7 @@ SeamCheck gains a profile-equality assertion over the shared apron.
 - **L_c.** The sourced rule is 15 V ft on two-lane highways and expressways, and 30 V ft on fully access-controlled roads and interstates [IA-DM 2A] (road-engineering.md 5.6). The column uses 15 V ft (4.57 V m); motorways use 30 V ft (9.14 V m), equally soft. The value is "soft", because mapped rural curves are often shorter than new-construction practice: an arc shorter than L_c is lengthened only if the deviation stays within delta_max. A short arc is flattened only if its deflection is under 10 degrees and removing it keeps every vertex within delta_max. Large-deflection short curves are real corners (a hairpin) and stay. L_c is not applied to closed-section streets.
 - **Broken-back tangent:** 4.6 V m.
 - **L_s:** clamp(max(2 s x v, 0.0214 V_kmh^3 / (1.2 R)), sqrt(4.8 R), sqrt(24 R)). Only at 45 mph or more. Plain arcs below that, with G1 continuity.
-- **delta_max:** the largest allowed distance between the fit and an unpinned mapped vertex. It is a *SimCruise tolerance* (heuristic), set at about half a lane at speed and tight in towns, because curbs and mapped sidewalks are mapped relative to the line.
+- **delta_max:** the largest allowed distance between the fit and an unpinned mapped vertex. It is a *OSDS tolerance* (heuristic), set at about half a lane at speed and tight in towns, because curbs and mapped sidewalks are mapped relative to the line.
 - **dkappa/ds:** C / v^3, used by AF2 only (7.4).
 
 e_max by context follows section 5. With 4% (urban high speed), use the Method-2 radius rows from road-engineering.md 5.2.

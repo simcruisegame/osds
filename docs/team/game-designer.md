@@ -20,21 +20,21 @@
 ## What I now know (onboarding, 2026-11-14)
 
 **How my area works today.**
-- `ASimCruiseGameMode::BeginWorldDrive` (Source/SimCruise/Private/Gameplay/SimCruiseGameMode.cpp:158) picks the start in this order: `-SimCruiseStart=lat,lon` ("chosen"), then a seeded random start-pool road ("random", the default because `bRandomStart = true`, SimCruiseGameMode.h:102), then the bundled Ocean Drive place. It writes `START <mode> seed=<n> <title>` to the log (line 203).
-- The start pool is data/start/start-pool.json: 36 hand-picked scenic roads. `ParseStartPool` (SimCruisePlaces.cpp:68) marks each entry `bLoose`. `Sequence` (line 112) returns 1 + `Retries` (3) places, so a failed road falls through to 3 more.
+- `AOsdsGameMode::BeginWorldDrive` (Source/OSDS/Private/Gameplay/OsdsGameMode.cpp:158) picks the start in this order: `-OsdsStart=lat,lon` ("chosen"), then a seeded random start-pool road ("random", the default because `bRandomStart = true`, OsdsGameMode.h:102), then the bundled Ocean Drive place. It writes `START <mode> seed=<n> <title>` to the log (line 203).
+- The start pool is data/start/start-pool.json: 36 hand-picked scenic roads. `ParseStartPool` (OsdsPlaces.cpp:68) marks each entry `bLoose`. `Sequence` (line 112) returns 1 + `Retries` (3) places, so a failed road falls through to 3 more.
 - Car placement: `TryPlacePendingPlayers` (GameMode.cpp:533) waits for the 3x3 ring of tiles. The player sees "Building X · n of 9 tiles" every 2 s. The place is given up when 4 or more tiles fail, or 1 tile fails and 90 s pass. After 180 s the car is placed on whatever has loaded.
-- Road snap: `FindRoadPoseFacing` (World/SimCruiseWorldStreamer.cpp:152). A pool road must be the named street within 125 m, else any road within 30 m. A chosen or searched point takes a road within 900 m (`StartSearchRadiusM`). Only `service` ways are rejected, so `track` is a valid start. Points within 15 m of a junction are skipped. With no road, the car "starts on the ground" (GameMode.cpp:594).
+- Road snap: `FindRoadPoseFacing` (World/OsdsWorldStreamer.cpp:152). A pool road must be the named street within 125 m, else any road within 30 m. A chosen or searched point takes a road within 900 m (`StartSearchRadiusM`). Only `service` ways are rejected, so `track` is a valid start. Points within 15 m of a junction are skipped. With no road, the car "starts on the ground" (GameMode.cpp:594).
 - After a failed chain, `TravelFailed` (line 394) goes back to Miami with "No random road loaded · starting in bundled Miami Beach".
-- Search: `SSimCruisePlaceSearch::Submit` (SimCruiseAtlasUI.cpp:403) runs `ParseQuery` ("lat, lon", "surprise", three aliases, SimCruisePlaces.cpp:169-189), else the helper `search` command (helper/atlas.mjs:240): Photon `limit=6&lang=en`, no bbox or location bias, then keeps only `countrycode=US`. Timeout 25 s.
+- Search: `SOsdsPlaceSearch::Submit` (OsdsAtlasUI.cpp:403) runs `ParseQuery` ("lat, lon", "surprise", three aliases, OsdsPlaces.cpp:169-189), else the helper `search` command (helper/atlas.mjs:240): Photon `limit=6&lang=en`, no bbox or location bias, then keeps only `countrycode=US`. Timeout 25 s.
 - Road atlas: 11 zoom steps (AtlasUI.cpp:501), about 1000 km across at the far end, so the player can pin any US spot. `DriveToPin` (line 665) titles the place with the raw "lat, lon"; no reverse geocode.
 - "Surprise me" (`SurpriseMe`, GameMode.cpp:376) draws from the same 36 pool roads, not a random US point.
-- Famous roads (SimCruiseFamousRoads.cpp:33): 4 roads with a start, end and length (Ocean Drive, Dragon, Big Sur, Monument Valley).
-- GPS: helper/route.mjs A* over OpenFreeMap z14 tiles; free-flow speeds by class (line 16), no `track` class; a leg is refused above 144 tiles (`MAX_TILES`, line 352). Off route at more than 30 m for 3 s; arrived within 25 m (SimCruiseRoute.h:112-115).
-- Defaults: car `nb2001_lowered` (Config/DefaultGame.ini:11) or the last car driven; start time 10:00 local solar time (Environment/SimCruiseEnvironment.cpp:204).
+- Famous roads (OsdsFamousRoads.cpp:33): 4 roads with a start, end and length (Ocean Drive, Dragon, Big Sur, Monument Valley).
+- GPS: helper/route.mjs A* over OpenFreeMap z14 tiles; free-flow speeds by class (line 16), no `track` class; a leg is refused above 144 tiles (`MAX_TILES`, line 352). Off route at more than 30 m for 3 s; arrived within 25 m (OsdsRoute.h:112-115).
+- Defaults: car `nb2001_lowered` (Config/DefaultGame.ini:11) or the last car driven; start time 10:00 local solar time (Environment/OsdsEnvironment.cpp:204).
 
 **Does it work at a random US place?**
 - General: the "chosen" start, the atlas pin, Photon search and the 900 m snap work at any lat/lon. The us-* test places use this path. (estimate)
-- Hard-wired: the default start and "Surprise me" reach only 36 curated roads; on failure the player goes back to Miami. Search presets are 9 lab places (SimCruisePlaces.cpp:49-59). Only 4 famous roads have an end point.
+- Hard-wired: the default start and "Surprise me" reach only 36 curated roads; on failure the player goes back to Miami. Search presets are 9 lab places (OsdsPlaces.cpp:49-59). Only 4 famous roads have an end point.
 - us-casselton-nd: many section lines are OSM `track`; a start can land on one, but the GPS cannot route on `track`. (estimate)
 - us-welch-wv, us-hazard-ky: a pin more than 900 m from a road puts the car "on the ground" in the forest with no warning. (estimate)
 - us-bronx-ny, us-doraville-ga: the router drops tunnels (route.mjs:47), which can cut routes. (estimate)
@@ -46,7 +46,7 @@
 3. P1: search can come back empty for common names (helper/atlas.mjs:240). Add a US `bbox` and a `lat`/`lon` bias at the car (Photon supports both).
 4. P2: no `track` class and a 144-tile leg cap in helper/route.mjs:16, 19.
 5. P2: "starts on the ground" with no message (GameMode.cpp:594). Retry wider, then tell the player.
-6. P2: lab presets are shown to players (SimCruisePlaces.cpp:49).
+6. P2: lab presets are shown to players (OsdsPlaces.cpp:49).
 
 **My first three actions.**
 1. Spec "random ordinary US road" (sampling, snap, fallback chain, message). Done when `scripts\preflight.ps1 -Roads random -RandomCount 3` starts on a public road at 3 random places and I have read the sheets.

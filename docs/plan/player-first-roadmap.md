@@ -1,4 +1,4 @@
-# SimCruise: player-first roadmap
+# OSDS: player-first roadmap
 
 Date: 12 November 2026. Status: **agreed 13 November 2026** (the project owner: "up to
 you"; order as written). This plan does not stop the v2.0.1 release.
@@ -53,7 +53,7 @@ notices in the first five minutes.
 The project owner's process note: *put more changes in before you test the game.* See
 section 6, "Playtest builds".
 
-## 2. If I played SimCruise, what would I want?
+## 2. If I played OSDS, what would I want?
 
 I would want to type "Tail of the Dragon" or "the road to my house", and in
 under a minute sit in *my* car, on *that* road, at *this* hour, with the real
@@ -308,7 +308,7 @@ The project owner asked for more changes before each test. From now on:
 ## 7. Original ideas, backed by game design research
 
 Each idea uses a method from the research below and adds something only
-SimCruise can do.
+OSDS can do.
 
 - **I1. Auto colour grade from reality.** For each hero road, take licensed
   photos at known times; the game renders the same view at the same sun, and

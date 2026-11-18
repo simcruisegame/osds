@@ -6,7 +6,7 @@
   A test that only prints numbers can pass while the picture is wrong. Each launch keeps, in one
   run folder: the game log, the command line, the commit, the GPU and its driver, a crash's
   Saved\Crashes folder (minidump and CrashContext), and, from the pre-flight robot with
-  -SimCruiseReview, full-size frames at the start, every 5 s and at each event, with a JSON
+  -OsdsReview, full-size frames at the start, every 5 s and at each event, with a JSON
   sidecar each and close-up crops (steering wheel, instrument cluster, mirrors, windscreen).
   review.md lists a fixed set of faults. The numbers fill some verdicts; a person (or a Claude
   reviewer) looks at the frames and fills the others. A launch is reviewed only when every item
@@ -166,7 +166,7 @@ function Write-ReviewSheet {
         $Note.steering = "MEASURED rim $($St.rim_deg_per_road_wheel_deg) deg per road-wheel deg (car data $($St.car_data_ratio)); lock to lock $($St.lock_to_lock_turns) turns (car data $($St.car_data_lock_to_lock_turns)); fastest rim $($St.max_rim_speed_dps) deg/s. Direction and smoothness: look at the wheel crops."
     }
 
-    # The cockpit steer test (-SimCruiseCockpitTest): gauges fixed, the wheel on its column.
+    # The cockpit steer test (-OsdsCockpitTest): gauges fixed, the wheel on its column.
     $CockpitJson = Join-Path $RunDir 'cockpit\cockpit.json'
     if (Test-Path $CockpitJson) {
         $Ck = Get-Content $CockpitJson -Raw | ConvertFrom-Json
@@ -197,7 +197,7 @@ function Write-ReviewSheet {
 
     # Audio: errors and warnings the audio code logged.
     if (Test-Path $Log) {
-        $Audio = @(Select-String -Path $Log -Pattern '(LogAudio\w*|LogSimCruiseAudio\w*|LogSimCruiseEngineSound\w*): (Error|Warning)')
+        $Audio = @(Select-String -Path $Log -Pattern '(LogAudio\w*|LogOsdsAudio\w*|LogOsdsEngineSound\w*): (Error|Warning)')
         $Auto.audio = if ($Audio.Count -eq 0) { 'PASS' } else { 'FAIL' }
         $Note.audio = if ($Audio.Count -eq 0) { 'no audio errors or warnings in game.log' } else { "$($Audio.Count) lines, first: $(($Audio[0].Line -replace '^\[.*?\]\[.*?\]', '').Trim())" }
     } else { $Auto.audio = 'FAIL'; $Note.audio = 'no game log' }
@@ -263,6 +263,6 @@ function Test-ReviewSheet([string]$Path) {
 function Get-NativeResolution {
     $Best = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.CurrentHorizontalResolution } |
         Sort-Object { [int]$_.CurrentHorizontalResolution * [int]$_.CurrentVerticalResolution } -Descending)
-    if ($Best.Count) { $W = $Best[0].CurrentHorizontalResolution; $H = $Best[0].CurrentVerticalResolution; return @("-ResX=$W", "-ResY=$H", "-SimCruiseNativeRes=${W}x$H") }
-    return @('-ResX=1920', '-ResY=1080', '-SimCruiseNativeRes=1920x1080')
+    if ($Best.Count) { $W = $Best[0].CurrentHorizontalResolution; $H = $Best[0].CurrentVerticalResolution; return @("-ResX=$W", "-ResY=$H", "-OsdsNativeRes=${W}x$H") }
+    return @('-ResX=1920', '-ResY=1080', '-OsdsNativeRes=1920x1080')
 }

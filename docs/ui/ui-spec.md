@@ -1,4 +1,4 @@
-# SimCruise UI spec (2.0.2)
+# OSDS UI spec (2.0.2)
 
 Every menu row is a US green guide sign, easy to read from a sofa on a TV. The GPS course is magenta (the aviation GPS convention), so it is never confused with road paint.
 

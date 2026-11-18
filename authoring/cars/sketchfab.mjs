@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Sketchfab → SimCruise traffic models.
+// Sketchfab → OSDS traffic models.
 //
 //   bun authoring/cars/sketchfab.mjs search "generic sedan" [--license=by,cc0] [--max-faces=120000] [--count=12]
 //   bun authoring/cars/sketchfab.mjs fetch <uid> --kind=sedan --length=4.7 [--flip] [--allow-brand]
@@ -35,7 +35,7 @@ const OUT = join(ROOT, "data/art/traffic");
 const MANIFEST = join(OUT, "manifest.json");
 const ALLOWED = { cc0: "CC0 1.0", by: "CC BY 4.0" };
 const BRANDS = ["toyota","honda","ford","chevrolet","chevy","gmc","dodge","ram ","jeep","chrysler","cadillac","buick","lincoln","tesla","nissan","subaru","mazda","mitsubishi","hyundai","kia","volkswagen","vw ","audi","bmw","mercedes","porsche","ferrari","lamborghini","volvo","lexus","acura","infiniti","oldsmobile","pontiac","plymouth","jaguar","land rover","mini ","fiat","alfa","peugeot","renault","skoda","seat ","opel","lada","rivian","lucid"];
-const UA = { "User-Agent": "SimCruise-authoring" };
+const UA = { "User-Agent": "OSDS-authoring" };
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {

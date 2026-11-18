@@ -19,16 +19,16 @@ evidence. "Hypothesis" marks a claim that a test must still prove.
   car moves at half speed. Speed, engine sound and the road disagree.
 - Fix: set `MaxPhysicsDeltaTime=0.1` (or higher) under `[/Script/Engine.PhysicsSettings]`.
   Check whether `MaxSubstepDeltaTime` also clamps in async mode (Epic reply).
-- Verify: `-SimCruiseDriveTest -ExecCmds="t.MaxFPS 15"`. In the CSV, the sum of
+- Verify: `-OsdsDriveTest -ExecCmds="t.MaxFPS 15"`. In the CSV, the sum of
   `phys_steps` deltas must equal the sum of `frame_dt * 360` within 1 %.
   Add an automation test that ticks a world at 1/15 s and checks `PhysicsSteps`.
 
 ### 2. P1: Recover snaps the camera to the old place, then the camera swoops
-- Evidence: `SimCruisePlayerController.cpp:604-615` calls `RecoverVehicle` and
-  then `Camera->SnapNextFrame()`. `SimCruiseGameMode.cpp:690` only queues the
-  reset. `SimCruiseVehicleMovementComponent.cpp:594-599` sets a pending flag;
+- Evidence: `OsdsPlayerController.cpp:604-615` calls `RecoverVehicle` and
+  then `Camera->SnapNextFrame()`. `OsdsGameMode.cpp:690` only queues the
+  reset. `OsdsVehicleMovementComponent.cpp:594-599` sets a pending flag;
   the physics thread applies it at `:210-218`. The camera reads
-  `Pawn->GetActorTransform()` (`SimCruisePlayerCameraManager.cpp:68`) on the
+  `Pawn->GetActorTransform()` (`OsdsPlayerCameraManager.cpp:68`) on the
   next frame, before the new pose returns from the physics thread. The snap
   lands on the old pose. `Chase.Update` (`:108`) then smooths toward the new pose,
   up to `RecoverSearchRadiusM` away.
@@ -39,21 +39,21 @@ evidence. "Hypothesis" marks a claim that a test must still prove.
   the drive log. The camera must not travel between the two places.
 
 ### 3. P2: Head motion and chase camera differentiate velocity over the game frame
-- Evidence: `SimCruiseCameraModels.cpp:82-94` computes acceleration as
+- Evidence: `OsdsCameraModels.cpp:82-94` computes acceleration as
   `(WorldVelocityMps - PreviousVelocity) / FrameS` with the game frame time.
-  The velocity comes from the last physics step (`SimCruisePlayerCameraManager.cpp:69`).
+  The velocity comes from the last physics step (`OsdsPlayerCameraManager.cpp:69`).
   With async physics the number of 1/360 s steps per frame varies (for example
   5-7 at 60 fps), so the felt acceleration jumps by about 15 % frame to frame.
-  `SimCruise.Gameplay.Camera.HeadModelFrameRate` feeds a perfect velocity and
+  `OSDS.Gameplay.Camera.HeadModelFrameRate` feeds a perfect velocity and
   cannot see this.
 - Fix: divide by the physics time between the two telemetry samples
-  (`FSimCruiseVehicleTelemetry::SimTimeS`). Pass it through `FSimCruiseDriveTelemetry`.
+  (`FOsdsVehicleTelemetry::SimTimeS`). Pass it through `FOsdsDriveTelemetry`.
 - Verify: steady 0.5 g circle at 45 fps; log head offset. Peak-to-peak noise
   must be under 10 % of the mean. Add the jitter case to the test.
 
 ### 4. P2: Closing the atlas at speed resets the steering rack to zero
-- Evidence: `SimCruisePlayerController.cpp:580` calls `Shaper.Reset()` in
-  `CloseOverlays`. `SimCruiseDriverShaping.cpp:97-106` sets `RackRad = 0`. The
+- Evidence: `OsdsPlayerController.cpp:580` calls `Shaper.Reset()` in
+  `CloseOverlays`. `OsdsDriverShaping.cpp:97-106` sets `RackRad = 0`. The
   car keeps its speed and yaw rate through the pause. On resume the rack restarts
   from straight and ramps back at the pad apply rate.
 - Impact: open the atlas in a corner, close it, the car runs wide for a moment.
@@ -63,7 +63,7 @@ evidence. "Hypothesis" marks a claim that a test must still prove.
   dip to 0.
 
 ### 5. P2: The gearbox toggle in the atlas reads frozen telemetry
-- Evidence: `SimCruisePlayerController.cpp:375` computes `!Telemetry.bManualTransmission`.
+- Evidence: `OsdsPlayerController.cpp:375` computes `!Telemetry.bManualTransmission`.
   `:378` reads telemetry back "now", but physics does not step while the atlas
   pauses the game. `AtlasView` shows `Telemetry.bManualTransmission` (`:475`).
 - Impact: press LB in the atlas: the label does not change. Press it again: the
@@ -73,8 +73,8 @@ evidence. "Hypothesis" marks a claim that a test must still prove.
 - Verify: open atlas, press LB twice, label must flip twice; close; check the HUD.
 
 ### 6. P2: A pending reset keeps pre-rebase coordinates
-- Evidence: `SimCruiseVehicleMovementComponent.cpp:33` stores `PendingResetTransform`
-  in world space. `SimCruiseGameMode.cpp:636-652` (`HandleRebased`) moves the
+- Evidence: `OsdsVehicleMovementComponent.cpp:33` stores `PendingResetTransform`
+  in world space. `OsdsGameMode.cpp:636-652` (`HandleRebased`) moves the
   pawn but not that transform.
 - Impact: Recover in the same frame as a rebase puts the car one tile (about
   550 m) away from the road, maybe in the air. Rare.
@@ -83,25 +83,25 @@ evidence. "Hypothesis" marks a claim that a test must still prove.
 
 ### 7. P2 (hypothesis): One physics step without ground at each rebase
 - Evidence: suspension rays run on the physics thread against the game-thread
-  scene query structure (`SimCruiseVehicleMovementComponent.cpp:262-284`,
-  `docs/unreal-architecture.md:78`). `ASimCruiseWorldStreamer::Rebase` moves tile
-  actors (`SimCruiseWorldStreamer.cpp:350`) and the car moves separately
-  (`SimCruiseGameMode.cpp:645`). Steps in flight between these two moves can
+  scene query structure (`OsdsVehicleMovementComponent.cpp:262-284`,
+  `docs/unreal-architecture.md:78`). `AOsdsWorldStreamer::Rebase` moves tile
+  actors (`OsdsWorldStreamer.cpp:350`) and the car moves separately
+  (`OsdsGameMode.cpp:645`). Steps in flight between these two moves can
   cast from the old car place against moved tiles.
-- Verify first: drive at 130 km/h across 5 rebases with `-SimCruiseDriveLog`.
+- Verify first: drive at 130 km/h across 5 rebases with `-OsdsDriveLog`.
   Look for rows with `contacts` < 4 or a jump in `susp_cm` at the rebase.
 - Fix if proven: freeze the vehicle step for the rebase frame, or rebase on the
   physics thread through the sim callback.
 
 ### 8. P2: The fallback car is hard-coded to `nb1999`
-- Evidence: `SimCruiseGameMode.cpp:576-577` loads `nb1999` when the chosen car
-  fails. `Public/Gameplay/SimCruiseGameMode.h:91` also defaults `StartCarId` to
+- Evidence: `OsdsGameMode.cpp:576-577` loads `nb1999` when the chosen car
+  fails. `Public/Gameplay/OsdsGameMode.h:91` also defaults `StartCarId` to
   `nb1999`; only `Config/DefaultGame.ini:11` sets `nb2001_lowered`.
 - Fix: fall back to `StartCarId`; set the C++ default to `nb2001_lowered`.
-- Verify: `-SimCruiseCar=nosuchcar` starts in the lowered NB.
+- Verify: `-OsdsCar=nosuchcar` starts in the lowered NB.
 
 ### 9. P2: The vehicle mutex is held across four ray casts
-- Evidence: `SimCruiseVehicleMovementComponent.cpp:162` locks for the whole step,
+- Evidence: `OsdsVehicleMovementComponent.cpp:162` locks for the whole step,
   including `LineTraceSingleByChannel` at `:269`. The game thread locks the same
   mutex several times per frame (controls, telemetry for HUD, camera, pawn, rumble).
 - Impact: game-thread stalls up to one step (21-34 µs) per lock. Small now; it grows

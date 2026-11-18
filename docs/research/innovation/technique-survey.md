@@ -1,12 +1,12 @@
 # Survey: current game techniques in each domain (14 November 2026)
 
-Innovation team. For each domain: the best current methods (with the studio or paper), what SimCruise has today, and what we take. This survey feeds [hyper-detail-proposals.md](hyper-detail-proposals.md). The Flight Simulator study is in [flight-simulator-study.md](flight-simulator-study.md). We do not repeat what the team already wrote in `research/domain-ideas.md` (driving senses, audio, camera, perception), `team/docs/research/lighting-tech.md` (light), and `world-detail/world-detail-methods.md` (lidar and aerial methods); we link to them.
+Innovation team. For each domain: the best current methods (with the studio or paper), what OSDS has today, and what we take. This survey feeds [hyper-detail-proposals.md](hyper-detail-proposals.md). The Flight Simulator study is in [flight-simulator-study.md](flight-simulator-study.md). We do not repeat what the team already wrote in `research/domain-ideas.md` (driving senses, audio, camera, perception), `team/docs/research/lighting-tech.md` (light), and `world-detail/world-detail-methods.md` (lidar and aerial methods); we link to them.
 
 Source marks: **[V]** read today. **[S]** headline or search summary seen today. **[K]** a well-known talk or paper, cited from the team's knowledge, not re-read today (check before you quote a number from it).
 
 ## 1. World generation and streaming
 
-| Method | Who and where | What it does | Take for SimCruise |
+| Method | Who and where | What it does | Take for OSDS |
 |---|---|---|---|
 | Markers per data layer, parent fallback, bandwidth-driven LoD | Asobo, MSFS, GDC 2022 [V] | Each layer is a state machine; draw the best available | **Adopt** in the scan engine (see the study, section 8) |
 | GPU run-time procedural placement | Guerrilla, Horizon Zero Dawn, GDC 2017, Jaap van Muijden [S] (https://www.guerrilla-games.com/read/gpu-based-procedural-placement-in-horizon-zero-dawn) | Artists write density rules in a graph over world data maps; the GPU places plants, rocks, sounds, effects and wildlife around the player at run time | **Adopt the idea** (density from data maps), but run on CPU workers into the scan map, because our GPU is the bottleneck |

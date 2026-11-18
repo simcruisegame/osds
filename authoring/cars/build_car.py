@@ -1,4 +1,4 @@
-"""Build a SimCruise car model in Blender from a design file (v3).
+"""Build a OSDS car model in Blender from a design file (v3).
 
     blender -b -P authoring/cars/build_car.py -- authoring/cars/designs/<id>.py data/art/cars/<id>.glb
         [--render out.png --view three-quarter|side|front|rear|top|cabin|rear-three-quarter]
@@ -24,7 +24,7 @@ Nodes: body, wheel_fl/fr/rl/rr (origin at the hub; spins), wheel_*_upright
 about its local column axis). Materials named lamp_rear become brake lamps,
 glass is drawn tinted and transparent by the client (its material role comes from the name).
 
-Original MIT work for SimCruise. Shapes are measured from photographs and
+Original MIT work for OSDS. Shapes are measured from photographs and
 published dimensions of the reference cars; no logos or badges.
 """
 import bpy, bmesh, math, os, sys, json, importlib.util

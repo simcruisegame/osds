@@ -1,15 +1,15 @@
 # Level crossings: a bridge and the road under it
 
-> **v2.0.3 uses the driving lane's own rule** (rc5-traffic 27913ee). A crossing counts unless the two roads are 4.9 m or more apart in height at the crossing point, and `ChooseAt` skips roads more than 3 m above or below the turn point. The record and queries below (`FSimCruiseRoadCrossing`, `LevelConflictAt`, `AcrossLevels`) are v2.0.4 work on branch `world-detail-v2-release-6`. They are not in the v2.0.3 candidate, and this note keeps them as a reference.
+> **v2.0.3 uses the driving lane's own rule** (rc5-traffic 27913ee). A crossing counts unless the two roads are 4.9 m or more apart in height at the crossing point, and `ChooseAt` skips roads more than 3 m above or below the turn point. The record and queries below (`FOsdsRoadCrossing`, `LevelConflictAt`, `AcrossLevels`) are v2.0.4 work on branch `world-detail-v2-release-6`. They are not in the v2.0.3 candidate, and this note keeps them as a reference.
 
 The tile data marks bridges (`bridge` on a road row) but carries no OSM `layer`, `tunnel` or `cutting`, and the elevation model has no cuts or embankments. So most mapped overpasses are built at one level with the road under them: Woodward Avenue over the Fisher Freeway (I-75) in Detroit, Northcrest Road over I-285 in Doraville. Since v2.0.3 no parapet or deck slab stands across such a road, so the roads cross flat. They are still two levels in the map: traffic must not turn from one onto the other there.
 
-## The record (`World/SimCruiseRoadNetwork.h`)
+## The record (`World/OsdsRoadNetwork.h`)
 
-Each tile's road network lists every deck crossing in `FSimCruiseRoadNetwork::Crossings`. A crossing is a bridge span over a carriageway that is not a deck there, crossed at 20 degrees or more.
+Each tile's road network lists every deck crossing in `FOsdsRoadNetwork::Crossings`. A crossing is a bridge span over a carriageway that is not a deck there, crossed at 20 degrees or more.
 
 ```cpp
-struct FSimCruiseRoadCrossing
+struct FOsdsRoadCrossing
 {
     int32 Deck;                 // the bridge ribbon
     int32 DeckFrom, DeckTo;     // its stations over the other road
@@ -30,7 +30,7 @@ Both look at one tile's network. A crossing lies in the tile that holds the deck
 
 ## The traffic fix (for the driving lane)
 
-`ASimCruiseTraffic::ChooseAt` (`World/SimCruiseTraffic.cpp`) offers a turn onto every public ribbon within 14 m of the decision point in plan view. It checks neither height nor bridge, so at Woodward a car on I-75 can turn onto the overpass. In the loop over `Best` (after `EntryS` is known), skip the option when it crosses levels:
+`AOsdsTraffic::ChooseAt` (`World/OsdsTraffic.cpp`) offers a turn onto every public ribbon within 14 m of the decision point in plan view. It checks neither height nor bridge, so at Woodward a car on I-75 can turn onto the overpass. In the loop over `Best` (after `EntryS` is known), skip the option when it crosses levels:
 
 ```cpp
 // A bridge and the road under it are no junction (docs/team/level-crossings.md).
@@ -41,11 +41,11 @@ For a ribbon in a neighbouring tile (a crossing on a seam), skip the option when
 
 ## A fast test for it
 
-`SimCruise.World.TrafficLevelCrossings` (driving lane): build the recorded Doraville and Detroit-Woodward tiles. For every crossing with `bAtGradeConflict`, put a traffic car on each ribbon 30 m before the crossing, heading towards it. Call `ChooseAt` at the crossing and fail if any option it offers is the other ribbon, i.e. `AcrossLevels` holds for the option. The Miami bundled tiles have no crossings, so the test needs the recorded places, or two synthetic ribbons, one flagged bridge, crossing at one level.
+`OSDS.World.TrafficLevelCrossings` (driving lane): build the recorded Doraville and Detroit-Woodward tiles. For every crossing with `bAtGradeConflict`, put a traffic car on each ribbon 30 m before the crossing, heading towards it. Call `ChooseAt` at the crossing and fail if any option it offers is the other ribbon, i.e. `AcrossLevels` holds for the option. The Miami bundled tiles have no crossings, so the test needs the recorded places, or two synthetic ribbons, one flagged bridge, crossing at one level.
 
 ## Counts (tile data, plan view)
 
-Bridge pieces crossing another drivable road: Detroit round Woodward 37, Doraville 85, Big Sur 0, Detroit start tiles 0, Miami bundled tiles 0 (their format has no bridge flag). `SimCruise.World.RoadOverlaps.Recorded` lists how many are at one level per place in `Saved/BridgeFix/changed-spans.md`.
+Bridge pieces crossing another drivable road: Detroit round Woodward 37, Doraville 85, Big Sur 0, Detroit start tiles 0, Miami bundled tiles 0 (their format has no bridge flag). `OSDS.World.RoadOverlaps.Recorded` lists how many are at one level per place in `Saved/BridgeFix/changed-spans.md`.
 
 ## Later (v2.0.4)
 

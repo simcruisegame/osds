@@ -1,6 +1,6 @@
 # How Microsoft Flight Simulator builds the Earth (study, 14 November 2026)
 
-Innovation team, for the project owner's question "how is Microsoft Flight Sim working and how can we create hyper detail". This note says what is public about Microsoft Flight Simulator 2020 and 2024 (MSFS), what we infer, and what SimCruise must copy, change or do better. The next two notes are the survey of game techniques ([technique-survey.md](technique-survey.md)) and the ranked proposals ([hyper-detail-proposals.md](hyper-detail-proposals.md)).
+Innovation team, for the project owner's question "how is Microsoft Flight Sim working and how can we create hyper detail". This note says what is public about Microsoft Flight Simulator 2020 and 2024 (MSFS), what we infer, and what OSDS must copy, change or do better. The next two notes are the survey of game techniques ([technique-survey.md](technique-survey.md)) and the ranked proposals ([hyper-detail-proposals.md](hyper-detail-proposals.md)).
 
 Source marks: **[V]** = we read the source today. **[S]** = we saw only the headline or a search summary. **[I]** = our inference, not a public fact.
 
@@ -80,7 +80,7 @@ Source: "Designing the Terrain System of Flight Simulator: Representing the Eart
 2. **Photographs carry their own light.** Baked shadows, clouds, seasons and cameras; this needs cleaning and is never perfect (GDC 2022 lists these as known issues) [V]. We solved part of this already ("unbake the sun", world-detail-methods.md).
 3. **From above, a tree, a bush and a lawn look alike** [V]. Trunks, crown shapes, understory and facades are not in a top-down photograph at all [I].
 4. **Statistical errors are visible.** One bad map tag made the Melbourne tower; about 20 % of buildings may be wrong [V]. At 1.2 m every error is in the driver's face [I].
-5. **Server dependence.** The 2024 launch failed at the cache [V]. SimCruise has no money for servers, so our cache must be local and our sources must be public servers that we use within their limits [I].
+5. **Server dependence.** The 2024 launch failed at the cache [V]. OSDS has no money for servers, so our cache must be local and our sources must be public servers that we use within their limits [I].
 6. **Photogrammetry meshes melt at low height.** Bing city meshes are made for aerial views; at street level trees and cars are merged into walls ("melted"). This is a common observation, not a published measurement [I]. Our own earlier test of a lidar "skin" saw the same look (world-detail-methods.md, method 11).
 
 ## 7. Why the driver's view is a different problem (our calculation)
@@ -100,9 +100,9 @@ So a 0.6 m NAIP photograph or a 0.3 m Bing photograph matches the pilot's pixel.
 
 Conclusion: MSFS's measured layers are the right base for the far world (beyond about 100 m). Near the road, detail must be **generated** from facts that describe what is there (soil, rock, road design, tree shape, building type), not copied from a photograph.
 
-## 8. What SimCruise takes from MSFS
+## 8. What OSDS takes from MSFS
 
-| MSFS method | Take it? | How in SimCruise |
+| MSFS method | Take it? | How in OSDS |
 |---|---|---|
 | Markers: one state machine per data layer, dependencies, parent fallback, versioned hot reload | **Yes, high value** | The scan engine's layers (NAIP, 3DEP, OSM, footprints, Köppen, NLCD, TreeMap) as markers. Parent fallback also answers the P0 "missing tile ahead" finding (onboarding row 2): draw the coarser tile and its collision, never nothing. |
 | LoD request from screen size and measured bandwidth | Yes | Request radius from speed and measured fetch rate per source (we have several public servers, each with its own limit). |

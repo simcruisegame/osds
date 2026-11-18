@@ -1,7 +1,7 @@
 OSDS 2.0.4 installer test, 2026-11-17, release PC, normal user (no elevation)
-- OSDS-2.0.4-windows-x64-setup.exe /VERYSILENT /CURRENTUSER: exit 0; log: "Visual C++ runtime: already installed", "GameInput: already installed", "Installation process succeeded". Updated the existing 2.0.3 install in place (%LOCALAPPDATA%\Programs\SimCruise).
+- OSDS-2.0.4-windows-x64-setup.exe /VERYSILENT /CURRENTUSER: exit 0; log: "Visual C++ runtime: already installed", "GameInput: already installed", "Installation process succeeded". Updated the existing 2.0.3 install in place (%LOCALAPPDATA%\Programs\OSDS).
 - Start menu: OSDS\OSDS, OSDS\OSDS controls, OSDS\Uninstall OSDS.
-- Installed game: SimCruise-Win64-Shipping.exe -SimCruiseShellSelfTest: exit 0, "SIMCRUISE SHELL SELF-TEST PASSED" (stick both ways, centre, key full lock, Y/X/C/F2, RT, W ramp, LT dead zone).
+- Installed game: OSDS-Win64-Shipping.exe -OsdsShellSelfTest: exit 0, "OSDS SHELL SELF-TEST PASSED" (stick both ways, centre, key full lock, Y/X/C/F2, RT, W ramp, LT dead zone).
 - Settings: preferences.json kept across the run, the uninstall and the reinstall.
 - Uninstall (unins000.exe /VERYSILENT): exit 0; program folder and Start menu entry gone.
 - Fresh reinstall: exit 0, installs to %LOCALAPPDATA%\Programs\OSDS; the shortcut points there.

@@ -1,4 +1,4 @@
-# The SimCruise expert team
+# The OSDS expert team
 
 The team is a set of expert subagents. Any thread or session that works in
 this repository can call them. Each expert has two files:
@@ -55,7 +55,7 @@ or a cloud clone), use the Agent tool with the role as `subagent_type`:
 
 ```
 Agent(subagent_type: "vehicle-dynamics-physicist",
-      prompt: "Review my change to SimCruiseTireModel.cpp (diff below). Check the slip definition and the relaxation length.")
+      prompt: "Review my change to OsdsTireModel.cpp (diff below). Check the slip definition and the relaxation length.")
 ```
 
 Rules for callers:

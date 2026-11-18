@@ -214,22 +214,22 @@ Press F4 (D-pad right), or pick *Tune car...* on the Your car page. You can only
 
 | Setting | What it does |
 |---|---|
-| `simcruise.Hud.Units` | 1 = km/h, 0 = mph |
-| `simcruise.Gearbox.AutoClutch` | Automatic clutch in manual mode |
-| `simcruise.Assists.StabilityControl` | Stability control on / off |
-| `simcruise.Lens.ScreenInches`, `simcruise.Lens.ViewDistanceCm` | Screen size and eye distance for the true field of view |
-| `simcruise.Wheel.Force` | Wheel force strength, 0 to 1 (default 0.6) |
-| `simcruise.Wheel.MaxTorqueNm` | Your wheel's peak torque (default 2.5) |
-| `simcruise.Wheel.ForceSign -1` | Flips a wheel that pushes the wrong way |
-| `simcruise.Rumble.Strength` | Rumble strength |
-| `simcruise.TriggerGamma` | Throttle trigger curve: 1 = linear, up to 3 (default 1.8) |
-| `simcruise.BrakeTriggerGamma` | Brake trigger curve (default 1.4) |
-| `simcruise.Pad.SteerSpeed` | Stick steering speed |
-| `simcruise.Pad.SteerLinearity` | Stick response |
-| `simcruise.Pad.SteerDeadZone` | Extra stick dead zone on top of the fixed 12 % |
+| `osds.Hud.Units` | 1 = km/h, 0 = mph |
+| `osds.Gearbox.AutoClutch` | Automatic clutch in manual mode |
+| `osds.Assists.StabilityControl` | Stability control on / off |
+| `osds.Lens.ScreenInches`, `osds.Lens.ViewDistanceCm` | Screen size and eye distance for the true field of view |
+| `osds.Wheel.Force` | Wheel force strength, 0 to 1 (default 0.6) |
+| `osds.Wheel.MaxTorqueNm` | Your wheel's peak torque (default 2.5) |
+| `osds.Wheel.ForceSign -1` | Flips a wheel that pushes the wrong way |
+| `osds.Rumble.Strength` | Rumble strength |
+| `osds.TriggerGamma` | Throttle trigger curve: 1 = linear, up to 3 (default 1.8) |
+| `osds.BrakeTriggerGamma` | Brake trigger curve (default 1.4) |
+| `osds.Pad.SteerSpeed` | Stick steering speed |
+| `osds.Pad.SteerLinearity` | Stick response |
+| `osds.Pad.SteerDeadZone` | Extra stick dead zone on top of the fixed 12 % |
 | `sc.Feature.Traffic`, `sc.Feature.Aircraft` | Moving traffic and aircraft (0 = off, the default) |
-| `-SimCruiseRealTime` | Launch option: follow your computer's clock |
-| `-SimCruiseUtc=2026-11-12T01:30:00Z` | Launch option: fix a moment in time |
+| `-OsdsRealTime` | Launch option: follow your computer's clock |
+| `-OsdsUtc=2026-11-12T01:30:00Z` | Launch option: fix a moment in time |
 
 More launch options: [unreal-building.md](unreal-building.md#drive-it).
 
@@ -247,5 +247,5 @@ The clutch moved from LB to A, the parking brake from A to B, shift down from X 
 
 ### For developers
 
-- All keys and buttons are one table in `Source/SimCruise/Private/Gameplay/SimCruiseInputConfig.cpp`, checked by the `SimCruise.Gameplay.Input` tests.
-- Each screen's button hints come from the same list as its key handling. The test `SimCruise.UI.PadHintsMatch` presses each hinted button to check it does what it says.
+- All keys and buttons are one table in `Source/OSDS/Private/Gameplay/OsdsInputConfig.cpp`, checked by the `OSDS.Gameplay.Input` tests.
+- Each screen's button hints come from the same list as its key handling. The test `OSDS.UI.PadHintsMatch` presses each hinted button to check it does what it says.

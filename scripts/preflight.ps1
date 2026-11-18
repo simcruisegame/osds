@@ -6,7 +6,7 @@
 .DESCRIPTION
   For each road and car it starts the game (editor binaries, -game, Ultra graphics,
   1280x720, the one-editor lock of scripts\EditorLock.ps1, a fixed midday time) with
-  -SimCruiseViewCheck -SimCruisePreflight. ASimCruisePreflight waits for the VIEWCHECK line,
+  -OsdsViewCheck -OsdsPreflight. AOsdsPreflight waits for the VIEWCHECK line,
   drives the road for -Seconds through the real input stack, records the view at 10 frames
   a second and writes one line:
 
@@ -16,7 +16,7 @@
   a 4 x 3 contact sheet <road>-<car>-sheet.png, and writes report.md with a table and links,
   all in Saved\Preflight\<date-time>\. A missing PREFLIGHT line, a timeout or an engine error
   fails the run. Each finished pre-flight adds one row (commit, result, report) to the
-  PC-wide index %LOCALAPPDATA%\SimCruise\preflight-index.csv, which scripts\playtest.ps1 reads.
+  PC-wide index %LOCALAPPDATA%\OSDS\preflight-index.csv, which scripts\playtest.ps1 reads.
 
   Roads (scripts\preflight.ps1 -Roads ...):
     ocean-drive  Ocean Drive, Miami Beach (the bundled start, offline)
@@ -53,7 +53,7 @@ param(
     [int]$Seed = -1,
     # How many places 'random' draws from data\test-places.json.
     [int]$RandomCount = 3,
-    # More game arguments for every run, for A/B tests (for example "-DPCVars=simcruise.Reflex=1").
+    # More game arguments for every run, for A/B tests (for example "-DPCVars=osds.Reflex=1").
     [string]$ExtraArgs = '',
     # The graphics preset of every run (ultra by default; high for the second fps number).
     [ValidateSet('low', 'medium', 'high', 'ultra')][string]$Graphics = 'ultra'
@@ -63,7 +63,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
 . (Join-Path $PSScriptRoot 'ReviewLib.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
-$Project = Join-Path $Root 'SimCruise.uproject'
+$Project = Join-Path $Root 'OSDS.uproject'
 $Editor = Join-Path $EngineDir 'Engine\Binaries\Win64\UnrealEditor.exe'
 if (-not (Test-Path $Editor)) { Write-Host "No Unreal Editor at $Editor (set -EngineDir or UE_ROOT)."; exit 2 }
 $Ffmpeg = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
@@ -78,33 +78,33 @@ $Roads = @($Roads | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $Cars = @($Cars | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 
 $Defs = @{
-    'ocean-drive' = @('-SimCruiseBundledStart')
-    'dragon'      = @('-SimCruiseStart=35.4792763,-83.9327265', '"-SimCruiseStartRoad=Calderwood Highway"')
-    'nebraska'    = @('-SimCruiseStart=40.56724,-96.5909', '"-SimCruiseStartRoad=Princeton Road"')
-    'big-sur'     = @('-SimCruiseStart=36.363197,-121.900041', '"-SimCruiseStartRoad=Cabrillo Highway"')
+    'ocean-drive' = @('-OsdsBundledStart')
+    'dragon'      = @('-OsdsStart=35.4792763,-83.9327265', '"-OsdsStartRoad=Calderwood Highway"')
+    'nebraska'    = @('-OsdsStart=40.56724,-96.5909', '"-OsdsStartRoad=Princeton Road"')
+    'big-sur'     = @('-OsdsStart=36.363197,-121.900041', '"-OsdsStartRoad=Cabrillo Highway"')
     # Places across the US for the world-detail checks (docs/research/world-detail-v2-plan.md):
     # not in the default list; the car starts on the nearest road.
-    'mojave'         = @('-SimCruiseStart=34.5583,-115.7442')   # National Trails Highway (Route 66), Amboy CA
-    'colorado-pass'  = @('-SimCruiseStart=39.1087,-106.5642')   # CO-82, Independence Pass
-    'kansas-plains'  = @('-SimCruiseStart=38.3634,-98.7648')    # near Great Bend KS
-    'maine-forest'   = @('-SimCruiseStart=45.3417,-69.9706')    # US-201, The Forks ME
-    'oregon-coast'   = @('-SimCruiseStart=45.8918,-123.9615')   # US-101, Cannon Beach OR
-    'atlanta-suburb' = @('-SimCruiseStart=33.9526,-84.5499')    # Marietta GA
-    'iowa-town'      = @('-SimCruiseStart=41.4080,-92.9163')    # Pella IA
-    'chicago'        = @('-SimCruiseStart=41.8847,-87.6245')    # Michigan Avenue, the Loop
-    'minnesota-north' = @('-SimCruiseStart=48.0519,-92.8310')   # US-53, Orr MN
-    'south-texas'    = @('-SimCruiseStart=26.4815,-97.7831')    # US-77, Raymondville TX
+    'mojave'         = @('-OsdsStart=34.5583,-115.7442')   # National Trails Highway (Route 66), Amboy CA
+    'colorado-pass'  = @('-OsdsStart=39.1087,-106.5642')   # CO-82, Independence Pass
+    'kansas-plains'  = @('-OsdsStart=38.3634,-98.7648')    # near Great Bend KS
+    'maine-forest'   = @('-OsdsStart=45.3417,-69.9706')    # US-201, The Forks ME
+    'oregon-coast'   = @('-OsdsStart=45.8918,-123.9615')   # US-101, Cannon Beach OR
+    'atlanta-suburb' = @('-OsdsStart=33.9526,-84.5499')    # Marietta GA
+    'iowa-town'      = @('-OsdsStart=41.4080,-92.9163')    # Pella IA
+    'chicago'        = @('-OsdsStart=41.8847,-87.6245')    # Michigan Avenue, the Loop
+    'minnesota-north' = @('-OsdsStart=48.0519,-92.8310')   # US-53, Orr MN
+    'south-texas'    = @('-OsdsStart=26.4815,-97.7831')    # US-77, Raymondville TX
     # The QA list of hard places (2.0.4): each stresses a different system.
-    'lombard'        = @('-SimCruiseStart=37.8021,-122.4187')   # Lombard St, San Francisco: steep grade, road steps
-    'million-dollar' = @('-SimCruiseStart=37.99,-107.66')       # US-550 near Ouray CO: switchbacks along cliffs
-    'pikes-peak'     = @('-SimCruiseStart=38.8481613,-105.0533868') # Pikes Peak Highway (Photon), above the tree line: altitude, hairpins
-    'badwater'       = @('-SimCruiseStart=36.23,-116.77')       # Badwater Road CA: ground below sea level
-    'mackinac'       = @('-SimCruiseStart=45.817,-84.728')      # Mackinac Bridge MI: a long bridge over water
-    'seven-mile'     = @('-SimCruiseStart=24.706,-81.154')      # Seven Mile Bridge FL: a low bridge
-    'bay-bridge-tunnel' = @('-SimCruiseStart=37.03,-76.08')     # Chesapeake Bay Bridge-Tunnel VA
-    'glenwood'       = @('-SimCruiseStart=39.555,-107.245')     # I-70 Glenwood Canyon: stacked carriageways
-    'high-five'      = @('-SimCruiseStart=32.925,-96.764')      # High Five interchange, Dallas: levels
-    'us-50-nevada'   = @('-SimCruiseStart=39.3,-117.0')         # US-50 Nevada: long straight at speed
+    'lombard'        = @('-OsdsStart=37.8021,-122.4187')   # Lombard St, San Francisco: steep grade, road steps
+    'million-dollar' = @('-OsdsStart=37.99,-107.66')       # US-550 near Ouray CO: switchbacks along cliffs
+    'pikes-peak'     = @('-OsdsStart=38.8481613,-105.0533868') # Pikes Peak Highway (Photon), above the tree line: altitude, hairpins
+    'badwater'       = @('-OsdsStart=36.23,-116.77')       # Badwater Road CA: ground below sea level
+    'mackinac'       = @('-OsdsStart=45.817,-84.728')      # Mackinac Bridge MI: a long bridge over water
+    'seven-mile'     = @('-OsdsStart=24.706,-81.154')      # Seven Mile Bridge FL: a low bridge
+    'bay-bridge-tunnel' = @('-OsdsStart=37.03,-76.08')     # Chesapeake Bay Bridge-Tunnel VA
+    'glenwood'       = @('-OsdsStart=39.555,-107.245')     # I-70 Glenwood Canyon: stacked carriageways
+    'high-five'      = @('-OsdsStart=32.925,-96.764')      # High Five interchange, Dallas: levels
+    'us-50-nevada'   = @('-OsdsStart=39.3,-117.0')         # US-50 Nevada: long straight at speed
 }
 $HardPlaces = @('dragon', 'lombard', 'million-dollar', 'pikes-peak', 'badwater', 'mackinac', 'seven-mile', 'bay-bridge-tunnel', 'glenwood', 'high-five', 'us-50-nevada', 'nebraska')
 if ($Seed -lt 0) { $Seed = [int](Get-Date -Format 'yyyyMMdd') }
@@ -118,10 +118,10 @@ $PlaceUtc = @{}
 $UtcGiven = $PSBoundParameters.ContainsKey('Utc')
 $Day = ([datetime]::Parse($Utc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal)).Date
 foreach ($P in $TestPlaces) {
-    $Defs[$P.key] = @("-SimCruiseStart=$($P.lat),$($P.lon)")
+    $Defs[$P.key] = @("-OsdsStart=$($P.lat),$($P.lon)")
     $PlaceUtc[$P.key] = $Day.AddHours(12.0 - [double]$P.lon / 15.0).ToString('yyyy-MM-ddTHH:mm:ssZ')
 }
-$Defs['pool'] = @('-SimCruiseRandomStart', "-SimCruiseStartSeed=$Seed")
+$Defs['pool'] = @('-OsdsRandomStart', "-OsdsStartSeed=$Seed")
 $Expanded = @()
 foreach ($Road in $Roads) {
     if ($Road -eq 'random') {
@@ -139,7 +139,7 @@ foreach ($Road in $Roads) {
         . (Join-Path $PSScriptRoot 'RandomPlaces.ps1')
         foreach ($P in @(Get-RandomUSPlaces -Count $RandomCount -Seed $Seed -Root $Root -AreasOnly)) {
             $Key = "rand-$($P.Type)-$($P.Index)"
-            $Defs[$Key] = @("-SimCruiseStart=$($P.Lat),$($P.Lon)")
+            $Defs[$Key] = @("-OsdsStart=$($P.Lat),$($P.Lon)")
             $PlaceUtc[$Key] = $Day.AddHours(12.0 - [double]$P.Lon / 15.0).ToString('yyyy-MM-ddTHH:mm:ssZ')
             Write-Host "Random US place $Key at $($P.Lat),$($P.Lon)"
             $Expanded += $Key
@@ -169,9 +169,9 @@ foreach ($Road in $Roads) {
         $Out = Join-Path $RunDir $Name
         New-Item -ItemType Directory -Force $Out | Out-Null
         $Log = Join-Path $Out 'game.log'
-        $Args = @("`"$Project`"", '-game', '-SimCruiseWorld', '-SimCruiseNoLive', '-SimCruiseNoNeural', "-SimCruiseGraphics=$Graphics", "-SimCruiseUtc=$(if (-not $UtcGiven -and $PlaceUtc.ContainsKey($Road)) { $PlaceUtc[$Road] } else { $Utc })",
-            "-SimCruiseCar=$Car", '-SimCruiseViewCheck', '-SimCruisePreflight', '-SimCruiseReview', "-SimCruisePreflightRoad=$Road", "-SimCruisePreflightSeconds=$Seconds",
-            "`"-SimCruisePreflightOut=$Out`"", '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution) + $Defs[$Road] + @(if ($Keen) { '-SimCruisePreflightKeen' }) + @(if ($ForceSpin) { '-SimCruisePreflightForceSpin' })
+        $Args = @("`"$Project`"", '-game', '-OsdsWorld', '-OsdsNoLive', '-OsdsNoNeural', "-OsdsGraphics=$Graphics", "-OsdsUtc=$(if (-not $UtcGiven -and $PlaceUtc.ContainsKey($Road)) { $PlaceUtc[$Road] } else { $Utc })",
+            "-OsdsCar=$Car", '-OsdsViewCheck', '-OsdsPreflight', '-OsdsReview', "-OsdsPreflightRoad=$Road", "-OsdsPreflightSeconds=$Seconds",
+            "`"-OsdsPreflightOut=$Out`"", '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution) + $Defs[$Road] + @(if ($Keen) { '-OsdsPreflightKeen' }) + @(if ($ForceSpin) { '-OsdsPreflightForceSpin' })
         if ($ExtraArgs) { $Args += $ExtraArgs }
         if (-not (Enter-EditorLock -GpuTest -TimeoutMinutes $LockTimeoutMinutes -Why "pre-flight $Name on $Root")) { exit 1 }
         $TimedOut = $false
@@ -191,7 +191,7 @@ foreach ($Road in $Roads) {
 
         $Line = if (Test-Path $Log) { Select-String -Path $Log -Pattern 'PREFLIGHT (PASS|FAIL) .*' | Select-Object -Last 1 } else { $null }
         $ViewLine = if (Test-Path $Log) { Select-String -Path $Log -Pattern 'VIEWCHECK (PASS|FAIL)' | Select-Object -Last 1 } else { $null }
-        $Engine = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'Ensure condition failed|Fatal error|LogSimCruise\w*: Error:') } else { @() }
+        $Engine = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'Ensure condition failed|Fatal error|LogOSDS\w*: Error:') } else { @() }
         $Json = Join-Path $Out 'preflight.json'
         $Stats = if (Test-Path $Json) { Get-Content $Json -Raw | ConvertFrom-Json } else { $null }
         $Reasons = @()
@@ -258,7 +258,7 @@ if ($ForceSpin) {
     exit 0
 }
 
-$IndexDir = Join-Path $env:LOCALAPPDATA 'SimCruise'
+$IndexDir = Join-Path $env:LOCALAPPDATA 'OSDS'
 New-Item -ItemType Directory -Force $IndexDir | Out-Null
 $Index = Join-Path $IndexDir 'preflight-index.csv'
 $Header = 'date,commit,result,runs,roads,cars,report,reasons'

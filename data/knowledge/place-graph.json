@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "SimCruise place knowledge graph. Facts are tokens kind:value with a confidence 0-1. Rules join facts to new facts with a weight. The engine (Source/SimCruise/*/Knowledge) bakes one plan per building when a tile loads and reads the live facts at run time. Edit freely: no code change is needed. See docs/place-graph.md.",
+  "about": "OSDS place knowledge graph. Facts are tokens kind:value with a confidence 0-1. Rules join facts to new facts with a weight. The engine (Source/OSDS/*/Knowledge) bakes one plan per building when a tile loads and reads the live facts at run time. Edit freely: no code change is needed. See docs/place-graph.md.",
 
   "aliases": {
     "style": {

@@ -1,6 +1,6 @@
 OSDS 2.1.0 installer test, 2026-11-17, release PC, normal user (no elevation)
 - OSDS-2.1.0-windows-x64-setup.exe /VERYSILENT /CURRENTUSER: exit 0; log: "Visual C++ runtime: already installed", "GameInput: already installed", "Installation process succeeded". Installed to %LOCALAPPDATA%\Programs\OSDS (Start menu: OSDS, OSDS controls, Uninstall OSDS).
-- Installed game: SimCruise-Win64-Shipping.exe -SimCruiseShellSelfTest: exit 0, "SIMCRUISE SHELL SELF-TEST PASSED", no crash report (the first 2.1 candidate exited 3: a crash on quitting while an aerial photo was AI-enhanced; fixed in this build).
+- Installed game: OSDS-Win64-Shipping.exe -OsdsShellSelfTest: exit 0, "OSDS SHELL SELF-TEST PASSED", no crash report (the first 2.1 candidate exited 3: a crash on quitting while an aerial photo was AI-enhanced; fixed in this build).
 - Settings: preferences.json unchanged across the run and the reinstall.
 - Drive captures from the installed build: Mini (Nebraska, Chicago), Camaro (Big Sur, Tail of the Dragon), Miata (Ocean Drive), Mustang (Ocean Drive at night): all exit 0, 7 shots each; CARLA roadside grass present (it was missing in the first candidate; fixed).
 - Sizes: setup 959.1 MB, zip 1,032.8 MB (2.0.4: 433 / 502 MB; the CARLA art and the two cars; the owner accepted the size).

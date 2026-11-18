@@ -4,7 +4,7 @@ Owner: lighting director. Date: 2026-11-12. Repo state: origin/main.
 Style: ASD-STE100 (short, active sentences). Each claim has a source.
 "Computed" = from code constants. "Measured" = from a capture. "Unverified" = not checked in a primary source.
 
-Purpose: the owner asked us to "look into all the different lighting tech out there and how it works in games on different surfaces". This file lists the techniques, their cost, and their fit to SimCruise on the RTX 2070 Super Max-Q at the 28 W cap (about 2.6 times slower than the 90 W numbers, `docs/unreal-architecture.md:767`).
+Purpose: the owner asked us to "look into all the different lighting tech out there and how it works in games on different surfaces". This file lists the techniques, their cost, and their fit to OSDS on the RTX 2070 Super Max-Q at the 28 W cap (about 2.6 times slower than the 90 W numbers, `docs/unreal-architecture.md:767`).
 
 ## 1. PBR surface models
 
@@ -43,34 +43,34 @@ Purpose: the owner asked us to "look into all the different lighting tech out th
 - Dark paint is mostly reflection. If the reflection has no environment, dark paint looks like plastic.
 - Gran Turismo 7 measures manufacturer paint samples with a spectrometer. [R13] Forza Motorsport (2023) samples paint with a spectrophotometer for colour, flake and gloss. [R15]
 - Unreal: the Clear Coat shading model has two lobes and an optional bottom normal (`r.ClearCoatNormal`). Substrate (Unreal's layered material system) can stack slabs; Epic released 280 Substrate automotive materials for UE 5.7. [R5] Substrate cost and status in 5.8: unverified.
-- SimCruise: `SimCruiseCarMaterialLibrary.cpp:119-256` already does flakes under a clear coat with orange peel, clear-coat roughness clamp 0.01, and `r.ClearCoatNormal=True` (`Config/DefaultEngine.ini:13`). The model is right. The missing part is the environment in the reflection (section 4).
+- OSDS: `OsdsCarMaterialLibrary.cpp:119-256` already does flakes under a clear coat with orange peel, clear-coat roughness clamp 0.01, and `r.ClearCoatNormal=True` (`Config/DefaultEngine.ini:13`). The model is right. The missing part is the environment in the reflection (section 4).
 
 ### 1.4 Wet asphalt
 
-- Porous surfaces darken when wet. Water fills the pores and light makes more internal bounces before it escapes. Dark asphalt falls to about 0.6 of its dry albedo (Lekner and Dorf 1988, as cited in `SimCruiseWorldResources.cpp:151-152`; primary text unverified).
+- Porous surfaces darken when wet. Water fills the pores and light makes more internal bounces before it escapes. Dark asphalt falls to about 0.6 of its dry albedo (Lekner and Dorf 1988, as cited in `OsdsWorldResources.cpp:151-152`; primary text unverified).
 - Roughness falls as a water film fills the micro-texture. Puddles are a separate layer: water with F0 0.02, roughness near 0, flat normal. [R6]
 - The darkening makes the specular term dominate. A wet road at night shows long, vertical streaks of each lamp (stretched GGX highlights on a slightly rough water film). [R6]
 - Lagarde's "Water drop" series (Remember Me) is the reference game method: modify the dry BRDF inputs per porosity and wetness, do not add a new lighting model. [R6]
-- SimCruise: the asphalt shader darkens to 0.6, sets roughness 0.35 when damp and 0.04 in puddles, and flattens the puddle normal (`SimCruiseWorldResources.cpp:154-159`). This matches [R6]. Two gaps: (a) the puddle keeps F0 0.04 (default Specular 0.5), water is 0.02; (b) a wet road reflects the street, and the street has no distance fields, so Lumen reflects only the sky (section 4).
+- OSDS: the asphalt shader darkens to 0.6, sets roughness 0.35 when damp and 0.04 in puddles, and flattens the puddle normal (`OsdsWorldResources.cpp:154-159`). This matches [R6]. Two gaps: (a) the puddle keeps F0 0.04 (default Specular 0.5), water is 0.02; (b) a wet road reflects the street, and the street has no distance fields, so Lumen reflects only the sky (section 4).
 
 ### 1.5 Dry asphalt and concrete
 
 - Dry asphalt is rough (0.8-0.95). Its look comes from the aggregate texture and the macro variation, not from specular.
 - At grazing angles even dry asphalt shows a sheen toward the sun (Fresnel and a rough GGX lobe). It is the "road glare" in a low sun.
-- SimCruise: asphalt roughness 0.80-0.95 (`SimCruiseWorldResources.cpp:148`), concrete 0.84-0.92 (`:176`). Correct range.
+- OSDS: asphalt roughness 0.80-0.95 (`OsdsWorldResources.cpp:148`), concrete 0.84-0.92 (`:176`). Correct range.
 
 ### 1.6 Stucco and building walls
 
 - Stucco is a rough dielectric. Its brightness on screen is albedo x (sun + sky + bounce) x visibility.
 - Real walls in a street receive less sky than a wall in an open field. The street and the opposite building block part of the sky (sky view factor). Bounce from dark asphalt is low.
-- SimCruise, computed: the Deco palette `F5F1E6` is linear albedo 0.88, `F2F0EA` 0.87, `ECE9E1` 0.82 (`SimCruiseTileDetail.cpp:143-145, 185-188`). Grain and stain lower this by only about 5-10 % (`SimCruiseWorldResources.cpp:235-236`). That is fresh paint. Weathered stucco on Ocean Drive is likely 0.6-0.75 (unverified).
+- OSDS, computed: the Deco palette `F5F1E6` is linear albedo 0.88, `F2F0EA` 0.87, `ECE9E1` 0.82 (`OsdsTileDetail.cpp:143-145, 185-188`). Grain and stain lower this by only about 5-10 % (`OsdsWorldResources.cpp:235-236`). That is fresh paint. Weathered stucco on Ocean Drive is likely 0.6-0.75 (unverified).
 - Answer to the owner's question ("buildings are too bright, would they absorb a bit?"): yes. Two causes. First, the albedo is fresh paint, about 15-25 % too high for a weathered wall. Second, the tile meshes have no distance fields, so software Lumen cannot compute the sky occlusion between buildings; walls in a street get the open-sky light (`docs/unreal-architecture.md:699, 707`). Fix the material and the occlusion. Do not fix it with exposure.
 
 ### 1.7 Glass
 
 - Thin glass: two surfaces, F0 0.04 each. Reflection at normal incidence is about 8 % total, near 100 % at grazing angles. Transmission about 85-90 % for clear float glass. [R2], unverified transmission range
 - Car windscreens are laminated and slightly green. Tinted architectural glass transmits 10-50 %.
-- Games draw a room behind the pane with interior mapping (a ray-box trace in the shader). SimCruise does this (`SimCruiseWorldResources.cpp:330-411`).
+- Games draw a room behind the pane with interior mapping (a ray-box trace in the shader). OSDS does this (`OsdsWorldResources.cpp:330-411`).
 - The reflection on the pane needs the street. Without it the pane reflects sky only.
 
 ### 1.8 Chrome and metals
@@ -80,13 +80,13 @@ Purpose: the owner asked us to "look into all the different lighting tech out th
 ### 1.9 Foliage
 
 - Leaves transmit about 10-20 % of light and reflect about 10-15 % (unverified ranges). Back-lit leaves glow yellow-green.
-- Unreal: Two Sided Foliage shading model (a transmission colour) or Subsurface. SimCruise uses two-sided foliage on palm fronds (`docs/unreal-architecture.md:692`).
-- Software Lumen needs "Affect Distance Field Lighting" on foliage. [R7] SimCruise turns it off on tree rings (`SimCruiseTrees.cpp:339, 357, 395`); this is a known cost trade.
+- Unreal: Two Sided Foliage shading model (a transmission colour) or Subsurface. OSDS uses two-sided foliage on palm fronds (`docs/unreal-architecture.md:692`).
+- Software Lumen needs "Affect Distance Field Lighting" on foliage. [R7] OSDS turns it off on tree rings (`OsdsTrees.cpp:339, 357, 395`); this is a known cost trade.
 
 ### 1.10 Water (ocean, canals)
 
 - F0 0.02. Colour comes from what is reflected (sky) and from scattering below the surface. At grazing angles the sea is a mirror of the sky.
-- SimCruise: water tint 0.025/0.15/0.17 and roughness 0.08 in the ground shader (`SimCruiseWorldResources.cpp:124, 128`). Plausible for coastal water (unverified).
+- OSDS: water tint 0.025/0.15/0.17 and roughness 0.08 in the ground shader (`OsdsWorldResources.cpp:124, 128`). Plausible for coastal water (unverified).
 
 ## 2. Global illumination
 
@@ -109,7 +109,7 @@ Key Lumen facts [R7]:
 - Hardware Lumen: Windows DX12 with RTX 2000 series or newer. It is "the only way to achieve high quality mirror reflections".
 - Epic's High scalability targets 60 fps on current consoles; Epic GI and reflections are about 8 ms at 1080p internal on consoles.
 
-SimCruise state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEngine.ini:20`). Tiles are static meshes made from render data on a worker thread with no distance field (`docs/unreal-architecture.md:707`). Palms are shared static meshes with distance fields (`:692`). So Lumen GI and reflections today see palms and the car, not the street. Low turns Lumen off; Medium keeps GI and drops reflections (`SimCruiseGraphics.cpp:67-78`).
+OSDS state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEngine.ini:20`). Tiles are static meshes made from render data on a worker thread with no distance field (`docs/unreal-architecture.md:707`). Palms are shared static meshes with distance fields (`:692`). So Lumen GI and reflections today see palms and the car, not the street. Low turns Lumen off; Medium keeps GI and drops reflections (`OsdsGraphics.cpp:67-78`).
 
 ## 3. Shadows
 
@@ -118,8 +118,8 @@ SimCruise state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEng
 - SMRT soft shadows: VSM traces the shadow map for contact-hardening penumbrae; Source Angle sets the sun's penumbra (the real sun is 0.53 deg). [R12]
 - Contact shadows: screen-space; not needed with Nanite on VSM; still useful for grass and small detail. [R12]
 - Ray-traced shadows: exact; cost per light; needs HW RT.
-- Distance field shadows: for non-Nanite geometry beyond the dynamic shadow distance. [R12] They need distance fields, so SimCruise tiles get none.
-- SimCruise: VSM on (`DefaultEngine.ini:11`). The sun moves with the real clock: a slow sun still invalidates cached pages when it moves (rate of update: unverified). Tiles are non-Nanite. Cost is known in `docs/unreal-architecture.md`. The cinematographer owns how hard the shadow edge looks; give them the 0.53 deg sun angle.
+- Distance field shadows: for non-Nanite geometry beyond the dynamic shadow distance. [R12] They need distance fields, so OSDS tiles get none.
+- OSDS: VSM on (`DefaultEngine.ini:11`). The sun moves with the real clock: a slow sun still invalidates cached pages when it moves (rate of update: unverified). Tiles are non-Nanite. Cost is known in `docs/unreal-architecture.md`. The cinematographer owns how hard the shadow edge looks; give them the 0.53 deg sun angle.
 
 ## 4. Reflections
 
@@ -135,13 +135,13 @@ SimCruise state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEng
 - Wet roads: the reflection is almost all at grazing angles. SSR covers most of it (the lamps and lit facades are on screen above the road). Lumen screen traces already do this before the distance-field trace. [R7]
 - Car paint: the clear coat reflects the whole hemisphere, much of it off screen. It needs a world representation (Lumen scene or HW RT) or a capture.
 - Forza Horizon 5 used ray tracing only in Forza Vista (the car viewer) at launch. [R14] Forza Motorsport (2023) shows RT reflections in races on Xbox (unverified detail). [R15]
-- SimCruise: mirrors use a scene capture, because Lumen cannot see the street (`docs/unreal-architecture.md:741`). This is a good local fix. Paint and shop glass still reflect only sky.
+- OSDS: mirrors use a scene capture, because Lumen cannot see the street (`docs/unreal-architecture.md:741`). This is a good local fix. Paint and shop glass still reflect only sky.
 
 ## 5. Sky, atmosphere and sun
 
 - Sky Atmosphere: physically based Rayleigh and Mie scattering, ozone absorption; the sun light takes the transmittance colour. Height fog can take the atmosphere colour. [L2]
-- Physical units: the sun at the top of the atmosphere is about 128 klx (1361 W/m2 x 93.9 lm/W, computed in `SimCruiseDaylightModel`); the atmosphere reduces it at the ground.
-- Volumetric clouds: ray-marched; cloud shadows and sky occlusion are the expensive parts. SimCruise measured 6.0 ms for cloud shadow and sky occlusion at Ultra before overrides (`Config/DefaultScalability.ini:6-7`) and cut it to about 0.56 ms at High (`:26-28`). Measured by the team.
+- Physical units: the sun at the top of the atmosphere is about 128 klx (1361 W/m2 x 93.9 lm/W, computed in `OsdsDaylightModel`); the atmosphere reduces it at the ground.
+- Volumetric clouds: ray-marched; cloud shadows and sky occlusion are the expensive parts. OSDS measured 6.0 ms for cloud shadow and sky occlusion at Ultra before overrides (`Config/DefaultScalability.ini:6-7`) and cut it to about 0.56 ms at High (`:26-28`). Measured by the team.
 - Sky light with real-time capture gives the sky's colour to shade. Lumen adds the occlusion. Without occlusion, shade is too bright and too blue.
 - GT7 precomputes sunlight and skylight from atmospheric physics with no ad hoc changes. [R13]
 
@@ -150,9 +150,9 @@ SimCruise state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEng
 ### 6.1 Auto exposure
 
 - Unreal histogram auto exposure in EV100, with a K = 12.5 meter and an 18 % target. [L3][L4]
-- Local exposure (UE 5.1+): a bilateral grid separates base and detail; HighlightContrastScale and ShadowContrastScale compress the base. [L4] SimCruise: 0.55 and 0.95 (`DefaultEngine.ini:34-35`). Strong highlight compression lowers the sun-lit wall versus the sky (good) but can flatten the scene (cinematographer's look).
+- Local exposure (UE 5.1+): a bilateral grid separates base and detail; HighlightContrastScale and ShadowContrastScale compress the base. [L4] OSDS: 0.55 and 0.95 (`DefaultEngine.ini:34-35`). Strong highlight compression lowers the sun-lit wall versus the sky (good) but can flatten the scene (cinematographer's look).
 - GT7 models two human adaptation times: short (seconds) and long (tens of minutes). [R13]
-- SimCruise stores Lumen's pre-exposed lighting with `r.EyeAdaptation.CachedLightingPreExposure=7.5` to cover EV100 -4.5..15.5 (`DefaultEngine.ini:48`).
+- OSDS stores Lumen's pre-exposed lighting with `r.EyeAdaptation.CachedLightingPreExposure=7.5` to cover EV100 -4.5..15.5 (`DefaultEngine.ini:48`).
 
 ### 6.2 Tone mappers
 
@@ -160,14 +160,14 @@ SimCruise state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEng
 - ACES (RRT+ODT): a reference for film; same per-channel hue skew in 1.x. ACES 2.0 reduces it (unverified in Unreal 5.8).
 - AgX (Blender 4.0 default since 2023): desaturates bright colours toward white along a path with less hue skew. [R17] (community reverse-engineering; no formal spec)
 - GT7 (SIGGRAPH 2025, PDI): "Color Volume Mapping": blends a per-channel curve with a curve in a uniform colour space (ICtCp or Jzazbz), to keep brake-light hues; one operator for SDR and HDR; sample code under MIT licence. [R13][R18] BeamNG adopted it. [R18] BeamNG's doc says SDR paper white is "typically about 250 nits" (their value; BT.2408 uses 203 for HDR reference white). [R18][L12]
-- SimCruise: signal colours are authored red-channel-only so the per-channel curve does not turn them salmon (`docs/unreal-architecture.md:336`). That is the right workaround for the filmic curve.
+- OSDS: signal colours are authored red-channel-only so the per-channel curve does not turn them salmon (`docs/unreal-architecture.md:336`). That is the right workaround for the filmic curve.
 
 ### 6.3 HDR output
 
 - Unreal: `r.AllowHDR=1`, `r.HDR.EnableHDROutput=1`, `r.HDR.Display.OutputDevice` 3/4 = ACES 1000/2000-nit ST 2084 (PQ), 5/6 = scRGB; `r.HDR.Display.ColorGamut` 2 = Rec.2020. `r.HDR.UI.Level` 1.5-2 recommended; `r.HDR.UI.CompositeMode 1` is experimental. Only 1000 and 2000 nit paths. D3D11 HDR needs exclusive fullscreen. The film curve is disabled in HDR by default. [L1]
 - BT.2408: HDR reference (graphics) white 203 cd/m2. [L12]
 - Dolby Vision mastering practice: master on a PQ display, set diffuse white consistently, derive SDR by trims and check the SDR picture. [L10] Dolby Vision for games on PC: unverified.
-- SimCruise: no HDR output today. SDR: sRGB, D65, 100-nit white. Keep it until the SDR contract tests pass.
+- OSDS: no HDR output today. SDR: sRGB, D65, 100-nit white. Keep it until the SDR contract tests pass.
 
 ### 6.4 Other driving games (public facts only)
 
@@ -181,7 +181,7 @@ SimCruise state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEng
 
 ## 7. Upscaling and denoising
 
-- TSR: Unreal's temporal upscaler; SimCruise uses it on every preset at 50-75 % (`SimCruiseGraphics.cpp:67-86`).
+- TSR: Unreal's temporal upscaler; OSDS uses it on every preset at 50-75 % (`OsdsGraphics.cpp:67-86`).
 - Thin geometry detection (`r.TSR.ThinGeometryDetection 1`): relaxes history rejection on sub-pixel lines (fences, railings, window frames), reduces flicker. Dense, uniform parallel lines (power lines) are a known limit; test them. Cost: extra compute passes. [R21]
 - DLSS Super Resolution runs on all RTX GPUs, so on the 2070 Super Max-Q (unverified for the current DLSS version). DLSS Ray Reconstruction replaces denoisers for RT; useful only with HW RT.
 - FSR (3.x, compute) runs on any GPU; FSR 4 ML is limited to newer AMD GPUs (unverified). XeSS has a DP4a path for non-Intel GPUs (unverified).
@@ -189,7 +189,7 @@ SimCruise state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEng
 
 ## 8. Technique table
 
-| Technique | Quality | Cost (90 W, unless noted) | Fits 28 W GPU in UE 5.8? | Recommendation for SimCruise |
+| Technique | Quality | Cost (90 W, unless noted) | Fits 28 W GPU in UE 5.8? | Recommendation for OSDS |
 |---|---|---|---|---|
 | Lumen software GI, no tile DFs (now) | Low (only palms/car in scene) | Paid, small gain | yes | Fix the missing scene (row below) |
 | Lumen software + tile distance fields | Medium-high | Build cost per tile; trace cost unmeasured | maybe | Build a coarse DF per tile on the worker thread, or try HW |
@@ -213,13 +213,13 @@ SimCruise state: software Lumen, `r.Lumen.HardwareRayTracing=False` (`DefaultEng
 | TSR + thin geometry detection | Stable thin lines | Low-medium | yes | Try on High |
 | DLSS SR | Similar or better than TSR | Lower at same quality (unverified) | maybe | Optional plugin, next phase |
 
-## 9. Top 8 changes for SimCruise
+## 9. Top 8 changes for OSDS
 
 Ranked by visible effect in a normal drive, then by size. Now = this phase (bugs and driving experience). Next = next phase.
 
-1. **Now. Give Lumen a street to trace.** Tiles have no mesh distance fields, so GI, sky occlusion and reflections miss the city (`docs/unreal-architecture.md:707, 741`; `Config/DefaultEngine.ini:14-20`). Option A: set `r.Lumen.HardwareRayTracing=True` (with `r.RayTracing=1` and SM6) on High/Ultra in `SimCruiseGraphics.cpp`; hardware Lumen needs no distance fields [R7]. Option B: build a coarse distance field per tile on the worker thread (`SimCruiseTileBuilder`). Test: Lumen Surface Cache view shows no pink on facades; shade/sun ratio on a street wall moves toward the photo. Cost: measure ProfileGPU at 28 W. Size M (A) / L (B).
-2. **Now. Weather the facade albedo.** Deco and tower whites are linear 0.87-0.88 (computed, `SimCruiseTileDetail.cpp:143, 185-188`). Multiply wall paint by about 0.8 in the building shader (`SimCruiseWorldResources.cpp:235`) or cap linear albedo at about 0.75. Test: sunlit white wall at sRGB 225-245 with sky still blue; wall/asphalt luminance ratio near the Ocean Drive photo. Size S.
-3. **Now. Set water F0 in puddles.** Puddles use default Specular 0.5 (F0 0.04); water is 0.02 [R2]. Set Specular 0.25 in the puddle mask (`SimCruiseWorldResources.cpp:156-159`). Test: lab probe of puddle reflectance at normal view. Size S.
+1. **Now. Give Lumen a street to trace.** Tiles have no mesh distance fields, so GI, sky occlusion and reflections miss the city (`docs/unreal-architecture.md:707, 741`; `Config/DefaultEngine.ini:14-20`). Option A: set `r.Lumen.HardwareRayTracing=True` (with `r.RayTracing=1` and SM6) on High/Ultra in `OsdsGraphics.cpp`; hardware Lumen needs no distance fields [R7]. Option B: build a coarse distance field per tile on the worker thread (`OsdsTileBuilder`). Test: Lumen Surface Cache view shows no pink on facades; shade/sun ratio on a street wall moves toward the photo. Cost: measure ProfileGPU at 28 W. Size M (A) / L (B).
+2. **Now. Weather the facade albedo.** Deco and tower whites are linear 0.87-0.88 (computed, `OsdsTileDetail.cpp:143, 185-188`). Multiply wall paint by about 0.8 in the building shader (`OsdsWorldResources.cpp:235`) or cap linear albedo at about 0.75. Test: sunlit white wall at sRGB 225-245 with sky still blue; wall/asphalt luminance ratio near the Ocean Drive photo. Size S.
+3. **Now. Set water F0 in puddles.** Puddles use default Specular 0.5 (F0 0.04); water is 0.02 [R2]. Set Specular 0.25 in the puddle mask (`OsdsWorldResources.cpp:156-159`). Test: lab probe of puddle reflectance at normal view. Size S.
 4. **Now. Measure VSM cost while the sun moves.** The real-clock sun invalidates cached pages [R12]. Measure `stat VirtualShadowMap` over 60 s at 28 W; if needed, quantise the sun direction update (e.g. every 0.05 deg). Owner: performance-engineer with photometric limits from us. Size S.
 5. **Now. Turn on TSR thin geometry detection on High.** `r.TSR.ThinGeometryDetection=1` in `DefaultScalability.ini` `[AntiAliasingQuality@2]`. Window frames, railings and wires flicker today (unverified, check a capture). Test: flicker count on a 10 s capture at 50 km/h. Size S.
 6. **Next. Colour-volume tone mapping (GT7 style).** Replace the red-only signal workaround with a hue-preserving tone curve (ICtCp blend, MIT sample code) [R13][R18]. Test: brake lamp at 6000 nits keeps hue within 5 deg in ICtCp; grey card at sRGB 117 +/- 10. Coordinate with the cinematographer. Size M.

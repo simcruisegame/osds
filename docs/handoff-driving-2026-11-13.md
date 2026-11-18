@@ -2,7 +2,7 @@
 
 ## Done (on main)
 
-- Brakes: Miata proportioning valve and 30 % rear split, real full-pedal capacity, threshold-braked 70-0 bench, ISO 7975 brake-in-turn bench (`SimCruise.Vehicle.BrakeInTurn.*`), straight-line split check (BRAKESPLIT).
+- Brakes: Miata proportioning valve and 30 % rear split, real full-pedal capacity, threshold-braked 70-0 bench, ISO 7975 brake-in-turn bench (`OSDS.Vehicle.BrakeInTurn.*`), straight-line split check (BRAKESPLIT).
 - Engine braking with closed-throttle pumping; roll centres (NB 45 / 90 mm); Torsen coast bias (NB 1.5).
 - Menus: stick and trigger settings, the pad reaches every atlas setting, "Your car" row (Tune car anywhere, Seat & view), Traffic Normal / Light / Off, start hint.
 - Views: seat, hood, near and far chase, scenic; look-around on the right stick; slight widening with speed; Seat & view menu saved per car.
@@ -11,7 +11,7 @@
 
 ## Off or unfinished
 
-- Throttle-plate progression (`throttle_progression`) is in the code but 0: with the current trigger curve it spun turning launches. Retune it together with `simcruise.TriggerGamma`.
+- Throttle-plate progression (`throttle_progression`) is in the code but 0: with the current trigger curve it spun turning launches. Retune it together with `osds.TriggerGamma`.
 - Live dash gauges: code dormant (presentation profile `dials`, rig `FDial`, render-target faces); the first capture had misplaced faces and no numerals. NB dial hubs are in the vehicle-physics memory notes.
 
 ## Next (owner's priority: driving at high speed, traffic off, highest settings, Tail of the Dragon)

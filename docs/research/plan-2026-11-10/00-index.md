@@ -1,7 +1,7 @@
 # Round plan (audit 2026-11-10)
 
 ## Vision
-SimCruise should become a "digital twin you can drive". The north star is that the 1999 Miata, the 1965 Mustang and the Corvette C8 each drive like the real car and look like it down to visible parts. Every claim of that is checked against reality in a repeatable loop, using published test data, the owner's own green NB, and street photos of the exact spot. There is no hand-tuning by eye.
+OSDS should become a "digital twin you can drive". The north star is that the 1999 Miata, the 1965 Mustang and the Corvette C8 each drive like the real car and look like it down to visible parts. Every claim of that is checked against reality in a repeatable loop, using published test data, the owner's own green NB, and street photos of the exact spot. There is no hand-tuning by eye.
 
 Physics comes first, in this order:
 - Measure what the model actually does today. Run CarTrack for all three kept cars, ISO 4138 understeer and roll gradients, ISO 7401 step steer, and tick-rate convergence. Fix the test procedures that bias calibration: the C&D 1 ft rollout and the instant brake step.

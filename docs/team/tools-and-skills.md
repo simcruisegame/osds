@@ -28,7 +28,7 @@ Skills are Claude Code skills on this account (call them with the Skill tool, or
 | Car team | `zizi-skills:source-driven-development` (manuals, SAE/ISO), `dataviz` (bench plots); agents `vehicle-dynamics-physicist`, `automotive-engineer` | **Blender MCP** (cockpit rig checks: wheel rim circle, dial positions), Project Chrono as a tyre reference (BSD-3) | Automation tests (in use), Chaos async physics (in use) |
 | Engineering | `unreal-engine-skills-for-claude-code:unreal-skill`, `engineering:debug`, `engineering:architecture`, `engineering:tech-debt`; agents `game-developer`, `performance-engineer` | **Unreal Insights** (`-trace=default,frame`; tree refresh and install steps), `stat unit`/`stat gpu` | **Insights traces** for every hitch; World Partition streaming ideas; async tasks for tree builds |
 | Picture | `unreal-skill`, `dataviz` (luma histograms); agents `lighting-director`, `cinematographer`, `technical-artist` | **Blender MCP** (car materials, rig), ffmpeg (sheets), realism.ps1 | **Runtime Virtual Texturing** for ground and road blends; Nanite (meshes); Lumen (in use); post-process local exposure (in use) |
-| World | `unreal-skill`, `unreal-engine-skills-for-claude-code:unreal-mcp` (drive the editor for PCG graphs), `create-toolset`; agents `gis-data-scientist`, `environment-artist`, `magician` | **Unreal MCP** plugin (enabled in `SimCruise.uproject`: ModelContextProtocol, AllToolsets), **Blender MCP** (tree and kit meshes), Poly Haven / ambientCG (CC0) | **PCG framework + shape grammar** (buildings, roadside, City Sample 5.8 pattern); **Nanite foliage** for real tree meshes; **HLOD**; **Runtime Virtual Texturing** for terrain and road edges |
+| World | `unreal-skill`, `unreal-engine-skills-for-claude-code:unreal-mcp` (drive the editor for PCG graphs), `create-toolset`; agents `gis-data-scientist`, `environment-artist`, `magician` | **Unreal MCP** plugin (enabled in `OSDS.uproject`: ModelContextProtocol, AllToolsets), **Blender MCP** (tree and kit meshes), Poly Haven / ambientCG (CC0) | **PCG framework + shape grammar** (buildings, roadside, City Sample 5.8 pattern); **Nanite foliage** for real tree meshes; **HLOD**; **Runtime Virtual Texturing** for terrain and road edges |
 | AI (local models) | `zizi-skills:source-driven-development` (model cards and licences), `security-review` (model files and downloads); agents `research-scientist`, `applied-mathematician`, `performance-engineer` | ONNX Runtime CPU (NNERuntimeORT plugin, enabled), Python lab for experiments | **NNE** (Neural Network Engine) with the ORT CPU backend; never on the game thread |
 | Innovation (research) | `anthropic-skills:deep-research`, `supermatt:prototype`, `zizi-skills:idea-refine`, `zizi-skills:research-methods`; agents `applied-mathematician`, `research-scientist`, `magician` | Python lab, Blender MCP | PCG, RVT, Nanite foliage (prototypes) |
 | Audio | `source-driven-development` (recordings, papers); agent `sound-designer` | ffmpeg `ebur128` (loudness) | **MetaSounds** as the host for our C++ synths (custom nodes); Submixes and Sound Classes |
@@ -46,13 +46,13 @@ Skills are Claude Code skills on this account (call them with the Skill tool, or
 ## Licence notes for the producer
 
 - The 8 detail-kit textures on main were made with SDXL. The world thread replaces them with CC0 scans.
-- Real-ESRGAN is in `SimCruiseNeuralDetail`. The live-data thread removes it.
+- Real-ESRGAN is in `OsdsNeuralDetail`. The live-data thread removes it.
 - Fab and Megascans assets stay out of the public repo (see `/mnt/project-files/research/free-unreal-tools.md`).
 
 ## PC audit (2026-11-14 03:10Z)
 
-- `D:\simcruise` is checked out on branch `unreal/client`, which does not have `.claude/agents`. A Claude session that starts there cannot see the 18 experts. Start sessions in a lane worktree on main (`D:\sc\lane-*`), or bring `.claude/agents` into that checkout.
-- `unreal-mcp` (`http://127.0.0.1:8000/mcp`, in `D:\simcruise\.mcp.json`) works only while the editor runs with its plugin (start the editor with `scripts\editor.ps1`).
+- `D:\osds` is checked out on branch `unreal/client`, which does not have `.claude/agents`. A Claude session that starts there cannot see the 18 experts. Start sessions in a lane worktree on main (`D:\sc\lane-*`), or bring `.claude/agents` into that checkout.
+- `unreal-mcp` (`http://127.0.0.1:8000/mcp`, in `D:\osds\.mcp.json`) works only while the editor runs with its plugin (start the editor with `scripts\editor.ps1`).
 - The Blender MCP (`uvx blender-mcp`) connects and drops; retry it. Tools: scene info, run Blender code, look, search and import assets.
 - desktop-commander fails to connect on the PC.
 - On the PC these skills are visible: Unreal (unreal-mcp, unreal-skill, create-toolset), engineering (architecture, code-review, debug, testing-strategy, tech-debt), supermatt (diagnosing-bugs, tdd, qa, prototype, research), zizi-skills (debugging-and-error-recovery, planning, orchestration, research-methods, source-driven-development), built-in code-review, security-review, simplify. No project skills folder (`.claude/skills`) exists yet.

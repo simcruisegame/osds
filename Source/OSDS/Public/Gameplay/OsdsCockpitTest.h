@@ -1,0 +1,140 @@
+// Copyright OSDS contributors. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "OsdsCockpitTest.generated.h"
+
+class AOsdsPlayerController;
+class UStaticMeshComponent;
+class UOsdsCarPresentationComponent;
+
+/** Cockpit limits and measures that need no world, kept apart for the tests. */
+namespace OsdsCockpitRules
+{
+	/** A fixed part (dial face, needle pivot, body) may move this much between poses (cm, deg). */
+	constexpr double MaxFixedMoveCm = 0.05;
+	constexpr double MaxFixedTurnDeg = 0.1;
+	/** The steering wheel: off-axis turn and hub motion, and the rim plane's tilt from the column. */
+	constexpr double MaxWheelOffAxisDeg = 0.5;
+	constexpr double MaxHubMoveCm = 0.1;
+	constexpr double MaxRimTiltDeg = 2.0;
+	/** The rim circle's centre from the column axis (cm), as the rig check holds it. */
+	constexpr double MaxRimAxisOffsetCm = 0.5;
+	/** The rim angle at full lock may differ from the car data's by this share. */
+	constexpr double MaxLockError = 0.05;
+	/** Cluster pixels that change by more than 25 of 255 between the centre and full lock (wheel hidden). */
+	constexpr double MaxClusterChangedPercent = 1.0;
+
+	/** The angle (deg) of a rotation's part that is not about Axis (both in the same frame). */
+	OSDS_API double OffAxisDeg(const FQuat& Rotation, const FVector& Axis);
+	/** The normal of the best plane through the points (least squares); zero with fewer than 3. */
+	OSDS_API FVector PlaneNormal(const TArray<FVector>& Points);
+
+	/**
+	 * The rim as a circle: a plane through the points, then a least-squares circle in that plane
+	 * (Kasa), three passes that drop points off the rim's tube (over 1.5 cm from the plane or 15 %
+	 * from the radius: spokes, the hub, a flat bottom's straight part). False with too few points.
+	 */
+	OSDS_API bool FitRimCircle(const TArray<FVector>& Points, FVector& OutNormal, FVector& OutCentre, double& OutRadius, int32& OutKept);
+
+	/**
+	 * The rim's outer edge in the wheel's own frame (X along the column, the pivot at the origin,
+	 * cm): the farthest point from the column in each of 64 sectors, within 6 cm of the rim's
+	 * plane and 0.7 to 1.25 times the rim's radius (the median of the sector maxima), as the rig
+	 * check takes it. Spokes, the hub and the horn pad never reach the outer edge.
+	 */
+	OSDS_API TArray<FVector> RimOuterEdge(const TArray<FVector>& Points);
+
+	/**
+	 * The rim's tilt on the column (deg) and its circle's centre off the axis (cm) from its outer
+	 * edge: a least-squares plane X = aY + bZ + c (the tilt) and a Kasa circle in Y-Z (the centre),
+	 * over every edge point, as the rig check measures them. False with fewer than 24 edge points.
+	 */
+	OSDS_API bool MeasureRim(const TArray<FVector>& Points, double& OutTiltDeg, double& OutAxisOffsetCm, double& OutRadiusCm, int32& OutEdgePoints);
+}
+
+/**
+ * The cockpit steer test (-OsdsCockpitTest): with the car at rest in the driver's seat, it
+ * turns the stick to the centre, half and full lock both ways, holds each 2 s, and at each pose
+ * reads the world transforms of the steering wheel, the dial faces, the needles and the body, and
+ * takes two frames: as the driver sees it, and with the steering wheel hidden. It FAILs when a
+ * dial, a needle or the body moves or turns with the steering, when a gauge hangs on the wheel,
+ * when the wheel turns about another axis than its column, its hub moves, its rim is tilted on the
+ * column, the rim angle at full lock is not the car data's, or the cluster's pixels change between
+ * the centre and full lock with the wheel hidden.
+ *
+ * Output (-OsdsCockpitOut=DIR, default <-OsdsPreflightOut>/cockpit, else
+ * Saved/Review/cockpit-<time>): <pose>.png, <pose>-nowheel.png, diff-<pose>.png (cluster change
+ * x4, outside the cluster dark), cockpit.json, and one log line
+ * COCKPIT PASS|FAIL car=.. lock=.. reasons=... With -OsdsPreflight the robot drives after it;
+ * alone, the game quits (-OsdsKeepOpen stays).
+ */
+UCLASS()
+class OSDS_API AOsdsCockpitTest : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	AOsdsCockpitTest();
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	bool IsFinished() const { return Stage == EStage::Done; }
+
+private:
+	enum class EStage : uint8 { WaitReady, Settle, Hold, ShotWheel, ShotNoWheel, Done };
+
+	struct FPartPose
+	{
+		FString Name;
+		FTransform World;
+		/** The mesh's local bounds centre, in the world. */
+		FVector BoundsCentre = FVector::ZeroVector;
+		FString Parent;
+	};
+	struct FPose
+	{
+		FString Name;
+		float Stick = 0.f;
+		double RimDeg = 0.0;
+		double WheelDeg = 0.0;
+		/** What the speedometer and tachometer show at this pose (NaN without such a dial). */
+		double SpeedShown = 0.0;
+		double RpmShown = 0.0;
+		TArray<FPartPose> Parts;
+		TArray<FColor> Pixels;
+		TArray<FColor> PixelsNoWheel;
+		int32 Width = 0;
+		int32 Height = 0;
+		FIntRect Cluster;
+	};
+
+	void Record(AOsdsPlayerController& Player, FPose& Pose);
+	void RequestShot();
+	void OnShot(int32 Width, int32 Height, const TArray<FColor>& Pixels);
+	void Judge();
+	void SavePng(const FString& Name, int32 Width, int32 Height, const TArray<FColor>& Pixels) const;
+	UOsdsCarPresentationComponent* GetModel(AOsdsPlayerController* Player) const;
+	UStaticMeshComponent* FindPart(UOsdsCarPresentationComponent* Model, const FString& Prefix) const;
+
+	EStage Stage = EStage::WaitReady;
+	double StageStarted = 0.0;
+	double Started = 0.0;
+	FString OutputDir;
+	bool bQuitWhenDone = true;
+	int32 PoseIndex = 0;
+	TArray<FPose> Poses;
+	bool bShotPending = false;
+	int32 NoWheelFrames = 0;
+	/** The wheel's own shadow setting, put back after the picture without the wheel. */
+	bool bWheelCastShadow = false;
+	/** The real car's lock-to-lock turns (car data steering_turns_lock_to_lock), 0 when not given. */
+	double CarLockTurns = 0.0;
+	FDelegateHandle ShotHandle;
+	FString CarId;
+	double FullLockRoadWheelDeg = 0.0;
+	double Ratio = 0.0;
+};

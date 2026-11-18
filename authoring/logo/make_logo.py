@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-make_logo.py -- SimCruise app-icon / logo concept generator.
+make_logo.py -- OSDS app-icon / logo concept generator.
 
 Python 3 + Pillow only (no other dependencies). Everything is drawn at 4x
 resolution with hard edges and downsampled with LANCZOS, so every curve is
@@ -16,7 +16,7 @@ Outputs per concept (written to --out):
                      template: an 824 px rounded square (22.4 % corner radius)
                      centred on a transparent 1024 canvas with a soft drop
                      shadow. --full-bleed fills the whole canvas instead.
-  X-wordmark.png     512x128 lock-up (icon mark + "SimCruise"), transparent
+  X-wordmark.png     512x128 lock-up (icon mark + "OSDS"), transparent
   X-preview-128.png  128x128 preview of the icon
 
 Usage
@@ -501,7 +501,7 @@ def review_sheet(icons, wordmarks, path):
 
 # --------------------------------------------------------------------------- CLI
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Generate SimCruise icon / logo concepts.")
+    ap = argparse.ArgumentParser(description="Generate OSDS icon / logo concepts.")
     ap.add_argument("--concept", default="all", help="A, B, C or all (default)")
     ap.add_argument("--out", default=os.path.dirname(os.path.abspath(__file__)), help="output directory")
     ap.add_argument("--color", action="append", default=[], metavar="KEY=#HEX", help="override a palette colour")

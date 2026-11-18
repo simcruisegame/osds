@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  Lists Unreal editors, SimCruise games and crash reporters on this PC that look stale.
+  Lists Unreal editors, OSDS games and crash reporters on this PC that look stale.
 
 .DESCRIPTION
-  Report mode by default: it changes nothing. It lists every UnrealEditor*, SimCruise*.exe and
+  Report mode by default: it changes nothing. It lists every UnrealEditor*, OSDS*.exe and
   CrashReportClient*.exe process that is older than -MaxMinutes, or whose parent (the script
   or editor that started it) is gone, with its process id, age, why it is listed, the folder
   it works in (the checkout of its .uproject, or the folder of a packaged game) and its
@@ -37,17 +37,17 @@ foreach ($P in $All) { $ById[[int]$P.ProcessId] = $P }
 function Get-WorkFolder($P) {
     $Cmd = [string]$P.CommandLine
     if ($Cmd -match '"?([A-Za-z]:[^"]*?\\)[^\\"]+\.uproject"?') { return $Matches[1].TrimEnd('\') }
-    if ($P.ExecutablePath -and $P.Name -like 'SimCruise*') { return Split-Path $P.ExecutablePath }
+    if ($P.ExecutablePath -and $P.Name -like 'OSDS*') { return Split-Path $P.ExecutablePath }
     # A crash reporter works for the editor or game it monitors (or its parent).
     $Parent = $ById[[int]$P.ParentProcessId]
     if ($Cmd -match '-MONITOR=(\d+)') { $Parent = $ById[[int]$Matches[1]] }
-    if ($Parent -and $Parent.Name -notlike 'CrashReportClient*' -and ($Parent.Name -like 'UnrealEditor*' -or $Parent.Name -like 'SimCruise*')) { return Get-WorkFolder $Parent }
+    if ($Parent -and $Parent.Name -notlike 'CrashReportClient*' -and ($Parent.Name -like 'UnrealEditor*' -or $Parent.Name -like 'OSDS*')) { return Get-WorkFolder $Parent }
     return ''
 }
 
 $Rows = @()
 foreach ($P in $All) {
-    if (-not ($P.Name -like 'UnrealEditor*' -or $P.Name -like 'SimCruise*.exe' -or $P.Name -like 'CrashReportClient*')) { continue }
+    if (-not ($P.Name -like 'UnrealEditor*' -or $P.Name -like 'OSDS*.exe' -or $P.Name -like 'CrashReportClient*')) { continue }
     if (-not $P.CreationDate) { continue }
     $Age = ($Now - $P.CreationDate).TotalMinutes
     $Parent = $ById[[int]$P.ParentProcessId]
@@ -70,7 +70,7 @@ foreach ($P in $All) {
     }
 }
 
-if (-not $Rows) { Write-Host "No stale Unreal or SimCruise processes (limit $MaxMinutes min)."; exit 0 }
+if (-not $Rows) { Write-Host "No stale Unreal or OSDS processes (limit $MaxMinutes min)."; exit 0 }
 foreach ($R in ($Rows | Sort-Object AgeMin -Descending)) {
     Write-Host ("pid {0,-6} {1,-28} {2,5} min  {3}" -f $R.Pid, $R.Name, $R.AgeMin, $R.Why)
     Write-Host ("    folder:  {0}" -f $(if ($R.Folder) { $R.Folder } else { '(unknown)' }))

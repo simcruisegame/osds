@@ -1,6 +1,6 @@
 # Historic cladding at 601 West Fifth Avenue
 
-> Former name: this study was written when SimCruise was called "Sunday Driver"; the app, paths and commands it mentions under that name are now SimCruise.
+> Former name: this study was written when OSDS was called "Sunday Driver"; the app, paths and commands it mentions under that name are now OSDS.
 
 Start an ordinary drive with the game argument --source-era 2015-05-22 to enable this recorded material at 601 West Fifth in Anchorage. The optional date applies to the historic exterior only. It uses no runtime downloads. The documented date span is July 20, 2007 through May 22, 2015. An explicit reference-epoch must fall on the same Anchorage-local day. Automatic nearby street-photo dates and a historical daylight setting alone leave the contemporary material selected. The measured 2015 polygons and 39.2 m eave must both match before five surveyed street-facing wall sections can change. The walls share mesh vertices with their original podium and cap. All existing roof and vehicle collision geometry remains intact.
 

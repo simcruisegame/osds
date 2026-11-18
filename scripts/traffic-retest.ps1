@@ -17,7 +17,7 @@
                                 (within 2.5 m), -10 to 60 m ahead
     junction-hold-Xs-of-Ys      the gap-acceptance case found no stop line (the case did not run)
   The game log names each car (Pre-flight: traffic ...), and the review frames carry an event.
-  The gap-acceptance case (-SimCruisePreflightStopAtJunction=10): the robot stops at the first stop
+  The gap-acceptance case (-OsdsPreflightStopAtJunction=10): the robot stops at the first stop
   line ahead (a road its road gives way to), holds 10 s on the parking brake, then pulls out; the
   traffic must leave it a full gap (no cut-in, no car through ours).
   After the runs: the cooked gate (scripts\release-test.ps1 -Cooked) and one timed quiet run are
@@ -56,7 +56,7 @@ $Cases = @(
     # Woodward Avenue (primary; junction 42.35271,-83.06146) and John R Street (tertiary; junction about
     # 42.35360,-83.05935). Both cross roads rank above it, so the robot stops at either line. The start is
     # 90 m before Woodward (110 m before John R); the start pick chooses the direction. Source: the game's own
-    # cached OpenMapTiles vector tile z14 4411/6060 (%LOCALAPPDATA%\SimCruise\map-cache\v-4411-6060,
+    # cached OpenMapTiles vector tile z14 4411/6060 (%LOCALAPPDATA%\OSDS\map-cache\v-4411-6060,
     # layer transportation_name), read 2026-11-14.
     @{ Name = 'detroit-canfield-junction'; Start = '42.35311,-83.06051'; Road = 'East Canfield Street'; Car = 'nb2001_lowered'; Utc = '2026-11-12T17:32:14Z'; Seed = 0; Stop = 10 }
 )
@@ -67,7 +67,7 @@ if ($OnlyCases) { $Only = $OnlyCases -split ','; $Cases = @($Cases | Where-Objec
 Set-GpuBusy "traffic re-test ($($Cases.Count) runs$(if ($ShowWindow) { ', visible' })) on $Root" (5 + 4 * $Cases.Count)
 try {
     if ($Build) {
-        & "$(if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:\Program Files\Epic Games\UE_5.8' })\Engine\Build\BatchFiles\Build.bat" SimCruiseEditor Win64 Development "-Project=$Root\SimCruise.uproject" -WaitMutex -NoHotReloadFromIDE | Select-Object -Last 1
+        & "$(if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:\Program Files\Epic Games\UE_5.8' })\Engine\Build\BatchFiles\Build.bat" OSDSEditor Win64 Development "-Project=$Root\OSDS.uproject" -WaitMutex -NoHotReloadFromIDE | Select-Object -Last 1
         if ($LASTEXITCODE -ne 0) { Write-Host "BUILD FAILED exit $LASTEXITCODE"; return }
     }
     foreach ($C in $Cases) {

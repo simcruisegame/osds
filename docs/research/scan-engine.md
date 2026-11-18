@@ -2,7 +2,7 @@
 
 Owner: the project owner ("do what Flight Simulator does"; "make that awesome"). Branch
 `world-detail-v2`. Plan: [world-detail-v2-plan.md](world-detail-v2-plan.md).
-C++ types: `Source/SimCruise/Public/World/SimCruiseScan*.h`. Python prototypes
+C++ types: `Source/OSDS/Public/World/OsdsScan*.h`. Python prototypes
 in `lab/scan/` write the same file.
 
 ## Idea
@@ -54,7 +54,7 @@ from the neighbours so edges match.
 | `HGHT` | RG16: R ground offset (signed, 1 cm: banks, cuts, ditches, kerbs, micro relief); G canopy top (10 cm) |
 | `INST` | 32-byte records: int32 x, y, z (cm); u16 kind; u16 subtype; u16 height (dm); u16 crown (dm); u8 yaw; u8 flags; u16 string id; u32 seed; u8 confidence; 3 reserved |
 | `BLDG` | Records: u64 source id; footprint polygon; height (dm); floors; ground-floor height; roof shape (flat, gable, hip, pyramid, shed, dome, mansard); roof RGB; wall RGB; wall material (brick, stucco, wood siding, concrete, glass, metal, stone); use; era (year/10); style region; shop name string id; flags; confidence |
-| `ROAD` | The per-32 m road context records (`FSimCruiseCellContext`, item 1) |
+| `ROAD` | The per-32 m road context records (`FOsdsCellContext`, item 1) |
 | `STRS` | UTF-8 string table |
 | `META` | JSON: sources and licences, eyes and versions, timings, self-check error, warnings (road steps ...) |
 
@@ -69,13 +69,13 @@ gives each class its albedo range and detail-kit slice.
 
 ## Eyes
 
-`ISimCruiseScanEye`: name, version, licence (weights **and** training data),
+`IOsdsScanEye`: name, version, licence (weights **and** training data),
 `CanRun(inputs)`, cost estimate (s), `Run(inputs, out channels, out points)`,
 worker only.
 
-`FSimCruiseScanInputs`: tile z/x/y, cell size, de-lit aerial RGB (+NIR when
+`FOsdsScanInputs`: tile z/x/y, cell size, de-lit aerial RGB (+NIR when
 there is one), base terrain, lidar DSM/DTM when there is one, map facts.
-`FSimCruiseScanChannel`: name, size, uint8 data, confidence.
+`FOsdsScanChannel`: name, size, uint8 data, confidence.
 
 Standard channels: `canopy_prob`, `canopy_height` (0-255 = 0-51 m),
 `building_prob`, `roof_type`, `road_prob`, `water_prob`,
@@ -108,7 +108,7 @@ on Cityscapes or Mapillary Vistas.
 
 1. Road-step fix, fallback ground, speed look-ahead (drive-breaking).
 2. Scan core: the format, a rules-only scan, the cache, a debug view
-   (`-SimCruiseScanView` shows the class map).
+   (`-OsdsScanView` shows the class map).
 3. First readers: terrain shape and surface; trees (real procedural meshes with
    LODs and an impostor, species and size from the scan, smooth LOD fades).
 4. Self-check. 5. Buildings. 6. Objects and signs.
@@ -123,7 +123,7 @@ has a cause in the data. Parallax only on faces that face the driver (banks,
 cuts, walls), never on the road ahead.
 
 **Scan core (batch B)**
-- `ISimCruiseScanEye::TrainingDataLicence()` is recorded for every eye. The hard
+- `IOsdsScanEye::TrainingDataLicence()` is recorded for every eye. The hard
   gate is the **weights** licence: an eye whose weights are non-commercial,
   research-only or unlicensed is refused (a test enforces it). We obey the
   publisher's licence fully: attribution, share-alike, use restrictions.
@@ -265,7 +265,7 @@ wear, stains; near bark and branch detail); L4 60 s+ (unique 4 mm/px pages withi
 Each level fades in over 1 s; generated detail agrees with RSTR on a 0.6 m downsample;
 a GPU job only at standstill with GPU p95 under 70 % of budget, stopped at once on move;
 levels cached by surface id; the speed rule drops levels that leave the view.
-`-SimCruiseStandstillTest` stops at a place and captures frames at 0/5/15/60 s, plus 1 m
+`-OsdsStandstillTest` stops at a place and captures frames at 0/5/15/60 s, plus 1 m
 from a wall and from the ground. v2.0.3: the scheduler and the L0-L2 rule parts.
 
 ## K. Generated detail
@@ -288,5 +288,5 @@ Per tile, for each surface class 0-63: RGB8 linear multiplier (128 = x1.0), u8
 confidence, u16 sample count. The AI colour match fills it with the place's own asphalt,
 dirt, grass, roof and soil colours; materials read it as a 64-entry per-tile constant.
 Fallback x1.0, or the GEOL soil colour. Eyes for v2.0.3 (read through
-`FSimCruiseAerialEye::Get().Lookup` until the engine calls `Run`): `aerial_student`,
+`FOsdsAerialEye::Get().Lookup` until the engine calls `Run`): `aerial_student`,
 `satlas_landcover` (model in `data/ai/`, MIT).

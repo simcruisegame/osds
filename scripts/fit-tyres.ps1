@@ -81,10 +81,10 @@ for ($Round = 1; $Round -le $MaxRounds; $Round++) {
         }
         [IO.File]::WriteAllText($S.Path, $T, $Utf8)
     }
-    $Filter = ($Pending | ForEach-Object { "SimCruise.Vehicle.CarTrack.$_" }) -join '+'
+    $Filter = ($Pending | ForEach-Object { "OSDS.Vehicle.CarTrack.$_" }) -join '+'
     Write-Host "Round $Round : $($Pending -join ', ')"
     & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check.ps1') -NoBuild -Filter $Filter | Out-Null
-    $Log = Join-Path $Root 'Saved\Logs\SimCruiseChecks.log'
+    $Log = Join-Path $Root 'Saved\Logs\OsdsChecks.log'
     foreach ($Car in $Pending) {
         $S = $State[$Car]
         $Line = Select-String -Path $Log -Pattern ("CARTRACK " + [regex]::Escape($Car) + "\s+0-60 ([\d.]+) s .*70-0 ([\d.]+) ft .*skidpad ([\d.]+) g") | Select-Object -Last 1

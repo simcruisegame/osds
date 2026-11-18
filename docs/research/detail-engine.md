@@ -1,6 +1,6 @@
 <!-- Produced by a multi-agent research and design workflow on 2026-11-10 (4 research sweeps, 3 designs, 2 judges, 1 synthesis). Timings marked as estimates are not yet measured on the target laptop. -->
 
-# SimCruise Detail Engine: recommended plan
+# OSDS Detail Engine: recommended plan
 
 ## Verdict
 

@@ -94,6 +94,6 @@ try{
   assert.equal(gdLanes(roadWidth(cls,1,1)),1,cls+' ramp is painted with one lane');
  }
  // The Godot client's LaneMarkings.gd (tag godot-final) was checked against these constants here;
- // the Unreal client's lane layout is checked by SimCruise.World.ParkingLayout.
+ // the Unreal client's lane layout is checked by OSDS.World.ParkingLayout.
 }
 console.log('lane-counts: all assertions passed');

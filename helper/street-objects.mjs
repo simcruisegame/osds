@@ -49,7 +49,7 @@ export function streetObjects(elements,x,y){
  }
  return objects;
 }
-export async function fetchObjects(x,y,cache,read,endpoint=process.env.SIMCRUISE_OVERPASS_URL){
+export async function fetchObjects(x,y,cache,read,endpoint=process.env.OSDS_OVERPASS_URL){
  const mx=Math.floor(x/4),my=Math.floor(y/4);
  const previous='street-osm-'+mx+'-'+my;
  const key='street-osm-v2-'+mx+'-'+my,miss=path.join(cache,key+'.miss');

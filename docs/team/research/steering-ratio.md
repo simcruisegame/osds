@@ -12,7 +12,7 @@ Owner: "the steering wheel does not turn realistically, too fast. Look up the re
 
 ## Why it looks too fast
 
-`SimCruiseDriverShaping.cpp:166-167` (`.h:35-36`): the pad applies 2.75 × the available steer angle per second, so the wheel reaches full stick in 0.36 s and returns in 0.23 s. Miata hand-wheel speed: about 1510°/s at parking speed (2416°/s on return), about 700°/s at 10 m/s, about 290°/s at 25 m/s. NHTSA's steering robots turn at 1000°/s (J-turn) and 720°/s (fishhook): https://www.govinfo.gov/link/fr/68/59254 . At low speed the game is faster than a test robot.
+`OsdsDriverShaping.cpp:166-167` (`.h:35-36`): the pad applies 2.75 × the available steer angle per second, so the wheel reaches full stick in 0.36 s and returns in 0.23 s. Miata hand-wheel speed: about 1510°/s at parking speed (2416°/s on return), about 700°/s at 10 m/s, about 290°/s at 25 m/s. NHTSA's steering robots turn at 1000°/s (J-turn) and 720°/s (fishhook): https://www.govinfo.gov/link/fr/68/59254 . At low speed the game is faster than a test robot.
 
 ## Fixes
 

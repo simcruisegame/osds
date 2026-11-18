@@ -34,8 +34,8 @@ FONT_DIR = os.path.join(REPO, "data", "fonts", "overpass")
 # --------------------------------------------------------------------------- palette
 # Names and values are documented in docs/brand/README.md.
 PAL = {
-    "asphalt": "#1B2128",   # ink: primary dark (old SimCruise asphalt, kept for equity)
-    "lane":    "#F5B53F",   # brand amber: the centre line (old SimCruise amber)
+    "asphalt": "#1B2128",   # ink: primary dark (old OSDS asphalt, kept for equity)
+    "lane":    "#F5B53F",   # brand amber: the centre line (old OSDS amber)
     "paper":   "#F4EFE4",   # warm off-white: edge-line cream
     "sky":     "#3A89D8",   # support blue: sky, links (accent only)
     "verge":   "#1F7A57",   # support green: verge / OK states (accent only)

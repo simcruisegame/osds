@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        SimCruise only uses data that is free to use **without an account or API key**. ODbL and ShareAlike data is fetched at runtime and never committed to the repository.
+        OSDS only uses data that is free to use **without an account or API key**. ODbL and ShareAlike data is fetched at runtime and never committed to the repository.
   - type: input
     id: name
     attributes:

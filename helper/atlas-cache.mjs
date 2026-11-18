@@ -4,7 +4,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 
 const minute = 60000;
 // One User-Agent for the helper and the game (generic: the project and its public page, no person).
-export const userAgent='OSDS/2.0.3 (open-source driving simulator; +https://github.com/simcruisegame/simcruise)';
+export const userAgent='OSDS/2.0.3 (open-source driving simulator; +https://github.com/simcruisegame/osds)';
 // A host that fails (a network error, a timeout, 429, 403 or a 5xx) is left alone for a while that
 // grows with each failure in a row: 15 s, 30 s, 1 min ... up to 6 h, with a fifth of jitter so the
 // players' helpers do not come back at once; one success resets it. Shared by every helper process
