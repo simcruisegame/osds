@@ -267,6 +267,13 @@ struct FOsdsCarDefinition
 	TArray<double> AntiRollBarScaleByAxle = {1.0, 1.0};
 	double DamperScale = 1.0;
 	double EngineTorqueScale = 1.0;
+	// Tuning hooks (FOsdsTuning, 2.2; never read from the car file). Each default is the car as before.
+	/** Extra suspension mount height per axle [front, rear], m (+ mounts higher in the body: that end sits lower). */
+	TArray<double> SuspensionMountOffsetMByAxle = {0.0, 0.0};
+	/** Toe per wheel per axle [front, rear], deg (+ toe-in); empty: ToeAngleDegPerWheel on all four wheels. */
+	TArray<double> ToeAngleDegByAxle;
+	/** Stability control's dead bands and side-slip limit times this (1 = the maker's calibration, 2 = a Sport mode). */
+	double StabilityControlDeadbandScale = 1.0;
 	double StaticSuspensionLengthM = 0.217;
 	double MinimumSuspensionTravelM = 0.074;
 	double MaximumSuspensionTravelM = 0.315;

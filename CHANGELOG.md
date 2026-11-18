@@ -2,6 +2,16 @@
 
 The short version of each release, newest first. Every release has full notes in [docs/release/notes/](docs/release/notes/). OSDS was called SimCruise up to 2.0.3 and Sunday Driver up to 1.0.8 ([history](docs/history.md)).
 
+## 2.2.0 (in progress)
+
+**Tune your car: power and chassis.**
+
+- **Horsepower and torque:** peak torque (lb-ft) and peak power (hp) with the curve on screen, rev limit, final drive and every gear ratio.
+- **Chassis:** front and rear springs, bump and rebound damping front and rear, anti-roll bars, front and rear ride height, camber, toe and caster where the real car has the adjustment, brake bias and force, limited-slip lock on power and coast, tyre pressures, stability and traction control levels (On, Sport, Off).
+- **See the effect first:** the menu shows the torque and power curves, an estimated 0-60 and top speed, and body roll per g before you drive. Six pages, LB / RB; all on the pad; saved per car.
+
+[Full notes](docs/release/notes/2.2.0.md)
+
 ## 2.1.1 (2026-11-18)
 
 **Real ray-traced light, road wear and rounded corners.**

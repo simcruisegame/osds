@@ -1,0 +1,17 @@
+{
+  "note": "Which wheel-alignment adjustments each real car has, for the tuning menu (FOsdsTuning::ReadAdjustable). Front toe is always adjustable (the tie rods) and is not listed. A car missing here gets front toe only. Sources: the makers' alignment specifications and service manuals as summarised by alignment shops; entries marked estimate were not checked against a manual.",
+  "cars": {
+    "nb1999": { "front_camber": true, "rear_camber": true, "rear_toe": true, "caster": true, "source": "NB Miata: eccentric bolts on all four lower arms set camber, caster and rear toe" },
+    "nb2001": { "front_camber": true, "rear_camber": true, "rear_toe": true, "caster": true, "source": "as nb1999" },
+    "nb2001_lowered": { "front_camber": true, "rear_camber": true, "rear_toe": true, "caster": true, "source": "as nb1999" },
+    "mustang65": { "front_camber": true, "rear_camber": false, "rear_toe": false, "caster": true, "source": "upper control arm shims set camber and caster; leaf-sprung live rear axle has none" },
+    "camaro87": { "front_camber": true, "rear_camber": false, "rear_toe": false, "caster": false, "source": "estimate: strut-to-knuckle camber; live rear axle" },
+    "mini15s": { "front_camber": false, "rear_camber": true, "rear_toe": true, "caster": false, "source": "estimate: F56 front struts fixed; rear multi-link eccentrics" },
+    "model3": { "front_camber": false, "rear_camber": true, "rear_toe": true, "caster": false, "source": "Tesla alignment specification: front camber and caster not adjustable; rear camber and toe are" },
+    "crv25": { "front_camber": false, "rear_camber": false, "rear_toe": true, "caster": false, "source": "estimate: rear toe eccentric only" },
+    "odyssey18": { "front_camber": false, "rear_camber": false, "rear_toe": true, "caster": false, "source": "estimate: rear toe eccentric only" },
+    "grandcherokee13": { "front_camber": true, "rear_camber": true, "rear_toe": true, "caster": true, "source": "estimate: WK2 cam bolts front and rear" },
+    "f150raptor18": { "front_camber": true, "rear_camber": false, "rear_toe": false, "caster": true, "source": "estimate: front cam bolts; live rear axle" },
+    "meridian_z": { "front_camber": true, "rear_camber": true, "rear_toe": true, "caster": true, "source": "OSDS's own sports car: a track car's full adjustment" }
+  }
+}
