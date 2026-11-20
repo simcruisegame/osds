@@ -12,7 +12,7 @@
 </p>
 
 <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px;">
-  <strong>IMPORTANT:</strong> This is an open-source project started by a solo developer (And Claude, Mostly). Because of that, progress is slow—so everyone is encouraged to jump in, contribute, and send PRs to help build this together! Thank you all.
+  <strong>IMPORTANT:</strong> This is an open-source project started by a solo developer (And Claude, Mostly). Everyone is encouraged to jump in, contribute, and send PRs to help build this together! Thank you all.
 </div>
 
 <p align="center">
