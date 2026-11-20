@@ -12,7 +12,7 @@
 </p>
 
 <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px;">
-  <strong>Note from the developer:</strong> This is an open-source project started by a solo developer (And Claude, Mostly). Everyone is encouraged to jump in, contribute, and send PRs to help build this together! Backstory: A couple of weeks ago this whole game was just a random idea - I started messaging Claude about modern game development, open-source architecture, licensing for integrating other projects and data, and it started blowing my mind. This is a fun project, would love to see others contribute! I know it has a lot of bugs but I don't want to throw a ton of money at this so I have a 20$ a month Claude sub developing as efficiently as possible. So, more to come! 
+  <strong>Note from the developer:</strong> (PLEASE STAR IN GITHUB <3) This is an open-source project started by a solo developer (And Claude, Mostly). Everyone is encouraged to jump in, contribute, and send PRs to help build this together! Backstory: A couple of weeks ago this whole game was just a random idea - I started messaging Claude about modern game development, open-source architecture, licensing for integrating other projects and data, and it started blowing my mind. This is a fun project, would love to see others contribute! I know it has a lot of bugs but I don't want to throw a ton of money at this so I have a 20$ a month Claude sub developing as efficiently as possible. So, more to come! 
 </div>
 
 <p align="center">
