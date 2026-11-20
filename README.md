@@ -11,6 +11,14 @@
   Cars are calibrated against real road tests. Keyboard, Xbox controller or USB wheel.
 </p>
 
+<div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px;">
+  <strong>IMPORTANT:</strong> We have an AI Agent working on a $20/month Claude subscription that updates this weekly, so progress is slow. Please feel free to contribute and send PRs! This is a one-person team. Thank you all.
+</div>
+
+<p>
+  This project started from a really simple idea: go anywhere in the US and drive on public roads. There are some roads around where I live that I wanted a driving sim for, and now it has become a really fun project to try to make it as realistic as possible.
+</p>
+
 <p align="center">
   <a href="https://github.com/simcruisegame/osds/releases/latest"><b>Download for Windows</b></a>
   · <a href="https://simcruisegame.github.io/osds/">Website</a>
