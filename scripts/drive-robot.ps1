@@ -27,6 +27,8 @@ param(
     [switch]$LowFps
 )
 
+# A game launched while another checkout builds waits on the UBT mutex in ValidatePlatforms; skip it (see check.ps1).
+$env:UE_SKIP_UBT_SDK_SETUP = '1'
 $ErrorActionPreference = 'Stop'
 # powershell -File passes "a,b,c" as one string.
 $Cars = @($Cars | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
