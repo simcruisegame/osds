@@ -13,7 +13,7 @@ const VECTOR_ZOOM=14;
 const SOURCE_SIZE=256;
 const EARTH_METRES=40075016.68557849;
 const BIN=16;
-const PAVED=new Set(['motorway','trunk','primary','secondary','tertiary','minor']);
+const PAVED=new Set(['motorway','trunk','primary','secondary','tertiary','minor','raceway']);
 const limit=(x,a,b)=>Math.max(a,Math.min(x,b));
 function fade(a,b,x){
  const t=limit((x-a)/(b-a),0,1);

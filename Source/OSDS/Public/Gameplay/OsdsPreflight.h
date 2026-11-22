@@ -89,12 +89,33 @@ struct OSDS_API FOsdsPreflightStats
 	/** -OsdsPreflightForceSpin: the negative test yanked the stick with the handbrake on. */
 	bool bForcedSpin = false;
 
-	// Frame times after the warm-up, without the frames the robot's own screenshots slow down.
+	// Frame times after the warm-up. Every frame counts, the ones the robot's own screenshots slow down too:
+	// a watching player sees those stalls (issue #69: leaving them out left 0 timed frames).
 	int32 TimedFrames = 0;
 	float FrameP95Ms = 0.f;
+	/** The 95th percentile game-thread time, and the longest total frame. */
+	float GameP95Ms = 0.f;
+	float WorstFrameMs = 0.f;
 	/** Frames over 50 ms, and over 100 ms (hitches a player sees). */
 	int32 SlowFrames = 0;
 	int32 Hitches = 0;
+};
+
+/**
+ * The frame times of a drive: one Record per frame with the total (wall) and game-thread time.
+ * Frames after FrameWarmupS of driving are timed; none is left out, whatever the robot did that frame.
+ */
+struct OSDS_API FOsdsFrameTimes
+{
+	void Record(float DriveSeconds, float TotalMs, float GameMs);
+	/** Fills TimedFrames, FrameP95Ms, GameP95Ms, WorstFrameMs, SlowFrames and Hitches of Stats. */
+	void Fill(FOsdsPreflightStats& Stats) const;
+	int32 AllFrames() const { return All; }
+
+private:
+	int32 All = 0;
+	TArray<float> TimedTotalMs;
+	TArray<float> TimedGameMs;
 };
 
 /** The pass rules and the measurements that need no world, kept apart for the tests. */
@@ -162,6 +183,9 @@ namespace OsdsPreflightRules
 
 	/** Fills the frame-time fields of Stats (p95, frames over 50 and 100 ms) from the timed frames (ms). */
 	OSDS_API void MeasureFrames(const TArray<float>& TimedMs, FOsdsPreflightStats& Stats);
+
+	/** The 95th percentile (nearest rank) of Ms; 0 for none. */
+	OSDS_API float Percentile95(const TArray<float>& Ms);
 
 	/**
 	 * Height steps along a path: samples (distance m, height m) in path order. A step is a
@@ -269,12 +293,10 @@ private:
 	/** The robot's felt yaw rate (low-passed) and its last stick, for a smooth hand. */
 	double SmoothedYawRate = 0.0;
 	float LastStick = 0.f;
-	/** Every drive frame's real time (ms) and the path distance at the long ones. */
+	/** Every drive frame's total and game-thread time; the rules judge those after the warm-up. */
+	FOsdsFrameTimes FrameTimes;
+	/** Every drive frame's real time (ms), for the log summary. */
 	TArray<float> FrameMs;
-	/** The frame times the rules judge: after the warm-up, none a screenshot touched. */
-	TArray<float> TimedFrameMs;
-	/** Frames still to skip after a screenshot request or capture. */
-	int32 CaptureSkip = 0;
 	/** -OsdsPreflightForceSpin: the negative test. */
 	bool bForceSpin = false;
 	float ForceSpinClock = 0.f;

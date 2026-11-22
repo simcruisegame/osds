@@ -49,6 +49,10 @@ A start drawn from the test-place list so every change is judged away from the H
 The summary of one Tile's character (what kind of place it is, how dense lights, signs and objects are, what its surfaces and sign style look like) that every world system follows.
 _Avoid_: place profile, tile style
 
+**Surface knowledge**:
+The rules about how real surfaces age and weather (where puddles, oil, cracks, dirt, grime, moss, rust and wear appear) that the materials follow everywhere.
+_Avoid_: detail rules, weathering table
+
 **World cache**:
 The generated results for each Tile (Place recipe, cleaned Aerial imagery, AI-made surface detail) saved on the player's disk and reused on later visits.
 _Avoid_: map cache (that holds raw downloads)

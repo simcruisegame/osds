@@ -90,6 +90,11 @@ struct FOsdsRibbon
 	bool bService = false;
 	/** Mapped surface=unpaved (gravel, dirt): drawn in gravel, no paint. */
 	bool bUnpaved = false;
+	/** A race track's surface (OpenStreetMap highway=raceway): no traffic, no street furniture, no kerbs or
+	 *  sidewalks, no stop lines; a curated track's width and banking (OsdsTracks). */
+	bool bTrack = false;
+	/** A track's pit lane or pit road, by its mapped name: flat, at most the pit width. */
+	bool bPit = false;
 	bool bStartOnBoundary = false;
 	bool bEndOnBoundary = false;
 	TArray<FOsdsRibbonStation> St;

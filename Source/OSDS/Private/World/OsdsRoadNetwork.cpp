@@ -4,6 +4,7 @@
 
 #include "World/OsdsGeo.h"
 #include "World/OsdsTileData.h"
+#include "World/OsdsTracks.h"
 
 #include <limits>
 
@@ -440,7 +441,8 @@ int32 FOsdsRoadNetwork::ClassRank(const FString& Class)
 bool FOsdsRoadNetwork::IsDrivableClass(const FString& Class)
 {
 	return Class == TEXT("motorway") || Class == TEXT("trunk") || Class == TEXT("primary") || Class == TEXT("secondary")
-		|| Class == TEXT("tertiary") || Class == TEXT("minor") || Class == TEXT("service") || Class == TEXT("busway");
+		|| Class == TEXT("tertiary") || Class == TEXT("minor") || Class == TEXT("service") || Class == TEXT("busway")
+		|| OsdsTracks::IsRacewayClass(Class);
 }
 
 bool FOsdsRoadNetwork::IsMajorClass(const FString& Class)
@@ -546,6 +548,21 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 	TileSizeM = InTileSizeM;
 	const double Side = TileSizeM;
 
+	// A curated race track near this tile (OsdsTracks): its raceway ribbons take the track's width
+	// and, on an oval, its published banking by where each station lies on the oval's loop.
+	const FOsdsTrack* Track = nullptr;
+	FOsdsTrackFrame TrackFrame;
+	bool bTrackFrame = false;
+	for (const FOsdsRoadRow& Row : Tile.Roads)
+	{
+		if (!OsdsTracks::IsRacewayClass(Row.Class)) continue;
+		double TileLon = 0.0, TileLat = 0.0;
+		OsdsGeo::TileToLonLat(FVector2d(Tile.Id.X + 0.5, Tile.Id.Y + 0.5), TileLon, TileLat);
+		Track = OsdsTracks::Near(TileLon, TileLat);
+		bTrackFrame = Track && OsdsTracks::MakeFrame(*Track, Tile.Id, Side, TrackFrame);
+		break;
+	}
+
 	// 1. Pieces in tile metres. Ends on the tile edge are snapped exactly onto it, then
 	// onto the matching road end of an already built neighbour (seam contract): the
 	// bundled and streamed tiles come from different zoom-14 vector tiles, whose
@@ -568,6 +585,10 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 		Piece.Class = Row.Class;
 		Piece.Name = Row.Name;
 		Piece.WidthM = FMath::Clamp(Row.WidthM, 2.5, 40.0);
+		if (OsdsTracks::IsRacewayClass(Row.Class) && Track && Track->WidthM > 0.0)
+		{
+			Piece.WidthM = OsdsTracks::IsPitName(Row.Name) ? FMath::Min(OsdsTracks::PitWidthM, Track->WidthM) : Track->WidthM;
+		}
 		Piece.OneWay = Row.OneWay;
 		Piece.Rank = ClassRank(Row.Class);
 		Piece.bBridge = Row.bBridge;
@@ -783,6 +804,8 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 			Ribbon.Name = Pieces[BestPiece].Name;
 			Ribbon.bMajor = IsMajorClass(Ribbon.Class);
 			Ribbon.bService = Ribbon.Class == TEXT("service");
+			Ribbon.bTrack = OsdsTracks::IsRacewayClass(Ribbon.Class);
+			Ribbon.bPit = Ribbon.bTrack && OsdsTracks::IsPitName(Ribbon.Name);
 			Ribbon.bUnpaved = Pieces[BestPiece].bUnpaved;
 
 			const int32 Count = FMath::Max(1, FMath::CeilToInt(SpanLength / OsdsRoadSection::StationStepM));
@@ -1083,7 +1106,21 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 			const bool bMinor = Ribbon.Class == TEXT("tertiary") || Ribbon.Class == TEXT("unclassified");
 			const double Design = (bMinor && IsTown(Ribbon.St[Count / 2].C)) ? 0.0 : DesignSpeedKmh(Ribbon.Class);
 			TArray<double> E; E.Init(0.0, Count + 1);
-			if (Design > 0.0)
+			// A banked oval: the published figure where the station lies on the loop (OsdsTracks::BankAt),
+			// raised on the oval's outside, easing to flat where a road course or an access lane leaves
+			// the loop. By position only, so the tiles on both sides of a seam agree without a contract.
+			TArray<uint8> TrackBank; TrackBank.Init(0, Count + 1);
+			if (Ribbon.bTrack && !Ribbon.bPit && bTrackFrame)
+			{
+				for (int32 k = 0; k <= Count; ++k)
+				{
+					double Slope = 0.0, Weight = 0.0, OutsideSign = 0.0;
+					if (!OsdsTracks::BankAt(TrackFrame, Ribbon.St[k].C, Ribbon.St[k].R, Ribbon.St[k].HalfW, Slope, Weight, OutsideSign)) continue;
+					E[k] = -OutsideSign * Slope * Weight;
+					TrackBank[k] = 1;
+				}
+			}
+			else if (Design > 0.0)
 			{
 				TArray<double> H; H.SetNum(Count + 1);
 				for (int32 k = 0; k <= Count; ++k) H[k] = FMath::Atan2(Ribbon.St[k].T.Y, Ribbon.St[k].T.X);
@@ -1142,10 +1179,12 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 					Ek = FMath::Lerp(Ek, bSame ? Their : -Their, Wb);
 				}
 				// An uncontracted end has no bank at the seam (both sides agree), eased like its pin.
-				if (Ribbon.bStartOnBoundary && !Contract[0]) Ek *= 1.0 - W0;
-				if (Ribbon.bEndOnBoundary && !Contract[1]) Ek *= 1.0 - W1;
+				// A track's banking is the same on both sides by construction: it keeps it.
+				if (Ribbon.bStartOnBoundary && !Contract[0] && !TrackBank[k]) Ek *= 1.0 - W0;
+				if (Ribbon.bEndOnBoundary && !Contract[1] && !TrackBank[k]) Ek *= 1.0 - W1;
 				Ek += Tilt0 * W0 + Tilt1 * W1;
-				St.E = FMath::Clamp(Ek, -0.08, 0.08);
+				const double MaxE = Ribbon.bTrack ? OsdsTracks::MaxBankSlope : 0.08;
+				St.E = FMath::Clamp(Ek, -MaxE, MaxE);
 				const double Crown = OsdsRoadSection::Crown * (1.0 - FMath::Min(1.0, FMath::Abs(St.E) / OsdsRoadSection::Crown));
 				St.HC = St.Z;
 				St.HL = St.Z + St.E * St.HalfW - Crown * St.HalfW;
@@ -1212,10 +1251,11 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 			{
 				const FOsdsRibbonStation& St = Ribbon.St[k];
 				const bool bTown = IsTown(St.C);
-				const EOsdsRoadEdge Base = bTown || Ribbon.bService ? EOsdsRoadEdge::Town : EOsdsRoadEdge::Rural;
+				// A race track has grass, an apron or a wall at its edge, never a kerb and sidewalk.
+				const EOsdsRoadEdge Base = (bTown && !Ribbon.bTrack) || Ribbon.bService ? EOsdsRoadEdge::Town : EOsdsRoadEdge::Rural;
 				Ribbon.Sides[0].Edge[k] = Base;
 				Ribbon.Sides[1].Edge[k] = Base;
-				if (Ribbon.bService || Walks.Num() == 0) continue;
+				if (Ribbon.bService || Ribbon.bTrack || Walks.Num() == 0) continue;
 				const FIntPoint Home(FMath::FloorToInt(St.C.X / WalkBin), FMath::FloorToInt(St.C.Y / WalkBin));
 				for (int32 dx = -Reach; dx <= Reach; ++dx)
 				for (int32 dy = -Reach; dy <= Reach; ++dy)

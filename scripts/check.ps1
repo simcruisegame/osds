@@ -93,6 +93,19 @@ function Write-CheckTime([string]$Result) {
 
 $Timing.Tier = $Tier
 
+# While a GPU test (a game someone watches) holds its lock, the build and the test editor start at BelowNormal
+# priority and Unreal Build Tool gets fewer parallel actions, so the watched game stays smooth (issue #69).
+# With no GPU test running nothing changes. The check re-reads the lock before the build and before the tests.
+$Self = [System.Diagnostics.Process]::GetCurrentProcess()
+$SelfPriority = $Self.PriorityClass
+function Set-CheckImpact($Impact) {
+    try { $Self.PriorityClass = if ($Impact.Throttle) { $Impact.Priority } else { $SelfPriority } } catch { Write-Host "Could not set the priority: $_" }
+}
+
+# The self-tests of the script helpers (no Unreal needed).
+& powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Test-Helpers.ps1') | Out-Host
+if ($LASTEXITCODE -ne 0) { Write-Host 'SCRIPT HELPER TESTS FAILED'; Write-CheckTime 'helper-tests'; exit 1 }
+
 # Every script under scripts\ must parse: a broken parameter list stops a review lane that runs it.
 $ParseErrors = 0
 foreach ($Script in Get-ChildItem (Join-Path $Root 'scripts') -Recurse -Filter *.ps1) {
@@ -126,8 +139,15 @@ if (-not $NoBuild) {
         Write-Host 'Build skipped: nothing under Source\ or in the .uproject changed since the last good build (-ForceBuild builds anyway).'
     }
     else {
+        $Impact = Get-LowImpactSettings -GpuTestRunning (Test-GpuTestLockHeld)
+        $BuildArgs = @('OSDSEditor', 'Win64', 'Development', "-Project=$Project", '-WaitMutex', '-NoHotReloadFromIDE')
+        if ($Impact.Throttle) {
+            $BuildArgs += "-MaxParallelActions=$($Impact.MaxParallelActions)"
+            Write-Host "A GPU test is running: building at $($Impact.Priority) priority with at most $($Impact.MaxParallelActions) parallel actions."
+        }
         Write-Host 'Building OSDSEditor (Win64 Development)...'
-        & $BuildBat OSDSEditor Win64 Development "-Project=$Project" -WaitMutex -NoHotReloadFromIDE | Out-Host
+        Set-CheckImpact $Impact
+        try { & $BuildBat @BuildArgs | Out-Host } finally { Set-CheckImpact (Get-LowImpactSettings -GpuTestRunning $false) }
         $Timing.Build = ((Get-Date) - $Started).TotalSeconds
         if ($LASTEXITCODE -ne 0) { Write-Host 'BUILD FAILED'; Remove-Item $BuildStamp -ErrorAction SilentlyContinue; Write-CheckTime 'build-failed'; exit 1 }
         # Hash again after the build, in case a file changed while it ran (then the next run builds).
@@ -155,7 +175,11 @@ try {
     # UBT's PC-wide mutex, so a build in another checkout held a test start up to 84 s. Tests only
     # need Win64, so the platform SDK check has nothing to tell them.
     $env:UE_SKIP_UBT_SDK_SETUP = '1'
+    $TestImpact = Get-LowImpactSettings -GpuTestRunning (Test-GpuTestLockHeld)
+    if ($TestImpact.Throttle) { Write-Host "A GPU test is running: the test editor starts at $($TestImpact.Priority) priority." }
+    Set-CheckImpact $TestImpact
     $P = Start-Process -FilePath $Editor -ArgumentList $ArgLine -PassThru -WindowStyle Hidden
+    if ($TestImpact.Throttle) { try { $P.PriorityClass = $TestImpact.Priority } catch { } }
     # Wait in short steps to sample the editor's peak memory (working set) on the way.
     $Deadline = $TestStart.AddMinutes($TimeoutMinutes)
     $Peak = 0
@@ -172,7 +196,7 @@ try {
     $Timing.Test = ((Get-Date) - $TestStart).TotalSeconds
     $Timing.PeakGB = [math]::Round($Peak / 1GB, 1)
 }
-finally { Exit-HeadlessSlot }
+finally { Exit-HeadlessSlot; Set-CheckImpact (Get-LowImpactSettings -GpuTestRunning $false) }
 if (-not (Test-Path $Log)) { Write-Host "No log at ${Log}: the editor did not run."; Write-CheckTime 'no-log'; exit 1 }
 
 $Lines = Get-Content $Log

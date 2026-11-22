@@ -147,7 +147,7 @@ void AOsdsGuardRails::BuildTile(const FIntPoint& Id)
 	const FOsdsTileContext* Ctx = Build->Context.Get();
 	for (const FOsdsRibbon& Ribbon : Build->Roads.Ribbons)
 	{
-		if (Ribbon.bService || Ribbon.St.Num() < 3) continue;
+		if (Ribbon.bService || Ribbon.bTrack || Ribbon.St.Num() < 3) continue;
 		const int32 RibbonIndex = static_cast<int32>(&Ribbon - Build->Roads.Ribbons.GetData());
 		TArray<double> S;
 		for (const FOsdsRibbonStation& St : Ribbon.St) S.Add(St.S);
