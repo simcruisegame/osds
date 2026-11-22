@@ -73,6 +73,22 @@ The pass range for a Bench result, taken from a real road test or standard.
 Electronic stability control: the system that brakes single wheels to stop a skid.
 _Avoid_: stability assist, traction control (a different system)
 
+**Differential**:
+The part that shares drive torque between two wheels or two axles. OSDS knows four kinds: Open, Bias, Active lock and Coupling.
+_Avoid_: diff (in docs)
+
+**Bias differential**:
+A Differential that can send more torque to the slower wheel, up to a fixed ratio (a Torsen works this way).
+_Avoid_: LSD (too broad)
+
+**Active lock**:
+A Differential whose locking is set moment by moment by the car's computer (the Corvette's eLSD; the Porsche's rear lock with brake vectoring).
+_Avoid_: eLSD, PTV (brand names for kinds of Active lock)
+
+**Coupling**:
+A clutch between the front and rear axles that sends torque to the second axle only when the first one slips or the computer asks (the Audi's quattro with a Haldex unit).
+_Avoid_: Haldex (a brand)
+
 **Gamepad**:
 The player's handheld controller (an Xbox controller).
 _Avoid_: pad
@@ -118,3 +134,13 @@ _Avoid_: lane
 
 **Cycle**:
 The work toward one version, from plan to release.
+
+**Spec**:
+A GitHub issue that states one area's goal for a Cycle: the problem, the solution, user stories and decisions.
+
+**Ticket**:
+A sub-issue of a Spec that delivers one complete, testable slice of it, with links to the Tickets that block it.
+_Avoid_: task, story
+
+**Integration branch**:
+The branch where a Thread gathers its finished Tickets before one pull request to main.

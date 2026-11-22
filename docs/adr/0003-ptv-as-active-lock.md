@@ -1,0 +1,3 @@
+# The Porsche's PTV Plus is modelled as an Active lock plus brake vectoring
+
+The real 992 Carrera S uses Porsche Torque Vectoring Plus: an electronically controlled rear differential lock plus brake pulses on the inside rear wheel. Porsche does not publish its control maps. OSDS models it with the same Active lock Differential as the Corvette's eLSD, plus a simple brake-vectoring rule driven by yaw-rate error, both with parameters marked as estimates and fitted to published road-test numbers. We chose one shared Active lock over a Porsche-specific model, because one well-tested Differential module serves both cars and a bespoke model would add guesses without data to check them against.
