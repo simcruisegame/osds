@@ -1,0 +1,174 @@
+{
+ "_comment": "2020 Porsche 911 Carrera S coupe (992.1, US), 3.0 L twin-turbo flat six, 8-speed PDK, rear-wheel drive, PTV Plus. Draft from lab/cars/porsche992-research.md; model fields (model_scene, rig, collision, mount) come from the fit.",
+ "id": "porsche992",
+ "name": "911 Carrera S",
+ "make": "Porsche",
+ "body": "coupe",
+ "seats": 4,
+ "mass_kg": 1534.0,
+ "front_weight": 0.38,
+ "cg_height_m": 0.46,
+ "inertia": [
+  2830,
+  2900,
+  755
+ ],
+ "wheelbase_m": 2.45,
+ "track_front_m": 1.589,
+ "track_rear_m": 1.557,
+ "tire_width_m": 0.305,
+ "tire_aspect_ratio": 0.3,
+ "rim_in": 21.0,
+ "axle_grip": [
+  0.95,
+  1.0
+ ],
+ "tyre_pressure_psi": [
+  36.0,
+  45.0
+ ],
+ "tyre_model": "tmeasy",
+ "tmeasy_peak_mu_y": 1.12,
+ "tmeasy_slide_mu_y": 0.9,
+ "tmeasy_peak_mu_x": 1.15,
+ "tmeasy_slide_mu_x": 0.9,
+ "load_sensitivity": 0.1,
+ "drag_area_m2": 0.62,
+ "unsprung_corner_kg": 44.0,
+ "wheel_rate_n_m": [
+  29100,
+  60900
+ ],
+ "bar_rate_n_m": [
+  26000.0,
+  18000.0
+ ],
+ "damper": [
+  "ratio",
+  "ratio"
+ ],
+ "damper_ratio_rebound": [
+  0.55,
+  0.55
+ ],
+ "damper_ratio_compression": [
+  0.35,
+  0.35
+ ],
+ "static_camber_deg": [
+  -0.8,
+  -1.5
+ ],
+ "caster_deg": 8.0,
+ "toe_per_wheel_deg": 0.05,
+ "steering_turns_lock_to_lock": 2.3,
+ "parking_rack_deg": 35.0,
+ "road_reference_deg": 31.0,
+ "brake_front_nm": 2800.0,
+ "brake_rear_nm": 2000.0,
+ "parking_brake_nm": 1500.0,
+ "parking_brake_type": "electric",
+ "abs_enabled": true,
+ "traction_control": true,
+ "stability_control": true,
+ "esc_understeer_deg_per_g": 1.5,
+ "engine": "combustion",
+ "aspiration": "turbo",
+ "torque_curve": [
+  [
+   1000,
+   260
+  ],
+  [
+   1500,
+   380
+  ],
+  [
+   2000,
+   490
+  ],
+  [
+   2300,
+   530
+  ],
+  [
+   5000,
+   530
+  ],
+  [
+   5500,
+   525
+  ],
+  [
+   6000,
+   515
+  ],
+  [
+   6500,
+   486
+  ],
+  [
+   7000,
+   445
+  ],
+  [
+   7500,
+   400
+  ]
+ ],
+ "torque_past_curve_nm": 330.0,
+ "engine_friction_nm": 19.4,
+ "engine_friction_per_rpm": 0.0085,
+ "engine_pumping_nm": 12.7,
+ "engine_pumping_per_rpm": 0.0013,
+ "idle_rpm": 700.0,
+ "fuel_cut_rpm": 7500.0,
+ "max_gear_rpm": 7400.0,
+ "engine_inertia": 0.16,
+ "transmission": "dct",
+ "gears": [
+  4.89,
+  3.17,
+  2.15,
+  1.56,
+  1.18,
+  0.94,
+  0.76,
+  0.61
+ ],
+ "reverse_ratio": 3.99,
+ "final_drive": 3.12,
+ "driveline_efficiency": 0.9,
+ "shift_seconds": 0.08,
+ "upshift_rpm": 7300.0,
+ "downshift_rpm": 2500.0,
+ "launch_control_rpm": 4500.0,
+ "clutch_capacity_nm": 800.0,
+ "clutch_back_nm": 750.0,
+ "layout": "rwd",
+ "rear_diff_bias": 3.0,
+ "rear_diff_coast_bias": 1.8,
+ "target_0_60_s": 3.0,
+ "target_0_60_rollout": true,
+ "target_70_0_ft": 136.0,
+ "target_skidpad_g": 1.06,
+ "sources": {
+  "mass": "3,382 lb PDK (Porsche 2020 US spec sheet); DIN 1515 kg (EU sheet). Split 38/62 and CG 0.46 m are estimates.",
+  "engine": "Porsche: 443 hp at 6500 rpm, 390 lb-ft at 2300-5000 rpm, 7500 rpm maximum. Curve outside the plateau is an estimate.",
+  "gearing": "PDK ratios and 3.12 rear axle ratio (EU sheet; US sheet 3.39 x 0.92 constant = 3.12). Reverse 3.99 EU, 3.96 US.",
+  "brakes": "350 x 34 mm 6-piston front, 350 x 28 mm 4-piston rear (Porsche). Torques are estimates; front share 0.60 stays above the ideal up to 1.06 g.",
+  "diff": "PTV Plus electronic rear lock with brake vectoring (Porsche EU sheet; standard on the North American Carrera S PDK, secondary). Bias 3.0/1.8 stands in.",
+  "steering": "15.0:1 on centre to about 12.25:1, 11.2 m circle (Porsche). 2.3 turns is an estimate.",
+  "aero": "EU Cd 0.29 x 2.07 m2 = 0.600; US Cd 0.31. 0.62 m2 is the midpoint.",
+  "tyre_pressure": "36/45 psi for 245/35ZR20 and 305/30ZR21 (tirepressure.com, secondary). Staggered tyres: rear size in the file, axle_grip for the front.",
+  "calibration": "Car and Driver: 3.0 s 0-60 PDK (via Gear Patrol); 136 ft 70-0 and 1.06 g from the 2020 manual Carrera S on the same tyres (Yahoo reprint).",
+  "estimates": "Weight split, CG, inertia, springs, bars, dampers, alignment, brake torques, clutch, shift time, diff bias, ESC gradient, tyre curve, axle_grip. static_mu.",
+  "research": "lab/cars/porsche992-research.md",
+  "static_mu": "static_mu is required by the loader: 1.10 (992, matches tmeasy_peak_mu_x 1.15 less load sensitivity) / 0.97 (TT) are estimates.",
+  "reference_corner_load_n": "mass_kg x 9.81 / 4 (computed from the published mass)."
+ },
+ "static_mu": 1.1,
+ "reference_corner_load_n": 3762.1,
+ "model_scene": "data/art/cars/porsche992/NOT-YET-MODELLED.gltf",
+ "_model_note": "No model yet (ticket #41). model_scene is a placeholder because the loader requires a non-empty value; the Cars spec replaces it with the fitted model. Physics fields beyond the draft are left to the Handling thread (#35)."
+}
