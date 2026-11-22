@@ -74,6 +74,7 @@ namespace
 		FString Name;
 		int32 Contract[2] = { INDEX_NONE, INDEX_NONE }; // neighbour seam end each piece end was snapped to
 		bool bBridge = false;
+		bool bSeamBridge = false; // an end snapped to a neighbour's bridge-deck end: the deck continues here (N4/H4)
 		bool bUnpaved = false;
 	};
 
@@ -673,6 +674,7 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 				ContractUsed[Best] = true;
 				P = NeighbourEnds[Best].P;
 				Piece.Contract[End] = Best;
+				if (NeighbourEnds[Best].bBridge) Piece.bSeamBridge = true;
 			}
 		}
 		Piece.S.Add(0.0);
@@ -868,11 +870,14 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 				const int32 OneWay = Pieces[Own->Piece].OneWay;
 				St.Travel = static_cast<int8>(OneWay == 0 ? 0 : (Own->bReversed ? -OneWay : OneWay));
 				const FPiece& OwnPiece = Pieces[Own->Piece];
-				St.bBridge = OwnPiece.bBridge;
+				St.bBridge = OwnPiece.bBridge || OwnPiece.bSeamBridge;
+				// A road row that lost its bridge flag but ends on a neighbour's deck is the same deck
+				// wherever this tile still carries a deck of its class and name under the station.
 				if (St.bBridge && BridgeDeckHeightAt(Tile, Side, St.C, OwnPiece.Class, OwnPiece.Name, BridgeDeckZ[k], &BridgeDeckRow[k]))
 				{
 					bHasBridgeDeckProfile[k] = 1;
 				}
+				else if (!OwnPiece.bBridge) St.bBridge = false;
 			}
 			// A bridge spans the gap: its profile runs straight from abutment to abutment
 			// (BridgeDeck.gd), not down to the river or the valley floor the elevation model
@@ -1809,6 +1814,7 @@ void FOsdsRoadNetwork::CollectSeamEnds(TArray<FOsdsSeamEnd>& Out) const
 			Seam.HL = St.HL;
 			Seam.HC = St.HC;
 			Seam.HR = St.HR;
+			Seam.bBridge = St.bBridge;
 			Out.Add(Seam);
 		}
 	}
