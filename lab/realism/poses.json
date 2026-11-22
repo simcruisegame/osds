@@ -1,5 +1,5 @@
 {
-  "about": "Poses for the realism score. Each is the exact spot of a licensed street photograph. Photos are fetched into Saved/Realism/photos for scoring and are never committed (links only).",
+  "about": "Poses for the realism score: 12 fixed places (set 'fixed') plus 8 seeded Random US places (set 'random', seed 30). Each is the exact spot of a licensed street photograph. Photos are fetched into Saved/Realism/photos for scoring and are never committed (links only). Pick more with lab/realism/pick-poses.py.",
   "poses": [
     {
       "name": "lummus",
@@ -18,7 +18,8 @@
         "author": "MatthiasMatthias",
         "licence": "CC BY-SA 4.0"
       },
-      "notes": "Lummus Park beachwalk and the Ocean Drive frontage. Pose, heading and time from the frame; field of view of the Pixel 8 main camera (6.9 mm). The Godot taste test of 10 November 2026 used the same pose."
+      "notes": "Lummus Park beachwalk and the Ocean Drive frontage. Pose, heading and time from the frame; field of view of the Pixel 8 main camera (6.9 mm). The Godot taste test of 10 November 2026 used the same pose.",
+      "set": "fixed"
     },
     {
       "name": "dragon",
@@ -39,7 +40,8 @@
       },
       "notes": "US 129 Tail of the Dragon, a curve near Deals Gap, 18 April 2006 14:09 EDT. Canon EOS Digital Rebel XT at 75 mm (APS-C): 16.8 deg across. Heading estimated from the road; refine by capture. Placed on US 129 at its nearest point to the geotag (67 m away), looking along the road.",
       "snap": "road",
-      "pitch": -1
+      "pitch": -1,
+      "set": "fixed"
     },
     {
       "name": "bixby",
@@ -59,7 +61,395 @@
         "licence": "CC0"
       },
       "notes": "CA-1 Big Sur, Bixby Creek Bridge from the viewpoint to the south, 17 July 2016 13:31 PDT. Canon EOS 6D at 70 mm: 28.8 deg across.",
-      "pitch": -6
+      "pitch": -6,
+      "set": "fixed"
+    },
+    {
+      "name": "bronx",
+      "lat": 40.8643425,
+      "lon": -73.9103472,
+      "heading": 219,
+      "hfov": 65.0,
+      "utc": "2025-10-25T17:04:03Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "2930da5f-f509-4f21-a2f5-eaf418f55f96",
+        "url": "https://panoramax.xyz/#focus=pic&pic=2930da5f-f509-4f21-a2f5-eaf418f55f96",
+        "author": "thetornado76",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Fixed place (dense city), the nearest daylight Panoramax frame to 40.8448,-73.8648. motorola moto g(9) plus, flat frame.",
+      "set": "fixed"
+    },
+    {
+      "name": "seattle",
+      "lat": 47.6063702,
+      "lon": -122.3320961,
+      "heading": 261,
+      "hfov": 70.0,
+      "utc": "2026-10-22T19:06:40Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "fb628a3b-5031-4fda-b92e-2b9b4ebbf332",
+        "url": "https://panoramax.xyz/#focus=pic&pic=fb628a3b-5031-4fda-b92e-2b9b4ebbf332",
+        "author": "LowestPotential",
+        "licence": "CC BY-SA 4.0",
+        "view": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "hfov": 70.0
+        }
+      },
+      "notes": "Fixed place (steep city), the nearest daylight Panoramax frame to 47.6062,-122.3321. GoPro Max, 360-degree frame cut to 70 deg along the travel.",
+      "set": "fixed"
+    },
+    {
+      "name": "ankeny",
+      "lat": 41.7319028,
+      "lon": -93.6001061,
+      "heading": 270,
+      "hfov": 70.0,
+      "utc": "2026-01-31T21:15:05Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "2cc20059-3661-4538-875f-4ab2f699dcc4",
+        "url": "https://panoramax.xyz/#focus=pic&pic=2cc20059-3661-4538-875f-4ab2f699dcc4",
+        "author": "Hopen111",
+        "licence": "CC BY-SA 4.0",
+        "view": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "hfov": 70.0
+        }
+      },
+      "notes": "Fixed place (suburb), the nearest daylight Panoramax frame to 41.7318,-93.6001. , 360-degree frame cut to 70 deg along the travel.",
+      "set": "fixed"
+    },
+    {
+      "name": "rawlins",
+      "lat": 41.7910803,
+      "lon": -107.2386938,
+      "heading": 261,
+      "hfov": 70.0,
+      "utc": "2025-07-19T17:40:38Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "78887d38-e101-450c-85a3-1f6c1a87a97a",
+        "url": "https://panoramax.xyz/#focus=pic&pic=78887d38-e101-450c-85a3-1f6c1a87a97a",
+        "author": "flug32",
+        "licence": "CC BY-SA 4.0",
+        "view": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "hfov": 70.0
+        }
+      },
+      "notes": "Fixed place (interstate), the nearest daylight Panoramax frame to 41.7911,-107.2387. GoPro Max, 360-degree frame cut to 70 deg along the travel.",
+      "set": "fixed"
+    },
+    {
+      "name": "chicago",
+      "lat": 41.8435589,
+      "lon": -87.6436756,
+      "heading": 83,
+      "hfov": 92.0,
+      "utc": "2026-10-25T20:43:01Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "cafe324f-8557-4e46-8811-6c25c77a3383",
+        "url": "https://panoramax.xyz/#focus=pic&pic=cafe324f-8557-4e46-8811-6c25c77a3383",
+        "author": "smilytruffle",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Fixed place (downtown), the nearest daylight Panoramax frame to 41.8757,-87.6305. samsung Galaxy S25, flat frame.",
+      "set": "fixed"
+    },
+    {
+      "name": "nyc-lower-east",
+      "lat": 40.7075019,
+      "lon": -73.9983226,
+      "heading": 222,
+      "hfov": 108.0,
+      "utc": "2025-10-25T16:11:08Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "8312d355-541e-4b5b-aded-67bcd1351230",
+        "url": "https://panoramax.xyz/#focus=pic&pic=8312d355-541e-4b5b-aded-67bcd1351230",
+        "author": "jg13",
+        "licence": "Etalab Open Licence 2.0"
+      },
+      "notes": "Fixed place (dense city), the nearest daylight Panoramax frame to 40.712,-73.9899. samsung SM-G781B, flat frame.",
+      "set": "fixed"
+    },
+    {
+      "name": "nebraska",
+      "lat": 40.6984917,
+      "lon": -96.7057639,
+      "heading": 143,
+      "hfov": 65.0,
+      "utc": "2026-02-19T19:35:27Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "c7c2d9b6-cd96-4aa0-b384-b4cc9569d2d7",
+        "url": "https://panoramax.xyz/#focus=pic&pic=c7c2d9b6-cd96-4aa0-b384-b4cc9569d2d7",
+        "author": "slinky309",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Fixed place (farm gravel), the nearest daylight Panoramax frame to 40.6,-96.65. Apple iPhone, flat frame.",
+      "set": "fixed"
+    },
+    {
+      "name": "detroit",
+      "lat": 42.2973903,
+      "lon": -83.1857607,
+      "heading": 133,
+      "hfov": 65.0,
+      "utc": "2026-11-21T15:18:09Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "32ef6dbe-fce6-40be-81be-ce321cf70c4e",
+        "url": "https://panoramax.xyz/#focus=pic&pic=32ef6dbe-fce6-40be-81be-ce321cf70c4e",
+        "author": "Nicroz",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Fixed place (city grid), the nearest daylight Panoramax frame to 42.35,-83.06. Google Pixel 10 Pro, flat frame.",
+      "set": "fixed"
+    },
+    {
+      "name": "anchorage",
+      "lat": 61.217333,
+      "lon": -149.898,
+      "heading": 45,
+      "hfov": 63,
+      "utc": "2010-09-05T02:49:35Z",
+      "width": 1600,
+      "height": 1067,
+      "world": "helper",
+      "photo": {
+        "source": "commons",
+        "file": "Holy_Family_Cathedral.jpg",
+        "url": "https://commons.wikimedia.org/wiki/File:Holy_Family_Cathedral.jpg",
+        "author": "Jay Galvin",
+        "licence": "CC BY 2.0"
+      },
+      "snap": "road",
+      "notes": "Holy Family Cathedral on the 5th Avenue corner, downtown Anchorage, eye level from the street corner with signals, parked cars and a wet road; overcast, 4 Sept 2010 18:49 AKDT. Heading is a low-confidence estimate (not tagged, read from the frame) and needs a visual check; FocalLengthIn35mmFilm missing, so hfov 63 is the fallback.",
+      "set": "fixed"
+    },
+    {
+      "name": "r30-1-mountains",
+      "lat": 35.9464278,
+      "lon": -83.0486528,
+      "heading": 384,
+      "hfov": 65.0,
+      "utc": "2025-11-16T15:18:04Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "b218c73e-ca7c-48b6-b05c-1731b351d4fa",
+        "url": "https://panoramax.xyz/#focus=pic&pic=b218c73e-ca7c-48b6-b05c-1731b351d4fa",
+        "author": "slinky309",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Random US place (mountains, seed 30), the nearest daylight Panoramax frame to 35.9777,-83.0184. Apple iPhone, flat frame.",
+      "set": "random"
+    },
+    {
+      "name": "r30-2-plains",
+      "lat": 40.8225167,
+      "lon": -97.2638361,
+      "heading": 327,
+      "hfov": 65.0,
+      "utc": "2026-03-05T20:29:52Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "f5c3a3b6-d8da-4f0d-b803-e5f3f688f0aa",
+        "url": "https://panoramax.xyz/#focus=pic&pic=f5c3a3b6-d8da-4f0d-b803-e5f3f688f0aa",
+        "author": "slinky309",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Random US place (plains, seed 30), the nearest daylight Panoramax frame to 40.6710,-97.2608. Apple iPhone, flat frame.",
+      "set": "random"
+    },
+    {
+      "name": "r30-3-city",
+      "lat": 37.7395819,
+      "lon": -122.4425505,
+      "heading": 313,
+      "hfov": 70.0,
+      "utc": "2026-07-17T18:11:34Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "4c53ea9a-f0d6-459e-8915-6b86bf85928c",
+        "url": "https://panoramax.xyz/#focus=pic&pic=4c53ea9a-f0d6-459e-8915-6b86bf85928c",
+        "author": "LowestPotential",
+        "licence": "CC BY-SA 4.0",
+        "view": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "hfov": 70.0
+        }
+      },
+      "notes": "Random US place (city, seed 30), the nearest daylight Panoramax frame to 37.7422,-122.4346. GoPro Max, 360-degree frame cut to 70 deg along the travel.",
+      "set": "random"
+    },
+    {
+      "name": "r30-4-small-town",
+      "lat": 40.2207855,
+      "lon": -82.8811082,
+      "heading": 83,
+      "hfov": 65.0,
+      "utc": "2025-07-03T18:49:38Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "8614ccb3-4f30-4408-a107-217f9158ee2a",
+        "url": "https://panoramax.xyz/#focus=pic&pic=8614ccb3-4f30-4408-a107-217f9158ee2a",
+        "author": "Adam Shomsky",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Random US place (small-town, seed 30), the nearest daylight Panoramax frame to 40.3753,-83.1177. , flat frame.",
+      "set": "random"
+    },
+    {
+      "name": "r30-5-forest",
+      "lat": 45.2482627,
+      "lon": -122.8943458,
+      "heading": 74,
+      "hfov": 70.0,
+      "utc": "2025-06-08T21:36:59Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "0fd06acd-4cd2-4eb1-8cdd-790e30bea02c",
+        "url": "https://panoramax.xyz/#focus=pic&pic=0fd06acd-4cd2-4eb1-8cdd-790e30bea02c",
+        "author": "LowestPotential",
+        "licence": "CC BY-SA 4.0",
+        "view": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "hfov": 70.0
+        }
+      },
+      "notes": "Random US place (forest, seed 30), the nearest daylight Panoramax frame to 45.1019,-122.8715. GoPro Max, 360-degree frame cut to 70 deg along the travel.",
+      "set": "random"
+    },
+    {
+      "name": "r30-6-suburb",
+      "lat": 41.9579417,
+      "lon": -88.0242222,
+      "heading": 173,
+      "hfov": 65.0,
+      "utc": "2025-10-26T18:58:02Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "7ed8affc-80bd-4483-ae38-47aa68a095f0",
+        "url": "https://panoramax.xyz/#focus=pic&pic=7ed8affc-80bd-4483-ae38-47aa68a095f0",
+        "author": "slinky309",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Random US place (suburb, seed 30), the nearest daylight Panoramax frame to 41.8777,-88.1050. Apple iPhone, flat frame.",
+      "set": "random"
+    },
+    {
+      "name": "r30-7-gravel",
+      "lat": 40.7101348,
+      "lon": -96.4001164,
+      "heading": 92,
+      "hfov": 70.0,
+      "utc": "2026-02-03T20:07:18Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "f20adcb5-081d-4fb1-a1a8-72abb8a9b421",
+        "url": "https://panoramax.xyz/#focus=pic&pic=f20adcb5-081d-4fb1-a1a8-72abb8a9b421",
+        "author": "slinky309",
+        "licence": "CC BY-SA 4.0",
+        "view": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "hfov": 70.0
+        }
+      },
+      "notes": "Random US place (gravel, seed 30), the nearest daylight Panoramax frame to 40.5701,-96.4136. GoPro MAX2, 360-degree frame cut to 70 deg along the travel.",
+      "set": "random"
+    },
+    {
+      "name": "r30-8-bronx-ny",
+      "lat": 40.8486134,
+      "lon": -73.9244787,
+      "heading": 224,
+      "hfov": 65.0,
+      "utc": "2025-10-25T17:13:22Z",
+      "width": 1600,
+      "height": 900,
+      "world": "helper",
+      "snap": "road",
+      "photo": {
+        "source": "panoramax",
+        "id": "b0592229-3ad8-403d-a6f8-f63a346588fe",
+        "url": "https://panoramax.xyz/#focus=pic&pic=b0592229-3ad8-403d-a6f8-f63a346588fe",
+        "author": "thetornado76",
+        "licence": "CC BY-SA 4.0"
+      },
+      "notes": "Random US place (dense-city, seed 30), the nearest daylight Panoramax frame to 40.8370,-73.9220. motorola moto g(9) plus, flat frame.",
+      "set": "random"
     }
   ]
 }
