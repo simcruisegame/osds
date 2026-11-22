@@ -260,7 +260,7 @@ bool FOsdsGraphicsAutoPickTest::RunTest(const FString&)
 	TestEqual(TEXT("desktop RTX 4080"), FOsdsGraphics::AutoPick(TEXT("NVIDIA GeForce RTX 4080"), false, 16376), P::Ultra);
 	TestEqual(TEXT("laptop RTX 4080 one tier down"), FOsdsGraphics::AutoPick(TEXT("NVIDIA GeForce RTX 4080 Laptop GPU"), false, 12282), P::High);
 	TestEqual(TEXT("desktop RTX 2070 Super"), FOsdsGraphics::AutoPick(TEXT("NVIDIA GeForce RTX 2070 SUPER"), false, 8192), P::Ultra);
-	TestEqual(TEXT("the owner's RTX 2070 Super Max-Q (High misses 60 fps on Ocean Drive)"), FOsdsGraphics::AutoPick(TEXT("NVIDIA GeForce RTX 2070 Super with Max-Q Design"), false, 8031), P::Medium);
+	TestEqual(TEXT("the owner's RTX 2070 Super Max-Q (High is tuned to 45 fps on this laptop)"), FOsdsGraphics::AutoPick(TEXT("NVIDIA GeForce RTX 2070 Super with Max-Q Design"), false, 8031), P::High);
 	TestEqual(TEXT("laptop RTX 2060"), FOsdsGraphics::AutoPick(TEXT("NVIDIA GeForce RTX 2060 Laptop GPU"), false, 6144), P::Medium);
 	TestEqual(TEXT("6 GB desktop cards step down from Ultra"), FOsdsGraphics::AutoPick(TEXT("NVIDIA GeForce RTX 3060"), false, 6144), P::High);
 	TestEqual(TEXT("unknown adapter without benchmark"), FOsdsGraphics::AutoPick(TEXT("Some Future GPU"), false, 16000, false), P::Medium);
