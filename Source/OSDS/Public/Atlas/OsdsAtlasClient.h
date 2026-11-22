@@ -120,10 +120,15 @@ public:
 	void SetMaxConcurrent(int32 MaxConcurrent);
 	int32 NumQueued() const;
 
+	/** Helper processes run, and network requests they report, since the game started. */
+	static int64 HelperRuns() { return HelperRunCounter.load(); }
+	static int64 HelperRequests() { return HelperRequestCounter.load(); }
 	/** Run one helper process synchronously on the calling thread (worker threads and tests only). */
 	static FOsdsAtlasResult RunBlocking(const FOsdsAtlasConfig& Config, const FOsdsAtlasRequest& Request, const std::atomic<bool>* Cancel);
 
 private:
+	static std::atomic<int64> HelperRunCounter;
+	static std::atomic<int64> HelperRequestCounter;
 	void StartNextLocked();
 	void Finish(const TSharedRef<FOsdsAtlasJob, ESPMode::ThreadSafe>& Job, FOsdsAtlasResult&& Result);
 

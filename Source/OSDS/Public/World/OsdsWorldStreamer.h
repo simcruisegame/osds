@@ -113,6 +113,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category = "OSDS|World")
 	int32 TilesFailed = 0;
+	/** The Tile the World cache last protected the Ring of (so it is set when the car changes Tile only). */
+	FIntPoint ProtectedCacheTile = FIntPoint(MIN_int32, MIN_int32);
+
 	/** Seconds a tile takes from request to result (a running mean; the look-ahead reads it). */
 	double LoadSecondsMean = 6.0;
 	/** How far ahead the streamer asks for tiles: speed x (2 x LoadSecondsMean + LookAheadMarginSeconds). */

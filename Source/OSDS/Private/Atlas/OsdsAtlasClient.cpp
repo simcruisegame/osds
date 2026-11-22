@@ -1,6 +1,7 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "Atlas/OsdsAtlasClient.h"
+#include "Atlas/OsdsUserAgent.h"
 
 #include "Async/Async.h"
 #include "HAL/FileManager.h"
@@ -227,6 +228,9 @@ void FOsdsAtlasClient::Finish(const TSharedRef<FOsdsAtlasJob, ESPMode::ThreadSaf
 	Job->Promise.SetValue(MoveTemp(Result));
 }
 
+std::atomic<int64> FOsdsAtlasClient::HelperRunCounter{0};
+std::atomic<int64> FOsdsAtlasClient::HelperRequestCounter{0};
+
 FOsdsAtlasResult FOsdsAtlasClient::RunBlocking(const FOsdsAtlasConfig& Config, const FOsdsAtlasRequest& Request, const std::atomic<bool>* Cancel)
 {
 	FOsdsAtlasResult Result;
@@ -257,6 +261,8 @@ FOsdsAtlasResult FOsdsAtlasClient::RunBlocking(const FOsdsAtlasConfig& Config, c
 		Result.Stderr = TEXT("could not create pipes");
 		return Result;
 	}
+	// The helper's User-Agent carries the game's version (ProjectVersion); the child inherits this.
+	FPlatformMisc::SetEnvironmentVar(TEXT("OSDS_VERSION"), *OsdsUserAgent::Version());
 	const TCHAR* WorkingDir = Config.WorkingDirectory.IsEmpty() ? nullptr : *Config.WorkingDirectory;
 	FProcHandle Proc = FPlatformProcess::CreateProc(*Config.Executable, *Params, false, true, true, nullptr, 0, WorkingDir, OutWrite, nullptr, ErrWrite);
 	if (!Proc.IsValid())
@@ -310,6 +316,13 @@ FOsdsAtlasResult FOsdsAtlasClient::RunBlocking(const FOsdsAtlasConfig& Config, c
 	Result.Stdout = Utf8(OutBytes);
 	Result.Stderr = Utf8(ErrBytes);
 	Result.Seconds = FPlatformTime::Seconds() - Started;
+	// Counted for the Long drive and the zero-network second drive: helper runs, and the network
+	// requests the helper reports in its result ("requests":N).
+	HelperRunCounter.fetch_add(1);
+	{
+		int32 At = Result.Stdout.Find(TEXT("\"requests\":"), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+		if (At != INDEX_NONE) HelperRequestCounter.fetch_add(FCString::Atoi(*Result.Stdout.Mid(At + 11, 12)));
+	}
 	if (bKilled)
 	{
 		return Result;

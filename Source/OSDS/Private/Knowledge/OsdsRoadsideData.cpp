@@ -1,6 +1,7 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "Knowledge/OsdsRoadsideData.h"
+#include "World/OsdsWorldCache.h"
 
 #include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
@@ -416,10 +417,10 @@ namespace OsdsRoadsideData
 		return true;
 	}
 
-	FString CachePath(const FIntPoint& Tile)
-	{
-		return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Knowledge/roadside"), OsdsTileName(Tile) + TEXT(".json"));
-	}
+	// The roadside facts of a Tile are a World cache layer (ADR 0005); bump when the JSON changes.
+	// Older Saved/Knowledge/roadside files (no size limit) are no longer read.
+	const FName RoadsideLayer(TEXT("roadside"));
+	constexpr int32 RoadsideVersion = 1;
 
 	bool ForTile(const FIntPoint& Tile, FOsdsRoadside& Out)
 	{
@@ -427,9 +428,11 @@ namespace OsdsRoadsideData
 			FScopeLock Lock(&RoadsideLock);
 			if (const FOsdsRoadside* C = RoadsideCache().Find(Tile)) { Out = *C; return true; }
 		}
-		FString Text;
+		TArray<uint8> Bytes;
 		FOsdsRoadside Data;
-		if (!FFileHelper::LoadFileToString(Text, *CachePath(Tile), FFileHelper::EHashOptions::None, FILEREAD_Silent) || !FromJson(Text, Data)) return false;
+		if (!FOsdsWorldCache::Get().Load(Tile, RoadsideLayer, RoadsideVersion, Bytes)) return false;
+		FUTF8ToTCHAR Text(reinterpret_cast<const ANSICHAR*>(Bytes.GetData()), Bytes.Num());
+		if (!FromJson(FString(Text.Length(), Text.Get()), Data)) return false;
 		FScopeLock Lock(&RoadsideLock);
 		RoadsideCache().Add(Tile, Data);
 		Out = MoveTemp(Data);
@@ -443,7 +446,7 @@ namespace OsdsRoadsideData
 			if (RoadsideCache().Contains(Tile)) return true;
 			if (MissingFiles().Contains(Tile)) return false;
 		}
-		const bool bFile = FPaths::FileExists(CachePath(Tile));
+		const bool bFile = FOsdsWorldCache::Get().Contains(Tile, RoadsideLayer, RoadsideVersion);
 		if (!bFile)
 		{
 			FScopeLock Lock(&RoadsideLock);
@@ -454,7 +457,11 @@ namespace OsdsRoadsideData
 
 	void Store(const FIntPoint& Tile, const FOsdsRoadside& Data, bool bSave)
 	{
-		if (bSave) FFileHelper::SaveStringToFile(ToJson(Tile, Data), *CachePath(Tile), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+		if (bSave)
+		{
+			FTCHARToUTF8 Utf8(*ToJson(Tile, Data));
+			FOsdsWorldCache::Get().Store(Tile, RoadsideLayer, RoadsideVersion, TConstArrayView<uint8>(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length()));
+		}
 		FScopeLock Lock(&RoadsideLock);
 		RoadsideCache().Add(Tile, Data);
 		MissingFiles().Remove(Tile);

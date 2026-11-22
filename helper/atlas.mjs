@@ -12,7 +12,7 @@ import {regionalSnow} from './regional-snow.mjs';
 import {forestForm} from './forest-form.mjs';
 import {shrubCover} from './shrub-cover.mjs';
 import {spectralGround} from './spectral-ground.mjs';
-import {trimSourceCache} from './cache-eviction.mjs';
+import {trimSourceCache,sourceCacheBudget} from './cache-eviction.mjs';
 import {aerialSource,regionalPhotograph} from './regional-aerial.mjs';
 import {regionalTerrain} from './regional-terrain.mjs';
 import {measuredGround,elevationGate} from './usgs-ground.mjs';
@@ -49,7 +49,7 @@ if(command==='archive-cloud-read'){
  process.exit(process.exitCode??0);
 }
 fs.mkdirSync(cache,{recursive:true});
-const day=86400000, cap=96*1024*1024;
+const day=86400000, cap=sourceCacheBudget;
 let requests=0;
 const readCached=cacheReader(cache,()=>requests++);
 const data=(id,url,ttl=30*day)=>readCached(id,url,ttl);

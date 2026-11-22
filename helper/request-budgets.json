@@ -1,0 +1,17 @@
+{
+ "about": "Request budgets (OSDS glossary): the most requests per kilometre driven OSDS may make to one public service. A session gets 'burst' requests to fill the first Ring, then 'perKm' for every kilometre driven. Values are estimates sized from a Ring of radius 1 (about 6 new Tiles per km at zoom 16, 0.47 km a side) and each service's published policy; the Long drive reports the real counts per service. A host not listed uses 'default'.",
+ "default": {"burst": 120, "perKm": 8, "policy": "estimate"},
+ "hosts": {
+  "tiles.openfreemap.org": {"burst": 200, "perKm": 20, "policy": "OpenFreeMap: free public vector tiles, no key, fair use; one request per vector tile (estimate)"},
+  "photon.komoot.io": {"burst": 10, "perKm": 0.2, "policy": "Photon search: a few searches per session, 1 request/s spacing enforced (estimate)"},
+  "overpass-api.de": {"burst": 4, "perKm": 0.1, "policy": "Overpass: very limited public service, queries are heavy; only on demand, never per Tile (estimate)"},
+  "overpass.private.coffee": {"burst": 4, "perKm": 0.1, "policy": "Overpass mirror: same as overpass-api.de (estimate)"},
+  "overpass.kumi.systems": {"burst": 4, "perKm": 0.1, "policy": "Overpass mirror: same as overpass-api.de (estimate)"},
+  "imagery.geoplatform.gov": {"burst": 60, "perKm": 4, "policy": "USGS/NAIP imagery: one photograph per Tile, spacing 1 s enforced (estimate)"},
+  "basemap.nationalmap.gov": {"burst": 60, "perKm": 4, "policy": "USGS National Map basemap imagery (estimate)"},
+  "elevation.nationalmap.gov": {"burst": 40, "perKm": 3, "policy": "USGS 3DEP elevation (estimate)"},
+  "api.panoramax.xyz": {"burst": 10, "perKm": 0.5, "policy": "Panoramax street photos: spacing 1 s enforced (estimate)"},
+  "aviationweather.gov": {"burst": 4, "perKm": 0.05, "policy": "NOAA weather: 60 s spacing enforced"},
+  "mesonet.agron.iastate.edu": {"burst": 4, "perKm": 0.05, "policy": "Iowa Mesonet: 61 s spacing enforced"}
+ }
+}

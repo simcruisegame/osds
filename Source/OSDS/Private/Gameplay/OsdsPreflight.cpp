@@ -1,6 +1,9 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "Gameplay/OsdsPreflight.h"
+#include "Atlas/OsdsAtlasClient.h"
+#include "HAL/PlatformMemory.h"
+#include "World/OsdsWorldCache.h"
 
 #include "CollisionQueryParams.h"
 #include "Engine/GameViewportClient.h"
@@ -1417,6 +1420,15 @@ void AOsdsPreflight::Finish()
 	}
 	UE_LOG(LogOsdsPreflight, Display, TEXT("PREFLIGHT FRAMES road=%s car=%s mean=%.1fm/s %s"), *RoadName, *CarId, Stats.MeanSpeedMps, *FrameLine);
 
+	{
+		// What the Long drive reports beside the frame times: the World cache, the map helper and memory.
+		const FOsdsWorldCache::FStats Cache = FOsdsWorldCache::Get().GetStats();
+		const FPlatformMemoryStats Mem = FPlatformMemory::GetStats();
+		UE_LOG(LogOsdsPreflight, Display,
+			TEXT("LONGDRIVE_STATS world_cache_hits=%lld world_cache_misses=%lld world_cache_stores=%lld world_cache_evicted=%lld world_cache_mb=%lld helper_runs=%lld helper_requests=%lld peak_ram_mb=%llu used_ram_mb=%llu"),
+			Cache.Hits, Cache.Misses, Cache.Stores, Cache.EvictedTiles, FOsdsWorldCache::Get().TotalBytes() / (1024 * 1024),
+			FOsdsAtlasClient::HelperRuns(), FOsdsAtlasClient::HelperRequests(), Mem.PeakUsedPhysical / (1024 * 1024), Mem.UsedPhysical / (1024 * 1024));
+	}
 	MeasureFrames(TimedFrameMs, Stats);
 	const FString Reasons = Judge(Stats);
 	const bool bPass = Reasons.IsEmpty();

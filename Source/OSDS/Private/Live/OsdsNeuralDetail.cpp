@@ -18,6 +18,7 @@
 #include "NNERuntimeGPU.h"
 #include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
+#include "World/OsdsWorldCache.h"
 #include "World/OsdsWorldResources.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogOsdsNeural, Log, All);
@@ -294,12 +295,25 @@ void FOsdsNeuralDetail::Downsample(const TArray<FColor>& In, int32 Width, int32 
 	}
 }
 
-FString FOsdsNeuralDetail::CachePath(const FString& SourcePath) const
+bool FOsdsNeuralDetail::CacheKey(const FString& SourcePath, FIntPoint& OutTile, FName& OutLayer, int32& OutVersion) const
 {
-	// The source file's size and time stamp are in the name: a new photograph is enhanced again.
+	// The photographs are named a16-<x>-<y>.jpg (zoom-16 Tile) or a-<x>-<y>.jpg (regional mosaic, its own
+	// grid): the two numbers key the World cache entry and the prefix names the layer, so the two grids
+	// never mix. The generator version folds in the output scale and the source file's size and time
+	// stamp: a new photograph, or a changed scale, is enhanced again (ADR 0005).
+	const FString Base = FPaths::GetBaseFilename(SourcePath);
+	TArray<FString> Parts;
+	Base.ParseIntoArray(Parts, TEXT("-"));
+	if (Parts.Num() != 3 || !Parts[1].IsNumeric() || !Parts[2].IsNumeric())
+	{
+		return false;
+	}
 	const FFileStatData Stat = IFileManager::Get().GetStatData(*SourcePath);
-	return FPaths::ProjectSavedDir() / TEXT("NeuralDetail") / FString::Printf(TEXT("%s-x%d-%llx.jpg"), *FPaths::GetBaseFilename(SourcePath), OutputScale,
-		static_cast<unsigned long long>(Stat.FileSize ^ Stat.ModificationTime.GetTicks()));
+	OutTile = FIntPoint(FCString::Atoi(*Parts[1]), FCString::Atoi(*Parts[2]));
+	OutLayer = FName(*FString::Printf(TEXT("neural-%s"), *Parts[0]));
+	OutVersion = static_cast<int32>(HashCombineFast(HashCombineFast(GetTypeHash(int32(GeneratorVersion)), GetTypeHash(int32(OutputScale))),
+		GetTypeHash(static_cast<uint64>(Stat.FileSize ^ Stat.ModificationTime.GetTicks()))));
+	return true;
 }
 
 bool FOsdsNeuralDetail::EnhanceAerial(const FString& SourcePath, TArray<FColor>& Pixels, int32& Width, int32& Height)
@@ -318,15 +332,28 @@ bool FOsdsNeuralDetail::EnhanceAerial(const FString& SourcePath, TArray<FColor>&
 	{
 		return false;
 	}
-	const FString Cached = CachePath(SourcePath);
 	TArray<FColor> Enhanced;
 	int32 W = 0, H = 0;
-	if (IFileManager::Get().FileExists(*Cached) && UOsdsWorldResources::DecodeImageFile(Cached, Enhanced, W, H) && W == Width * OutputScale && H == Height * OutputScale)
+	FIntPoint CacheTile;
+	FName CacheLayer;
+	int32 CacheVersion = 0;
+	TArray<uint8> Jpg;
+	if (CacheKey(SourcePath, CacheTile, CacheLayer, CacheVersion) && FOsdsWorldCache::Get().Load(CacheTile, CacheLayer, CacheVersion, Jpg))
 	{
-		Pixels = MoveTemp(Enhanced);
-		Width = W;
-		Height = H;
-		return true;
+		TSharedPtr<IImageWrapper> Wrapper = ImageWrappers ? ImageWrappers->CreateImageWrapper(EImageFormat::JPEG) : nullptr;
+		TArray64<uint8> Raw;
+		if (Wrapper && Wrapper->SetCompressed(Jpg.GetData(), Jpg.Num()) && Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)
+			&& Wrapper->GetWidth() == Width * OutputScale && Wrapper->GetHeight() == Height * OutputScale)
+		{
+			W = Wrapper->GetWidth();
+			H = Wrapper->GetHeight();
+			Enhanced.SetNumUninitialized(W * H);
+			FMemory::Memcpy(Enhanced.GetData(), Raw.GetData(), W * H * sizeof(FColor));
+			Pixels = MoveTemp(Enhanced);
+			Width = W;
+			Height = H;
+			return true;
+		}
 	}
 	FScopeLock Guard(&QueueLock);
 	if (!bStopping && !Queued.Contains(SourcePath))
@@ -397,7 +424,14 @@ void FOsdsNeuralDetail::Process(const FString& SourcePath)
 	TSharedPtr<IImageWrapper> Jpeg = ImageWrappers ? ImageWrappers->CreateImageWrapper(EImageFormat::JPEG) : nullptr;
 	if (Jpeg && Jpeg->SetRaw(Out.GetData(), Out.Num() * sizeof(FColor), OW, OH, ERGBFormat::BGRA, 8))
 	{
-		FFileHelper::SaveArrayToFile(Jpeg->GetCompressed(92), *CachePath(SourcePath));
+		FIntPoint CacheTile;
+		FName CacheLayer;
+		int32 CacheVersion = 0;
+		if (CacheKey(SourcePath, CacheTile, CacheLayer, CacheVersion))
+		{
+			const TArray64<uint8> Packed = Jpeg->GetCompressed(92);
+			FOsdsWorldCache::Get().Store(CacheTile, CacheLayer, CacheVersion, TConstArrayView<uint8>(Packed.GetData(), static_cast<int32>(Packed.Num())));
+		}
 	}
 	const FString Key = FPaths::GetCleanFilename(SourcePath);
 	// The texture's mip chain here, on the worker: the game thread only copies it in.

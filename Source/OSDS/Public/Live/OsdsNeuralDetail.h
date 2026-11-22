@@ -80,7 +80,10 @@ public:
 	FString Describe() const;
 
 private:
-	FString CachePath(const FString& SourcePath) const;
+	/** The World cache entry of one photograph; false for a file that is not a tile photograph. */
+	bool CacheKey(const FString& SourcePath, FIntPoint& OutTile, FName& OutLayer, int32& OutVersion) const;
+	/** Bump when the model, its windows or the encoding change: every enhanced photograph is made again. */
+	static constexpr int32 GeneratorVersion = 1;
 	void RunWorker();
 	void Process(const FString& SourcePath);
 

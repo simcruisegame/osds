@@ -1,6 +1,7 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "Live/OsdsAerialEye.h"
+#include "World/OsdsWorldCache.h"
 
 #include "Async/Async.h"
 #include <atomic>
@@ -228,9 +229,21 @@ bool FOsdsAerialEye::Initialize()
 	return true;
 }
 
-FString FOsdsAerialEye::CachePath(const FIntPoint& Tile16) const
+// The eye's classes of a Tile are a World cache layer (ADR 0005), one per eye model; the generator
+// version is the eye's own version and the file format's. Older Saved/Scan/eyes files are not read.
+namespace
 {
-	return FPaths::ProjectSavedDir() / FString::Printf(TEXT("Scan/eyes/%s-v%d/16/%d/%d.eye"), *EyeName.ToString(), EyeVersion, Tile16.X, Tile16.Y);
+	FName EyeLayer(FName EyeName) { return FName(*FString::Printf(TEXT("eye-%s"), *EyeName.ToString())); }
+}
+
+bool FOsdsAerialEye::LoadCached(const FIntPoint& Tile16, TArray<uint8>& OutBytes) const
+{
+	return FOsdsWorldCache::Get().Load(Tile16, EyeLayer(EyeName), EyeVersion * 100 + FileVersion, OutBytes);
+}
+
+void FOsdsAerialEye::StoreCached(const FIntPoint& Tile16, const TArray<uint8>& Bytes) const
+{
+	FOsdsWorldCache::Get().Store(Tile16, EyeLayer(EyeName), EyeVersion * 100 + FileVersion, Bytes);
 }
 
 void FOsdsAerialEye::InputsFromPhoto(const TArray<FColor>& Photo, int32 PhotoSize, const FIntPoint& Tile16, FOsdsScanInputs& Out)
@@ -657,7 +670,7 @@ void FOsdsAerialEye::RunWorker()
 		bool bHit = false;
 		{
 			TArray<uint8> Bytes;
-			bHit = FFileHelper::LoadFileToArray(Bytes, *CachePath(Tile), FILEREAD_Silent) && Decode(Bytes, Channels, Tints);
+			bHit = LoadCached(Tile, Bytes) && Decode(Bytes, Channels, Tints);
 		}
 		double Seconds = 0.0;
 		bool bOk = bHit;
@@ -720,7 +733,7 @@ void FOsdsAerialEye::RunWorker()
 					if (!bMosaic) ComputeTints(Inputs, Channels, Tints);
 					TArray<uint8> Bytes;
 					Encode(Channels, Tints, Bytes);
-					FFileHelper::SaveArrayToFile(Bytes, *CachePath(Tile));
+					StoreCached(Tile, Bytes);
 					UE_LOG(LogOsdsAerialEye, Log, TEXT("SCANEYE eye=%s tile=%d,%d photo=%s ms=%.0f cleaned=%d"), *EyeName.ToString(), Tile.X, Tile.Y, bMosaic ? TEXT("z16") : TEXT("z14"), Seconds * 1000.0, Cleaned);
 					if (CVarOsdsEyeDump.GetValueOnAnyThread() > 0)
 					{
@@ -815,7 +828,7 @@ bool FOsdsAerialEye::Lookup(const FIntPoint& Tile16, TArray<FOsdsScanChannel>& O
 	}
 	TArray<uint8> Bytes;
 	TArray<FOsdsClassTint> Tints;
-	if (!FFileHelper::LoadFileToArray(Bytes, *CachePath(Tile16), FILEREAD_Silent) || !Decode(Bytes, Out, Tints))
+	if (!LoadCached(Tile16, Bytes) || !Decode(Bytes, Out, Tints))
 	{
 		return false;
 	}

@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import {trimSourceCache} from '../helper/cache-eviction.mjs';
+import {trimSourceCache,sourceCacheBudget} from '../helper/cache-eviction.mjs';
+assert.equal(sourceCacheBudget,(Number(process.env.OSDS_MAP_CACHE_MIB)>0?Number(process.env.OSDS_MAP_CACHE_MIB):1024)*1024*1024,'raw map cache budget: 1 GiB unless OSDS_MAP_CACHE_MIB says otherwise');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sunday-driver-evict-'));
 const time=Date.now(),past=(time-3_600_000)/1000;
 function file(name,used=past,written=past){
