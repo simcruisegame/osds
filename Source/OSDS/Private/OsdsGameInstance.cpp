@@ -3,6 +3,7 @@
 #include "OsdsGameInstance.h"
 
 #include "Vehicle/CarDefinitionLoader.h"
+#include "Vehicle/OsdsCarPicker.h"
 
 void UOsdsGameInstance::Init()
 {
@@ -33,10 +34,10 @@ void UOsdsGameInstance::Init()
 
 TArray<FString> UOsdsGameInstance::GetAvailableCarIds() const
 {
-	TArray<FString> Ids;
-	CarDefinitions.GetKeys(Ids);
-	Ids.Sort();
-	return Ids;
+	// Only Drivable cars, in picker order (ADR 0001); Traffic cars stay loadable by id.
+	TArray<const FOsdsCarDefinition*> Cars;
+	for (const TPair<FString, FOsdsCarDefinition>& Pair : CarDefinitions) Cars.Add(&Pair.Value);
+	return OsdsCarPicker::DrivableIdsInPickerOrder(Cars);
 }
 
 bool UOsdsGameInstance::HasCarDefinition(const FString& CarId) const
