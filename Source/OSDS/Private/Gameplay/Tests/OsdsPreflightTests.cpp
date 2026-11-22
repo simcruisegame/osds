@@ -5,6 +5,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Gameplay/OsdsPreflight.h"
+#include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 namespace OsdsPreflightTest
 {
@@ -74,6 +77,72 @@ bool FOsdsPreflightJudgeTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("p95 of 94 fast, 3 slow, 3 hitches"), F.FrameP95Ms, 60.f);
 	TestEqual(TEXT("over 50 ms"), F.SlowFrames, 6);
 	TestEqual(TEXT("over 100 ms"), F.Hitches, 3);
+	return true;
+}
+
+// Issue #69: every Preflight run reported timed_frames 0 because frames a screenshot touched were
+// left out, and at 10 fps with a screenshot every 0.1 s that was every frame.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPreflightFrameTimesTest, "OSDS.Gameplay.Preflight.FrameTimes", OsdsPreflightTest::Flags)
+bool FOsdsPreflightFrameTimesTest::RunTest(const FString& Parameters)
+{
+	using namespace OsdsPreflightRules;
+	// The evidence run: 60 s of drive at about 100 ms a frame (game thread 40 ms), a screenshot on every frame.
+	FOsdsFrameTimes Times;
+	float DriveS = 0.f;
+	for (int32 I = 0; I < 600; ++I)
+	{
+		DriveS += 0.1f;
+		const bool bHitch = (I % 100) == 99;
+		Times.Record(DriveS, bHitch ? 250.f : 100.f, 40.f);
+	}
+	FOsdsPreflightStats S;
+	Times.Fill(S);
+	TestTrue(TEXT("frames after the warm-up are timed"), S.TimedFrames > 500);
+	TestEqual(TEXT("p95 of the total frame time"), S.FrameP95Ms, 100.f);
+	TestEqual(TEXT("p95 of the game-thread time"), S.GameP95Ms, 40.f);
+	TestEqual(TEXT("worst frame"), S.WorstFrameMs, 250.f);
+	TestEqual(TEXT("frames over 50 ms are all of them"), S.SlowFrames, S.TimedFrames);
+	TestTrue(TEXT("hitches over 100 ms are counted"), S.Hitches >= 5);
+	TestEqual(TEXT("all frames are kept, warm-up included"), Times.AllFrames(), 600);
+
+	// The warm-up itself is not judged.
+	FOsdsFrameTimes Warm;
+	Warm.Record(1.f, 900.f, 10.f);
+	Warm.Record(OsdsPreflightRules::FrameWarmupS + 0.1f, 16.f, 8.f);
+	FOsdsPreflightStats W;
+	Warm.Fill(W);
+	TestEqual(TEXT("one frame after the warm-up"), W.TimedFrames, 1);
+	TestEqual(TEXT("the warm-up stall is not in p95"), W.FrameP95Ms, 16.f);
+
+	// Nothing recorded: zeros, not a crash.
+	FOsdsFrameTimes None;
+	FOsdsPreflightStats N;
+	None.Fill(N);
+	TestEqual(TEXT("no frames, no timed frames"), N.TimedFrames, 0);
+
+	// A slow drive now fails the run (before: 0 timed frames, so it passed).
+	FOsdsPreflightStats Slow = OsdsPreflightTest::Good();
+	Times.Fill(Slow);
+	TestTrue(TEXT("a 10 fps drive fails on slow frames"), Judge(Slow).Contains(TEXT("slow-frames-p95")));
+	return true;
+}
+
+// Preflight must feed every drive frame to FOsdsFrameTimes and must not skip the frames it captures.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPreflightFrameWiringTest, "OSDS.Gameplay.Preflight.FrameTimesWired", OsdsPreflightTest::Flags)
+bool FOsdsPreflightFrameWiringTest::RunTest(const FString& Parameters)
+{
+	const FString Path = FPaths::Combine(FPaths::ProjectDir(), TEXT("Source/OSDS/Private/Gameplay/OsdsPreflight.cpp"));
+	FString Source;
+	if (!FFileHelper::LoadFileToString(Source, *Path))
+	{
+		AddInfo(TEXT("OsdsPreflight.cpp is not next to the binaries (packaged build); wiring not checked"));
+		return true;
+	}
+	TestTrue(TEXT("the drive tick records every frame"), Source.Contains(TEXT("FrameTimes.Record(")));
+	TestTrue(TEXT("the game thread time is read"), Source.Contains(TEXT("GGameThreadTime")));
+	TestTrue(TEXT("the result is filled from the recorder"), Source.Contains(TEXT("FrameTimes.Fill(Stats)")));
+	TestFalse(TEXT("frames a screenshot touched are not left out of the timing"), Source.Contains(TEXT("CaptureSkip")));
+	TestTrue(TEXT("the json carries the game-thread p95"), Source.Contains(TEXT("game_p95_ms")));
 	return true;
 }
 

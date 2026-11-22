@@ -89,10 +89,31 @@ void FOsdsReviewRecorder::StartGuard()
 		FDisplayMetrics Metrics;
 		FSlateApplication::Get().GetCachedDisplayMetrics(Metrics);
 		UGameUserSettings* Settings = GEngine->GameUserSettings;
-		Settings->SetFullscreenMode(EWindowMode::WindowedFullscreen);
-		if (Metrics.PrimaryDisplayWidth > 0) Settings->SetScreenResolution(FIntPoint(Metrics.PrimaryDisplayWidth, Metrics.PrimaryDisplayHeight));
-		Settings->ApplyResolutionSettings(false);
-		UE_LOG(LogOsdsReview, Display, TEXT("REVIEW DISPLAY borderless %dx%d"), Metrics.PrimaryDisplayWidth, Metrics.PrimaryDisplayHeight);
+		// -OsdsWindowRes=WxH (scripts: preflight.ps1 -Resolution): a chosen size smaller than the screen, in a window of that
+		// size, so the GPU draws the pixels the preset was tuned for (issue #69). Absent or not smaller: the screen's own size.
+		FIntPoint Chosen(0, 0);
+		FString ChosenText;
+		if (FParse::Value(FCommandLine::Get(), TEXT("OsdsWindowRes="), ChosenText))
+		{
+			FString W, H;
+			if (ChosenText.Split(TEXT("x"), &W, &H)) Chosen = FIntPoint(FCString::Atoi(*W), FCString::Atoi(*H));
+		}
+		const bool bChosenSmaller = Chosen.X > 0 && Chosen.Y > 0 && Metrics.PrimaryDisplayWidth > 0
+			&& (Chosen.X < Metrics.PrimaryDisplayWidth || Chosen.Y < Metrics.PrimaryDisplayHeight);
+		if (bChosenSmaller)
+		{
+			Settings->SetFullscreenMode(EWindowMode::Windowed);
+			Settings->SetScreenResolution(Chosen);
+			Settings->ApplyResolutionSettings(false);
+			UE_LOG(LogOsdsReview, Display, TEXT("REVIEW DISPLAY windowed %dx%d (screen %dx%d)"), Chosen.X, Chosen.Y, Metrics.PrimaryDisplayWidth, Metrics.PrimaryDisplayHeight);
+		}
+		else
+		{
+			Settings->SetFullscreenMode(EWindowMode::WindowedFullscreen);
+			if (Metrics.PrimaryDisplayWidth > 0) Settings->SetScreenResolution(FIntPoint(Metrics.PrimaryDisplayWidth, Metrics.PrimaryDisplayHeight));
+			Settings->ApplyResolutionSettings(false);
+			UE_LOG(LogOsdsReview, Display, TEXT("REVIEW DISPLAY borderless %dx%d"), Metrics.PrimaryDisplayWidth, Metrics.PrimaryDisplayHeight);
+		}
 	}
 	// The game keeps its pace when it is not the foreground window.
 	if (IConsoleVariable* Idle = IConsoleManager::Get().FindConsoleVariable(TEXT("t.IdleWhenNotForeground"))) Idle->Set(0, ECVF_SetByConsole);

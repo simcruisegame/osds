@@ -174,3 +174,41 @@ function Read-GpuBusy {
     $End = if ($T -match 'end_estimate=(\S+?),') { [datetime]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal) } else { $null }
     return [pscustomobject]@{ Text = $T.Trim(); End = $End; Stale = ($End -and (Get-Date).ToUniversalTime() -gt $End.AddMinutes(30)) }
 }
+
+<#
+  Is a GPU test (a visible or off-screen game that took -GpuTest) running right now? True while
+  the Global\OsdsGpuTest mutex is held by another process. Probes with a zero-wait grab and lets go
+  at once; a mutex nobody ever created is not held.
+#>
+function Test-GpuTestLockHeld {
+    $M = $null
+    try { $Open = [System.Threading.Mutex]::TryOpenExisting($script:GpuTestLockName, [ref]$M) } catch { return $false }
+    if (-not $Open) { return $false }
+    try {
+        $Got = $false
+        try { $Got = $M.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $Got = $true }
+        if ($Got) { try { $M.ReleaseMutex() } catch { }; return $false }
+        return $true
+    }
+    finally { $M.Dispose() }
+}
+
+<#
+  What a build or a headless test run does so a game someone is watching stays smooth (issue #69):
+  with a GPU test running, start at BelowNormal priority and let Unreal Build Tool run half the
+  cores' worth of compile actions (-MaxParallelActions; 4 of 8). With no GPU test: nothing changes
+  (Normal priority, MaxParallelActions 0 = no argument, UBT picks its own number).
+  $env:OSDS_THROTTLE_ACTIONS overrides the number of actions.
+#>
+function Get-LowImpactSettings {
+    # Cores: the physical cores (8 on the Owner's PC; Environment.ProcessorCount counts hyper-threads too).
+    param([bool]$GpuTestRunning, [int]$Cores = 0)
+    if ($Cores -le 0) {
+        try { $Cores = [int]((Get-CimInstance Win32_Processor | Measure-Object NumberOfCores -Sum).Sum) } catch { $Cores = 0 }
+        if ($Cores -le 0) { $Cores = [int][math]::Max(2, [Environment]::ProcessorCount / 2) }
+    }
+    if (-not $GpuTestRunning) { return [pscustomobject]@{ Throttle = $false; Priority = 'Normal'; MaxParallelActions = 0 } }
+    $Actions = [int][math]::Max(2, [math]::Floor($Cores / 2))
+    if ($env:OSDS_THROTTLE_ACTIONS -and [int]$env:OSDS_THROTTLE_ACTIONS -gt 0) { $Actions = [int]$env:OSDS_THROTTLE_ACTIONS }
+    return [pscustomobject]@{ Throttle = $true; Priority = 'BelowNormal'; MaxParallelActions = $Actions }
+}
