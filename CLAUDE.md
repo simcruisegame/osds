@@ -15,6 +15,8 @@ Unreal Engine 5.8 C++ driving simulator that builds the US from real data at run
 - Build + headless tests: `powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -Tier fast` (about 2 min; `-Tier full` before a merge; `-Filter OSDS.Vehicle` for one area).
 - In-game drives: `scripts\preflight.ps1 -ShowWindow ...` (the Owner watches; never run game tests off-screen).
 - One Unreal editor or GPU job at a time on this PC: the scripts take the locks in `scripts\EditorLock.ps1`.
+- From bash (Git Bash), write script paths with forward slashes: `powershell -ExecutionPolicy Bypass -File scripts/check.ps1 -Tier fast`. Bash eats backslashes, and `\t` in a path becomes a tab.
+- Run long builds and checks in the background and wait for the completion notice; never poll, and never keep a subagent alive just to wait for one.
 
 ## Rules
 
