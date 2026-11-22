@@ -36,6 +36,10 @@ struct FOsdsCarDefinition
 	FString Make;
 	FString Body = TEXT("roadster");
 	FString ModelScene;
+	/** Drivable cars (ADR 0001) are the ones the car picker offers; every other Car file is a Traffic car (data/cars `drivable`). */
+	bool bDrivable = false;
+	/** Position in the car picker, 1 first (data/cars `picker_order`); Drivable cars only. */
+	int32 PickerOrder = 0;
 	bool bModelRigFit = false;
 	bool bModelRigFlip = false;
 	int32 SeatCount = 2;
