@@ -23,7 +23,7 @@ class SWidgetSwitcher;
 enum class EOsdsMenuRow : uint8
 {
 	// Drive
-	Continue, WhereTo, PlanRoute, FamousRoads, Traffic, Atlas, Quit,
+	Continue, WhereTo, PlanRoute, FamousRoads, RaceTracks, Traffic, Atlas, Quit,
 	// Your car
 	Car, Transmission, Stability, Tune, Lights,
 	// Seat & view
@@ -176,6 +176,8 @@ public:
 	SLATE_BEGIN_ARGS(SOsdsListMenu) : _bPad(true) {}
 		SLATE_ARGUMENT(FString, Title)
 		SLATE_ARGUMENT(FString, Help)
+		/** A small line above the pad hints (the race tracks' not-affiliated line). */
+		SLATE_ARGUMENT(FString, Footer)
 		SLATE_ARGUMENT(TArray<FItem>, Items)
 		SLATE_ARGUMENT(bool, bPad)
 		SLATE_EVENT(FOnChoose, OnChoose)
@@ -201,6 +203,8 @@ private:
 
 	TArray<FItem> Items;
 	TArray<TSharedPtr<SWidget>> RowWidgets;
+	/** A list longer than the screen scrolls the chosen row into view. */
+	TSharedPtr<class SScrollBox> Scroll;
 	int32 Selected = 0;
 	bool bPad = true;
 	bool bFocusDirty = true;

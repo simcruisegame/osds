@@ -23,7 +23,9 @@
 // it stays valid, and a survey made for the reference width still covers the
 // narrower paved road.
 export const LANE_M=3.6;
-export const referenceWidths={motorway:19,trunk:16,primary:12,secondary:11,tertiary:10,minor:8,service:4.6,track:3};
+// raceway: OpenStreetMap highway=raceway (race tracks). Its width is rarely mapped and the vector
+// tiles drop it; the game sets a curated track's own width (data/tracks/tracks.json, OsdsTracks).
+export const referenceWidths={motorway:19,trunk:16,primary:12,secondary:11,tertiary:10,minor:8,service:4.6,track:3,raceway:12};
 const MAJOR=['motorway','trunk','primary','secondary','tertiary'];
 // Paved shoulder per side of a one-way carriageway, metres: [outside, median].
 // AASHTO-style rural values; on urban streets they stand in for the gutter and

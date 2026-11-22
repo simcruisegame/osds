@@ -473,6 +473,17 @@ float3 col = Tint.rgb * fine * v;
 float3 gravel = float3(0.26, 0.23, 0.19) * lerp(1.0, a, 1.0);
 col = lerp(col, gravel, VC.r);
 Roughness = saturate(0.80 + 0.10 * (1.0 - a) + 0.05 * VC.r);
+// A race track (OsdsTileBuilder: alpha 0.5 racing asphalt, 0.25 concrete, 1 a road; B the rubbered-in groove). Racing
+// asphalt is a dense, even mix of hard aggregate, resurfaced every few years: darker, coarser in the
+// close-up grain, without the patched cracks of a public road. Concrete tracks (Bristol, Dover) are
+// light grey slabs. The groove is laid down by tyre rubber: darker and a little glossier.
+float track = VA < 0.75 ? 1.0 : 0.0;
+float concreteTrack = VA < 0.375 ? 1.0 : 0.0;
+col = lerp(col, Tint.rgb * lerp(1.0, a, 0.6) * lerp(1.0, macro, 0.12) * 0.86, track * (1.0 - concreteTrack));
+col = lerp(col, float3(0.40, 0.39, 0.36) * lerp(1.0, a, 0.25) * lerp(1.0, macro, 0.18), concreteTrack);
+col *= lerp(1.0, lerp(0.62, 0.45, concreteTrack), VC.b * track);
+Roughness = lerp(Roughness, lerp(0.86, 0.9, concreteTrack), track);
+Roughness = lerp(Roughness, 0.66, VC.b * track);
 // Sealed cracks ("tar snakes"): on the older stretches of a paved road, thin meandering lines of
 // black crack sealant, a few metres apart. Drawn as the 0.5 contour of a two-octave value noise,
 // 2.4 cm wide, filtered by the pixel's footprint (coverage, not aliasing) and faded out where a
@@ -482,7 +493,7 @@ Roughness = saturate(0.80 + 0.10 * (1.0 - a) + 0.05 * VC.r);
 	#define SC_VN(q, o) (lerp(lerp(SC_TH(floor(q) + o), SC_TH(floor(q) + o + float2(1.0, 0.0)), smoothstep(0.0, 1.0, frac(q).x)), lerp(SC_TH(floor(q) + o + float2(0.0, 1.0)), SC_TH(floor(q) + o + float2(1.0, 1.0)), smoothstep(0.0, 1.0, frac(q).x)), smoothstep(0.0, 1.0, frac(q).y)))
 	float2 tq = m / 3.7;
 	float fld = 0.72 * SC_VN(tq, float2(0.0, 0.0)) + 0.28 * SC_VN(tq * 2.6 + float2(3.1, 7.7), float2(11.0, 5.0));
-	float age = saturate((macro2 - 0.97) * 5.0) * (1.0 - VC.r);
+	float age = saturate((macro2 - 0.97) * 5.0) * (1.0 - VC.r) * (VA < 0.75 ? 0.0 : 1.0);
 	float px = max(length(fwidth(m)), 1e-4);
 	float hwpx = 0.012 / px;
 	float dpx = abs(fld - 0.5) / max(fwidth(fld), 1e-6);
@@ -504,7 +515,7 @@ if (RoadDecalsOn > 0.5)
 	hh = hh * 1274126177u; hh ^= hh >> 13; hh *= 2654435761u;
 	float r0 = float(hh & 1023u) / 1023.0, r1 = float((hh >> 10) & 1023u) / 1023.0, r2 = float((hh >> 20) & 1023u) / 1023.0;
 	float older = saturate((macro2 - 0.9) * 4.0);
-	float chance = lerp(0.35, 0.75, older) * (1.0 - VC.r);
+	float chance = lerp(0.35, 0.75, older) * (1.0 - VC.r) * (VA < 0.75 ? 0.1 : 1.0);
 	if (r0 < chance)
 	{
 		float ang = r1 * 6.2831853;

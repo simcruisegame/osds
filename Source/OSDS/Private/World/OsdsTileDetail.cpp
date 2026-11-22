@@ -1755,7 +1755,7 @@ namespace OsdsTileDetail
 		for (int32 r = 0; r < Roads.Ribbons.Num(); ++r)
 		{
 			const FOsdsRibbon& R = Roads.Ribbons[r];
-			if (R.bService || R.St.Num() < 2) continue;
+			if (R.bService || R.bTrack || R.St.Num() < 2) continue;
 			for (int32 k = 0; k + 1 < R.St.Num(); ++k)
 			{
 				const FOsdsRibbonStation& A = R.St[k];
@@ -1810,7 +1810,7 @@ namespace OsdsTileDetail
 		for (int32 r = 0; r < Roads.Ribbons.Num(); ++r)
 		{
 			const FOsdsRibbon& Ribbon = Roads.Ribbons[r];
-			if (Ribbon.bService || Ribbon.St.Num() < 2) continue;
+			if (Ribbon.bService || Ribbon.bTrack || Ribbon.St.Num() < 2) continue;
 			const FVector2d T0 = Ribbon.St[0].T;
 			const double Canon = (T0.X > 1e-6 || (FMath::Abs(T0.X) <= 1e-6 && T0.Y > 0.0)) ? 1.0 : -1.0;
 			const FVector2d World0(static_cast<double>(X.Data.Id.X) * X.Side + Ribbon.St[0].C.X, static_cast<double>(X.Data.Id.Y) * X.Side + Ribbon.St[0].C.Y);

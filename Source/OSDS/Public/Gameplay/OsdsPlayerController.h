@@ -146,6 +146,9 @@ public:
 	bool IsMenuButtonDown() const;
 	void OpenRoutePlanner();
 	void OpenFamousRoads();
+	/** Race tracks: Oval tracks or Road courses, then the track (OsdsTracks). */
+	void OpenRaceTracks();
+	void OpenTrackList(bool bOvals);
 	void OpenWhereTo();
 	/** "Quit the game?": Keep driving (first, so a stray A keeps you driving) or Quit to the desktop; B goes back. */
 	void OpenQuitConfirm();
