@@ -1,0 +1,3 @@
+# OSDS 3.0 offers exactly five Drivable cars
+
+OSDS 3.0 offers exactly five Drivable cars: the Miata (the Owner's lowered 2001 NB with its roll cage), the Corvette C8, the Mini Cooper S, the Porsche 911 Carrera S (992) and the Audi TT 3.2 quattro (8J). The other Car files (Camaro, Mustang, Model 3, CR-V, F-150, Grand Cherokee, Odyssey and the other Miata trims) stay in the repository as Traffic cars and are no longer offered in the car picker. We chose depth over breadth: five cars that each pass every Bench in its Band and feel right on the Gamepad beat thirteen cars of mixed quality. Adding a car back to the picker means bringing its Car file up to the same standard first.
