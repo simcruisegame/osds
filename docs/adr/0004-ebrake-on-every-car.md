@@ -1,0 +1,3 @@
+# Every Drivable car has an E-brake, whatever its real parking brake
+
+Some real cars in 3.0 (the Corvette C8 and the Porsche 992) have electric parking brakes that brake all four wheels at speed, so they cannot do a handbrake turn. Players expect to pull the handbrake and slide in any car, so OSDS gives every Drivable car an E-brake: a game-side hydraulic handbrake on the rear wheels, like the common motorsport modification, capped at the rear service-brake torque. The Car file's real `parking_brake_type` stays as documented fact for the parked car; the E-brake is a deliberate game addition, not a claim about the real car.
