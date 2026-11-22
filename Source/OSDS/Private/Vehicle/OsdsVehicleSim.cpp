@@ -113,6 +113,7 @@ FOsdsVehicleSim::FOsdsVehicleSim()
 void FOsdsVehicleSim::Initialize(const FOsdsCarDefinition& InCar)
 {
 	Car = InCar;
+	Differential.Configure(Car);
 	TireRadiusM = Car.TireFreeRadiusM();
 	WheelInertiaKgM2 = FMath::Max(Car.WheelRotationalInertiaKgM2, UE_DOUBLE_SMALL_NUMBER);
 	RestLengthM = Car.MaximumSuspensionTravelM;
@@ -369,18 +370,12 @@ double FOsdsVehicleSim::AdvanceSteering(double Current, double Target, double De
 
 double FOsdsVehicleSim::DrivenOmega() const
 {
-	const FOsdsWheelState* W = State.Wheels;
-	if (Car.DrivetrainLayout == TEXT("fwd"))
+	double WheelOmegas[4];
+	for (int32 WheelIndex = 0; WheelIndex < 4; ++WheelIndex)
 	{
-		return (W[0].AngularSpeedRadPerSecond + W[1].AngularSpeedRadPerSecond) * 0.5;
+		WheelOmegas[WheelIndex] = State.Wheels[WheelIndex].AngularSpeedRadPerSecond;
 	}
-	if (Car.DrivetrainLayout == TEXT("awd"))
-	{
-		const double Share = Car.AwdFrontTorqueShareFraction;
-		return Share * (W[0].AngularSpeedRadPerSecond + W[1].AngularSpeedRadPerSecond) * 0.5 +
-			(1.0 - Share) * (W[2].AngularSpeedRadPerSecond + W[3].AngularSpeedRadPerSecond) * 0.5;
-	}
-	return (W[2].AngularSpeedRadPerSecond + W[3].AngularSpeedRadPerSecond) * 0.5;
+	return Differential.DrivenOmega(WheelOmegas);
 }
 
 double FOsdsVehicleSim::MotorTorqueNm(double Throttle, double Ratio, double SignDirection, double SpeedMps)
@@ -1200,7 +1195,7 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 			// the clutch the same at every physics rate and is stable for any
 			// substep up to that length.
 			const double Reflected = ForwardRatio * ForwardRatio * Car.DrivelineEfficiencyFraction /
-				(I * (Car.DrivetrainLayout == TEXT("awd") ? 4.0 : 2.0));
+				(I * Differential.DrivenWheelCount());
 			const double Coupling = FMath::Min(Car.ClutchCouplingNmPerRadPerSecond,
 				1.0 / (FMath::Max(Ds, ClutchCalibrationSubstepS) * (1.0 / Car.EngineRotationalInertiaKgM2 + Reflected)));
 			ClutchLoad = FMath::Clamp((State.EngineOmegaRadPerSecond - AxleSpeed * ForwardRatio) * Coupling,
@@ -1294,14 +1289,22 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 			OutputLoad = ClutchLoad;
 		}
 		const double AxleTorque = OutputLoad * ForwardRatio * Car.DrivelineEfficiencyFraction * SignDirection;
-		double WheelOmegas[4];
+		FOsdsDifferentialInput DiffInput;
+		DiffInput.AxleTorqueNm = AxleTorque;
 		for (int32 WheelIndex = 0; WheelIndex < 4; ++WheelIndex)
 		{
-			WheelOmegas[WheelIndex] = State.Wheels[WheelIndex].AngularSpeedRadPerSecond;
+			DiffInput.WheelOmegaRadPerSecond[WheelIndex] = State.Wheels[WheelIndex].AngularSpeedRadPerSecond;
 		}
-		double DriveTorque[4];
-		OsdsDynamics::SplitDriveTorqueToWheels(Car, AxleTorque, WheelOmegas, Ds,
-			bElectric ? FMath::Abs(ClutchLoad) > 0.0 : ClutchLoad > 0.0, DriveTorque);
+		DiffInput.DeltaTimeS = Ds;
+		DiffInput.bDrive = bElectric ? FMath::Abs(ClutchLoad) > 0.0 : ClutchLoad > 0.0;
+		DiffInput.Vehicle.Throttle = Throttle;
+		DiffInput.Vehicle.SpeedMps = Speed;
+		DiffInput.Vehicle.YawRateRadPerSecond = State.EscYawRadPerS;
+		DiffInput.Vehicle.LateralAccelMps2 = Speed * State.EscYawRadPerS;
+		DiffInput.Vehicle.SteerRackRad = Steering;
+		FOsdsDifferentialOutput DiffOutput;
+		Differential.Step(DiffInput, DiffOutput);
+		const double* DriveTorque = DiffOutput.WheelTorqueNm;
 
 		for (int32 WheelIndex = 0; WheelIndex < 4; ++WheelIndex)
 		{
