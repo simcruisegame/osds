@@ -46,6 +46,7 @@ The team charter and the map of teams, leads, owner threads and current work are
 | `environment-artist` | Roadside, ground, vegetation and buildings against real photos and road standards. |
 | `tools-engineer` | check, pre-flight, view check, replay, packaging, installers; tests that fail when they should. |
 | `research-scientist` | Remote sensing, computer vision and earth science: reading aerial photos, lidar and land data correctly; legal CPU models; error estimates and experiments. |
+| `art-director` | Overall photorealism of the generated world: light, colour, density, wear, edges, repetition; ranks visual fixes by realism per millisecond; reviews any look-changing PR. |
 | `applied-mathematician` | Sampling, filtering and LOD; stable non-repeating procedural detail; inverse problems and the self-check against the aerial photo; statistics; scan-map encoding. |
 
 ## How to call the team
