@@ -45,6 +45,16 @@ One of the fixed roads used to compare builds over time (Ocean Drive, the Dragon
 **Random US place**:
 A start drawn from the test-place list so every change is judged away from the Hero roads too.
 
+**Place recipe**:
+The summary of one Tile's character (what kind of place it is, how dense lights, signs and objects are, what its surfaces and sign style look like) that every world system follows.
+_Avoid_: place profile, tile style
+
+**Data pack**:
+World data for an area built ahead of time and shipped with the game, so the area loads without live requests.
+
+**Request budget**:
+The most requests per kilometre driven that OSDS may make to one public service.
+
 **Race track**:
 A real oval or road course the player can pick, built from map data and published banking.
 
@@ -68,6 +78,13 @@ A repeatable, scripted test of one car against published numbers (0-60, 70-0, sk
 
 **Band**:
 The pass range for a Bench result, taken from a real road test or standard.
+
+**Garage**:
+The screen where the player sets a Drivable car's paint, wheels and ride height, saved per car.
+
+**E-brake**:
+The game's handbrake on the rear wheels, available on every Drivable car for handbrake turns, whatever the real car's parking brake is.
+_Avoid_: handbrake (when the real car's parking brake is meant)
 
 **ESC**:
 Electronic stability control: the system that brakes single wheels to stop a skid.
@@ -113,6 +130,9 @@ The rule that nobody calls a change working until they have run the game and loo
 
 **Done-test**:
 The check that decides when a piece of work is finished.
+
+**Long drive**:
+A scripted 100-mile highway drive at speed that checks streaming, frame time, memory and Request budgets.
 
 **Release candidate**:
 A packaged build that is a candidate to ship, given one full release test.
