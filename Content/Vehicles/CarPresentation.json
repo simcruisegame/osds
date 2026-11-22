@@ -46,8 +46,8 @@
     "interior_plastic": "#2e2f30",
     "cloth": "#101011"
    },
-   "hide_pattern": "^Object_(27|30) ",
-   "hide_pattern_source": "The NB model carries a soft-top header and roof lining as black nodes Object_27 and Object_30 overhead the driver (heights 108-123 cm, 57-60 cm rearward of the windscreen header): the Owner's car has the top folded, so they are hidden (issue #100).",
+   "hide_pattern": "^ object_30( |$)",
+   "hide_pattern_source": "Node Object_30 of the NB model is the roof lining / soft-top shell: black, x +-70 cm, from 2 cm behind to 70 cm behind the windscreen header, up to 123 cm above the ground, so from the driver's eye (about 1.0 m up, 0.47 m behind the header) it fills the view from 16 to 45 degrees above the horizon. The Owner's car has the top folded, so it is hidden (issue #100). The label the rig matches starts with a space and is lower case (OsdsGltfModel.cpp), so the pattern is anchored on ' object_30'; the first attempt's '^Object_(27|30) ' never matched. Object_27 is the windscreen frame and stays.",
    "badges": [
     "mazda",
     {
