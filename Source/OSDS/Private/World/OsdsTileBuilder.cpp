@@ -16,6 +16,8 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Knowledge/OsdsRoadsideData.h"
+#include "World/OsdsTrackDetail.h"
+#include "World/OsdsTracks.h"
 #include "World/OsdsTileDetail.h"
 #include "World/OsdsWorldResources.h"
 
@@ -937,6 +939,7 @@ namespace OsdsTileBuilder
 		}
 		// Side runs (curbs, town edges, shoulders) are gathered first and drawn after every ribbon,
 		// so the curbs that meet at a street corner can be pulled back and joined by a curb return.
+		bool bTrackSurfaceKnown = false, bTrackConcrete = false;
 		struct FPendingRun { TArray<FSection> Run; EOsdsRoadEdge Edge; int32 SideIndex; double Sign; bool bCutStart; bool bCutEnd; };
 		TArray<FPendingRun> PendingRuns;
 		for (int32 r = 0; r < Roads.Ribbons.Num(); ++r)
@@ -963,7 +966,34 @@ namespace OsdsTileBuilder
 				for (const FVector& P : Rows[i]) B.CarriagewayPoints.Add(P);
 			}
 			// Vertex colour R: gravel (the asphalt shader's rural-shoulder gravel) on an unpaved road.
+			const int32 FirstVertex = Asphalt.Positions.Num();
 			EmitStrip(Asphalt, Rows, { FVector::UpVector }, FLinearColor(Ribbon.bUnpaved ? 1.f : 0.f, 0.f, 0.f, 1.f), true);
+			// A race track's surface (the asphalt shader): alpha 0.5 for racing asphalt, 0.25 for a
+			// concrete track (Bristol, Dover), 1 on every road; B the rubbered-in groove across the width, darkest a little
+			// inside the middle on the racing surface, a light trace down a pit lane.
+			if (Ribbon.bTrack && Asphalt.Positions.Num() == FirstVertex + NS * 5)
+			{
+				if (!bTrackSurfaceKnown)
+				{
+					double TLon = 0.0, TLat = 0.0;
+					OsdsGeo::TileToLonLat(FVector2d(Data.Id.X + 0.5, Data.Id.Y + 0.5), TLon, TLat);
+					const FOsdsTrack* Near = OsdsTracks::Near(TLon, TLat);
+					bTrackConcrete = Near && Near->bConcrete;
+					bTrackSurfaceKnown = true;
+				}
+				static const float Groove[5] = { 0.10f, 0.70f, 0.85f, 0.45f, 0.10f };
+				const float Surface = bTrackConcrete && !Ribbon.bPit ? 0.25f : 0.5f;
+				for (int32 i = 0; i < NS; ++i)
+				{
+					for (int32 c = 0; c < 5; ++c)
+					{
+						// The groove sits toward the driver's left of the middle on a one-way ribbon
+						// (the inside line of an oval run counter-clockwise), mirrored when it runs against.
+						const int32 Col = Ribbon.St[i].Travel < 0 ? 4 - c : c;
+						Asphalt.Colors[FirstVertex + i * 5 + c] = FLinearColor(0.f, 0.f, Ribbon.bPit ? 0.25f * Groove[Col] : Groove[Col], Surface);
+					}
+				}
+			}
 
 			// Open ends inside the tile get a skirt so a dead end never shows a gap.
 			for (int32 End = 0; End < 2; ++End)
@@ -1262,6 +1292,13 @@ namespace OsdsTileBuilder
 			OsdsTileDetail::BuildCarlaVerges(Context);
 			OsdsTileDetail::BuildPromenades(Context);
 			OsdsStreetFurniture::Build(Context);
+			// A race track's lines, walls, fences and kerbs (only on tiles with raceway ribbons).
+			const OsdsTrackDetail::FCounts Track = OsdsTrackDetail::Build(Context);
+			if (Track.WallSegments || Track.KerbBlocks || Track.bStartLine)
+			{
+				UE_LOG(LogTemp, Verbose, TEXT("Track detail tile %d,%d: %d line quads, %d wall segments, %d fence posts, %d kerb blocks%s"),
+					Data.Id.X, Data.Id.Y, Track.LineQuads, Track.WallSegments, Track.FencePosts, Track.KerbBlocks, Track.bStartLine ? TEXT(", the start/finish line") : TEXT(""));
+			}
 		}
 
 		// ---------------------------------------------------------------- markings
@@ -1568,7 +1605,7 @@ namespace OsdsTileBuilder
 			for (int32 r = 0; r < Roads.Ribbons.Num(); ++r)
 			{
 				const FOsdsRibbon& Ribbon = Roads.Ribbons[r];
-				if (Ribbon.bService || Ribbon.Class == TEXT("service") || Ribbon.St.Num() < 3) continue;
+				if (Ribbon.bService || Ribbon.bTrack || Ribbon.Class == TEXT("service") || Ribbon.St.Num() < 3) continue;
 				// Where another public carriageway crosses this one's centre line.
 				TArray<uint8> Inside; Inside.Init(0, Ribbon.St.Num());
 				TArray<int32> CrossRank; CrossRank.Init(MIN_int32, Ribbon.St.Num());
@@ -1580,7 +1617,7 @@ namespace OsdsTileBuilder
 					{
 						if (Seg.Key == r) continue;
 						const FOsdsRibbon& Other = Roads.Ribbons[Seg.Key];
-						if (Other.bService || Other.Class == TEXT("service") || !Other.St.IsValidIndex(Seg.Value + 1)) continue;
+						if (Other.bService || Other.bTrack || Other.Class == TEXT("service") || !Other.St.IsValidIndex(Seg.Value + 1)) continue;
 						const FVector2d A = Other.St[Seg.Value].C, Bb = Other.St[Seg.Value + 1].C;
 						const double Tt = FMath::Clamp(FVector2d::DotProduct(Ribbon.St[i].C - A, Bb - A) / FMath::Max((Bb - A).SizeSquared(), 1e-9), 0.0, 1.0);
 						if (FVector2d::Distance(Ribbon.St[i].C, FMath::Lerp(A, Bb, Tt)) > Other.St[Seg.Value].HalfW) continue;

@@ -13,6 +13,7 @@
 #include "Gameplay/OsdsAtlasUI.h"
 #include "Gameplay/OsdsDriveHud.h"
 #include "Gameplay/OsdsFamousRoads.h"
+#include "World/OsdsTracks.h"
 #include "Gameplay/OsdsFeatures.h"
 #include "Gameplay/OsdsGameMode.h"
 #include "Gameplay/OsdsHUD.h"
@@ -297,6 +298,7 @@ void AOsdsPlayerController::MenuAction(EOsdsMenuRow Row, int32 Dir)
 	case EOsdsMenuRow::WhereTo: OpenWhereTo(); break;
 	case EOsdsMenuRow::PlanRoute: OpenRoutePlanner(); break;
 	case EOsdsMenuRow::FamousRoads: OpenFamousRoads(); break;
+	case EOsdsMenuRow::RaceTracks: OpenRaceTracks(); break;
 	case EOsdsMenuRow::Atlas: OpenRoadAtlas(); break;
 	case EOsdsMenuRow::Quit: OpenQuitConfirm(); break;
 	case EOsdsMenuRow::EndRoute:
@@ -453,6 +455,75 @@ void AOsdsPlayerController::OpenFamousRoads()
 			if (UOsdsRouteSubsystem* Gps = UOsdsRouteSubsystem::Get(GetWorld())) Gps->StartRouteAfterTravel(Road.Stops);
 		})
 		.OnBack_Lambda([this]() { LeaveSubScreen(); });
+	ListPanel = List;
+	ShowOverlay(List, List);
+}
+
+namespace
+{
+	/** The tracks of one menu group, in list order: ovals, or road and street circuits. */
+	TArray<const FOsdsTrack*> TrackGroup(bool bOvals)
+	{
+		TArray<const FOsdsTrack*> Out;
+		for (const FOsdsTrack& T : OsdsTracks::All()) if ((T.Kind == EOsdsTrackKind::Oval) == bOvals) Out.Add(&T);
+		return Out;
+	}
+}
+
+void AOsdsPlayerController::OpenRaceTracks()
+{
+	CloseOverlays();
+	TArray<SOsdsListMenu::FItem> Items;
+	for (const bool bOvals : { true, false })
+	{
+		SOsdsListMenu::FItem Item;
+		Item.Icon = OsdsTheme::EIcon::Flag;
+		Item.Title = bOvals ? TEXT("Oval tracks") : TEXT("Road courses");
+		Item.Note = bOvals ? TEXT("Superspeedways, mile ovals and short tracks, banked as built")
+			: TEXT("Natural-terrain circuits, the Roval and the Long Beach streets");
+		Item.Value = FString::Printf(TEXT("%d"), TrackGroup(bOvals).Num());
+		Items.Add(Item);
+	}
+	TSharedRef<SOsdsListMenu> List = SNew(SOsdsListMenu)
+		.Title(TEXT("Race tracks"))
+		.Help(TEXT("Start on the start/finish straight, facing the way the races run."))
+		.Footer(OsdsTracks::Disclaimer)
+		.Items(Items)
+		.bPad(bUsingGamepad)
+		.OnChoose_Lambda([this](int32 Index) { OpenTrackList(Index == 0); })
+		.OnBack_Lambda([this]() { LeaveSubScreen(); });
+	ListPanel = List;
+	ShowOverlay(List, List);
+}
+
+void AOsdsPlayerController::OpenTrackList(bool bOvals)
+{
+	CloseOverlays();
+	TArray<SOsdsListMenu::FItem> Items;
+	for (const FOsdsTrack* T : TrackGroup(bOvals))
+	{
+		SOsdsListMenu::FItem Item;
+		Item.Icon = OsdsTheme::EIcon::Flag;
+		Item.Title = T->Name;
+		Item.Note = T->bBanked && T->Kind == EOsdsTrackKind::Oval
+			? FString::Printf(TEXT("%s · banked %s° in the turns"), *T->Place, *FString::SanitizeFloat(T->BankTurnDeg, 0))
+			: T->Place;
+		Item.Value = OsdsRouteText::Distance(T->LengthMi * 1609.344);
+		Items.Add(Item);
+	}
+	TSharedRef<SOsdsListMenu> List = SNew(SOsdsListMenu)
+		.Title(bOvals ? TEXT("Oval tracks") : TEXT("Road courses"))
+		.Help(TEXT("Lengths and banking as published by each track. The track is empty: no other cars."))
+		.Footer(OsdsTracks::Disclaimer)
+		.Items(Items)
+		.bPad(bUsingGamepad)
+		.OnChoose_Lambda([this, bOvals](int32 Index)
+		{
+			const TArray<const FOsdsTrack*> Group = TrackGroup(bOvals);
+			if (!Group.IsValidIndex(Index)) return;
+			ChoosePlace(OsdsTracks::ToPlace(*Group[Index]));
+		})
+		.OnBack_Lambda([this]() { OpenRaceTracks(); });
 	ListPanel = List;
 	ShowOverlay(List, List);
 }

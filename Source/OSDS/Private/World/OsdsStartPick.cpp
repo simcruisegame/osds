@@ -4,13 +4,19 @@
 
 #include "World/OsdsRoadCheck.h"
 #include "World/OsdsRoadNetwork.h"
+#include "World/OsdsTracks.h"
 #include "World/OsdsTileBuilder.h"
 #include "World/OsdsTraffic.h"
 #include "Misc/ScopeExit.h"
 
 namespace
 {
-	bool IsPublic(const FOsdsRibbon& R) { return !R.bService && R.Class != TEXT("service") && R.St.Num() >= 2; }
+	/** A public road: no service ways, and no race track (a track is started on only when asked for, OsdsTracks::RacewayStreet). */
+	bool IsPublic(const FOsdsRibbon& R) { return !R.bService && !R.bTrack && R.Class != TEXT("service") && R.St.Num() >= 2; }
+	/** A track's racing surface: a raceway ribbon that is not its pit lane. */
+	bool IsRacingSurface(const FOsdsRibbon& R) { return R.bTrack && !R.bPit && R.St.Num() >= 2; }
+	/** Where a drive goes on from ribbon From: a public road from a road, the racing surface from a track. */
+	bool Follows(const FOsdsRibbon& From, const FOsdsRibbon& O) { return From.bTrack ? IsRacingSurface(O) : IsPublic(O); }
 
 	/** The road-layer faces of each build, binned once per Candidates call (else per check). */
 	thread_local TMap<const FOsdsTileBuild*, TSharedPtr<OsdsRoadCheck::FTopSurface>>* GTops = nullptr;
@@ -109,7 +115,7 @@ double OsdsStartPick::AheadM(const TArray<FOsdsStartTile>& Tiles, int32 Tile, in
 			{
 				if (t == Tile && r == Ribbon) continue;
 				const FOsdsRibbon& O = Ribbons[r];
-				if (!IsPublic(O)) continue;
+				if (!Follows(R, O)) continue;
 				if (FVector2d::Distance(World(Tiles[t], O.St[0].C), End) < 3.0)
 				{
 					const double Dot = FVector2d::DotProduct((O.St[1].C - O.St[0].C).GetSafeNormal(), Heading);
@@ -208,7 +214,7 @@ TArray<OsdsStartPick::FRouteSample> OsdsStartPick::RouteSamples(const TArray<FOs
 			{
 				if (t == Tile && r == Ribbon) continue;
 				const FOsdsRibbon& O = Ribbons[r];
-				if (!IsPublic(O)) continue;
+				if (!Follows(R, O)) continue;
 				if (FVector2d::Distance(World(Tiles[t], O.St[0].C), End) < 3.0)
 				{
 					const double Dot = FVector2d::DotProduct((O.St[1].C - O.St[0].C).GetSafeNormal(), Heading);
@@ -340,6 +346,8 @@ TArray<FOsdsStartPose> OsdsStartPick::Candidates(const TArray<FOsdsStartTile>& T
 	GTops = &TopCache;
 	ON_SCOPE_EXIT { GTops = nullptr; };
 	const bool bPreferred = PreferredYawDeg < 1e9;
+	// A race track's start: any raceway ribbon that is not a pit lane, whatever its mapped name.
+	const bool bRaceway = RoadName == OsdsTracks::RacewayStreet;
 	const FVector2d Wanted = bPreferred ? FVector2d(FMath::Cos(FMath::DegreesToRadians(PreferredYawDeg)), FMath::Sin(FMath::DegreesToRadians(PreferredYawDeg))) : FVector2d::ZeroVector;
 	const FVector2d Near(NearCm.X / 100.0, NearCm.Y / 100.0);
 	for (int32 t = 0; t < Tiles.Num(); ++t)
@@ -349,7 +357,8 @@ TArray<FOsdsStartPose> OsdsStartPick::Candidates(const TArray<FOsdsStartTile>& T
 		for (int32 r = 0; r < B->Roads.Ribbons.Num(); ++r)
 		{
 			const FOsdsRibbon& Ribbon = B->Roads.Ribbons[r];
-			if (!IsPublic(Ribbon) || (!RoadName.IsEmpty() && !Ribbon.Name.Equals(RoadName, ESearchCase::IgnoreCase))) continue;
+			if (bRaceway ? !IsRacingSurface(Ribbon)
+				: (!IsPublic(Ribbon) || (!RoadName.IsEmpty() && !Ribbon.Name.Equals(RoadName, ESearchCase::IgnoreCase)))) continue;
 			// 30 m or more from any junction: where another carriageway runs into this one's side (a
 			// cut), and where this ribbon's own end meets another road (a T: Welch, WV started 26 m
 			// from one, on the flared kerb of the corner).

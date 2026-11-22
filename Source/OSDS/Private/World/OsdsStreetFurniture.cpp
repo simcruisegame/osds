@@ -305,7 +305,7 @@ namespace OsdsStreetFurniture
 		for (int32 r = 0; r < (Mode == 1 ? Roads.Ribbons.Num() : 0); ++r)
 		{
 			const FOsdsRibbon& Ribbon = Roads.Ribbons[r];
-			if (Ribbon.bService || Ribbon.bUnpaved || Ribbon.St.Num() < 2) continue;
+			if (Ribbon.bService || Ribbon.bTrack || Ribbon.bUnpaved || Ribbon.St.Num() < 2) continue;
 			const FVector2d T0 = Ribbon.St[0].T;
 			const double Canon = (T0.X > 1e-6 || (FMath::Abs(T0.X) <= 1e-6 && T0.Y > 0.0)) ? 1.0 : -1.0;
 			const FVector2d World0(X.Data.Id.X * X.Side + Ribbon.St[0].C.X, X.Data.Id.Y * X.Side + Ribbon.St[0].C.Y);
