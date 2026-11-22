@@ -448,4 +448,52 @@ bool FOsdsPresentationRolesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPresentationMiataTopFoldedTest, "OSDS.Presentation.Miata.TopFoldedSkyAboveScreen", Flags)
+bool FOsdsPresentationMiataTopFoldedTest::RunTest(const FString& Parameters)
+{
+	FLoaded L;
+	if (!LoadAndRig(*this, TEXT("nb2001_lowered"), L))
+	{
+		return false;
+	}
+	const FVector Eye = FOsdsRigInputs::FromCar(L.Car).DriverEyeM * 100.0;
+	AddInfo(FString::Printf(TEXT("EYE %s"), *Eye.ToString()));
+	for (int32 S = 0; S < L.Rigged.Body.Sections.Num(); ++S)
+	{
+		const FOsdsRigSection& Sec = L.Rigged.Body.Sections[S];
+		double MaxElev = -90, MinX = 1e9, MaxZ = -1e9;
+		int32 N = 0;
+		for (const FVector3f& P : Sec.Positions)
+		{
+			const double Dx = P.X - Eye.X;
+			if (Dx < 20.0 || FMath::Abs(P.Y - Eye.Y) > 60.0) continue;
+			const double Elev = FMath::RadiansToDegrees(FMath::Atan2(P.Z - Eye.Z, Dx));
+			if (Elev > 8.0 && Elev < 40.0) { ++N; MaxElev = FMath::Max(MaxElev, Elev); MinX = FMath::Min<double>(MinX, P.X); MaxZ = FMath::Max<double>(MaxZ, P.Z); }
+		}
+		if (Sec.Role == EOsdsCarMaterialRole::Authored && L.Model.Materials.IsValidIndex(Sec.MaterialIndex) && L.Model.Materials[Sec.MaterialIndex].Name == TEXT("black"))
+		{
+			for (int32 Band = 0; Band < 4; ++Band)
+			{
+				int32 C = 0; double X0 = 1e9, X1 = -1e9, Y0 = 1e9, Y1 = -1e9, Z0 = 1e9, Z1 = -1e9;
+				for (const FVector3f& P : Sec.Positions)
+				{
+					const double Dx = P.X - Eye.X;
+					if (Dx < 20.0 || FMath::Abs(P.Y - Eye.Y) > 60.0) continue;
+					const double Elev = FMath::RadiansToDegrees(FMath::Atan2(P.Z - Eye.Z, Dx));
+					if (Elev < 8.0 + 8.0 * Band || Elev >= 16.0 + 8.0 * Band) continue;
+					++C; X0 = FMath::Min<double>(X0, P.X); X1 = FMath::Max<double>(X1, P.X); Y0 = FMath::Min<double>(Y0, P.Y); Y1 = FMath::Max<double>(Y1, P.Y); Z0 = FMath::Min<double>(Z0, P.Z); Z1 = FMath::Max<double>(Z1, P.Z);
+				}
+				AddInfo(FString::Printf(TEXT("BLK band %d: %d verts x %.0f..%.0f y %.0f..%.0f z %.0f..%.0f"), Band, C, X0, X1, Y0, Y1, Z0, Z1));
+			}
+		}
+		if (N > 0)
+		{
+			const FString Name = L.Model.Materials.IsValidIndex(Sec.MaterialIndex) ? L.Model.Materials[Sec.MaterialIndex].Name : FString();
+			AddInfo(FString::Printf(TEXT("SEC %d %s role %d: %d verts in the upper view, max elev %.1f, min x %.0f, max z %.0f"), S, *Name, (int32)Sec.Role, N, MaxElev, MinX, MaxZ));
+		}
+	}
+	return true;
+}
+
 #endif
