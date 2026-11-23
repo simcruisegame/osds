@@ -41,6 +41,8 @@
  ],
  "_comment": "2015 MINI Cooper S Hardtop 2-door (F56, US): 2.0 L B48 turbo four, 6-speed manual, front-wheel drive. Model: CARLA Team's Mini Cooper (carla-content, CC BY 4.0), exported from Unreal to glTF.",
  "id": "mini15s",
+ "drivable": true,
+ "picker_order": 3,
  "name": "Cooper S",
  "make": "MINI",
  "body": "hatchback",

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Makes a play-test build of the latest main: a packaged, smoke-tested zip with release notes.
 
@@ -40,6 +40,8 @@ param(
     [string]$EngineDir = $(if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:\Program Files\Epic Games\UE_5.8' })
 )
 
+# A game launched while another checkout builds waits on the UBT mutex in ValidatePlatforms; skip it (see check.ps1).
+$env:UE_SKIP_UBT_SDK_SETUP = '1'
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
 $Root = Split-Path -Parent $PSScriptRoot

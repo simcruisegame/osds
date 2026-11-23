@@ -111,6 +111,22 @@
      ]
     },
     {
+     "note": "soft top header (black): the owner's top is folded behind the seats and the windscreen header is a thin strip in his photo, with no visor frame; the model's closed-top header bar (about 14 cm tall by 18 cm deep) and sun visors drew a thick dark band across the driver's view. Parts wholly inside this box (the model's header bar, 10 cm ahead to 4 cm behind the screen top). The rear-view mirror's black housing sits against it and goes too (the glass stays).",
+     "material": "black",
+     "box": [
+      [
+       -0.12,
+       -0.62,
+       1.05
+      ],
+      [
+       0.17,
+       0.62,
+       1.45
+      ]
+     ]
+    },
+    {
      "note": "soft top (black): the owner drives top down; parts wholly behind the windscreen header and above the door line, seats kept",
      "material": "black",
      "box": [
@@ -120,7 +136,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -136,7 +152,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -152,7 +168,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -168,7 +184,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -184,7 +200,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -200,7 +216,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -216,7 +232,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -943,9 +959,10 @@
     "cabin_engine_note": "Mid engine: the eye sits 1.30 m ahead of the rear axle (driver_eye, half the 2723 mm wheelbase) and the LT2 about 0.5 m ahead of that axle with its intake on top (estimate from the C8 layout), so about 0.9 m from the ear against about 2 m for a front engine ahead of the dash: the intake is as loud in the cabin as outside (inverse distance, limited to 1).",
     "source": "GM LT2 6.2 L V8: firing order 1-8-7-2-6-5-4-3, odd cylinders on the left (driver's side) bank and even on the right (GM numbering); quad tips, the driver's-side pair nearer. Bank gains 1.0 / 0.62 are an estimate (no recording synchronised with rpm)."
    },
-   "credit": "\"2019 Chevrolet Corvette C8 Stingray\" by Hari Prasath R (https://sketchfab.com/Haris3D), CC BY 4.0",
+   "credit": "\"2019 Chevrolet Corvette C8 Stingray\" by Hari Prasath R (https://sketchfab.com/Haris3D), CC BY 4.0. Modified: the infotainment texture (Interior_Display) has its two phone-projection tiles (trademark labels) painted out; the cluster texture (Gauges) has the tach-centre crossed-flags mark painted out; the interior atlas (Interior) has the gear-selector crossed-flags relief, the speaker-trim stingray emblem and BOSE lettering, and the OnStar button mark painted out (scripts/osds-cars/debadge_c8_cluster.ps1).",
    "steering_ratio": 15.7,
    "steering_ratio_source": "15.7:1, variable-ratio electric rack (Chevrolet, 2020 Corvette Stingray specifications; 16.25:1 on the C7).",
+   "steering_wheel": {"node": "steering wheel", "source": "The model's 'Steering Wheel' nodes (rim, hub, aluminium trim, paddles and the decal plates); the rig fits the rim ring to them and turns them about the column, at the ratio above and the car file's 2.5 turns lock to lock (NZ road tests, in data/cars/meridian_z.json). The crossed-flags emblem plate (Interior_Badge) is hidden: no maker marks."},
    "paint": {
     "name": "Torch Red (GKZ)",
     "base": "#a3140f",
@@ -975,6 +992,8 @@
     "Seats_Adjust_the_leather_texture_using_Color_Ramp_or_using_HSV": "leather",
     "Gauges": "gauge",
     "Interior_Display": "gauge",
+    "Interior_Badge": "hidden",
+    "Badges": "hidden",
     "Mat_supergt.209": "hidden",
     "Headlights": "lamp_front",
     "Day_Lights": "lamp_front",

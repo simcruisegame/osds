@@ -121,7 +121,7 @@ private:
 /** The pass rules and the measurements that need no world, kept apart for the tests. */
 namespace OsdsPreflightRules
 {
-	constexpr float MinDistanceM = 200.f;
+	constexpr float MinMeanSpeedMps = 3.3f; // the old 200 m in 60 s, as a simulated-time speed
 	/** Off the road surface longer than this is a run-off (a crack under the wheels takes about 0.1 s). */
 	constexpr float MaxOffRoadSeconds = 1.f;
 	/** A spin: the rear axle slips past 15 deg (the drive robot's SPUN line), or the car slides backwards. */
@@ -293,6 +293,7 @@ private:
 	/** The robot's felt yaw rate (low-passed) and its last stick, for a smooth hand. */
 	double SmoothedYawRate = 0.0;
 	float LastStick = 0.f;
+	float LastThrottle = 0.f;
 	/** Every drive frame's total and game-thread time; the rules judge those after the warm-up. */
 	FOsdsFrameTimes FrameTimes;
 	/** Every drive frame's real time (ms), for the log summary. */

@@ -11,6 +11,7 @@ The short version of each release, newest first. Every release has full notes in
 - **User-Agent:** now reads the game's `ProjectVersion`, so it never shows a stale number.
 - **Request budgets:** each public service gets a number of requests per kilometre driven; roads, elevation and aerial imagery are essential and never refused, everything else is deferred first ([docs/team/request-budgets.md](docs/team/request-budgets.md)).
 - **Long drive:** `scripts/long-drive.ps1` drives about 100 miles at 75-80 mph and fails on hitches over 100 ms, memory growth, or a service over its budget.
+**Bridges hold across tile seams:** a deck whose road row lost its bridge flag at a tile border (Mackinac) now continues at deck height instead of dropping to the water.
 
 **Race tracks** (the race-tracks team):
 

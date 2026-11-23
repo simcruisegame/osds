@@ -22,6 +22,7 @@
 #include "Gameplay/OsdsVehicleControl.h"
 #include "Gameplay/OsdsViewCheck.h"
 #include "Misc/CommandLine.h"
+#include "Vehicle/OsdsCarPicker.h"
 #include "Misc/Parse.h"
 #include "OsdsGameInstance.h"
 #include "Vehicle/CarDefinitionLoader.h"
@@ -126,15 +127,13 @@ void AOsdsGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	// RestartPlayer) while the map loads, before StartPlay, and a world drive
 	// must hold that player until the road under the car exists.
 	const TCHAR* Cmd = FCommandLine::Get();
-	CarId = StartCarId;
-	// The car driven last (DrivingPreferences.gd "car"), when it still exists.
-	const FString Remembered = OsdsPreferences::GetString(TEXT("car"), FString());
+	// The car driven last (DrivingPreferences.gd "car") counts only while it is Drivable (ADR 0001);
+	// -OsdsCar= reaches any Car file (tests and Benches).
+	FString Override;
+	FParse::Value(Cmd, TEXT("OsdsCar="), Override);
 	const UOsdsGameInstance* Garage = GetGameInstance<UOsdsGameInstance>();
-	if (!Remembered.IsEmpty() && Garage && Garage->HasCarDefinition(Remembered))
-	{
-		CarId = Remembered;
-	}
-	FParse::Value(Cmd, TEXT("OsdsCar="), CarId);
+	CarId = OsdsCarPicker::ChooseStartCar(OsdsPreferences::GetString(TEXT("car"), FString()),
+		Garage ? Garage->GetAvailableCarIds() : TArray<FString>(), Override, StartCarId);
 	// The lighting lab builds its own street, and -OsdsNoWorld drives the loaded map.
 	bWorldDrive = GetWorld() && GetWorld()->IsGameWorld()
 		&& !FParse::Param(Cmd, TEXT("OsdsNoWorld")) && !FParse::Param(Cmd, TEXT("OsdsLab"));
@@ -471,8 +470,7 @@ void AOsdsGameMode::CycleCar(APlayerController* Player)
 	{
 		return;
 	}
-	TArray<FString> Ids = GameInstance->GetAvailableCarIds();
-	Ids.Sort();
+	const TArray<FString> Ids = GameInstance->GetAvailableCarIds(); // Drivable, in picker order
 	if (Ids.Num() < 2)
 	{
 		return;

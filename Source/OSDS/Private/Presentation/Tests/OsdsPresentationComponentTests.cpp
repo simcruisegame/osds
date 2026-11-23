@@ -84,6 +84,31 @@ bool FOsdsPresentationComponentBuildTest::RunTest(const FString& Parameters)
 		Car->ApplyVisualState(State);
 		TestNearlyEqual(TEXT("steering wheel shows 0.1 rad x 15.7"), Car->GetSteeringWheelAngleRad(), 1.57, 1e-6);
 
+		// The steering-wheel MESH really turns (#43): its orientation is the rest pose turned by
+		// road-wheel angle x 15.7 about the column axis (the part's local X), and the column
+		// itself does not move.
+		UStaticMeshComponent* WheelMesh = nullptr;
+		for (UStaticMeshComponent* Mesh : Meshes)
+		{
+			if (Mesh->GetName().StartsWith(TEXT("steering_wheel")) && !Mesh->GetName().Contains(TEXT("glass"))) { WheelMesh = Mesh; }
+		}
+		if (TestNotNull(TEXT("steering wheel mesh component"), WheelMesh))
+		{
+			const FTransform Rest = Car->GetSteeringWheelRestTransform();
+			const FVector Column = Rest.GetUnitAxis(EAxis::X);
+			const FQuat Turned = WheelMesh->GetRelativeRotation().Quaternion();
+			const FQuat Delta = Rest.GetRotation().Inverse() * Turned;
+			FVector TurnAxis;
+			float TurnAngle = 0.f;
+			Delta.ToAxisAndAngle(TurnAxis, TurnAngle);
+			TestNearlyEqual(TEXT("the wheel mesh turns 1.57 rad (0.1 x 15.7)"), static_cast<double>(TurnAngle), 1.57, 1e-4);
+			TestTrue(TEXT("the wheel mesh turns about the column axis"), FMath::Abs(FVector::DotProduct(TurnAxis, FVector::ForwardVector)) > 0.9999);
+			const FVector ColumnNow = WheelMesh->GetRelativeRotation().Quaternion().RotateVector(FVector::ForwardVector);
+			TestTrue(TEXT("the column axis stays put"), ColumnNow.Equals(Rest.GetRotation().RotateVector(FVector::ForwardVector), 1e-4));
+			TestTrue(TEXT("the mesh stays on the column centre"), WheelMesh->GetRelativeLocation().Equals(Rest.GetLocation(), 0.01));
+			TestTrue(TEXT("column axis points forward"), Column.X > 0.5);
+		}
+
 		// The wheel meshes sit on knuckles at the hubs.
 		int32 OnHubs = 0;
 		for (UStaticMeshComponent* Mesh : Meshes)

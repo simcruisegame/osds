@@ -218,6 +218,7 @@ struct FOsdsSeamEnd
 	FVector2d T = FVector2d(1.0, 0.0);
 	double HalfW = 0.0;
 	double HL = 0.0, HC = 0.0, HR = 0.0;
+	bool bBridge = false; // the road ends on this seam as a bridge deck: the tile across continues the deck
 };
 
 class OSDS_API FOsdsRoadNetwork

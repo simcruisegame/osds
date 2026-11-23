@@ -424,6 +424,26 @@ bool FOsdsPresentationRigC8Test::RunTest(const FString& Parameters)
 		int32 Calipers = 0;
 		for (int32 W = 0; W < 4; ++W) Calipers += L.Rigged.Uprights[W].NumTriangles() > 0 ? 1 : 0;
 		TestEqual(TEXT("meridian_z four calipers ride on the uprights"), Calipers, 4);
+			// Cockpit (#43): a steering wheel entry, turned at the sourced ratio; live cluster readouts; no maker marks.
+			TestEqual(TEXT("meridian_z steering ratio is the sourced 15.7"), L.Profile.SteeringRatio, 15.7, 1e-9);
+			TestFalse(TEXT("meridian_z names its steering wheel node"), L.Profile.SteeringWheelNode.IsEmpty());
+			TestTrue(TEXT("meridian_z rig has a steering wheel part"), L.Rigged.bHasSteeringWheel && L.Rigged.SteeringWheel.NumTriangles() > 100);
+			TestEqual(TEXT("meridian_z wheel angle = road-wheel angle x ratio"), UOsdsCarPresentationComponent::SteeringWheelAngleFor(0.1, 0.1, L.Profile.SteeringRatio), 1.57, 1e-9);
+			if (TestTrue(TEXT("meridian_z has a digital cluster screen"), L.Profile.Screen.IsSet()))
+			{
+				TestTrue(TEXT("meridian_z cluster has a speed box"), L.Profile.Screen->SpeedBox.Z > L.Profile.Screen->SpeedBox.X);
+			}
+			FOsdsCarVisualState State;
+			State.SpeedMps = 26.8224f;
+			State.EngineRpm = 4500.f;
+			TestEqual(TEXT("meridian_z speed readout, mph"), UOsdsCarPresentationComponent::DialTarget(TEXT("speed_mph"), State), 60.0, 0.01);
+			TestEqual(TEXT("meridian_z rpm readout"), UOsdsCarPresentationComponent::DialTarget(TEXT("rpm"), State), 4500.0, 0.01);
+			TestTrue(TEXT("meridian_z crossed-flags badge material is hidden"), L.Profile.RoleFor(TEXT("Interior_Badge"), TEXT("")) == EOsdsCarMaterialRole::Hidden);
+			for (const FOsdsRigSection& Section : L.Rigged.SteeringWheel.Sections)
+			{
+				const FString Name = L.Model.Materials.IsValidIndex(Section.MaterialIndex) ? L.Model.Materials[Section.MaterialIndex].Name : FString();
+				TestTrue(TEXT("no badge material on the wheel: ") + Name, !Name.Contains(TEXT("Badge")));
+			}
 	}
 	return true;
 }
