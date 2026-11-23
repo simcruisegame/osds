@@ -1,6 +1,8 @@
 ﻿// Copyright OSDS contributors. All Rights Reserved.
 
 #include "Atlas/OsdsAtlasClient.h"
+#include "Atlas/OsdsUserAgent.h"
+#include "Misc/ConfigCacheIni.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
@@ -119,6 +121,21 @@ bool FOsdsAtlasAsyncTest::RunTest(const FString& Parameters)
 	ExpectError(*this, TEXT("second running job cancelled"), B.Error, EOsdsAtlasError::Cancelled);
 	ExpectError(*this, TEXT("queued job cancelled"), C.Error, EOsdsAtlasError::Cancelled);
 	TestTrue(FString::Printf(TEXT("cancel is prompt (%.2f s)"), CancelSeconds), CancelSeconds < 5.0);
+	return true;
+}
+
+// The User-Agent names the game's own version (ProjectVersion), not a number typed in code.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsUserAgentVersionTest, "OSDS.Atlas.UserAgentVersion",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter)
+bool FOsdsUserAgentVersionTest::RunTest(const FString& Parameters)
+{
+	FString ProjectVersion;
+	GConfig->GetString(TEXT("/Script/EngineSettings.GeneralProjectSettings"), TEXT("ProjectVersion"), ProjectVersion, GGameIni);
+	TestFalse(TEXT("ProjectVersion is set"), ProjectVersion.IsEmpty());
+	const FString Agent = OsdsUserAgent::Get();
+	TestTrue(TEXT("User-Agent carries ProjectVersion"), Agent.StartsWith(FString::Printf(TEXT("OSDS/%s "), *ProjectVersion)));
+	TestFalse(TEXT("no stale version"), Agent.Contains(TEXT("2.0.3")));
+	TestFalse(TEXT("no person in it"), Agent.Contains(TEXT("@")));
 	return true;
 }
 

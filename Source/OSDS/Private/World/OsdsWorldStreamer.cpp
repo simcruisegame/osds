@@ -1,6 +1,7 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "World/OsdsWorldStreamer.h"
+#include "World/OsdsWorldCache.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -793,6 +794,15 @@ void AOsdsWorldStreamer::UpdateFallbackGround(const FVector& AtCm)
 	// collision is ready (OsdsFallbackGround). Collision only: nothing is drawn.
 	const FIntPoint Here = Frame.TileAtWorldCm(AtCm);
 	const int32 R = FMath::Max(1, RingRadius);
+	if (Here != ProtectedCacheTile)
+	{
+		// The Tiles round the car (one wider than the Ring, for the look-ahead) never leave the World cache.
+		ProtectedCacheTile = Here;
+		TArray<FIntPoint> Ring;
+		for (int32 dy = -R - 1; dy <= R + 1; ++dy)
+		for (int32 dx = -R - 1; dx <= R + 1; ++dx) Ring.Add(Here + FIntPoint(dx, dy));
+		FOsdsWorldCache::Get().SetProtectedTiles(Ring);
+	}
 	auto Ready = [this](const FIntPoint& T) -> const FOsdsTileBuild*
 	{
 		const AOsdsWorldTile* Tile = GetTile(T);

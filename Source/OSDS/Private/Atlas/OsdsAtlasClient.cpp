@@ -1,6 +1,7 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "Atlas/OsdsAtlasClient.h"
+#include "Atlas/OsdsUserAgent.h"
 
 #include "Async/Async.h"
 #include "HAL/FileManager.h"
@@ -42,6 +43,21 @@ FString FOsdsAtlasResult::Describe() const
 
 namespace
 {
+	/**
+	 * The helper's User-Agent carries the game's version; its child process inherits this variable. The
+	 * environment is process-wide, so it is written exactly once (a thread-safe static), first from the
+	 * game thread when the default config is resolved or a client is made, never again per run.
+	 */
+	void PublishVersionOnce()
+	{
+		static const bool bPublished = []()
+		{
+			FPlatformMisc::SetEnvironmentVar(TEXT("OSDS_VERSION"), *OsdsUserAgent::Version());
+			return true;
+		}();
+		(void)bPublished;
+	}
+
 	FString Quote(const FString& Arg)
 	{
 		if (!Arg.IsEmpty() && !Arg.Contains(TEXT(" ")) && !Arg.Contains(TEXT("\"")) && !Arg.Contains(TEXT("\t")))
@@ -91,6 +107,7 @@ namespace
 
 FOsdsAtlasConfig FOsdsAtlasConfig::ResolveDefault()
 {
+	PublishVersionOnce();
 	FOsdsAtlasConfig Config;
 	const FString Root = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
 	const FString Exe = PLATFORM_WINDOWS ? TEXT("atlas.exe") : TEXT("atlas");
@@ -116,6 +133,7 @@ FOsdsAtlasConfig FOsdsAtlasConfig::ResolveDefault()
 FOsdsAtlasClient::FOsdsAtlasClient(const FOsdsAtlasConfig& InConfig)
 	: Config(InConfig)
 {
+	PublishVersionOnce();
 	Config.MaxConcurrent = FMath::Clamp(Config.MaxConcurrent, 1, 8);
 }
 
@@ -227,6 +245,9 @@ void FOsdsAtlasClient::Finish(const TSharedRef<FOsdsAtlasJob, ESPMode::ThreadSaf
 	Job->Promise.SetValue(MoveTemp(Result));
 }
 
+std::atomic<int64> FOsdsAtlasClient::HelperRunCounter{0};
+std::atomic<int64> FOsdsAtlasClient::HelperRequestCounter{0};
+
 FOsdsAtlasResult FOsdsAtlasClient::RunBlocking(const FOsdsAtlasConfig& Config, const FOsdsAtlasRequest& Request, const std::atomic<bool>* Cancel)
 {
 	FOsdsAtlasResult Result;
@@ -257,6 +278,7 @@ FOsdsAtlasResult FOsdsAtlasClient::RunBlocking(const FOsdsAtlasConfig& Config, c
 		Result.Stderr = TEXT("could not create pipes");
 		return Result;
 	}
+	PublishVersionOnce(); // a no-op after the first time; set before any child starts
 	const TCHAR* WorkingDir = Config.WorkingDirectory.IsEmpty() ? nullptr : *Config.WorkingDirectory;
 	FProcHandle Proc = FPlatformProcess::CreateProc(*Config.Executable, *Params, false, true, true, nullptr, 0, WorkingDir, OutWrite, nullptr, ErrWrite);
 	if (!Proc.IsValid())
@@ -310,6 +332,13 @@ FOsdsAtlasResult FOsdsAtlasClient::RunBlocking(const FOsdsAtlasConfig& Config, c
 	Result.Stdout = Utf8(OutBytes);
 	Result.Stderr = Utf8(ErrBytes);
 	Result.Seconds = FPlatformTime::Seconds() - Started;
+	// Counted for the Long drive and the zero-network second drive: helper runs, and the network
+	// requests the helper reports in its result ("requests":N).
+	HelperRunCounter.fetch_add(1);
+	{
+		int32 At = Result.Stdout.Find(TEXT("\"requests\":"), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+		if (At != INDEX_NONE) HelperRequestCounter.fetch_add(FCString::Atoi(*Result.Stdout.Mid(At + 11, 12)));
+	}
 	if (bKilled)
 	{
 		return Result;

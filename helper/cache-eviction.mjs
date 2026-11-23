@@ -2,6 +2,11 @@
 import path from 'node:path';
 
 const managed = /^(?:manifest|[vh]-\d+-\d+|a-(?:hi-naip-|ak-usfs-)?\d+-\d+\.(?:jpg|png)(?:\.miss)?|a16-\d+-\d+\.jpg(?:\.miss)?|s-[0-9a-f]+|(?:usgs-dem|roof-wesm|roof-ept|roof-laz|roof-district-v[12]|road-crossfall-v1|lane-layout-v1|lane-widths-v1|lane-counts-v1|lane-roads|snow-terra|ridge-aerial|summit-snow|snow-stac|ridge-band|shrub|banks-v1|forest-v1|relief|naip-low|ov|nsi-uses|vmap|scene-list|street-osm|panoramax|inventory|crown-poly|civic-pits|civic-pavement|metar|kv\d+|[cs]\d+)-[A-Za-z0-9._-]+)$/;
+// The raw map cache budget. 96 MiB (2.x) held about 40 tiles of a drive; a 100-mile highway drive
+// at zoom 16 touches roughly 350 new tiles, so the budget is 1 GiB (estimate: about 3 MB of raw
+// downloads per tile; the Long drive test reports the real figure). OSDS_MAP_CACHE_MIB overrides it.
+export const sourceCacheBudget = (process.env.OSDS_MAP_CACHE_MIB && Number(process.env.OSDS_MAP_CACHE_MIB) > 0
+ ? Number(process.env.OSDS_MAP_CACHE_MIB) : 1024) * 1024 * 1024;
 const handoffMs = 60_000;
 // Per-tile retry records (usgs-ground.mjs elevationGate) only matter inside
 // their 20-minute retry window; older ones are removed whatever the budget.

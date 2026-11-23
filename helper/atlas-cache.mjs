@@ -2,9 +2,53 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 
+import budgetTable from './request-budgets.json';
 const minute = 60000;
+// Request budgets (docs/team/request-budgets.md): requests per kilometre driven, per public service.
+// The game writes `.source-state/session.json` {"started":<ms>,"km":<driven>} when a drive starts (a
+// new start or teleport is a new session, so it earns a new burst) and keeps km current; each host's
+// spend is kept in `.source-state/<host>.spent` {"started":..,"n":..}. Over budget, the request is not
+// made: the caller gets the stale cache file if there is one, and tries again as the car drives on.
+export function budgetFor(host,table=budgetTable){ return table.hosts?.[host]??table.default; }
+export function budgetAllowed(budget,km){ return Math.floor(budget.burst+budget.perKm*Math.max(0,km||0)); }
+function readJson(file){ try{ return JSON.parse(read(file)?.toString()??'null'); }catch{ return null; } }
+// Each host is "essential" (roads, elevation, aerial imagery: the car cannot drive without them) or
+// "enrichment" (everything else: search, weather, street photos...). A host with no "tier" is enrichment.
+export function budgetTier(budget){ return budget?.tier==='essential'?'essential':'enrichment'; }
+// Takes one request from the host's budget; false when it is spent. No session file = no game
+// (tests, the helper by hand): not limited. Essential hosts are never refused (their spend is still
+// counted and reported); an enrichment host is refused as soon as it is over its own allowance, so
+// enrichment is deferred first and never takes anything from an essential host (each host is its own budget).
+export function spendBudget(state,host,table=budgetTable){
+ const session=readJson(path.join(state,'session.json'));
+ if(!session||!Number.isFinite(session.started))return true;
+ const file=path.join(state,host+'.spent');
+ let spent=readJson(file);
+ if(!spent||spent.started!==session.started)spent={started:session.started,n:0};
+ const budget=budgetFor(host,table);
+ if(budgetTier(budget)!=='essential'&&spent.n>=budgetAllowed(budget,session.km))return false;
+ spent.n++;
+ try{atomic(file,JSON.stringify(spent))}catch{}
+ return true;
+}
+// Per-host spend of the running session: {host:{n,allowed,tier}} for every host in the table and every
+// host that has a .spent file this session. {} when there is no session (no game).
+export function budgetReport(state,table=budgetTable){
+ const session=readJson(path.join(state,'session.json'));
+ if(!session||!Number.isFinite(session.started))return {};
+ let hosts=new Set(Object.keys(table.hosts??{}));
+ try{for(const f of fs.readdirSync(state))if(f.endsWith('.spent'))hosts.add(f.slice(0,-'.spent'.length));}catch{}
+ const report={};
+ for(const host of [...hosts].sort()){
+  const spent=readJson(path.join(state,host+'.spent'));
+  const budget=budgetFor(host,table);
+  report[host]={n:spent&&spent.started===session.started?spent.n:0,allowed:budgetAllowed(budget,session.km),tier:budgetTier(budget)};
+ }
+ return report;
+}
 // One User-Agent for the helper and the game (generic: the project and its public page, no person).
-export const userAgent='OSDS/2.0.3 (open-source driving simulator; +https://github.com/simcruisegame/osds)';
+// The version comes from the game's ProjectVersion: the game sets OSDS_VERSION when it starts the helper.
+export const userAgent='OSDS/'+(/^[0-9A-Za-z.+-]{1,24}$/.test(process.env.OSDS_VERSION??'')?process.env.OSDS_VERSION:'dev')+' (open-source driving simulator; +https://github.com/simcruisegame/osds)';
 // A host that fails (a network error, a timeout, 429, 403 or a 5xx) is left alone for a while that
 // grows with each failure in a row: 15 s, 30 s, 1 min ... up to 6 h, with a fifth of jitter so the
 // players' helpers do not come back at once; one success resets it. Shared by every helper process
@@ -91,6 +135,7 @@ export function cacheReader(directory, onRequest, fetcher=fetch) {
    if(Number(read(cooldown)?.toString())>Date.now()) throw Error('Provider requested a pause');
    releaseSlot=await acquireNetworkSlot(state,host);
    if(Number(read(cooldown)?.toString())>Date.now())throw Error('Provider requested a pause');
+   if(!spendBudget(state,host))throw Error('Request budget spent');
    onRequest();
    const headers={'User-Agent':userAgent};
    if(range)headers.Range='bytes='+range[0]+'-'+range[1];

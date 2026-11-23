@@ -298,6 +298,8 @@ private:
 	FOsdsFrameTimes FrameTimes;
 	/** Every drive frame's real time (ms), for the log summary. */
 	TArray<float> FrameMs;
+	/** Memory in use (MiB) when the drive starts: the Long drive judges the growth from here (start_ram_mb). */
+	uint64 StartRamMb = 0;
 	/** -OsdsPreflightForceSpin: the negative test. */
 	bool bForceSpin = false;
 	float ForceSpinClock = 0.f;
