@@ -43,6 +43,21 @@ FString FOsdsAtlasResult::Describe() const
 
 namespace
 {
+	/**
+	 * The helper's User-Agent carries the game's version; its child process inherits this variable. The
+	 * environment is process-wide, so it is written exactly once (a thread-safe static), first from the
+	 * game thread when the default config is resolved or a client is made, never again per run.
+	 */
+	void PublishVersionOnce()
+	{
+		static const bool bPublished = []()
+		{
+			FPlatformMisc::SetEnvironmentVar(TEXT("OSDS_VERSION"), *OsdsUserAgent::Version());
+			return true;
+		}();
+		(void)bPublished;
+	}
+
 	FString Quote(const FString& Arg)
 	{
 		if (!Arg.IsEmpty() && !Arg.Contains(TEXT(" ")) && !Arg.Contains(TEXT("\"")) && !Arg.Contains(TEXT("\t")))
@@ -92,6 +107,7 @@ namespace
 
 FOsdsAtlasConfig FOsdsAtlasConfig::ResolveDefault()
 {
+	PublishVersionOnce();
 	FOsdsAtlasConfig Config;
 	const FString Root = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
 	const FString Exe = PLATFORM_WINDOWS ? TEXT("atlas.exe") : TEXT("atlas");
@@ -117,6 +133,7 @@ FOsdsAtlasConfig FOsdsAtlasConfig::ResolveDefault()
 FOsdsAtlasClient::FOsdsAtlasClient(const FOsdsAtlasConfig& InConfig)
 	: Config(InConfig)
 {
+	PublishVersionOnce();
 	Config.MaxConcurrent = FMath::Clamp(Config.MaxConcurrent, 1, 8);
 }
 
@@ -261,8 +278,7 @@ FOsdsAtlasResult FOsdsAtlasClient::RunBlocking(const FOsdsAtlasConfig& Config, c
 		Result.Stderr = TEXT("could not create pipes");
 		return Result;
 	}
-	// The helper's User-Agent carries the game's version (ProjectVersion); the child inherits this.
-	FPlatformMisc::SetEnvironmentVar(TEXT("OSDS_VERSION"), *OsdsUserAgent::Version());
+	PublishVersionOnce(); // a no-op after the first time; set before any child starts
 	const TCHAR* WorkingDir = Config.WorkingDirectory.IsEmpty() ? nullptr : *Config.WorkingDirectory;
 	FProcHandle Proc = FPlatformProcess::CreateProc(*Config.Executable, *Params, false, true, true, nullptr, 0, WorkingDir, OutWrite, nullptr, ErrWrite);
 	if (!Proc.IsValid())

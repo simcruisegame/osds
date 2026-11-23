@@ -295,6 +295,14 @@ void FOsdsNeuralDetail::Downsample(const TArray<FColor>& In, int32 Width, int32 
 	}
 }
 
+FIntPoint FOsdsNeuralDetail::PhotoCacheTile(const FString& Prefix, int32 X, int32 Y)
+{
+	// A zoom-16 photograph is keyed by its own Tile. A regional mosaic photograph counts its own, much
+	// coarser grid, so it moves into a space far past any zoom-16 Tile (x, y < 2^16): no mosaic can ever
+	// share a Tile folder with, be protected as, or be evicted with a real Tile (the Ring).
+	return Prefix == TEXT("a") ? FIntPoint(X + MosaicTileOffset, Y + MosaicTileOffset) : FIntPoint(X, Y);
+}
+
 bool FOsdsNeuralDetail::CacheKey(const FString& SourcePath, FIntPoint& OutTile, FName& OutLayer, int32& OutVersion) const
 {
 	// The photographs are named a16-<x>-<y>.jpg (zoom-16 Tile) or a-<x>-<y>.jpg (regional mosaic, its own
@@ -309,7 +317,7 @@ bool FOsdsNeuralDetail::CacheKey(const FString& SourcePath, FIntPoint& OutTile, 
 		return false;
 	}
 	const FFileStatData Stat = IFileManager::Get().GetStatData(*SourcePath);
-	OutTile = FIntPoint(FCString::Atoi(*Parts[1]), FCString::Atoi(*Parts[2]));
+	OutTile = PhotoCacheTile(Parts[0], FCString::Atoi(*Parts[1]), FCString::Atoi(*Parts[2]));
 	OutLayer = FName(*FString::Printf(TEXT("neural-%s"), *Parts[0]));
 	OutVersion = static_cast<int32>(HashCombineFast(HashCombineFast(GetTypeHash(int32(GeneratorVersion)), GetTypeHash(int32(OutputScale))),
 		GetTypeHash(static_cast<uint64>(Stat.FileSize ^ Stat.ModificationTime.GetTicks()))));
@@ -430,7 +438,10 @@ void FOsdsNeuralDetail::Process(const FString& SourcePath)
 		if (CacheKey(SourcePath, CacheTile, CacheLayer, CacheVersion))
 		{
 			const TArray64<uint8> Packed = Jpeg->GetCompressed(92);
-			FOsdsWorldCache::Get().Store(CacheTile, CacheLayer, CacheVersion, TConstArrayView<uint8>(Packed.GetData(), static_cast<int32>(Packed.Num())));
+			if (!FOsdsWorldCache::Get().Store(CacheTile, CacheLayer, CacheVersion, TConstArrayView<uint8>(Packed.GetData(), static_cast<int32>(Packed.Num()))))
+			{
+				UE_LOG(LogOsdsNeural, Warning, TEXT("AI detail: %s not saved to the World cache; it is enhanced again next visit"), *FPaths::GetCleanFilename(SourcePath));
+			}
 		}
 	}
 	const FString Key = FPaths::GetCleanFilename(SourcePath);

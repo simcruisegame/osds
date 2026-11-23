@@ -4,6 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "HAL/CriticalSection.h"
+#include <atomic>
+
+OSDS_API DECLARE_LOG_CATEGORY_EXTERN(LogOsdsWorldCache, Log, All);
 
 /**
  * The World cache (ADR 0005): the generated layers of each Tile (Place recipe, cleaned Aerial
@@ -18,8 +21,10 @@
  * it driven), down to the player's size limit (OSDS.WorldCache.LimitMiB). Tiles in the protected
  * set (the Ring around the car) are never evicted. A damaged file is a miss.
  *
- * Thread-safe. Callers run on worker threads: Load and Store do disk I/O and must never be called
- * from the frame path.
+ * Thread-safe. Callers run on worker threads: Load, Store, Evict and WarmIndex do disk I/O and must
+ * never be called from the frame path. The frame path may call SetProtectedTiles, TotalBytes,
+ * LimitBytes and GetStats: they take only tiny locks or atomics and never wait for disk work.
+ * A damaged file (bad magic, size or checksum) is deleted from disk and the index when it is read.
  */
 class OSDS_API FOsdsWorldCache
 {
@@ -37,19 +42,26 @@ public:
 	/** True when this Tile has this layer at this generator version (header check only; no payload read). */
 	bool Contains(const FIntPoint& Tile16, FName Layer, int32 GeneratorVersion) const;
 
-	/** Saves (atomically, replacing any older version of the layer), then trims to the size limit. */
+	/**
+	 * Saves (atomically, replacing any older version of the layer), then trims to the size limit.
+	 * A failed write is logged, retried once after evicting, and returns false: callers check it.
+	 */
 	bool Store(const FIntPoint& Tile16, FName Layer, int32 GeneratorVersion, TConstArrayView<uint8> Bytes);
 
 	/** The one seed every generator uses for a Tile: the same on every visit and every machine. */
 	static uint64 TileSeed(const FIntPoint& Tile16);
 
-	/** Tiles that must stay (the Ring). Replaces the previous set. */
+	/** Reads the cache folder into the index now (worker thread; Load, Store and Evict do it on first use). */
+	void WarmIndex();
+
+	/** Tiles that must stay (the Ring). Replaces the previous set. Frame-path safe: a copy and a swap under a tiny lock. */
 	void SetProtectedTiles(const TArray<FIntPoint>& Tiles);
 
 	/** Trims to the limit now. Returns the number of Tiles removed. */
 	int32 Evict();
 
-	int64 TotalBytes();
+	/** Bytes on disk as far as the index knows (0 until WarmIndex or a first Load/Store). Never waits. */
+	int64 TotalBytes() const;
 	int64 LimitBytes() const;
 
 	struct FStats
@@ -58,6 +70,8 @@ public:
 		int64 Misses = 0;
 		int64 Stores = 0;
 		int64 EvictedTiles = 0;
+		int64 CorruptDeleted = 0;
+		int64 StoreFailures = 0;
 	};
 	FStats GetStats() const;
 
@@ -73,14 +87,33 @@ private:
 	FString LayerFile(const FIntPoint& Tile, FName Layer) const;
 	void EnsureIndex();
 	void MarkDriven(const FIntPoint& Tile);
-	int32 EvictLocked();
+	/** Index lock held by the caller: forgets one layer (a damaged file was deleted). */
+	void ForgetLayerLocked(const FIntPoint& Tile, FName Layer);
+	/** Evicts least recently driven unprotected Tiles down to Target bytes: victims leave the index under the
+	 *  lock (memory only), their folders are deleted with no lock held. Returns the Tiles removed. */
+	int32 EvictToTarget(int64 Target);
+	bool WriteFile(const FString& File, const TArray<uint8>& Raw);
 
 	FString Root;
 	int64 FixedLimit;
-	mutable FCriticalSection Lock;
-	bool bIndexed = false;
+
+	/** In-memory index edits only: never held across disk I/O. */
+	mutable FCriticalSection IndexLock;
 	TMap<FIntPoint, FTileInfo> Index;
+
+	/** The Ring: its own tiny lock so the game thread never waits for the index. */
+	mutable FCriticalSection ProtectedLock;
 	TSet<FIntPoint> Protected;
-	int64 Total = 0;
-	FStats Stats;
+
+	/** One directory scan at a time (workers only); the index lock is taken only to merge the result. */
+	FCriticalSection ScanLock;
+	std::atomic<bool> bIndexed{false};
+
+	std::atomic<int64> Total{0};
+	std::atomic<int64> Hits{0};
+	std::atomic<int64> Misses{0};
+	std::atomic<int64> Stores{0};
+	std::atomic<int64> EvictedTiles{0};
+	std::atomic<int64> CorruptDeleted{0};
+	std::atomic<int64> StoreFailures{0};
 };

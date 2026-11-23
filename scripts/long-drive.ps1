@@ -11,8 +11,12 @@
 
     LONGDRIVE PASS|FAIL road=.. miles=.. mph=.. frame_p95=..ms hitches=.. tile_popin=.. world_cache_hits=.. ...
 
-  It fails when the car covers under 95 % of the miles, the frame p95 is over 50 ms, or pre-flight
-  itself failed (spin, off road, tile pop-in, engine error). Run it twice, cold then -Warm (same
+  It fails when the car covers under 95 % of the miles, the frame p95 is over 50 ms, any frame is
+  over 100 ms (hitches_over_100ms), memory in use grew by more than -MaxRamGrowthMb (default 1500,
+  an estimate) between the start of the drive and the end, an enrichment host went over its
+  Request budget (the helper's .source-state\*.spent files against helper\request-budgets.json),
+  or pre-flight itself failed (spin, off road, tile pop-in, engine error). The LONGDRIVE line also
+  reports max_frame, tiles_built and the World cache hit rate. Run it twice, cold then -Warm (same
   caches, nothing cleared), to see what the World cache and the map cache save: a warm run must
   make no more helper requests than a cold one.
 
@@ -32,7 +36,9 @@ param(
     # Hidden windows are not a Long drive: the Owner watches (the default shows the window).
     [switch]$Hidden,
     # Label for the report: the second run over the same route is the warm one.
-    [switch]$Warm
+    [switch]$Warm,
+    # Most memory in use may grow over the drive (end minus start), MB. 1500 is an estimate.
+    [double]$MaxRamGrowthMb = 1500
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
@@ -69,8 +75,43 @@ $Extra = if ($Requests.Count) { $Requests[0].Matches[0].Groups[1].Value } else {
 # A warm run over the same route (ADR 0005): nothing generated, nothing downloaded.
 if ($Warm -and $Extra -match 'world_cache_stores=(\d+)' -and [int]$Matches[1] -gt 0) { $Reasons += "warm-run-generated-$($Matches[1])-layers" }
 if ($Warm -and $Extra -match 'helper_requests=(\d+)' -and [int]$Matches[1] -gt 0) { $Reasons += "warm-run-made-$($Matches[1])-network-requests" }
+$Stat = @{}
+foreach ($M in [regex]::Matches($Extra, '(\w+)=([-0-9.]+)')) { $Stat[$M.Groups[1].Value] = [double]$M.Groups[2].Value }
+# Hitches: no frame over 100 ms in the whole drive.
+if ($S.hitches_over_100ms -gt 0) { $Reasons += "hitches-over-100ms-$($S.hitches_over_100ms)" }
+# Memory: growth from the start of the drive to the end.
+$RamGrowth = $null
+if ($Stat.ContainsKey('used_ram_mb') -and $Stat.ContainsKey('start_ram_mb')) {
+    $RamGrowth = $Stat['used_ram_mb'] - $Stat['start_ram_mb']
+    if ($RamGrowth -gt $MaxRamGrowthMb) { $Reasons += ('ram-grew-{0:0}-mb' -f $RamGrowth) }
+}
+# Request budgets: an enrichment host that spent more than burst + perKm x km. Essential hosts are never refused.
+$Overruns = @()
+$MapCache = if ($env:OSDS_MAP_CACHE) { $env:OSDS_MAP_CACHE } else { Join-Path $env:LOCALAPPDATA 'OSDS\map-cache' }
+$StateDir = Join-Path $MapCache '.source-state'
+$SessionFile = Join-Path $StateDir 'session.json'
+if ((Test-Path $SessionFile) -and (Test-Path $StateDir)) {
+    $Session = Get-Content $SessionFile -Raw | ConvertFrom-Json
+    $Table = Get-Content (Join-Path $Root 'helper\request-budgets.json') -Raw | ConvertFrom-Json
+    foreach ($F in Get-ChildItem $StateDir -Filter '*.spent') {
+        $Spent = Get-Content $F.FullName -Raw | ConvertFrom-Json
+        if ($Spent.started -ne $Session.started) { continue }
+        $HostName = $F.BaseName
+        $Budget = $Table.hosts.$HostName
+        if (-not $Budget) { $Budget = $Table.default }
+        if ($Budget.tier -eq 'essential') { continue }
+        $Allowed = [Math]::Floor($Budget.burst + $Budget.perKm * [Math]::Max(0, $Session.km))
+        if ($Spent.n -gt $Allowed) { $Overruns += ('{0}:{1}>{2}' -f $HostName, $Spent.n, $Allowed) }
+    }
+}
+if ($Overruns.Count) { $Reasons += ('budget-overrun-' + ($Overruns -join '+')) }
 $Result = if ($Reasons.Count) { 'FAIL' } else { 'PASS' }
-Write-Host ("LONGDRIVE {0} road={1} cache={2} miles={3:0.0} mph_mean={4:0.0} frame_p95={5}ms hitches={6} tile_popin={7} {8} reasons={9}" -f `
-    $Result, $Road, $(if ($Warm) { 'warm' } else { 'cold' }), $Driven, ($S.mean_speed_mps / 0.44704), $S.frame_p95_ms, $S.hitches_over_100ms, $S.tile_popins, $Extra, ($Reasons -join ','))
+Write-Host ("LONGDRIVE {0} road={1} cache={2} miles={3:0.0} mph_mean={4:0.0} frame_p95={5}ms hitches={6} max_frame={7}ms tiles_built={8} hit_rate={9} ram_growth={10}mb tile_popin={11} {12} reasons={13}" -f `
+    $Result, $Road, $(if ($Warm) { 'warm' } else { 'cold' }), $Driven, ($S.mean_speed_mps / 0.44704), $S.frame_p95_ms, $S.hitches_over_100ms,
+    $(if ($Stat.ContainsKey('max_frame_ms')) { $Stat['max_frame_ms'] } else { 'n/a' }),
+    $(if ($Stat.ContainsKey('tiles_built')) { $Stat['tiles_built'] } else { 'n/a' }),
+    $(if ($Stat.ContainsKey('world_cache_hit_rate')) { $Stat['world_cache_hit_rate'] } else { 'n/a' }),
+    $(if ($null -ne $RamGrowth) { '{0:0}' -f $RamGrowth } else { 'n/a' }),
+    $S.tile_popins, $Extra, ($Reasons -join ','))
 Write-Host "Evidence: $($Run.FullName)"
 if ($Result -eq 'FAIL') { exit 1 }

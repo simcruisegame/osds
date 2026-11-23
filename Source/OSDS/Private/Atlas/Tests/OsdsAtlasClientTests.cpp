@@ -2,6 +2,7 @@
 
 #include "Atlas/OsdsAtlasClient.h"
 #include "Atlas/OsdsUserAgent.h"
+#include "Misc/ConfigCacheIni.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"

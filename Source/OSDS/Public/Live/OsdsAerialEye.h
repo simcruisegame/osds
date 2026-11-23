@@ -138,7 +138,8 @@ public:
 private:
 	FOsdsAerialEye() = default;
 	bool LoadCached(const FIntPoint& Tile16, TArray<uint8>& OutBytes) const;
-	void StoreCached(const FIntPoint& Tile16, const TArray<uint8>& Bytes) const;
+	/** False when the World cache could not keep the layer (it logged why). */
+	bool StoreCached(const FIntPoint& Tile16, const TArray<uint8>& Bytes) const;
 	void RunWorker();
 	/** A tile's zoom-16 photograph through the helper (worker only; cached by the helper). */
 	bool Photo16(const FIntPoint& Tile16, bool bFetch, TArray<FColor>& Out);

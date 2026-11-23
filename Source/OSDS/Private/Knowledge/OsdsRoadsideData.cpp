@@ -460,7 +460,11 @@ namespace OsdsRoadsideData
 		if (bSave)
 		{
 			FTCHARToUTF8 Utf8(*ToJson(Tile, Data));
-			FOsdsWorldCache::Get().Store(Tile, RoadsideLayer, RoadsideVersion, TConstArrayView<uint8>(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length()));
+			if (!FOsdsWorldCache::Get().Store(Tile, RoadsideLayer, RoadsideVersion, TConstArrayView<uint8>(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length())))
+			{
+				// The in-memory copy below still serves this drive; the cache already logged why it failed.
+				UE_LOG(LogOsdsWorldCache, Warning, TEXT("Roadside data for tile %d,%d not saved to the World cache; it is fetched again next visit"), Tile.X, Tile.Y);
+			}
 		}
 		FScopeLock Lock(&RoadsideLock);
 		RoadsideCache().Add(Tile, Data);

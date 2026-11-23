@@ -12,18 +12,39 @@ const minute = 60000;
 export function budgetFor(host,table=budgetTable){ return table.hosts?.[host]??table.default; }
 export function budgetAllowed(budget,km){ return Math.floor(budget.burst+budget.perKm*Math.max(0,km||0)); }
 function readJson(file){ try{ return JSON.parse(read(file)?.toString()??'null'); }catch{ return null; } }
+// Each host is "essential" (roads, elevation, aerial imagery: the car cannot drive without them) or
+// "enrichment" (everything else: search, weather, street photos...). A host with no "tier" is enrichment.
+export function budgetTier(budget){ return budget?.tier==='essential'?'essential':'enrichment'; }
 // Takes one request from the host's budget; false when it is spent. No session file = no game
-// (tests, the helper by hand): not limited.
+// (tests, the helper by hand): not limited. Essential hosts are never refused (their spend is still
+// counted and reported); an enrichment host is refused as soon as it is over its own allowance, so
+// enrichment is deferred first and never takes anything from an essential host (each host is its own budget).
 export function spendBudget(state,host,table=budgetTable){
  const session=readJson(path.join(state,'session.json'));
  if(!session||!Number.isFinite(session.started))return true;
  const file=path.join(state,host+'.spent');
  let spent=readJson(file);
  if(!spent||spent.started!==session.started)spent={started:session.started,n:0};
- if(spent.n>=budgetAllowed(budgetFor(host,table),session.km))return false;
+ const budget=budgetFor(host,table);
+ if(budgetTier(budget)!=='essential'&&spent.n>=budgetAllowed(budget,session.km))return false;
  spent.n++;
  try{atomic(file,JSON.stringify(spent))}catch{}
  return true;
+}
+// Per-host spend of the running session: {host:{n,allowed,tier}} for every host in the table and every
+// host that has a .spent file this session. {} when there is no session (no game).
+export function budgetReport(state,table=budgetTable){
+ const session=readJson(path.join(state,'session.json'));
+ if(!session||!Number.isFinite(session.started))return {};
+ let hosts=new Set(Object.keys(table.hosts??{}));
+ try{for(const f of fs.readdirSync(state))if(f.endsWith('.spent'))hosts.add(f.slice(0,-'.spent'.length));}catch{}
+ const report={};
+ for(const host of [...hosts].sort()){
+  const spent=readJson(path.join(state,host+'.spent'));
+  const budget=budgetFor(host,table);
+  report[host]={n:spent&&spent.started===session.started?spent.n:0,allowed:budgetAllowed(budget,session.km),tier:budgetTier(budget)};
+ }
+ return report;
 }
 // One User-Agent for the helper and the game (generic: the project and its public page, no person).
 // The version comes from the game's ProjectVersion: the game sets OSDS_VERSION when it starts the helper.

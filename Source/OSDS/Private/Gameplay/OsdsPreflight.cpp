@@ -665,6 +665,7 @@ void AOsdsPreflight::Tick(float DeltaSeconds)
 			RebaseHandle = Stream->OnRebased.AddUObject(this, &AOsdsPreflight::OnRebased);
 			FrameHandle = UGameViewportClient::OnScreenshotCaptured().AddUObject(this, &AOsdsPreflight::OnFrame);
 			LastYawDeg = Pawn->GetActorRotation().Yaw;
+			StartRamMb = FPlatformMemory::GetStats().UsedPhysical / (1024 * 1024);
 			Stage = EStage::Drive;
 			StageStarted = Now;
 			Stats.DriveSeconds = 0.f;
@@ -1442,10 +1443,17 @@ void AOsdsPreflight::Finish()
 		// What the Long drive reports beside the frame times: the World cache, the map helper and memory.
 		const FOsdsWorldCache::FStats Cache = FOsdsWorldCache::Get().GetStats();
 		const FPlatformMemoryStats Mem = FPlatformMemory::GetStats();
+		const AOsdsGameMode* StatsMode = GetWorld()->GetAuthGameMode<AOsdsGameMode>();
+		const AOsdsWorldStreamer* StatsStream = StatsMode ? StatsMode->GetStreamer() : nullptr;
+		float MaxFrameMs = 0.f;
+		for (const float Ms : FrameMs) MaxFrameMs = FMath::Max(MaxFrameMs, Ms);
+		const int64 Lookups = Cache.Hits + Cache.Misses;
+		const double HitRate = Lookups > 0 ? double(Cache.Hits) / double(Lookups) : 0.0;
 		UE_LOG(LogOsdsPreflight, Display,
-			TEXT("LONGDRIVE_STATS world_cache_hits=%lld world_cache_misses=%lld world_cache_stores=%lld world_cache_evicted=%lld world_cache_mb=%lld helper_runs=%lld helper_requests=%lld peak_ram_mb=%llu used_ram_mb=%llu"),
-			Cache.Hits, Cache.Misses, Cache.Stores, Cache.EvictedTiles, FOsdsWorldCache::Get().TotalBytes() / (1024 * 1024),
-			FOsdsAtlasClient::HelperRuns(), FOsdsAtlasClient::HelperRequests(), Mem.PeakUsedPhysical / (1024 * 1024), Mem.UsedPhysical / (1024 * 1024));
+			TEXT("LONGDRIVE_STATS world_cache_hits=%lld world_cache_misses=%lld world_cache_stores=%lld world_cache_evicted=%lld world_cache_mb=%lld world_cache_hit_rate=%.3f max_frame_ms=%.0f tiles_built=%d helper_runs=%lld helper_requests=%lld peak_ram_mb=%llu start_ram_mb=%llu used_ram_mb=%llu"),
+			Cache.Hits, Cache.Misses, Cache.Stores, Cache.EvictedTiles, FOsdsWorldCache::Get().TotalBytes() / (1024 * 1024), HitRate,
+			MaxFrameMs, StatsStream ? StatsStream->TilesInstalled : 0,
+			FOsdsAtlasClient::HelperRuns(), FOsdsAtlasClient::HelperRequests(), Mem.PeakUsedPhysical / (1024 * 1024), StartRamMb, Mem.UsedPhysical / (1024 * 1024));
 	}
 	FrameTimes.Fill(Stats);
 	const FString Reasons = Judge(Stats);

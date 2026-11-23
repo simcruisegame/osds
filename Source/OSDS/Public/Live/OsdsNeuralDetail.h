@@ -79,6 +79,15 @@ public:
 
 	FString Describe() const;
 
+	/** Added to both numbers of a regional mosaic photograph (a-x-y.jpg) so it never lands on a zoom-16 Tile (named constant: 2^24). */
+	static constexpr int32 MosaicTileOffset = 1 << 24;
+
+	/**
+	 * The World cache Tile a photograph is stored under: its own (x, y) for a zoom-16 photograph (prefix
+	 * "a16"), (x, y) + MosaicTileOffset for a regional mosaic photograph (prefix "a").
+	 */
+	static FIntPoint PhotoCacheTile(const FString& Prefix, int32 X, int32 Y);
+
 private:
 	/** The World cache entry of one photograph; false for a file that is not a tile photograph. */
 	bool CacheKey(const FString& SourcePath, FIntPoint& OutTile, FName& OutLayer, int32& OutVersion) const;

@@ -241,9 +241,9 @@ bool FOsdsAerialEye::LoadCached(const FIntPoint& Tile16, TArray<uint8>& OutBytes
 	return FOsdsWorldCache::Get().Load(Tile16, EyeLayer(EyeName), EyeVersion * 100 + FileVersion, OutBytes);
 }
 
-void FOsdsAerialEye::StoreCached(const FIntPoint& Tile16, const TArray<uint8>& Bytes) const
+bool FOsdsAerialEye::StoreCached(const FIntPoint& Tile16, const TArray<uint8>& Bytes) const
 {
-	FOsdsWorldCache::Get().Store(Tile16, EyeLayer(EyeName), EyeVersion * 100 + FileVersion, Bytes);
+	return FOsdsWorldCache::Get().Store(Tile16, EyeLayer(EyeName), EyeVersion * 100 + FileVersion, Bytes);
 }
 
 void FOsdsAerialEye::InputsFromPhoto(const TArray<FColor>& Photo, int32 PhotoSize, const FIntPoint& Tile16, FOsdsScanInputs& Out)
@@ -733,7 +733,10 @@ void FOsdsAerialEye::RunWorker()
 					if (!bMosaic) ComputeTints(Inputs, Channels, Tints);
 					TArray<uint8> Bytes;
 					Encode(Channels, Tints, Bytes);
-					StoreCached(Tile, Bytes);
+					if (!StoreCached(Tile, Bytes))
+					{
+						UE_LOG(LogOsdsAerialEye, Warning, TEXT("Scan eye %s: tile %d,%d not saved to the World cache; it is scanned again next visit"), *EyeName.ToString(), Tile.X, Tile.Y);
+					}
 					UE_LOG(LogOsdsAerialEye, Log, TEXT("SCANEYE eye=%s tile=%d,%d photo=%s ms=%.0f cleaned=%d"), *EyeName.ToString(), Tile.X, Tile.Y, bMosaic ? TEXT("z16") : TEXT("z14"), Seconds * 1000.0, Cleaned);
 					if (CVarOsdsEyeDump.GetValueOnAnyThread() > 0)
 					{
