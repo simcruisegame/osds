@@ -34,6 +34,33 @@ function Get-TestWindowArgs([bool]$ShowWindow) {
     return @('-RenderOffScreen')
 }
 
+# The holder notes (gpu-test-lock.txt, build-lock.txt) only tell the people waiting who has a lock.
+# Other sessions read and write them at the same moment, so a note must never end a run: writes retry
+# a few times and then only warn; reads share the file and give '' when they cannot read it.
+function Write-LockNote([string]$Path, [string]$Text) {
+    for ($I = 0; $I -lt 5; $I++) {
+        try {
+            New-Item -ItemType Directory -Force (Split-Path $Path) -ErrorAction Stop | Out-Null
+            Set-Content -Encoding utf8 -Path $Path -Value $Text -ErrorAction Stop
+            return
+        }
+        catch { Start-Sleep -Milliseconds 100 }
+    }
+    Write-Host "Could not write the lock note $Path (another process has it open); carrying on without it."
+}
+
+function Read-LockNote([string]$Path) {
+    for ($I = 0; $I -lt 3; $I++) {
+        try {
+            if (-not $Path -or -not (Test-Path $Path)) { return '' }
+            $F = [System.IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite, Delete')
+            try { return (New-Object System.IO.StreamReader($F)).ReadToEnd().Trim() } finally { $F.Dispose() }
+        }
+        catch { Start-Sleep -Milliseconds 50 }
+    }
+    return ''
+}
+
 # The one wait loop for a named lock (the GPU test lock and the build lock use it): try once at
 # once, and if it is held say so right away, naming the holder, then keep trying every
 # -PollSeconds until -TimeoutMinutes. A holder that ended without releasing (abandoned) hands it over.
@@ -53,7 +80,7 @@ function Wait-LockWithHolder {
         $Wait = $PollSpan
         $Waited = [int]((Get-Date) - $Start).TotalMinutes
         $Who = 'unknown'
-        try { if ($HolderFile -and (Test-Path $HolderFile)) { $T = (Get-Content $HolderFile -Raw).Trim(); if ($T) { $Who = $T } } } catch { }
+        $T = Read-LockNote $HolderFile; if ($T) { $Who = $T }
         Write-Host "Waiting for $Label held by $Who ($Why): $Waited min so far"
         if (((Get-Date) - $Start).TotalMinutes -ge $TimeoutMinutes) { return $false }
     }
@@ -71,8 +98,7 @@ function Enter-EditorLock {
             $script:GpuTestLock.Dispose(); $script:GpuTestLock = $null
             return $false
         }
-        New-Item -ItemType Directory -Force (Split-Path $Holder) | Out-Null
-        "$Why, since $((Get-Date).ToString('HH:mm:ss')), pid $PID" | Set-Content -Encoding utf8 $Holder
+        Write-LockNote $Holder "$Why, since $((Get-Date).ToString('HH:mm:ss')), pid $PID"
         Write-Host "GPU test lock taken after $([int]((Get-Date) - $Start).TotalSeconds) s."
     }
     $script:EditorLock = New-Object System.Threading.Mutex($false, $script:EditorLockName)
@@ -103,7 +129,7 @@ function Exit-EditorLock {
         $script:GpuTestLock = $null
         # Free: the holder file names nobody (load.csv logs the holder).
         $Holder = Join-Path $env:LOCALAPPDATA 'OSDS\gpu-test-lock.txt'
-        try { Set-Content -Encoding utf8 $Holder '' } catch { }
+        Write-LockNote $Holder ''
     }
 }
 
@@ -173,12 +199,8 @@ $script:BuildLock = $null
 
 function Get-BuildLockHolder([string]$HolderFile = $script:BuildLockHolderFile) {
     # The holder's pid and a note, or 'unknown'.
-    try {
-        if (Test-Path $HolderFile) {
-            $T = (Get-Content $HolderFile -Raw).Trim()
-            if ($T) { return $T }
-        }
-    } catch { }
+    $T = Read-LockNote $HolderFile
+    if ($T) { return $T }
     return 'unknown'
 }
 
@@ -195,17 +217,14 @@ function Enter-BuildLock {
         return $false
     }
     $script:BuildLock = $Mutex
-    try {
-        New-Item -ItemType Directory -Force (Split-Path $HolderFile) | Out-Null
-        "pid $PID, $Why, since $((Get-Date).ToString('HH:mm:ss'))" | Set-Content -Encoding utf8 $HolderFile
-    } catch { }
+    Write-LockNote $HolderFile "pid $PID, $Why, since $((Get-Date).ToString('HH:mm:ss'))"
     Write-Host "Build lock taken after $([int]((Get-Date) - $Start).TotalSeconds) s."
     return $true
 }
 
 function Exit-BuildLock([string]$HolderFile = $script:BuildLockHolderFile) {
     if ($script:BuildLock) {
-        try { Set-Content -Encoding utf8 $HolderFile '' } catch { }
+        Write-LockNote $HolderFile ''
         try { $script:BuildLock.ReleaseMutex() } catch { }
         $script:BuildLock.Dispose()
         $script:BuildLock = $null

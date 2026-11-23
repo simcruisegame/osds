@@ -71,6 +71,23 @@ Assert-That ((Get-BuildLockHolder $BHolder) -eq 'unknown') 'a released build loc
 Stop-Job $Holder -ErrorAction SilentlyContinue; Remove-Job $Holder -Force -ErrorAction SilentlyContinue
 Remove-Item $BHolder -ErrorAction SilentlyContinue
 
+# A holder note another process has open must not stop a lock being taken or released (a preflight died on this).
+$Locked = Join-Path ([IO.Path]::GetTempPath()) "osds-locked-note-$PID.txt"
+Set-Content $Locked 'pid 1, other'
+$Stream = [System.IO.File]::Open($Locked, 'Open', 'ReadWrite', 'None')
+try {
+    $script:BuildLockName = "Global\OsdsBuildSelfTestC$PID"
+    $Ok = Enter-BuildLock -Name $script:BuildLockName -HolderFile $Locked -PollSeconds 1 -TimeoutMinutes 1 -Why 'self-test' 6>&1 | Out-String
+    Assert-That ($Ok -match 'Build lock taken' -and $Ok -match 'Could not write the lock note' -and $script:BuildLock) 'a holder note held open (FileShare.None): the build lock is still taken, with a warning'
+    Exit-BuildLock $Locked
+    Assert-That (-not $script:BuildLock) 'and released'
+    Assert-That ((Get-BuildLockHolder $Locked) -eq 'unknown') 'an unreadable holder note reads as unknown'
+}
+finally { $Stream.Dispose() }
+Write-LockNote $Locked 'pid 2, after'
+Assert-That ((Get-BuildLockHolder $Locked) -eq 'pid 2, after') 'a holder note is written and read once free'
+Remove-Item $Locked -ErrorAction SilentlyContinue
+
 # Only exit 4 with the "already running" line is a queue case; any other failure is real.
 $Running = @('Build.bat is already running, waiting for existing script to terminate...')
 Assert-That (Test-BuildRefusedByOtherBuild $Running 4) 'exit 4 with "already running" is a queue case'
