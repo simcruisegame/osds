@@ -105,7 +105,7 @@ namespace OsdsDynamics
 	}
 
 	void GetTmeasyCurves(const FOsdsCarDefinition& Car, double NormalLoadN, double GripScale,
-		FTmeasyCurve& OutX, FTmeasyCurve& OutY)
+		FTmeasyCurve& OutX, FTmeasyCurve& OutY, const FOsdsSurfaceShape& Shape)
 	{
 		const double Pn = FMath::Max(Car.ReferenceCornerLoadN, 1.0);
 		// Chrono clamps the load it interpolates with; past about 2.5 pn the quadratic turns over.
@@ -125,6 +125,17 @@ namespace OsdsDynamics
 		OutY.PeakSlip = FMath::Max(InterpL(Car.TmeasyPeakSlipY, Car.TmeasyPeakSlipY * Car.TmeasyPeakSlipY2Ratio), 0.02) * G;
 		OutY.SlideForce = Force(Car.TmeasySlideMuY, Car.TmeasySlideMuY2Ratio) * G;
 		OutY.SlideSlip = FMath::Max(InterpL(Car.TmeasySlideSlipY, Car.TmeasySlideSlipY * Car.TmeasySlideSlipY2Ratio), 0.1) * G;
+		if (!Shape.IsIdentity())
+		{
+			// Loose ground (OsdsSurfaceTable.h): the peak and the full slide come at more slip, and the
+			// force falls less from the peak to the slide (never below the car's own slide force).
+			for (FTmeasyCurve* C : { &OutX, &OutY })
+			{
+				C->PeakSlip *= Shape.PeakSlipScale;
+				C->SlideSlip *= Shape.PeakSlipScale;
+				C->SlideForce = C->PeakForce - (C->PeakForce - C->SlideForce) * FMath::Clamp(Shape.FalloffKept, 0.0, 1.0);
+			}
+		}
 	}
 
 	double TmeasyForce(double S, const FTmeasyCurve& C)
@@ -200,10 +211,11 @@ namespace OsdsDynamics
 	}
 
 	double TmeasyCombined(const FOsdsCarDefinition& Car, double NormalLoadN, double GripScale,
-		double SlipX, double SlipY, double& OutSecantPerSlip, double& OutPeakSlipX)
+		double SlipX, double SlipY, double& OutSecantPerSlip, double& OutPeakSlipX,
+		const FOsdsSurfaceShape& Shape)
 	{
 		FTmeasyCurve X, Y;
-		GetTmeasyCurves(Car, NormalLoadN, GripScale, X, Y);
+		GetTmeasyCurves(Car, NormalLoadN, GripScale, X, Y, Shape);
 		OutPeakSlipX = X.PeakSlip;
 		const double Sc = FMath::Sqrt(SlipX * SlipX + SlipY * SlipY);
 		if (Sc < 1.0e-6)
@@ -243,7 +255,7 @@ namespace OsdsDynamics
 		const double SlipX = (Input.StartAngularSpeedRadPerSecond * R - V) / Transport;
 		const double SlipY = Input.LateralSlip;
 		double Secant = 0.0, PeakSlipX = 0.1;
-		TmeasyCombined(Car, Fz, Input.GripScale, SlipX, SlipY, Secant, PeakSlipX);
+		TmeasyCombined(Car, Fz, Input.GripScale, SlipX, SlipY, Secant, PeakSlipX, Input.Shape);
 		Out.PeakSlipRatio = PeakSlipX;
 		// The wheel and the contact solved together on the secant stiffness (never negative),
 		// so a spinning or locking wheel stays stable past the peak.
@@ -258,7 +270,7 @@ namespace OsdsDynamics
 			const double EndSpinGuess = Spin - Fx * R * Ds / I;
 			const double MeanSlipX = (0.5 * (Input.StartAngularSpeedRadPerSecond + EndSpinGuess) * R - V) / Transport;
 			double MeanSecant = Secant;
-			TmeasyCombined(Car, Fz, Input.GripScale, MeanSlipX, SlipY, MeanSecant, PeakSlipX);
+			TmeasyCombined(Car, Fz, Input.GripScale, MeanSlipX, SlipY, MeanSecant, PeakSlipX, Input.Shape);
 			Secant = MeanSecant;
 			Ke = FMath::Max(Secant, 0.0) / Transport;
 			Fx = Ke * (Spin * R - V) / (1.0 + Ke * R * R * Ds / I);

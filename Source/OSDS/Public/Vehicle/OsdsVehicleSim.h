@@ -258,6 +258,8 @@ public:
 	 *  that has stability control (CarDefinition::bStabilityControlEnabled); the movement component sets it
 	 *  from osds.Assists.StabilityControl. */
 	bool bStabilityControlSwitch = true;
+	/** Test hook (benches): when 0 or more, every wheel stands on this EOsdsSurfaceKind, dry, whatever the ground query says. */
+	int32 SurfaceOverrideKind = -1;
 	/** True while the automatic clutch works through a shift. */
 	bool IsAutoShifting() const { return AutoPhase != 0; }
 

@@ -2,6 +2,7 @@
 
 #include "World/OsdsWorldTile.h"
 #include "Vehicle/OsdsSurfaceKind.h"
+#include "Vehicle/OsdsSurfaceTable.h"
 
 #include "World/OsdsCellContext.h"
 #include "World/OsdsScan.h"
@@ -131,10 +132,7 @@ void AOsdsWorldTile::SurfaceGripAtFace(int32 FaceIndex, float& OutDryGrip, float
 void AOsdsWorldTile::SurfaceAtFace(int32 FaceIndex, float& OutDryGrip, float& OutWetLoss, uint8& OutKind) const
 {
 	OutKind = static_cast<uint8>(EOsdsSurfaceKind::Unknown);
-	// Peak friction relative to dry asphalt (0.8-0.9), from Wong, Theory of Ground Vehicles,
-	// table 1.3: wet asphalt or concrete 0.5-0.7 (about 0.7 of dry), gravel 0.6 (0.7 of dry,
-	// little changed when wet), earth road 0.68 dry and 0.55 wet (0.8 and 0.65 of dry asphalt;
-	// the tile's ground: verges, lawns, soil).
+	// Grip per surface kind comes from OsdsSurface::Tyre (sources there); early outs keep asphalt's.
 	OutDryGrip = 1.f;
 	OutWetLoss = 0.3f;
 	TSharedPtr<const FSurfaceMap, ESPMode::ThreadSafe> Map;
@@ -163,8 +161,6 @@ void AOsdsWorldTile::SurfaceAtFace(int32 FaceIndex, float& OutDryGrip, float& Ou
 		const int32 Local = FaceIndex - Map->AsphaltFirstFace;
 		if (Map->GravelAsphalt.IsValidIndex(Local) && Map->GravelAsphalt[Local])
 		{
-			OutDryGrip = 0.7f;
-			OutWetLoss = 0.1f;
 			OutKind = static_cast<uint8>(EOsdsSurfaceKind::Gravel);
 		}
 		break;
@@ -174,13 +170,15 @@ void AOsdsWorldTile::SurfaceAtFace(int32 FaceIndex, float& OutDryGrip, float& Ou
 		OutKind = static_cast<uint8>(EOsdsSurfaceKind::Concrete);
 		break;
 	case EOsdsTileLayer::Terrain:
-		OutDryGrip = 0.8f;
-		OutWetLoss = 0.19f;
 		OutKind = static_cast<uint8>(EOsdsSurfaceKind::Grass);
 		break;
 	default:
 		break;
 	}
+	// The grip numbers have one home: the surface table (OsdsSurfaceTable.h), with its sources.
+	const FOsdsSurfaceTyre Tyre = OsdsSurface::Tyre(OutKind);
+	OutDryGrip = static_cast<float>(Tyre.DryGrip);
+	OutWetLoss = static_cast<float>(Tyre.WetLoss);
 }
 
 AOsdsWorldTile::AOsdsWorldTile()

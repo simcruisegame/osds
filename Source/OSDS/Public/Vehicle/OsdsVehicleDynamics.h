@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Vehicle/OsdsSurfaceTable.h"
 #include "Vehicle/CarDefinition.h"
 
 /** Per-contact inputs to the SI-unit tire model. Wheel torques are applied
@@ -58,6 +59,8 @@ struct FOsdsLongitudinalSubstepInput
 	 *  and surface times axle grip. LateralForceN then carries only the camber thrust. */
 	double LateralSlip = 0.0;
 	double GripScale = 1.0;
+	/** The surface's curve shape (loose ground: later peak, flatter fall-off); identity on pavement. */
+	FOsdsSurfaceShape Shape;
 };
 
 struct FOsdsLongitudinalSubstepOutput
@@ -153,7 +156,7 @@ namespace OsdsDynamics
 	 *  twice it as Chrono's ChTMeasyTire does: forces quadratically, slips linearly), the
 	 *  forces and slips scaled by GripScale. */
 	void GetTmeasyCurves(const FOsdsCarDefinition& Car, double NormalLoadN, double GripScale,
-		FTmeasyCurve& OutX, FTmeasyCurve& OutY);
+		FTmeasyCurve& OutX, FTmeasyCurve& OutY, const FOsdsSurfaceShape& Shape = FOsdsSurfaceShape());
 
 	/** Contact patch length (m) of a tyre under this load: 2 sqrt(R d), d = load / vertical stiffness. */
 	double ContactPatchLengthM(const FOsdsCarDefinition& Car, double NormalLoadN);
@@ -167,7 +170,8 @@ namespace OsdsDynamics
 
 	/** Combined TMeasy force F along the slip direction (SlipX, SlipY), and the secant F/s. */
 	double TmeasyCombined(const FOsdsCarDefinition& Car, double NormalLoadN, double GripScale,
-		double SlipX, double SlipY, double& OutSecantPerSlip, double& OutPeakSlipX);
+		double SlipX, double SlipY, double& OutSecantPerSlip, double& OutPeakSlipX,
+		const FOsdsSurfaceShape& Shape = FOsdsSurfaceShape());
 
 	FOsdsLongitudinalSubstepOutput SolveLongitudinalSubstep(
 		const FOsdsCarDefinition& Car,

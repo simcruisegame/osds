@@ -107,6 +107,28 @@ struct FOsdsStepSteerResult
 FOsdsStepSteerResult OsdsRunStepSteer(const FOsdsCarDefinition& Car, double FixedStepS,
 	double SpeedMps = 80.0 / 3.6, double LateralG = 0.4);
 
+/** Driving on one surface kind (the surface table, OsdsSurfaceTable.h), stability control off: a straight
+ *  hold and a lane change at a speed, or a launch from rest at full throttle. */
+struct FOsdsSurfaceDriveResult
+{
+	bool bCompleted = false;
+	double SpeedMps = 0.0;
+	/** Peak body sideslip (deg) while holding the speed straight, and through the lane change. */
+	double StraightBetaDeg = 0.0;
+	double LaneChangeBetaDeg = 0.0;
+	double LaneChangeLateralG = 0.0;
+	double SpeedHeldMps = 0.0;
+	/** Launch: seconds from the throttle to 10 m/s (huge if never), seconds below 0.3 m/s with the pedal down, the engine's top rpm then, the last gear and rpm. */
+	double TimeTo10MpsS = 0.0;
+	double StuckS = 0.0;
+	double MaxRpmWhileStuck = 0.0;
+	int32 Gear = 0;
+	double Rpm = 0.0;
+};
+
+FOsdsSurfaceDriveResult OsdsRunSurfaceHold(const FOsdsCarDefinition& Car, double FixedStepS, int32 SurfaceKind, double SpeedMps);
+FOsdsSurfaceDriveResult OsdsRunSurfaceLaunch(const FOsdsCarDefinition& Car, double FixedStepS, int32 SurfaceKind);
+
 /** FMVSS 126 / NHTSA sine with dwell, the US stability-control test: coasting from 80 km/h, one 0.7 Hz sine
  *  of steering with a 0.5 s dwell at its second peak, at 6.5 times the steer that gives 0.3 g. */
 struct FOsdsSineDwellResult
