@@ -20,6 +20,13 @@ This is the result of the 2026-11-23 retrospective. Read [ask-matt](https://www.
 - Builds and tests run in the background with a completion notice. Never poll, and never keep an agent alive just to wait.
 - A huge, foggy effort goes through `/wayfinder` first. Use `/improve-codebase-architecture` when a ticket is hard to test.
 
+## Testing together (integration on main)
+
+1. **Integration Preflight after every code merge.** The coordinator (QA lane) runs one visible Ultra Preflight on `main`: `powershell -ExecutionPolicy Bypass -File scripts/preflight.ps1 -ShowWindow -Graphics ultra -RandomCount 2 -KeepFrames` (the four Hero roads plus 2 Random US places; a race track joins once Preflight can start on one). The art-director reviews the combined frames. This run is the source of truth, because textures, road geometry, cars and handling only meet on `main`. A P0/P1 it finds becomes a bug ticket at once.
+2. **One GPU queue.** Work sessions run headless tests freely, and at most one short visible drive for their own ticket's before/after frames (the GPU lock in `scripts/EditorLock.ps1` queues it). Full suites and integration runs belong to the coordinator only.
+3. **Rebase before the final test.** Each work session rebases on `origin/main` right before its final test and PR, so it tests against everyone's latest work. Merge small and often.
+4. **Shared evidence.** Integration results go to `Saved/Review/integration-<sha>/` in the main checkout. The coordinator links that folder from the merged PR (a comment) and from the issue it closes, so every session reads the same frames.
+
 ## Feedback loops first
 
 Before trusting any test result, check that the harness measures what it claims to:
