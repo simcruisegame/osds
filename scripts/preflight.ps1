@@ -59,7 +59,9 @@ param(
     [ValidateSet('low', 'medium', 'high', 'ultra')][string]$Graphics = 'ultra',
     # The window size: 'WxH' (default 1920x1080, what the High preset's 45 fps target is tuned for) or
     # 'native' for the screen's own size (a sign-off run). Issue #69: native 3440x1440 ran at about 10 fps.
-    [string]$Resolution = '1920x1080'
+    [string]$Resolution = '1920x1080',
+    # Run even when Source\ is newer than the built binary (a deliberate A/B on old bits).
+    [switch]$AllowStaleBinary
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,6 +77,18 @@ if (-not $Ffmpeg) {
     if ($Found) { $Ffmpeg = $Found.FullName }
 }
 if (-not $Ffmpeg) { Write-Host 'No ffmpeg: install it once with "winget install Gyan.FFmpeg" (free), then run again.'; exit 2 }
+
+# Never drive a binary older than the code: a refused or failed build (disk guard, build error) leaves the
+# old one, and its numbers describe the wrong game (issue #142). -AllowStaleBinary is for a deliberate A/B on old bits.
+$Stale = Get-StaleBinary -Root $Root
+if ($Stale.Stale) {
+    if ($AllowStaleBinary) { Write-Host "WARNING: running on a stale binary (-AllowStaleBinary): $($Stale.Reason)" }
+    else {
+        Write-Host "PREFLIGHT REFUSED: the game binary is older than the source: $($Stale.Reason)."
+        Write-Host 'Build first (scripts\check.ps1 -Tier fast; free disk space if it refused for space), then run again.'
+        exit 3
+    }
+}
 
 # "powershell -File" hands "a,b" over as one string.
 $Roads = @($Roads | ForEach-Object { $_ -split ',' } | Where-Object { $_ })

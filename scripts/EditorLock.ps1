@@ -145,6 +145,92 @@ function Exit-HeadlessSlot {
     }
 }
 
+# One Unreal build at a time on this PC (issue #142). Unreal Build Tool has its own mutex, but
+# a second Build.bat can still give up with "Build.bat is already running" (exit 4). Every script
+# that builds takes this lock first and queues behind the holder, with a line that names it.
+# A named Windows mutex, so a crashed or killed holder frees it. The holder file is for the
+# people waiting (the mutex itself does not say who has it).
+$script:BuildLockName = 'Global\OsdsBuild'
+$script:BuildLockHolderFile = Join-Path $env:LOCALAPPDATA 'OSDS\build-lock.txt'
+$script:BuildLock = $null
+
+function Get-BuildLockHolder([string]$HolderFile = $script:BuildLockHolderFile) {
+    # The holder's pid and a note, or 'unknown'.
+    try {
+        if (Test-Path $HolderFile) {
+            $T = (Get-Content $HolderFile -Raw).Trim()
+            if ($T) { return $T }
+        }
+    } catch { }
+    return 'unknown'
+}
+
+function Enter-BuildLock {
+    param(
+        [int]$TimeoutMinutes = 60, [string]$Why = 'build', [double]$PollSeconds = 30,
+        [string]$Name = $script:BuildLockName, [string]$HolderFile = $script:BuildLockHolderFile
+    )
+    $Mutex = New-Object System.Threading.Mutex($false, $Name)
+    $Start = Get-Date
+    $Taken = $false
+    while (-not $Taken) {
+        try { $Taken = $Mutex.WaitOne([TimeSpan]::FromSeconds($PollSeconds)) }
+        catch [System.Threading.AbandonedMutexException] { $Taken = $true }
+        if ($Taken) { break }
+        $Waited = [int]((Get-Date) - $Start).TotalMinutes
+        Write-Host "Waiting for build lock held by $(Get-BuildLockHolder $HolderFile) ($Why): $Waited min so far"
+        if (((Get-Date) - $Start).TotalMinutes -ge $TimeoutMinutes) {
+            Write-Host "Another build held the lock for $TimeoutMinutes min. Gave up."
+            $Mutex.Dispose()
+            return $false
+        }
+    }
+    $script:BuildLock = $Mutex
+    try {
+        New-Item -ItemType Directory -Force (Split-Path $HolderFile) | Out-Null
+        "pid $PID, $Why, since $((Get-Date).ToString('HH:mm:ss'))" | Set-Content -Encoding utf8 $HolderFile
+    } catch { }
+    Write-Host "Build lock taken after $([int]((Get-Date) - $Start).TotalSeconds) s."
+    return $true
+}
+
+function Exit-BuildLock([string]$HolderFile = $script:BuildLockHolderFile) {
+    if ($script:BuildLock) {
+        try { Set-Content -Encoding utf8 $HolderFile '' } catch { }
+        try { $script:BuildLock.ReleaseMutex() } catch { }
+        $script:BuildLock.Dispose()
+        $script:BuildLock = $null
+    }
+}
+
+# Did Build.bat give up only because another build was running (not because the code is broken)?
+function Test-BuildRefusedByOtherBuild([string[]]$Output, [int]$ExitCode) {
+    if ($ExitCode -eq 0) { return $false }
+    return [bool](@($Output) -match 'already running')
+}
+
+<#
+  A run on a binary older than the code is a run on the wrong game (twice a refused build let a
+  drive measure the old binary). Stale = the editor module is missing, or some file under Source\
+  was written after it (2 s of slack for file-system time rounding).
+#>
+function Get-StaleBinary {
+    param([string]$Root, [string]$Binary = (Join-Path $Root 'Binaries\Win64\UnrealEditor-OSDS.dll'))
+    if (-not (Test-Path $Binary)) {
+        return [pscustomobject]@{ Stale = $true; Reason = "no binary at $Binary"; Newest = $null }
+    }
+    $BinTime = (Get-Item $Binary).LastWriteTimeUtc
+    $Newest = Get-ChildItem (Join-Path $Root 'Source') -Recurse -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+    if ($Newest -and $Newest.LastWriteTimeUtc -gt $BinTime.AddSeconds(2)) {
+        return [pscustomobject]@{
+            Stale = $true; Newest = $Newest.FullName
+            Reason = "$Binary ($($BinTime.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss'))) is older than $($Newest.FullName) ($($Newest.LastWriteTimeUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss')))"
+        }
+    }
+    return [pscustomobject]@{ Stale = $false; Reason = ''; Newest = if ($Newest) { $Newest.FullName } else { $null } }
+}
+
 function Stop-ProcessTree {
     param([int]$ProcessId)
     & taskkill.exe /T /F /PID $ProcessId 2>&1 | Out-Null
