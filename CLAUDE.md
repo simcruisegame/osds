@@ -8,6 +8,7 @@ Unreal Engine 5.8 C++ driving simulator that builds the US from real data at run
 - Build, run, launch flags and console variables: `docs/unreal-building.md`.
 - Current cycle plan (3.0): GitHub milestone `3.0`; bug list: `docs/release/bugs.md`.
 - Expert reviewers: `.claude/agents/*.md` (read-only subagents; see `docs/team/README.md`).
+- How work flows (grill, spec, tickets, one ticket per fresh session, `/code-review` on every PR, daily `/retro`, context and budget limits): `docs/agents/workflow.md`.
 - Car data: `data/cars/<id>.json`, research per car in `lab/cars/*-research.md`.
 
 ## Checks (run these, never improvise editor commands)
