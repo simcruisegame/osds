@@ -121,7 +121,7 @@ private:
 /** The pass rules and the measurements that need no world, kept apart for the tests. */
 namespace OsdsPreflightRules
 {
-	constexpr float MinDistanceM = 200.f;
+	constexpr float MinMeanSpeedMps = 3.3f; // the old 200 m in 60 s, as a simulated-time speed
 	/** Off the road surface longer than this is a run-off (a crack under the wheels takes about 0.1 s). */
 	constexpr float MaxOffRoadSeconds = 1.f;
 	/** A spin: the rear axle slips past 15 deg (the drive robot's SPUN line), or the car slides backwards. */
