@@ -48,6 +48,27 @@ struct OSDS_API FOsdsPreflightStats
 	int32 RoadSteps = 0;
 	float MaxStepCm = 0.f;
 	int32 RoadGaps = 0;
+	/**
+	 * Edge lip (#127): the road surface at the ribbon's paved edge minus the ground 1 m beyond it, in cm,
+	 * sampled each 0.5 m along the path on both sides. Positive = the road stands proud of the ground
+	 * (the "raised slab" look); negative = a drop-off. Sides next to another road or a bridge deck are skipped.
+	 */
+	int32 EdgeLipSamples = 0;
+	float EdgeLipMeanCm = 0.f;
+	float EdgeLipP95Cm = 0.f;
+	float EdgeLipMaxCm = 0.f;
+	float EdgeLipMinCm = 0.f;
+	/**
+	 * Edge jaggedness (#127): where the road mesh really ends across the ribbon's edge, minus the ribbon
+	 * edge, per 0.5 m station on both sides (cm), about each side's own mean line (the mean itself is EdgeJagOffsetCm). RMS and largest deviation, and the direction reversals
+	 * (steps of 2 cm or more) per 10 m of edge: a stair-step or zig-zag edge scores high, a clean one near 0.
+	 */
+	int32 EdgeJagSamples = 0;
+	float EdgeJagRmsCm = 0.f;
+	float EdgeJagMaxCm = 0.f;
+	float EdgeJagReversalsPer10m = 0.f;
+	/** Mean distance of the mesh edge outside the ribbon edge (cm): the paved shoulder and skirt, not jaggedness. */
+	float EdgeJagOffsetCm = 0.f;
 	/** Vertical body jolts, and those near a tile border. */
 	int32 Jolts = 0;
 	int32 BorderJolts = 0;
@@ -193,6 +214,14 @@ namespace OsdsPreflightRules
 	 */
 	OSDS_API int32 CountSteps(const TArray<FVector2f>& DistanceHeight, float& OutMaxStepCm, float MaxGapM = 1.f, TArray<int32>* OutIndices = nullptr);
 
+	/** A step in the edge line of at least this many cm counts toward a direction reversal. */
+	constexpr float ReversalCm = 2.f;
+	/** Edge jaggedness from the left and right deviation series (path m, cm). */
+	OSDS_API void SummariseEdgeJag(const TArray<FVector2f>& Left, const TArray<FVector2f>& Right, FOsdsPreflightStats& Stats);
+
+	/** Mean, 95th percentile (of the absolute lip), largest and smallest of the edge-lip samples (cm). */
+	OSDS_API void SummariseEdgeLip(const TArray<float>& LipsCm, FOsdsPreflightStats& Stats);
+
 	/**
 	 * Frames whose change (the percent of the picture that changed by more than 40 of 255) is above
 	 * max(Floor, Factor x the median), skipping those marked turning.
@@ -336,6 +365,11 @@ private:
 	TArray<uint8> SurfaceIsRoad;
 	/** Where each surface sample was (lat, lon), so a step can be found again. */
 	TArray<FVector2d> SurfaceLatLon;
+	/** Edge-lip samples (cm) and the path distance of the last one (#127). */
+	TArray<float> EdgeLips;
+	TArray<FVector2f> EdgeDevLeft, EdgeDevRight;
+	double LastEdgeSampleM = -1.0;
+	int32 EdgeSkipNoRoad = 0, EdgeSkipBesideRoad = 0, EdgeSkipNoGround = 0, EdgeSkipNoCursor = 0;
 	float OffRoadNow = 0.f;
 	double LastVz = 0.0;
 	bool bHasLastVz = false;

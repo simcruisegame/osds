@@ -179,6 +179,61 @@ namespace OsdsPreflightRules
 		return Count;
 	}
 
+	void SummariseEdgeJag(const TArray<FVector2f>& Left, const TArray<FVector2f>& Right, FOsdsPreflightStats& Stats)
+	{
+		Stats.EdgeJagSamples = Left.Num() + Right.Num();
+		Stats.EdgeJagRmsCm = Stats.EdgeJagMaxCm = Stats.EdgeJagReversalsPer10m = Stats.EdgeJagOffsetCm = 0.f;
+		if (Stats.EdgeJagSamples == 0) return;
+		double SumSq = 0.0, OffsetSum = 0.0;
+		int32 Reversals = 0;
+		double LengthM = 0.0;
+		for (const TArray<FVector2f>* Side : {&Left, &Right})
+		{
+			if (Side->IsEmpty()) continue;
+			// Jaggedness is the wobble about the side's own mean line; the mean offset is reported apart.
+			double Mean = 0.0;
+			for (const FVector2f& P : *Side) Mean += P.Y;
+			Mean /= Side->Num();
+			OffsetSum += Mean * Side->Num();
+			int32 LastDir = 0;
+			for (int32 I = 0; I < Side->Num(); ++I)
+			{
+				const float D = (*Side)[I].Y - static_cast<float>(Mean);
+				SumSq += static_cast<double>(D) * D;
+				Stats.EdgeJagMaxCm = FMath::Max(Stats.EdgeJagMaxCm, FMath::Abs(D));
+				if (I == 0) continue;
+				const float Delta = (*Side)[I].Y - (*Side)[I - 1].Y;
+				if (FMath::Abs(Delta) < ReversalCm) continue;
+				const int32 Dir = Delta > 0.f ? 1 : -1;
+				if (LastDir != 0 && Dir != LastDir) ++Reversals;
+				LastDir = Dir;
+			}
+			if (Side->Num() > 1) LengthM += (*Side)[Side->Num() - 1].X - (*Side)[0].X;
+		}
+		Stats.EdgeJagOffsetCm = static_cast<float>(OffsetSum / Stats.EdgeJagSamples);
+		Stats.EdgeJagRmsCm = static_cast<float>(FMath::Sqrt(SumSq / Stats.EdgeJagSamples));
+		Stats.EdgeJagReversalsPer10m = LengthM > 1.0 ? static_cast<float>(Reversals * 10.0 / LengthM) : 0.f;
+	}
+
+	void SummariseEdgeLip(const TArray<float>& Lips, FOsdsPreflightStats& Stats)
+	{
+		Stats.EdgeLipSamples = Lips.Num();
+		Stats.EdgeLipMeanCm = Stats.EdgeLipP95Cm = Stats.EdgeLipMaxCm = Stats.EdgeLipMinCm = 0.f;
+		if (Lips.IsEmpty()) return;
+		double Sum = 0.0;
+		TArray<float> Abs;
+		Stats.EdgeLipMaxCm = Stats.EdgeLipMinCm = Lips[0];
+		for (const float L : Lips)
+		{
+			Sum += L;
+			Abs.Add(FMath::Abs(L));
+			Stats.EdgeLipMaxCm = FMath::Max(Stats.EdgeLipMaxCm, L);
+			Stats.EdgeLipMinCm = FMath::Min(Stats.EdgeLipMinCm, L);
+		}
+		Stats.EdgeLipMeanCm = static_cast<float>(Sum / Lips.Num());
+		Stats.EdgeLipP95Cm = Percentile95(Abs);
+	}
+
 	float Percentile95(const TArray<float>& Ms)
 	{
 		if (Ms.IsEmpty())
@@ -1154,6 +1209,50 @@ void AOsdsPreflight::MeasureTick(AOsdsPlayerController* Player, float DeltaSecon
 	OffRoadNow = bUnderRoad ? 0.f : OffRoadNow + DeltaSeconds;
 	Stats.OffRoadSeconds = FMath::Max(Stats.OffRoadSeconds, OffRoadNow);
 
+	// Edge lip (#127): the road at the paved edge against the ground 1 m beyond it, both sides, every 0.5 m.
+	if (bUnderRoad && !Lines.IsEmpty() && PathM - LastEdgeSampleM >= 0.5)
+	{
+		const FVector2d Car2(CarCm.X, CarCm.Y);
+		const FCursor Near = FindCursor(Car2, FVector2d(Forward.X, Forward.Y));
+		if (!Near.IsValid() || FVector2d::Distance(Car2, PointAt(Near)) / 100.0 >= Lines[Near.Line].HalfW[Near.Seg] + 0.5) ++EdgeSkipNoCursor;
+		else
+		{
+			LastEdgeSampleM = PathM;
+			const FVector2d Tan = TangentAt(Near);
+			const FVector2d Left(-Tan.Y, Tan.X);
+			const FVector2d Centre = PointAt(Near);
+			const double HalfWCm = Lines[Near.Line].HalfW[Near.Seg] * 100.0;
+			for (const double Side : {-1.0, 1.0})
+			{
+				// Where the road mesh really ends across the edge: a bisection from 60 cm inside the ribbon's
+				// edge to 2 m outside it (a rural road's paved shoulder is wider than the ribbon).
+				double InCm = HalfWCm - 60.0, OutCm = HalfWCm + 200.0, Z = 0.0;
+				const auto RoadAt = [&](double OffCm)
+				{
+					const FVector2d Q = Centre + Left * Side * OffCm;
+					return SurfaceAt(FVector(Q.X, Q.Y, CarCm.Z), Z);
+				};
+				if (!RoadAt(InCm)) { ++EdgeSkipNoRoad; continue; }
+				if (RoadAt(OutCm)) { ++EdgeSkipBesideRoad; continue; }
+				for (int32 Iter = 0; Iter < 8; ++Iter)
+				{
+					const double Mid = 0.5 * (InCm + OutCm);
+					(RoadAt(Mid) ? InCm : OutCm) = Mid;
+				}
+				const double JoinCm = 0.5 * (InCm + OutCm);
+				(Side > 0.0 ? EdgeDevLeft : EdgeDevRight).Add(FVector2f(static_cast<float>(PathM), static_cast<float>(JoinCm - HalfWCm)));
+				// The lip: the road 8 cm inside the join against the ground 40 cm outside it.
+				double EdgeZ = 0.0, BesideZ = TNumericLimits<double>::Lowest();
+				const FVector2d EdgeXY = Centre + Left * Side * (JoinCm - 8.0);
+				const FVector2d BesideXY = Centre + Left * Side * (JoinCm + 40.0);
+				if (!SurfaceAt(FVector(EdgeXY.X, EdgeXY.Y, CarCm.Z), EdgeZ)) { ++EdgeSkipNoRoad; continue; }
+				if (SurfaceAt(FVector(BesideXY.X, BesideXY.Y, CarCm.Z), BesideZ)) { ++EdgeSkipBesideRoad; continue; }
+				if (BesideZ == TNumericLimits<double>::Lowest()) { ++EdgeSkipNoGround; continue; }
+				EdgeLips.Add(static_cast<float>((EdgeZ - BesideZ) * 100.0));
+			}
+		}
+	}
+
 	// Jolts: vertical acceleration of the body, from its velocity.
 	const double Vz = Player->GetTelemetry().BodyVelocityMps.Z;
 	if (bHasLastVz && DeltaSeconds > 1e-3f && DeltaSeconds < 0.1f && JoltCooldown <= 0.f)
@@ -1401,6 +1500,10 @@ void AOsdsPreflight::Finish()
 	}
 	TArray<int32> StepAt;
 	Stats.RoadSteps = CountSteps(RoadOnly, Stats.MaxStepCm, 1.f, &StepAt);
+	SummariseEdgeLip(EdgeLips, Stats);
+	SummariseEdgeJag(EdgeDevLeft, EdgeDevRight, Stats);
+	UE_LOG(LogOsdsPreflight, Display, TEXT("PREFLIGHT EDGE JAG samples=%d rms=%.1fcm max=%.1fcm reversals_per_10m=%.2f mesh_edge_offset=%.1fcm"), Stats.EdgeJagSamples, Stats.EdgeJagRmsCm, Stats.EdgeJagMaxCm, Stats.EdgeJagReversalsPer10m, Stats.EdgeJagOffsetCm);
+	UE_LOG(LogOsdsPreflight, Display, TEXT("PREFLIGHT EDGE LIP skipped: edge-not-road=%d beside-is-road=%d no-ground=%d no-ribbon=%d; samples=%d mean=%.1fcm p95_abs=%.1fcm max=%.1fcm min=%.1fcm"), EdgeSkipNoRoad, EdgeSkipBesideRoad, EdgeSkipNoGround, EdgeSkipNoCursor, Stats.EdgeLipSamples, Stats.EdgeLipMeanCm, Stats.EdgeLipP95Cm, Stats.EdgeLipMaxCm, Stats.EdgeLipMinCm);
 	// Where each counted step is, for the road-step check to find it again.
 	{
 		TArray<FVector2d> RoadLatLon;
@@ -1485,6 +1588,8 @@ void AOsdsPreflight::Finish()
 		TEXT("  \"sky_samples\": %d, \"sky_white_percent\": %.1f, \"reference_ev100\": %.2f,\n")
 		TEXT("  \"tile_popins\": %d, \"car_popins\": %d, \"flash_frames\": %d, \"median_frame_diff\": %.2f,\n")
 		TEXT("  \"road_steps\": %d, \"max_step_cm\": %.1f, \"road_gaps\": %d, \"jolts\": %d, \"border_jolts\": %d,\n")
+		TEXT("  \"edge_lip_samples\": %d, \"edge_lip_mean_cm\": %.1f, \"edge_lip_p95_abs_cm\": %.1f, \"edge_lip_max_cm\": %.1f, \"edge_lip_min_cm\": %.1f,\n")
+		TEXT("  \"edge_jag_samples\": %d, \"edge_jag_rms_cm\": %.1f, \"edge_jag_max_cm\": %.1f, \"edge_jag_reversals_per_10m\": %.2f, \"edge_jag_mesh_edge_offset_cm\": %.1f,\n")
 		TEXT("  \"stuck_traffic\": %d, \"traffic_cut_ins\": %d, \"traffic_through_our_car\": %d, \"traffic_turn_rounds\": %d, \"motorway_traffic_at_grade\": %d,\n")
 		TEXT("  \"junction_hold_asked_s\": %.1f, \"junction_hold_s\": %.1f, \"junction_cross\": \"%s\", \"frames\": %d,\n")
 		TEXT("  \"peak_rear_slip_deg\": %.1f, \"peak_yaw_dps\": %.1f, \"backwards_seconds\": %.2f, \"forced_spin\": %s,\n")
@@ -1498,6 +1603,8 @@ void AOsdsPreflight::Finish()
 		Stats.SkySamples, Stats.SkyWhitePercent, Stats.ReferenceEV100,
 		Stats.TilePopIns, Stats.CarPopIns, Stats.FlashFrames, Stats.MedianFrameDiff,
 		Stats.RoadSteps, Stats.MaxStepCm, Stats.RoadGaps, Stats.Jolts, Stats.BorderJolts,
+		Stats.EdgeLipSamples, Stats.EdgeLipMeanCm, Stats.EdgeLipP95Cm, Stats.EdgeLipMaxCm, Stats.EdgeLipMinCm,
+		Stats.EdgeJagSamples, Stats.EdgeJagRmsCm, Stats.EdgeJagMaxCm, Stats.EdgeJagReversalsPer10m, Stats.EdgeJagOffsetCm,
 		Stats.StuckTraffic, Stats.TrafficCutIns, Stats.TrafficOverlaps, Stats.TrafficTurnRounds, Stats.TrafficAtGrade,
 		Stats.JunctionHoldAskedS, Stats.JunctionHoldS, *JunctionCrossName.ReplaceCharWithEscapedChar(), Stats.Frames,
 		Stats.PeakRearSlipDeg, Stats.PeakYawDps, Stats.ReversedSeconds, B(Stats.bForcedSpin),
