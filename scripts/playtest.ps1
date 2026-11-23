@@ -86,8 +86,8 @@ if (Test-Path $Atlas) {
 # package.ps1 first runs an editor commandlet, so the worktree's editor module must be built
 # (a new worktree has none). Unreal Build Tool queues on its own mutex.
 Write-Host "Building OSDSEditor in $Worktree"
-& (Join-Path $EngineDir 'Engine\Build\BatchFiles\Build.bat') OSDSEditor Win64 Development "-Project=$(Join-Path $Worktree 'OSDS.uproject')" -WaitMutex -NoHotReloadFromIDE | Out-Host
-if ($LASTEXITCODE -ne 0) { Write-Host 'EDITOR BUILD FAILED'; exit 1 }
+$BuildExit = Invoke-LockedBuild -BuildBat (Join-Path $EngineDir 'Engine\Build\BatchFiles\Build.bat') -BuildArgs @('OSDSEditor', 'Win64', 'Development', "-Project=$(Join-Path $Worktree 'OSDS.uproject')", '-WaitMutex', '-NoHotReloadFromIDE') -Why "play-test editor build in $Worktree" -TimeoutMinutes $LockTimeoutMinutes
+if ($BuildExit -ne 0) { Write-Host 'EDITOR BUILD FAILED'; exit 1 }
 
 if (-not (Enter-EditorLock -TimeoutMinutes $LockTimeoutMinutes -Why "play-test build of $Commit")) { exit 1 }
 try {

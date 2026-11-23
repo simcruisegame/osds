@@ -93,9 +93,8 @@ if ($Skip.Count) { $Poses = @($Poses | Where-Object { $Skip -notcontains $_.name
 
 # 2. The build.
 if (-not $NoBuild) {
-    Write-Host 'Building OSDSEditor (Win64 Development)...'
-    & $BuildBat OSDSEditor Win64 Development "-Project=$Project" -WaitMutex -NoHotReloadFromIDE | Out-Host
-    if ($LASTEXITCODE -ne 0) { Write-Host 'BUILD FAILED'; exit 1 }
+    $BuildExit = Invoke-LockedBuild -BuildBat $BuildBat -BuildArgs @('OSDSEditor', 'Win64', 'Development', "-Project=$Project", '-WaitMutex', '-NoHotReloadFromIDE') -Why "realism build on $Root" -TimeoutMinutes $LockTimeoutMinutes
+    if ($BuildExit -ne 0) { Write-Host 'BUILD FAILED'; exit 1 }
 }
 
 # 3. One game run per pose, so each pose gets its own window size, time and start.

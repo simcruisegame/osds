@@ -144,19 +144,26 @@ if (-not $NoBuild) {
         $Drive = Get-PSDrive -Name ((Split-Path -Qualifier $Root).TrimEnd(':'))
         $FreeGB = [math]::Round($Drive.Free / 1GB, 1)
         if ($FreeGB -lt 12) {
+            Write-Host 'NO BUILD WAS MADE: scripts\preflight.ps1 will refuse to run on the old binary until a build succeeds.'
             throw "Only $FreeGB GB free on $($Drive.Name): (a build needs about 12 GB). Free space first: scripts\clean-lane.ps1, or remove finished worktrees (git worktree remove)."
         }
-        $Impact = Get-LowImpactSettings -GpuTestRunning (Test-GpuTestLockHeld)
         $BuildArgs = @('OSDSEditor', 'Win64', 'Development', "-Project=$Project", '-WaitMutex', '-NoHotReloadFromIDE')
-        if ($Impact.Throttle) {
-            $BuildArgs += "-MaxParallelActions=$($Impact.MaxParallelActions)"
-            Write-Host "A GPU test is running: building at $($Impact.Priority) priority with at most $($Impact.MaxParallelActions) parallel actions."
+        # One build at a time on this PC: queue behind another session's build instead of failing
+        # with "Build.bat is already running" (exit 4). A real build failure still fails. The GPU-test
+        # throttle is read after the wait, since a game may have started or ended meanwhile (issue #69).
+        $Throttle = {
+            $Impact = Get-LowImpactSettings -GpuTestRunning (Test-GpuTestLockHeld)
+            Set-CheckImpact $Impact
+            if ($Impact.Throttle) {
+                Write-Host "A GPU test is running: building at $($Impact.Priority) priority with at most $($Impact.MaxParallelActions) parallel actions."
+                "-MaxParallelActions=$($Impact.MaxParallelActions)"
+            }
         }
-        Write-Host 'Building OSDSEditor (Win64 Development)...'
-        Set-CheckImpact $Impact
-        try { & $BuildBat @BuildArgs | Out-Host } finally { Set-CheckImpact (Get-LowImpactSettings -GpuTestRunning $false) }
-        $Timing.Build = ((Get-Date) - $Started).TotalSeconds
-        if ($LASTEXITCODE -ne 0) { Write-Host 'BUILD FAILED'; Remove-Item $BuildStamp -ErrorAction SilentlyContinue; Write-CheckTime 'build-failed'; exit 1 }
+        $BuildStart = Get-Date
+        try { $BuildExit = Invoke-LockedBuild -BuildBat $BuildBat -BuildArgs $BuildArgs -Why "build on $Root" -TimeoutMinutes $LockTimeoutMinutes -AfterLock $Throttle }
+        finally { Set-CheckImpact (Get-LowImpactSettings -GpuTestRunning $false) }
+        $Timing.Build = ((Get-Date) - $BuildStart).TotalSeconds
+        if ($BuildExit -ne 0) { Write-Host 'BUILD FAILED'; Remove-Item $BuildStamp -ErrorAction SilentlyContinue; Write-CheckTime 'build-failed'; exit 1 }
         # Hash again after the build, in case a file changed while it ran (then the next run builds).
         New-Item -ItemType Directory -Force (Split-Path $BuildStamp) | Out-Null
         if ((Get-BuildStamp) -eq $Stamp) { Set-Content -Encoding ascii $BuildStamp $Stamp }
@@ -168,8 +175,8 @@ $Log = Join-Path $Root "Saved\Logs\$LogName"
 if (Test-Path $Log) { Remove-Item $Log -Force }
 $LockStart = Get-Date
 $Timing.Slots = Get-HeadlessSlotCount -Requested $Slots
-if (-not (Enter-HeadlessSlot -Slots $Timing.Slots -TimeoutMinutes $LockTimeoutMinutes -Why "tests on $Root")) { $Timing.LockWait = ((Get-Date) - $LockStart).TotalSeconds; Write-CheckTime 'lock-timeout'; exit 1 }
-$Timing.LockWait = ((Get-Date) - $LockStart).TotalSeconds
+if (-not (Enter-HeadlessSlot -Slots $Timing.Slots -TimeoutMinutes $LockTimeoutMinutes -Why "tests on $Root")) { $Timing.LockWait += ((Get-Date) - $LockStart).TotalSeconds; Write-CheckTime 'lock-timeout'; exit 1 }
+$Timing.LockWait += ((Get-Date) - $LockStart).TotalSeconds
 $TestStart = Get-Date
 try {
     Write-Host "Running automation tests: $Filter ($Tier tier)"

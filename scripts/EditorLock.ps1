@@ -34,6 +34,58 @@ function Get-TestWindowArgs([bool]$ShowWindow) {
     return @('-RenderOffScreen')
 }
 
+# The holder notes (gpu-test-lock.txt, build-lock.txt) only tell the people waiting who has a lock.
+# Other sessions read and write them at the same moment, so a note must never end a run: writes retry
+# a few times and then only warn; reads share the file and give '' when they cannot read it.
+function Write-LockNote([string]$Path, [string]$Text) {
+    for ($I = 0; $I -lt 5; $I++) {
+        try {
+            New-Item -ItemType Directory -Force (Split-Path $Path) -ErrorAction Stop | Out-Null
+            Set-Content -Encoding utf8 -Path $Path -Value $Text -ErrorAction Stop
+            return
+        }
+        catch { Start-Sleep -Milliseconds 100 }
+    }
+    Write-Host "Could not write the lock note $Path (another process has it open); carrying on without it."
+}
+
+function Read-LockNote([string]$Path) {
+    for ($I = 0; $I -lt 3; $I++) {
+        try {
+            if (-not $Path -or -not (Test-Path $Path)) { return '' }
+            $F = [System.IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite, Delete')
+            try { return (New-Object System.IO.StreamReader($F)).ReadToEnd().Trim() } finally { $F.Dispose() }
+        }
+        catch { Start-Sleep -Milliseconds 50 }
+    }
+    return ''
+}
+
+# The one wait loop for a named lock (the GPU test lock and the build lock use it): try once at
+# once, and if it is held say so right away, naming the holder, then keep trying every
+# -PollSeconds until -TimeoutMinutes. A holder that ended without releasing (abandoned) hands it over.
+function Wait-LockWithHolder {
+    param(
+        [Parameter(Mandatory)][System.Threading.Mutex]$Mutex, [string]$Label, [string]$Why = '',
+        [string]$HolderFile, [double]$TimeoutMinutes = 60, [double]$PollSeconds = 30
+    )
+    $Start = Get-Date
+    $PollSpan = [TimeSpan]::FromSeconds($PollSeconds)
+    $Wait = [TimeSpan]::Zero
+    while ($true) {
+        $Taken = $false
+        try { $Taken = $Mutex.WaitOne($Wait) }
+        catch [System.Threading.AbandonedMutexException] { $Taken = $true }
+        if ($Taken) { return $true }
+        $Wait = $PollSpan
+        $Waited = [int]((Get-Date) - $Start).TotalMinutes
+        $Who = 'unknown'
+        $T = Read-LockNote $HolderFile; if ($T) { $Who = $T }
+        Write-Host "Waiting for $Label held by $Who ($Why): $Waited min so far"
+        if (((Get-Date) - $Start).TotalMinutes -ge $TimeoutMinutes) { return $false }
+    }
+}
+
 function Enter-EditorLock {
     param([int]$TimeoutMinutes = 60, [string]$Why = 'editor run', [switch]$GpuTest)
     if ($GpuTest) {
@@ -41,22 +93,12 @@ function Enter-EditorLock {
         # Who holds the lock, for the people waiting (the mutex itself does not say).
         $Holder = Join-Path $env:LOCALAPPDATA 'OSDS\gpu-test-lock.txt'
         $Start = Get-Date
-        $Taken = $false
-        while (-not $Taken) {
-            try { $Taken = $script:GpuTestLock.WaitOne([TimeSpan]::FromSeconds(30)) }
-            catch [System.Threading.AbandonedMutexException] { $Taken = $true }
-            if ($Taken) { break }
-            $Waited = [int]((Get-Date) - $Start).TotalMinutes
-            $Who = if (Test-Path $Holder) { (Get-Content $Holder -Raw).Trim() } else { 'unknown' }
-            Write-Host "Waiting for the GPU test lock ($Why): $Waited min so far; held by $Who"
-            if ($Waited -ge $TimeoutMinutes) {
-                Write-Host "Another GPU test held the lock for $TimeoutMinutes min. Gave up."
-                $script:GpuTestLock.Dispose(); $script:GpuTestLock = $null
-                return $false
-            }
+        if (-not (Wait-LockWithHolder -Mutex $script:GpuTestLock -Label 'the GPU test lock' -Why $Why -HolderFile $Holder -TimeoutMinutes $TimeoutMinutes)) {
+            Write-Host "Another GPU test held the lock for $TimeoutMinutes min. Gave up."
+            $script:GpuTestLock.Dispose(); $script:GpuTestLock = $null
+            return $false
         }
-        New-Item -ItemType Directory -Force (Split-Path $Holder) | Out-Null
-        "$Why, since $((Get-Date).ToString('HH:mm:ss')), pid $PID" | Set-Content -Encoding utf8 $Holder
+        Write-LockNote $Holder "$Why, since $((Get-Date).ToString('HH:mm:ss')), pid $PID"
         Write-Host "GPU test lock taken after $([int]((Get-Date) - $Start).TotalSeconds) s."
     }
     $script:EditorLock = New-Object System.Threading.Mutex($false, $script:EditorLockName)
@@ -87,7 +129,7 @@ function Exit-EditorLock {
         $script:GpuTestLock = $null
         # Free: the holder file names nobody (load.csv logs the holder).
         $Holder = Join-Path $env:LOCALAPPDATA 'OSDS\gpu-test-lock.txt'
-        try { Set-Content -Encoding utf8 $Holder '' } catch { }
+        Write-LockNote $Holder ''
     }
 }
 
@@ -143,6 +185,120 @@ function Exit-HeadlessSlot {
         $script:HeadlessSlot.Dispose()
         $script:HeadlessSlot = $null
     }
+}
+
+# One Unreal build at a time on this PC (issue #142). Unreal Build Tool has its own mutex, but
+# a second Build.bat can still give up with "Build.bat is already running" (exit 4). The scripts
+# that run Build.bat (check.ps1, realism.ps1, playtest.ps1) do it through Invoke-LockedBuild, which
+# takes this lock first and queues behind the holder, with a line that names it.
+# A named Windows mutex, so a crashed or killed holder frees it. The holder file is for the
+# people waiting (the mutex itself does not say who has it).
+$script:BuildLockName = 'Global\OsdsBuild'
+$script:BuildLockHolderFile = Join-Path $env:LOCALAPPDATA 'OSDS\build-lock.txt'
+$script:BuildLock = $null
+
+function Get-BuildLockHolder([string]$HolderFile = $script:BuildLockHolderFile) {
+    # The holder's pid and a note, or 'unknown'.
+    $T = Read-LockNote $HolderFile
+    if ($T) { return $T }
+    return 'unknown'
+}
+
+function Enter-BuildLock {
+    param(
+        [double]$TimeoutMinutes = 60, [string]$Why = 'build', [double]$PollSeconds = 30,
+        [string]$Name = $script:BuildLockName, [string]$HolderFile = $script:BuildLockHolderFile
+    )
+    $Mutex = New-Object System.Threading.Mutex($false, $Name)
+    $Start = Get-Date
+    if (-not (Wait-LockWithHolder -Mutex $Mutex -Label 'build lock' -Why $Why -HolderFile $HolderFile -TimeoutMinutes $TimeoutMinutes -PollSeconds $PollSeconds)) {
+        Write-Host "Another build held the lock for $TimeoutMinutes min. Gave up."
+        $Mutex.Dispose()
+        return $false
+    }
+    $script:BuildLock = $Mutex
+    Write-LockNote $HolderFile "pid $PID, $Why, since $((Get-Date).ToString('HH:mm:ss'))"
+    Write-Host "Build lock taken after $([int]((Get-Date) - $Start).TotalSeconds) s."
+    return $true
+}
+
+function Exit-BuildLock([string]$HolderFile = $script:BuildLockHolderFile) {
+    if ($script:BuildLock) {
+        Write-LockNote $HolderFile ''
+        try { $script:BuildLock.ReleaseMutex() } catch { }
+        $script:BuildLock.Dispose()
+        $script:BuildLock = $null
+    }
+}
+
+# Did Build.bat give up only because another build was running (exit 4 and its "already running"
+# line)? Any other failure, a compile error included, is a real failure and is never retried.
+function Test-BuildRefusedByOtherBuild([string[]]$Output, [int]$ExitCode) {
+    if ($ExitCode -ne 4) { return $false }
+    return [bool](@($Output) -match 'already running')
+}
+
+<#
+  Runs Build.bat under the build lock; returns its exit code (1 when the lock timed out).
+  -AfterLock runs once the lock is ours (so a GPU-test throttle is read after the wait, not before)
+  and returns extra Build.bat arguments. A build another tool started outside the scripts can still
+  make Build.bat answer exit 4 "already running": that waits 30 s and tries again until the timeout.
+  Any other failure is returned at once.
+#>
+function Invoke-LockedBuild {
+    param(
+        [Parameter(Mandatory)][string]$BuildBat, [string[]]$BuildArgs = @(), [string]$Why = 'build',
+        [double]$TimeoutMinutes = 60, [scriptblock]$AfterLock, [double]$RetrySeconds = 30
+    )
+    if (-not (Enter-BuildLock -TimeoutMinutes $TimeoutMinutes -Why $Why)) { return 1 }
+    try {
+        # @() around the whole thing: a single returned string must stay a one-item array (splatting a string splats its characters).
+        $Extra = @(if ($AfterLock) { & $AfterLock })
+        $Deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+        while ($true) {
+            Write-Host 'Building OSDSEditor (Win64 Development)...'
+            $Out = @()
+            & $BuildBat @BuildArgs @Extra | ForEach-Object { Write-Host $_; $Out += [string]$_ }
+            $Code = $LASTEXITCODE
+            if ((Test-BuildRefusedByOtherBuild $Out $Code) -and (Get-Date) -lt $Deadline) {
+                Write-Host "Waiting for build lock held by another Build.bat (exit $Code); trying again in $RetrySeconds s."
+                Start-Sleep -Seconds $RetrySeconds
+                continue
+            }
+            return $Code
+        }
+    }
+    finally { Exit-BuildLock }
+}
+
+<#
+  A run on a binary older than the code is a run on the wrong game (twice a refused build let a
+  drive measure the old binary). Stale = the editor module is missing, or a file that gets compiled
+  (*.cpp, *.h, *.inl, *.cs, which includes *.Build.cs) under Source\ was written after it (2 s of slack
+  for file-system time rounding). Notes, data and other files do not count: Unreal Build Tool would
+  not relink for them. A source tree that cannot be read counts as stale (fail closed).
+#>
+function Get-StaleBinary {
+    param([string]$Root, [string]$Binary = (Join-Path $Root 'Binaries\Win64\UnrealEditor-OSDS.dll'))
+    if (-not (Test-Path $Binary)) {
+        return [pscustomobject]@{ Stale = $true; Reason = "no binary at $Binary"; Newest = $null }
+    }
+    $BinTime = (Get-Item $Binary).LastWriteTimeUtc
+    $Fmt = 'yyyy-MM-dd HH:mm:ss'
+    try {
+        $Newest = Get-ChildItem (Join-Path $Root 'Source') -Recurse -File -Include '*.cpp', '*.h', '*.inl', '*.cs' -ErrorAction Stop |
+            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+    }
+    catch {
+        return [pscustomobject]@{ Stale = $true; Newest = $null; Reason = "cannot read $(Join-Path $Root 'Source') to compare it with the binary ($($_.Exception.Message))" }
+    }
+    if ($Newest -and $Newest.LastWriteTimeUtc -gt $BinTime.AddSeconds(2)) {
+        return [pscustomobject]@{
+            Stale = $true; Newest = $Newest.FullName
+            Reason = "newest source $($Newest.FullName) was written $($Newest.LastWriteTimeUtc.ToLocalTime().ToString($Fmt)), the binary $Binary $($BinTime.ToLocalTime().ToString($Fmt))"
+        }
+    }
+    return [pscustomobject]@{ Stale = $false; Reason = ''; Newest = if ($Newest) { $Newest.FullName } else { $null } }
 }
 
 function Stop-ProcessTree {
