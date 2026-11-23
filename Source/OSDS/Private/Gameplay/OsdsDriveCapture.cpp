@@ -332,6 +332,14 @@ void AOsdsDriveCapture::Tick(float DeltaSeconds)
 			{
 				FOsdsGraphics::Apply(Preset);
 			}
+			// -OsdsPerfCmds="r.X 1;r.Y 0": console commands run after the preset, for A/B timing of one setting.
+			FString PerfCmds;
+			if (FParse::Value(FCommandLine::Get(), TEXT("OsdsPerfCmds="), PerfCmds, false))
+			{
+				TArray<FString> Cmds;
+				PerfCmds.ParseIntoArray(Cmds, TEXT(";"));
+				for (const FString& Cmd : Cmds) { Player->ConsoleCommand(Cmd); }
+			}
 			if (Camera) { Camera->SetView(View == TEXT("chase") ? EOsdsView::Chase : EOsdsView::Driver); }
 			if (AOsdsHUD* Hud = Cast<AOsdsHUD>(Player->GetHUD())) { Hud->SetLevel(EOsdsHudLevel::Off); }
 		}
