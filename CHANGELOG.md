@@ -4,6 +4,8 @@ The short version of each release, newest first. Every release has full notes in
 
 ## 3.0 (in progress)
 
+**Bridges hold across tile seams:** a deck whose road row lost its bridge flag at a tile border (Mackinac) now continues at deck height instead of dropping to the water.
+
 **Race tracks** (the race-tracks team):
 
 - **Race tracks in the pause menu:** 22 oval tracks and 14 road courses across the US, from Daytona, Talladega, Bristol and Richmond to Watkins Glen, Road America, Laguna Seca and COTA. Choose one and you start on its start/finish straight, facing the way the races run, with no traffic.

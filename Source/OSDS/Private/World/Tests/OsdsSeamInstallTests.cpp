@@ -334,6 +334,44 @@ bool FOsdsBridgeDeckProfileTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsBridgeFlagSeamTest, "OSDS.World.BridgeFlagAcrossSeam", OsdsSeamInstallTest::Flags)
+bool FOsdsBridgeFlagSeamTest::RunTest(const FString& Parameters)
+{
+	// N4 / H4 (Mackinac): the neighbour tile's road ends on the seam as a bridge deck, but this
+	// tile's road row lost its "bridge" flag, so the deck stretch was built at ground level (a hole,
+	// a lip and a fall). The exported deck profile is still here, so the flag must follow the
+	// seam contract: this road is the same deck, at the deck's height.
+	const FString Json = TEXT("{\"id\":[101,100],\"grid\":1,\"h\":[0,0,0,0],\"roads\":[[\"primary\",0,\"test deck\",[[0,0.5],[1,0.5]],8,\"paved\"]],\"bridges\":[[\"primary\",\"test deck\",[[0,0.5],[1,0.5]],8,[10,10],0,0]]}");
+	FOsdsTileData B;
+	FString Error;
+	if (!TestTrue(TEXT("tile parses"), OsdsTileData::Parse(Json, B, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	constexpr double Side = 200.0;
+	FOsdsSeamEnd Neighbour;
+	Neighbour.P = FVector2d(0.0, 0.5 * Side);
+	Neighbour.T = FVector2d(1.0, 0.0);
+	Neighbour.HalfW = 4.0;
+	Neighbour.HL = Neighbour.HC = Neighbour.HR = 10.0;
+	Neighbour.bBridge = true;
+	FOsdsRoadNetwork Built;
+	Built.Build(B, Side, { Neighbour });
+	if (!TestEqual(TEXT("one ribbon"), Built.Ribbons.Num(), 1)) return false;
+	const FOsdsRibbon& Ribbon = Built.Ribbons[0];
+	TestTrue(TEXT("the seam end of the road is a bridge deck"), Ribbon.St[0].bBridge);
+	TestTrue(FString::Printf(TEXT("the deck stays at its height at the seam (%.2f m)"), Ribbon.St[0].HC), FMath::Abs(Ribbon.St[0].HC - 10.0) < 0.05);
+	// A road with no bridge neighbour is left alone: no flag invented.
+	FOsdsSeamEnd Ground = Neighbour;
+	Ground.bBridge = false;
+	Ground.HL = Ground.HC = Ground.HR = 0.0;
+	FOsdsRoadNetwork Plain;
+	Plain.Build(B, Side, { Ground });
+	if (Plain.Ribbons.Num() == 1) TestFalse(TEXT("no bridge neighbour, no bridge flag"), Plain.Ribbons[0].St[0].bBridge);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsBridgeDeckSmoothTest, "OSDS.World.BridgeDeckSmooth", OsdsSeamInstallTest::Flags)
 bool FOsdsBridgeDeckSmoothTest::RunTest(const FString& Parameters)
 {
