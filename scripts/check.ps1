@@ -139,6 +139,13 @@ if (-not $NoBuild) {
         Write-Host 'Build skipped: nothing under Source\ or in the .uproject changed since the last good build (-ForceBuild builds anyway).'
     }
     else {
+        # A build needs several GB on the checkout's drive; a full disk fails the build halfway
+        # ("not enough space on the disk") and slows every running game. Stop early with a clear message.
+        $Drive = Get-PSDrive -Name ((Split-Path -Qualifier $Root).TrimEnd(':'))
+        $FreeGB = [math]::Round($Drive.Free / 1GB, 1)
+        if ($FreeGB -lt 12) {
+            throw "Only $FreeGB GB free on $($Drive.Name): (a build needs about 12 GB). Free space first: scripts\clean-lane.ps1, or remove finished worktrees (git worktree remove)."
+        }
         $Impact = Get-LowImpactSettings -GpuTestRunning (Test-GpuTestLockHeld)
         $BuildArgs = @('OSDSEditor', 'Win64', 'Development', "-Project=$Project", '-WaitMutex', '-NoHotReloadFromIDE')
         if ($Impact.Throttle) {

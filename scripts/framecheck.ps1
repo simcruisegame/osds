@@ -46,6 +46,9 @@ $Defs = @{
     'dragon'      = @('-OsdsStart=35.4792763,-83.9327265', '"-OsdsStartRoad=Calderwood Highway"')
     'nebraska'    = @('-OsdsStart=40.56724,-96.5909', '"-OsdsStartRoad=Princeton Road"')
     'big-sur'     = @('-OsdsStart=36.363197,-121.900041', '"-OsdsStartRoad=Cabrillo Highway"')
+    'mackinac'    = @('-OsdsStart=45.817,-84.728')
+    'seven-mile'  = @('-OsdsStart=24.706,-81.154')
+    'high-five'   = @('-OsdsStart=32.925,-96.764')
 }
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $RunDir = Join-Path $Root "Saved\FrameCheck\$Stamp"
@@ -69,7 +72,7 @@ foreach ($Road in $Roads) {
         if (-not $P.WaitForExit($TimeoutMinutes * 60 * 1000)) { Stop-ProcessTree -ProcessId $P.Id; Write-Host '  timed out' }
     }
     finally { Exit-EditorLock }
-    $Lines = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'PREFLIGHT FRAMES .*|Pre-flight: stall .*' | ForEach-Object { $_.Matches[0].Value }) } else { @('no log') }
+    $Lines = if (Test-Path $Log) { @(Select-String -Path $Log -Pattern 'PREFLIGHT (FRAMES|PASS|FAIL) .*|Pre-flight: stall .*' | ForEach-Object { $_.Matches[0].Value }) } else { @('no log') }
     $Lines | ForEach-Object { Write-Host "  $_" }
     $Md += "## $Road"; $Md += ''; $Md += ($Lines | ForEach-Object { "    $_" }); $Md += ''
 }

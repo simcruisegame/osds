@@ -1,39 +1,12 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "Vehicle/OsdsVehicleDynamics.h"
+#include "Vehicle/OsdsDifferential.h"
 
 #include "Math/UnrealMathUtility.h"
 
 namespace OsdsDynamics
 {
-	namespace
-	{
-		/** Torque-sensing limited slip between two wheels (bias 1 = open). */
-		TPair<double, double> SplitAxleTorque(
-			double AxleTorqueNm,
-			double LeftWheelAngularSpeed,
-			double RightWheelAngularSpeed,
-			double WheelInertiaKgM2,
-			double DeltaTimeS,
-			bool bIsDriveTorque,
-			double BiasRatio)
-		{
-			const double HalfTorqueNm = AxleTorqueNm * 0.5;
-			// The caller passes the drive or the coast bias: a torque-sensing (Torsen) differential biases
-			// engine braking as well as drive.
-			if (DeltaTimeS <= 0.0 || BiasRatio <= 1.0)
-			{
-				return TPair<double, double>(HalfTorqueNm, HalfTorqueNm);
-			}
-
-			const double TransferLimitNm = FMath::Abs(HalfTorqueNm) * (BiasRatio - 1.0) / (BiasRatio + 1.0);
-			const double EqualizingTorqueNm = (RightWheelAngularSpeed - LeftWheelAngularSpeed) *
-				WheelInertiaKgM2 / (2.0 * DeltaTimeS);
-			const double TransferNm = FMath::Clamp(EqualizingTorqueNm, -TransferLimitNm, TransferLimitNm);
-			return TPair<double, double>(HalfTorqueNm + TransferNm, HalfTorqueNm - TransferNm);
-		}
-	}
-
 	FShiftPoints GetAutomaticShiftPoints(const FOsdsCarDefinition& Car, double PedalFraction)
 	{
 		const double FullUp = Car.AutomaticUpshiftSpeedRpm;
@@ -119,52 +92,30 @@ namespace OsdsDynamics
 		bool bIsDriveTorque,
 		double OutWheelTorquesNm[4])
 	{
-		for (int32 Index = 0; Index < 4; ++Index)
-		{
-			OutWheelTorquesNm[Index] = 0.0;
-		}
 		if (WheelAngularSpeedsRadPerSecond == nullptr)
 		{
-			return;
-		}
-		const double* W = WheelAngularSpeedsRadPerSecond;
-		const double I = Car.WheelRotationalInertiaKgM2;
-
-		if (Car.DrivetrainLayout == TEXT("fwd"))
-		{
-			const TPair<double, double> Front = SplitAxleTorque(AxleTorqueNm, W[0], W[1], I, DeltaTimeS, bIsDriveTorque,
-				bIsDriveTorque ? Car.FrontDifferentialBiasRatio : 1.0);
-			OutWheelTorquesNm[0] = Front.Key;
-			OutWheelTorquesNm[1] = Front.Value;
-			return;
-		}
-
-		double RearTorqueNm = AxleTorqueNm;
-		if (Car.DrivetrainLayout == TEXT("awd"))
-		{
-			double FrontTorqueNm = AxleTorqueNm * Car.AwdFrontTorqueShareFraction;
-			RearTorqueNm = AxleTorqueNm * (1.0 - Car.AwdFrontTorqueShareFraction);
-			if (bIsDriveTorque && DeltaTimeS > 0.0 && Car.CenterDifferentialBiasRatio > 1.0)
+			for (int32 Index = 0; Index < 4; ++Index)
 			{
-				// Limited-slip centre: torque moves toward the slower axle within the bias.
-				const double TransferLimitNm = FMath::Abs(AxleTorqueNm) * 0.5 *
-					(Car.CenterDifferentialBiasRatio - 1.0) / (Car.CenterDifferentialBiasRatio + 1.0);
-				const double AxleSpeedDifference = (W[2] + W[3] - W[0] - W[1]) * I / DeltaTimeS;
-				const double TransferNm = FMath::Clamp(AxleSpeedDifference, -TransferLimitNm, TransferLimitNm);
-				FrontTorqueNm += TransferNm;
-				RearTorqueNm -= TransferNm;
+				OutWheelTorquesNm[Index] = 0.0;
 			}
-
-			const TPair<double, double> Front = SplitAxleTorque(FrontTorqueNm, W[0], W[1], I, DeltaTimeS, bIsDriveTorque,
-				bIsDriveTorque ? Car.FrontDifferentialBiasRatio : 1.0);
-			OutWheelTorquesNm[0] = Front.Key;
-			OutWheelTorquesNm[1] = Front.Value;
+			return;
 		}
-
-		const TPair<double, double> Rear = SplitAxleTorque(RearTorqueNm, W[2], W[3], I, DeltaTimeS, bIsDriveTorque,
-			bIsDriveTorque ? Car.RearDifferentialBiasRatio : Car.RearDifferentialCoastBiasRatio);
-		OutWheelTorquesNm[2] = Rear.Key;
-		OutWheelTorquesNm[3] = Rear.Value;
+		FOsdsDifferential Differential;
+		Differential.Configure(Car);
+		FOsdsDifferentialInput Input;
+		Input.AxleTorqueNm = AxleTorqueNm;
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			Input.WheelOmegaRadPerSecond[Index] = WheelAngularSpeedsRadPerSecond[Index];
+		}
+		Input.DeltaTimeS = DeltaTimeS;
+		Input.bDrive = bIsDriveTorque;
+		FOsdsDifferentialOutput Output;
+		Differential.Step(Input, Output);
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			OutWheelTorquesNm[Index] = Output.WheelTorqueNm[Index];
+		}
 	}
 
 	TArray<double> SplitDriveTorqueToWheels(
