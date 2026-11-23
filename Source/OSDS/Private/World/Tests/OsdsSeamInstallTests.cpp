@@ -363,11 +363,18 @@ bool FOsdsBridgeFlagSeamTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the seam end of the road is a bridge deck"), Ribbon.St[0].bBridge);
 	TestTrue(FString::Printf(TEXT("the deck stays at its height at the seam (%.2f m)"), Ribbon.St[0].HC), FMath::Abs(Ribbon.St[0].HC - 10.0) < 0.05);
 	// A road with no bridge neighbour is left alone: no flag invented.
+	// The same, the neighbour built later or not at all (this tile first): no contract, and the
+	// deck 10 m over the ground still holds across the seam.
+	FOsdsRoadNetwork First;
+	First.Build(B, Side);
+	if (First.Ribbons.Num() == 1) TestTrue(TEXT("this tile built first still flags the seam deck"), First.Ribbons[0].St[0].bBridge);
 	FOsdsSeamEnd Ground = Neighbour;
 	Ground.bBridge = false;
 	Ground.HL = Ground.HC = Ground.HR = 0.0;
+	FOsdsTileData Low = B;
+	for (FOsdsBridgeDeck& Deck : Low.Bridges) for (double& H : Deck.HeightsM) H = 0.2;
 	FOsdsRoadNetwork Plain;
-	Plain.Build(B, Side, { Ground });
+	Plain.Build(Low, Side, { Ground });
 	if (Plain.Ribbons.Num() == 1) TestFalse(TEXT("no bridge neighbour, no bridge flag"), Plain.Ribbons[0].St[0].bBridge);
 	return true;
 }

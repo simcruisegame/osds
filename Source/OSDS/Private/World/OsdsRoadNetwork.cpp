@@ -74,6 +74,7 @@ namespace
 		FString Name;
 		int32 Contract[2] = { INDEX_NONE, INDEX_NONE }; // neighbour seam end each piece end was snapped to
 		bool bBridge = false;
+		bool bSeamEnd = false;    // an end lies on a tile edge: the road crosses a seam (order-independent N4/H4 check)
 		bool bSeamBridge = false; // an end snapped to a neighbour's bridge-deck end: the deck continues here (N4/H4)
 		bool bUnpaved = false;
 	};
@@ -654,6 +655,7 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 			const FVector2d Inward = (End == 0 ? Piece.P[1] : Piece.P[Piece.P.Num() - 2]) - P;
 			const int32 Edge = EdgeOf(P);
 			if (Edge < 0) continue;
+			Piece.bSeamEnd = true;
 			// Contracts are for roads crossing the seam, not running along it.
 			const FVector2d In = Inward.GetSafeNormal();
 			if ((Edge < 2 ? FMath::Abs(In.X) : FMath::Abs(In.Y)) < 0.5) continue;
@@ -870,7 +872,7 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 				const int32 OneWay = Pieces[Own->Piece].OneWay;
 				St.Travel = static_cast<int8>(OneWay == 0 ? 0 : (Own->bReversed ? -OneWay : OneWay));
 				const FPiece& OwnPiece = Pieces[Own->Piece];
-				St.bBridge = OwnPiece.bBridge || OwnPiece.bSeamBridge;
+				St.bBridge = OwnPiece.bBridge || OwnPiece.bSeamBridge || OwnPiece.bSeamEnd;
 				// A road row that lost its bridge flag but ends on a neighbour's deck is the same deck
 				// wherever this tile still carries a deck of its class and name under the station.
 				if (St.bBridge && BridgeDeckHeightAt(Tile, Side, St.C, OwnPiece.Class, OwnPiece.Name, BridgeDeckZ[k], &BridgeDeckRow[k]))
@@ -878,6 +880,13 @@ void FOsdsRoadNetwork::Build(const FOsdsTileData& Tile, double InTileSizeM, cons
 					bHasBridgeDeckProfile[k] = 1;
 				}
 				else if (!OwnPiece.bBridge) St.bBridge = false;
+				// A road crossing a seam with no neighbour contract (this tile built first) keeps the flag only
+				// where the exported deck stands well above the ground; a deck at ground level is not a bridge.
+				if (St.bBridge && !OwnPiece.bBridge && !OwnPiece.bSeamBridge && bHasBridgeDeckProfile[k] && BridgeDeckZ[k] - Zs[k] < 1.5)
+				{
+					St.bBridge = false;
+					bHasBridgeDeckProfile[k] = 0;
+				}
 			}
 			// A bridge spans the gap: its profile runs straight from abutment to abutment
 			// (BridgeDeck.gd), not down to the river or the valley floor the elevation model
