@@ -1,0 +1,25 @@
+# Frame rate at full GPU power, 3.0 main (rebased 2026-11-23), editor -game, 1920x1080 windowed, RTX 2070 Super Max-Q laptop on AC
+# Command: scripts\editor.ps1 -game -windowed -ResX=1920 -ResY=1080 -OsdsWorld -OsdsNoLive -OsdsNoNeural -OsdsBundledStart -OsdsCar=nb2001_lowered -OsdsDriveCapture -OsdsDrivePerf=<preset>
+# Parked 10 s windows, driver view and chase view (the `OsdsPerf:` log lines). Nebraska: -OsdsStart=40.56724,-96.5909 "-OsdsStartRoad=Princeton Road".
+# Editor numbers; a packaged game is faster. Gate: High, seat, 45 fps or more.
+
+| Place | Preset | View | fps | GPU ms | Game ms | nvidia-smi during the run (avg of 2 s samples) |
+|---|---|---|---|---|---|---|
+| Ocean Drive | Medium | seat | 79.5 | 11.7 | 2.6 | 62.3 W, 1302 MHz (max 2100) |
+| Ocean Drive | High | seat | 53.3 | 17.9 | 2.4 | 57.9 W, 1236 MHz |
+| Ocean Drive | High | chase | 66.1 | 14.4 | 2.5 | same run |
+| Ocean Drive | Ultra | seat | 33.5 | 28.7 | 2.5 | 63.8 W, 1305 MHz |
+| Ocean Drive | Ultra | chase | 47.4 | 20.4 | 2.2 | same run |
+| Nebraska | High | seat | 62.0 | 15.5 | 2.0 | 64.5 W, 1254 MHz |
+| Nebraska | High | chase | 77.2 | 12.4 | 2.0 | same run |
+
+## Power-capped runs (the "10 fps" of #120)
+The same High run on Ocean Drive, same code, while another checkout was compiling:
+seat 19.6 fps, GPU 49.3 ms, nvidia-smi average 22.3 W, 813 MHz, throttle reasons 0x24 (software power cap + thermal slowdown).
+Run again with no compiler running: 53.3 fps, 17.9 ms, 57.9 W. The ratio is 2.6x, the 28 W factor in docs/team/performance-engineer.md.
+A frame-rate number is only valid if nvidia-smi shows the clocks near their top while it runs (this laptop: 1200-1300 MHz under this load, 300 MHz idle, 2100 MHz max) and no build runs.
+Harness fix (flag capped runs): #141.
+
+## Per-pass GPU cost, High seat, Ocean Drive (ProfileGPU, 1080p at 75 %, power-capped frame of 49 ms; shares are what matters)
+Lumen screen probe gather 4.1 ms (DiffuseIndirectAndAO 5.8), deferred lighting 7.5, post/TSR 6.5 (TSR 5.1), base pass 5.4 (Nanite 2.9), shadow depths 4.3, volumetric cloud 3.4 + cloud shadow 2.9,
+second view family `OsdsVehicle_0` 8.3 ms (the car's own render). No single pass dominates; cost scales with pixel count (Medium 58 % 30 ms, High 75 % 48 ms, Ultra 100 % 88 ms, all power-capped).
