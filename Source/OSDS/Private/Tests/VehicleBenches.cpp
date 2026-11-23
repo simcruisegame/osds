@@ -983,6 +983,152 @@ namespace
 	};
 }
 
+namespace
+{
+	/** Straight hold, then a one-period sine lane change, then a straight again, on one surface kind. */
+	struct FSurfaceHoldDriver
+	{
+		double Dt = 1.0 / 360.0;
+		double Speed0 = 18.6;
+		int32 Kind = 0;
+		double RackAmplitudeRad = 0.03;
+		double SineS = 3.0;
+		int32 State = 0;
+		double T = 0.0;
+		double SpeedI = 0.0;
+		double Gas = 0.0;
+		double SpeedSum = 0.0;
+		int32 SpeedN = 0;
+		std::atomic<bool> bDone{ false };
+		FOsdsSurfaceDriveResult Result;
+
+		void Step(FOsdsVehicleDriverContext& C)
+		{
+			C.Controls = FOsdsVehicleControls();
+			if (bDone) return;
+			T += Dt;
+			C.Sim.bStabilityControlSwitch = false;
+			C.Sim.SurfaceOverrideKind = Kind;
+			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
+			const FVector3d Right = C.Body.Rotation.RotateVector(FVector3d::UnitY());
+			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
+			const double Beta = FMath::Abs(OsdsUnits::ToDegrees(FMath::Atan2(C.Body.LinearVelocityMps.Dot(Right), FMath::Max(FMath::Abs(Speed), 0.5))));
+			C.Controls.bDirectRack = true;
+			C.Controls.RackAngleRad = 0.0;
+			if (State == 0)
+			{
+				if (T >= 0.5)
+				{
+					C.Body.LinearVelocityMps = Forward * Speed0;
+					C.bBodyStateChanged = true;
+					for (FOsdsWheelState& Wheel : C.Sim.State.Wheels) Wheel.AngularSpeedRadPerSecond = Speed0 / C.Sim.GetTireRadiusM();
+					const FOsdsCarDefinition& Car = C.Sim.GetCar();
+					int32 Gear = Car.ForwardGearRatios.Num() - 1;
+					for (int32 G = 0; G < Car.ForwardGearRatios.Num(); ++G)
+					{
+						if (Speed0 / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[G] * Car.FinalDriveRatio * 60.0 / Tau < 3500.0) { Gear = G; break; }
+					}
+					C.Sim.State.Gear = Gear;
+					C.Sim.State.EngineOmegaRadPerSecond = Speed0 / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[Gear] * Car.FinalDriveRatio;
+					State = 1;
+					T = 0.0;
+				}
+				return;
+			}
+			SpeedI = FMath::Clamp(SpeedI + (Speed0 - Speed) * Dt * 0.3, 0.0, 0.9);
+			Gas = FMath::Clamp((Speed0 - Speed) * 0.65 + SpeedI, 0.0, 1.0);
+			C.Controls.Throttle = Gas;
+			SpeedSum += Speed; ++SpeedN;
+			if (State == 1)
+			{
+				if (T > 1.0) Result.StraightBetaDeg = FMath::Max(Result.StraightBetaDeg, Beta);
+				if (T >= 4.0) { State = 2; T = 0.0; }
+			}
+			else if (State == 2)
+			{
+				// Left then right (Unreal's yaw is negative to the left, so the rack goes negative first).
+				C.Controls.RackAngleRad = -RackAmplitudeRad * FMath::Sin(Tau * T / SineS);
+				Result.LaneChangeBetaDeg = FMath::Max(Result.LaneChangeBetaDeg, Beta);
+				Result.LaneChangeLateralG = FMath::Max(Result.LaneChangeLateralG, FMath::Abs(C.Body.AngularVelocityRadPerSecond.Z) * Speed / Gravity);
+				if (T >= SineS + 2.0)
+				{
+					Result.SpeedMps = Speed0;
+					Result.SpeedHeldMps = SpeedSum / FMath::Max(SpeedN, 1);
+					Result.bCompleted = true;
+					bDone = true;
+				}
+			}
+		}
+	};
+
+	/** From rest at full throttle on one surface kind. */
+	struct FSurfaceLaunchDriver
+	{
+		double Dt = 1.0 / 360.0;
+		int32 Kind = 0;
+		double T = 0.0;
+		std::atomic<bool> bDone{ false };
+		FOsdsSurfaceDriveResult Result;
+
+		void Step(FOsdsVehicleDriverContext& C)
+		{
+			C.Controls = FOsdsVehicleControls();
+			if (bDone) return;
+			T += Dt;
+			C.Sim.bStabilityControlSwitch = false;
+			C.Sim.SurfaceOverrideKind = Kind;
+			C.Controls.bDirectRack = true;
+			C.Controls.RackAngleRad = 0.0;
+			if (T < 0.5) return;
+			C.Controls.Throttle = 1.0;
+			const FVector3d Forward = C.Body.Rotation.RotateVector(FVector3d::UnitX());
+			const double Speed = C.Body.LinearVelocityMps.Dot(Forward);
+			if (Speed < 0.3)
+			{
+				Result.StuckS += Dt;
+				Result.MaxRpmWhileStuck = FMath::Max(Result.MaxRpmWhileStuck, C.Sim.State.EngineRpm);
+			}
+			Result.SpeedMps = FMath::Max(Result.SpeedMps, Speed);
+			Result.Gear = C.Sim.State.Gear + 1;
+			Result.Rpm = C.Sim.State.EngineRpm;
+			if (Speed >= 10.0) { Result.TimeTo10MpsS = T - 0.5; Result.bCompleted = true; bDone = true; }
+			else if (T > 30.0) { Result.TimeTo10MpsS = 1.0e9; bDone = true; }
+		}
+	};
+}
+
+FOsdsSurfaceDriveResult OsdsRunSurfaceHold(const FOsdsCarDefinition& Car, double FixedStepS, int32 SurfaceKind, double SpeedMps)
+{
+	TSharedRef<FSurfaceHoldDriver> Driver = MakeShared<FSurfaceHoldDriver>();
+	Driver->Dt = FixedStepS;
+	Driver->Speed0 = SpeedMps;
+	Driver->Kind = SurfaceKind;
+	// The road-wheel angle for 0.25 g on the bicycle model with 3 deg/g understeer, as the step steer.
+	const double RadiusM = SpeedMps * SpeedMps / (0.25 * Gravity);
+	Driver->RackAmplitudeRad = Car.WheelbaseM / RadiusM + OsdsUnits::ToRadians(3.0 * 0.25);
+	FOsdsVehicleBenchWorld World(FixedStepS);
+	if (!World.IsValid() || World.SpawnVehicle(Car, FVector3d(0.0, 0.0, 0.15), [Driver](FOsdsVehicleDriverContext& C) { Driver->Step(C); }) == nullptr)
+	{
+		return Driver->Result;
+	}
+	World.RunUntil([&Driver]() { return Driver->bDone.load(); }, 30.0);
+	return Driver->Result;
+}
+
+FOsdsSurfaceDriveResult OsdsRunSurfaceLaunch(const FOsdsCarDefinition& Car, double FixedStepS, int32 SurfaceKind)
+{
+	TSharedRef<FSurfaceLaunchDriver> Driver = MakeShared<FSurfaceLaunchDriver>();
+	Driver->Dt = FixedStepS;
+	Driver->Kind = SurfaceKind;
+	FOsdsVehicleBenchWorld World(FixedStepS, 3000.0);
+	if (!World.IsValid() || World.SpawnVehicle(Car, FVector3d(0.0, 0.0, 0.15), [Driver](FOsdsVehicleDriverContext& C) { Driver->Step(C); }) == nullptr)
+	{
+		return Driver->Result;
+	}
+	World.RunUntil([&Driver]() { return Driver->bDone.load(); }, 40.0);
+	return Driver->Result;
+}
+
 FOsdsTopSpeedResult OsdsRunTopSpeed(const FOsdsCarDefinition& Car, double FixedStepS)
 {
 	TSharedRef<FTopSpeedDriver> Driver = MakeShared<FTopSpeedDriver>();

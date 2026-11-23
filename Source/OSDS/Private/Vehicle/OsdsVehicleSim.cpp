@@ -647,6 +647,7 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 		/** TMeasy: tan(relaxed slip angle) and surface times axle grip. */
 		double SlipY = 0.0;
 		double GripScale = 1.0;
+		FOsdsSurfaceShape Shape;
 		double MeanLateral = 0.0;
 		double MeanLongitudinal = 0.0;
 	};
@@ -723,6 +724,11 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 			if (bHit)
 			{
 				Hit.SurfaceGrip = GripSum / GripCount;
+				if (SurfaceOverrideKind >= 0)
+				{
+					Hit.SurfaceKind = static_cast<uint8>(SurfaceOverrideKind);
+					Hit.SurfaceGrip = OsdsSurface::Grip(Hit.SurfaceKind, 0.0);
+				}
 			}
 		}
 		// A tyre does not stand on a wall: a surface more than 75 deg from level (a bank the car slid
@@ -974,7 +980,8 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 			Row.SlipY = FMath::Tan(FMath::Clamp(SlipAngle, -1.4, 1.4));
 			Row.GripScale = FMath::Max(Wheel.SurfaceGrip, 0.0) * AxleValue(Car.AxleGripMultiplier, Axle, 1.0) * PressureGrip;
 			OsdsDynamics::FTmeasyCurve CurveX, CurveY;
-			OsdsDynamics::GetTmeasyCurves(Car, Fz, Row.GripScale, CurveX, CurveY);
+			Row.Shape = OsdsSurface::Shape(Wheel.SurfaceKind);
+			OsdsDynamics::GetTmeasyCurves(Car, Fz, Row.GripScale, CurveX, CurveY, Row.Shape);
 			Row.Mu = Fz > 1.0 ? CurveY.PeakForce / Fz : 0.0;
 			Wheel.FrictionCoefficient = Row.Mu;
 			Row.SideForce = OsdsDynamics::ComputeLateralForceN(Car, Fz, Row.Mu, 0.0,
@@ -1356,6 +1363,7 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 			Sub.SubstepS = Ds;
 			Sub.LateralSlip = Row.SlipY;
 			Sub.GripScale = Row.GripScale;
+			Sub.Shape = Row.Shape;
 			const FOsdsLongitudinalSubstepOutput Out = OsdsDynamics::SolveLongitudinalSubstep(Car, Sub);
 			Wheel.SlipRatio = Out.SlipRatio;
 			Wheel.TractionControlSlip = Out.TractionControlSlip;
@@ -1416,8 +1424,16 @@ void FOsdsVehicleSim::Step(double DeltaTimeS, int32 Substeps, const FOsdsVehicle
 		const double RollingSpeed = Rolling.Size();
 		if (RollingSpeed > 0.01 && State.WheelContactCount > 0)
 		{
+			// The surface scales the car's own (paved) coefficient: the mean over the wheels in contact (OsdsSurfaceTable.h).
+			double SurfaceCr = 0.0;
+			int32 CrWheels = 0;
+			for (const FOsdsWheelState& W : State.Wheels)
+			{
+				if (W.bContact) { SurfaceCr += OsdsSurface::Tyre(W.SurfaceKind).RollingResistanceScale; ++CrWheels; }
+			}
+			const double CrScale = CrWheels > 0 ? SurfaceCr / CrWheels : 1.0;
 			OutForces.ForceN += -Rolling / RollingSpeed *
-				FMath::Min(RollingSpeed * MassKg / Dt, MassKg * OsdsDynamics::GravityMps2 * Car.RollingResistanceCoefficient);
+				FMath::Min(RollingSpeed * MassKg / Dt, MassKg * OsdsDynamics::GravityMps2 * Car.RollingResistanceCoefficient * CrScale);
 		}
 	}
 	State.EngineRpm = State.EngineOmegaRadPerSecond * 60.0 / Tau;

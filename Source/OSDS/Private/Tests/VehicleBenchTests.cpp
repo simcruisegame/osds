@@ -8,6 +8,7 @@
 #include "Tests/VehicleBenches.h"
 #include "Vehicle/OsdsUnits.h"
 #include "Vehicle/OsdsVehicleDynamics.h"
+#include "Vehicle/OsdsSurfaceTable.h"
 
 namespace
 {
@@ -338,6 +339,38 @@ namespace
 namespace
 {
 	/**
+	 * Surface table (#114, bug #102). Miata at 67 km/h on gravel, stability control off: straight and a
+	 * 0.25 g lane change stay in control (sideslip under 10 deg); from rest on a flat grass field it
+	 * drives out (10 m/s in a sane time, never parked at 0 mph with the engine racing).
+	 */
+	bool RunSurfaceTest(FAutomationTestBase& Test, const TCHAR* CarId)
+	{
+		FOsdsCarDefinition Car;
+		if (!OsdsLoadBenchCar(Test, CarId, Car))
+		{
+			return false;
+		}
+		const int32 Gravel = static_cast<int32>(EOsdsSurfaceKind::Gravel);
+		const int32 Grass = static_cast<int32>(EOsdsSurfaceKind::Grass);
+		const FOsdsSurfaceDriveResult H = OsdsRunSurfaceHold(Car, OsdsShippingFixedStepS, Gravel, 67.0 / 3.6);
+		const FOsdsSurfaceDriveResult L = OsdsRunSurfaceLaunch(Car, OsdsShippingFixedStepS, Grass);
+		const FString Line = FString::Printf(TEXT("SURFACE %-11s gravel 67 km/h: held %.1f m/s  straight beta %.1f deg  lane change beta %.1f deg %.2f g | grass launch: 10 m/s in %.1f s  stuck %.2f s (max %.0f rpm)  gear %d %.0f rpm"),
+			CarId, H.SpeedHeldMps, H.StraightBetaDeg, H.LaneChangeBetaDeg, H.LaneChangeLateralG, L.TimeTo10MpsS, L.StuckS, L.MaxRpmWhileStuck, L.Gear, L.Rpm);
+		UE_LOG(LogTemp, Display, TEXT("%s"), *Line);
+		Test.AddInfo(Line);
+		Test.TestTrue(TEXT("gravel hold completed"), H.bCompleted);
+		Test.TestTrue(TEXT("gravel straight at 67 km/h: sideslip under 10 deg"), H.StraightBetaDeg < 10.0);
+		Test.TestTrue(TEXT("gravel lane change at 67 km/h: sideslip under 10 deg"), H.LaneChangeBetaDeg < 10.0);
+		Test.TestTrue(TEXT("grass launch reached 10 m/s"), L.bCompleted);
+		Test.TestTrue(TEXT("grass launch: 10 m/s within 12 s"), L.TimeTo10MpsS < 12.0);
+		Test.TestTrue(TEXT("grass launch: never parked with the pedal down (under 1 s below 0.3 m/s)"), L.StuckS < 1.0);
+		return true;
+	}
+}
+
+namespace
+{
+	/**
 	 * Top speed at full throttle on the flat. A reference only where it is published: the 2020
 	 * Corvette Stingray Z51, 194 mph (Chevrolet's specification). The others are logged until a
 	 * figure is sourced.
@@ -564,6 +597,7 @@ OSDS_VEHICLE_BENCH(BrakeInTurn, nb1999)
 OSDS_VEHICLE_BENCH(BrakeInTurn, nb2001)
 OSDS_VEHICLE_BENCH(BrakeInTurn, nb2001_lowered)
 OSDS_VEHICLE_BENCH(BrakeInTurn, mustang65)
+OSDS_VEHICLE_BENCH(Surface, nb2001_lowered)
 OSDS_VEHICLE_BENCH(StepSteer, nb1999)
 OSDS_VEHICLE_BENCH(StepSteer, nb2001)
 OSDS_VEHICLE_BENCH(StepSteer, nb2001_lowered)
@@ -713,3 +747,39 @@ OSDS_VEHICLE_CONVERGENCE(meridian_z)
 #undef OSDS_VEHICLE_CONVERGENCE
 
 #endif
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsSurfaceTableTest, "OSDS.Vehicle.SurfaceTable", VehicleBenchFlags)
+bool FOsdsSurfaceTableTest::RunTest(const FString&)
+{
+	const FOsdsSurfaceTyre Asphalt = OsdsSurface::Tyre(EOsdsSurfaceKind::Asphalt);
+	for (EOsdsSurfaceKind Paved : { EOsdsSurfaceKind::Unknown, EOsdsSurfaceKind::Asphalt, EOsdsSurfaceKind::Concrete })
+	{
+		const FOsdsSurfaceTyre T = OsdsSurface::Tyre(Paved);
+		TestEqual(TEXT("paved grip is the car's own"), T.DryGrip, 1.0);
+		TestEqual(TEXT("paved rolling resistance is the car's own"), T.RollingResistanceScale, 1.0);
+		TestTrue(TEXT("paved curve shape is untouched"), OsdsSurface::Shape(static_cast<uint8>(Paved)).IsIdentity());
+	}
+	TestEqual(TEXT("asphalt wet loss kept"), Asphalt.WetLoss, 0.3);
+	const FOsdsSurfaceTyre Gravel = OsdsSurface::Tyre(EOsdsSurfaceKind::Gravel);
+	const FOsdsSurfaceTyre Grass = OsdsSurface::Tyre(EOsdsSurfaceKind::Grass);
+	const FOsdsSurfaceTyre Dirt = OsdsSurface::Tyre(EOsdsSurfaceKind::Dirt);
+	TestTrue(TEXT("grass does not grip more than gravel"), Grass.DryGrip <= Gravel.DryGrip);
+	for (const FOsdsSurfaceTyre& T : { Gravel, Grass, Dirt })
+	{
+		TestTrue(TEXT("loose ground grips less than asphalt"), T.DryGrip < 1.0);
+		TestTrue(TEXT("loose ground peaks at more slip"), T.PeakSlipScale > 1.0);
+		TestTrue(TEXT("loose ground falls off less"), T.FalloffKept < 1.0);
+		TestTrue(TEXT("loose ground rolls harder"), T.RollingResistanceScale > 1.0);
+	}
+	// The tyre curve: on gravel the peak is lower and later, the force past it falls less.
+	FOsdsCarDefinition Car;
+	if (!OsdsLoadBenchCar(*this, TEXT("nb2001_lowered"), Car)) return false;
+	const double Fz = Car.ReferenceCornerLoadN;
+	OsdsDynamics::FTmeasyCurve PX, PY, GX, GY;
+	OsdsDynamics::GetTmeasyCurves(Car, Fz, 1.0, PX, PY);
+	OsdsDynamics::GetTmeasyCurves(Car, Fz, Gravel.DryGrip, GX, GY, OsdsSurface::Shape(static_cast<uint8>(EOsdsSurfaceKind::Gravel)));
+	TestTrue(TEXT("gravel peak force lower"), GY.PeakForce < PY.PeakForce);
+	TestTrue(TEXT("gravel peak slip higher than the paved peak slip scaled by grip alone"), GY.PeakSlip > PY.PeakSlip * Gravel.DryGrip * 1.2);
+	TestTrue(TEXT("gravel force falls less after the peak"), (GY.PeakForce - GY.SlideForce) / GY.PeakForce < 0.5 * (PY.PeakForce - PY.SlideForce) / PY.PeakForce);
+	return true;
+}
