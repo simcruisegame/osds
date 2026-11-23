@@ -266,3 +266,18 @@ function Get-NativeResolution {
     if ($Best.Count) { $W = $Best[0].CurrentHorizontalResolution; $H = $Best[0].CurrentVerticalResolution; return @("-ResX=$W", "-ResY=$H", "-OsdsNativeRes=${W}x$H") }
     return @('-ResX=1920', '-ResY=1080', '-OsdsNativeRes=1920x1080')
 }
+
+<#
+  The window size of a picture or driving test, as game arguments. -Size is 'WxH' (default 1920x1080, the size the
+  High preset's 45 fps target was tuned for) or 'native' (the screen's own size, for a sign-off run).
+  -OsdsNativeRes always names the screen, so the review still marks a smaller window "below-native-resolution"
+  (NOT VALID FOR SIGN-OFF); -OsdsWindowRes asks a visible run (-ShowWindow) for a window of that size
+  instead of the borderless screen-sized one.
+#>
+function Get-TestResolution {
+    param([string]$Size = '1920x1080')
+    $Native = @(Get-NativeResolution)
+    if ($Size -eq 'native') { return $Native }
+    if ($Size -notmatch '^(\d{3,5})x(\d{3,5})$') { throw "Resolution '$Size' is not 'native' or WxH (for example 1920x1080)." }
+    return @("-ResX=$($Matches[1])", "-ResY=$($Matches[2])", $Native[2], "-OsdsWindowRes=$($Matches[1])x$($Matches[2])")
+}

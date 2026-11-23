@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   For each road and car it starts the game (editor binaries, -game, Ultra graphics,
-  1280x720, the one-editor lock of scripts\EditorLock.ps1, a fixed midday time) with
+  1920x1080 (-Resolution native for the screen's own size), the one-editor lock of scripts\EditorLock.ps1, a fixed midday time) with
   -OsdsViewCheck -OsdsPreflight. AOsdsPreflight waits for the VIEWCHECK line,
   drives the road for -Seconds through the real input stack, records the view at 10 frames
   a second and writes one line:
@@ -56,7 +56,10 @@ param(
     # More game arguments for every run, for A/B tests (for example "-DPCVars=osds.Reflex=1").
     [string]$ExtraArgs = '',
     # The graphics preset of every run (ultra by default; high for the second fps number).
-    [ValidateSet('low', 'medium', 'high', 'ultra')][string]$Graphics = 'ultra'
+    [ValidateSet('low', 'medium', 'high', 'ultra')][string]$Graphics = 'ultra',
+    # The window size: 'WxH' (default 1920x1080, what the High preset's 45 fps target is tuned for) or
+    # 'native' for the screen's own size (a sign-off run). Issue #69: native 3440x1440 ran at about 10 fps.
+    [string]$Resolution = '1920x1080'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -183,7 +186,7 @@ foreach ($Road in $Roads) {
         $Log = Join-Path $Out 'game.log'
         $Args = @("`"$Project`"", '-game', '-OsdsWorld', '-OsdsNoLive', '-OsdsNoNeural', "-OsdsGraphics=$Graphics", "-OsdsUtc=$(if (-not $UtcGiven -and $PlaceUtc.ContainsKey($Road)) { $PlaceUtc[$Road] } else { $Utc })",
             "-OsdsCar=$Car", '-OsdsViewCheck', '-OsdsPreflight', '-OsdsReview', "-OsdsPreflightRoad=$Road", "-OsdsPreflightSeconds=$Seconds",
-            "`"-OsdsPreflightOut=$Out`"", '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-NativeResolution) + $Defs[$Road] + @(if ($Keen) { '-OsdsPreflightKeen' }) + @(if ($ForceSpin) { '-OsdsPreflightForceSpin' })
+            "`"-OsdsPreflightOut=$Out`"", '-NoLiveCoding', '-nosplash', '-unattended', '-log', "`"-abslog=$Log`"") + @(Get-TestWindowArgs $ShowWindow) + @(Get-TestResolution $Resolution) + $Defs[$Road] + @(if ($Keen) { '-OsdsPreflightKeen' }) + @(if ($ForceSpin) { '-OsdsPreflightForceSpin' })
         if ($ExtraArgs) { $Args += $ExtraArgs }
         if (-not (Enter-EditorLock -GpuTest -TimeoutMinutes $LockTimeoutMinutes -Why "pre-flight $Name on $Root")) { exit 1 }
         $TimedOut = $false
@@ -211,6 +214,8 @@ foreach ($Road in $Roads) {
         if (-not $Line) { $Reasons += 'no PREFLIGHT line' }
         elseif ($Line.Matches[0].Groups[1].Value -ne 'PASS' -and $Stats) { $Reasons += $Stats.reasons }
         if ($Engine.Count) { $Reasons += "$($Engine.Count) engine errors" }
+        # Every run records per-frame times (issue #69); a run that timed no frames cannot say it was smooth.
+        if ($Stats -and [int]$Stats.timed_frames -le 0) { $Reasons += 'no frame times recorded (timed_frames 0)' }
         if ($Evidence.Crashed) { $Reasons += 'crash (see crash\)' }
         $Result = if ($Reasons.Count) { 'FAIL' } else { 'PASS' }
 

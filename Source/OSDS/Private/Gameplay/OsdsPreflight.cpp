@@ -31,6 +31,7 @@
 #include "Misc/Paths.h"
 #include "Presentation/OsdsCarPresentationComponent.h"
 #include "ProceduralMeshComponent.h"
+#include "RenderTimer.h"
 #include "ShaderCompiler.h"
 #include "UnrealClient.h"
 #include "World/OsdsBridges.h"
@@ -175,21 +176,27 @@ namespace OsdsPreflightRules
 		return Count;
 	}
 
+	float Percentile95(const TArray<float>& Ms)
+	{
+		if (Ms.IsEmpty())
+		{
+			return 0.f;
+		}
+		TArray<float> Sorted = Ms;
+		Sorted.Sort();
+		return Sorted[FMath::Clamp(FMath::CeilToInt32(0.95 * Sorted.Num()) - 1, 0, Sorted.Num() - 1)];
+	}
+
 	void MeasureFrames(const TArray<float>& TimedMs, FOsdsPreflightStats& Stats)
 	{
 		Stats.TimedFrames = TimedMs.Num();
-		Stats.FrameP95Ms = 0.f;
+		Stats.FrameP95Ms = Percentile95(TimedMs);
+		Stats.WorstFrameMs = 0.f;
 		Stats.SlowFrames = 0;
 		Stats.Hitches = 0;
-		if (TimedMs.IsEmpty())
-		{
-			return;
-		}
-		TArray<float> Sorted = TimedMs;
-		Sorted.Sort();
-		Stats.FrameP95Ms = Sorted[FMath::Clamp(FMath::CeilToInt32(0.95 * Sorted.Num()) - 1, 0, Sorted.Num() - 1)];
 		for (const float Ms : TimedMs)
 		{
+			Stats.WorstFrameMs = FMath::Max(Stats.WorstFrameMs, Ms);
 			Stats.SlowFrames += Ms > 50.f ? 1 : 0;
 			Stats.Hitches += Ms > 100.f ? 1 : 0;
 		}
@@ -214,6 +221,22 @@ namespace OsdsPreflightRules
 		}
 		return Count;
 	}
+}
+
+void FOsdsFrameTimes::Record(float DriveSeconds, float TotalMs, float GameMs)
+{
+	++All;
+	if (DriveSeconds > OsdsPreflightRules::FrameWarmupS)
+	{
+		TimedTotalMs.Add(TotalMs);
+		TimedGameMs.Add(GameMs);
+	}
+}
+
+void FOsdsFrameTimes::Fill(FOsdsPreflightStats& Stats) const
+{
+	OsdsPreflightRules::MeasureFrames(TimedTotalMs, Stats);
+	Stats.GameP95Ms = OsdsPreflightRules::Percentile95(TimedGameMs);
 }
 
 AOsdsPreflight::AOsdsPreflight()
@@ -693,20 +716,13 @@ void AOsdsPreflight::Tick(float DeltaSeconds)
 			// The real frame time (DeltaSeconds can be clamped); a long one is a stall the player sees.
 			const float Ms = static_cast<float>(FApp::GetDeltaTime() * 1000.0);
 			FrameMs.Add(Ms);
-			// The rules judge the frames after the warm-up that no screenshot of the robot's own touched.
-			if (CaptureSkip > 0)
-			{
-				--CaptureSkip;
-			}
-			else if (Stats.DriveSeconds > OsdsPreflightRules::FrameWarmupS)
-			{
-				TimedFrameMs.Add(Ms);
-			}
+			// Every frame after the warm-up is judged, the ones a screenshot slows too: the player watching sees them.
+			FrameTimes.Record(Stats.DriveSeconds, Ms, static_cast<float>(FPlatformTime::ToMilliseconds(GGameThreadTime)));
 			if (Ms > 50.f)
 			{
 				UE_LOG(LogOsdsPreflight, Display, TEXT("Pre-flight: stall %.0f ms at %.0f m (%.0f km/h)"), Ms, PathM, Player->GetTelemetry().BodyVelocityMps.X * 3.6);
 			}
-			if (Ms > 100.f && Stats.DriveSeconds > OsdsPreflightRules::FrameWarmupS && CaptureSkip == 0)
+			if (Ms > 100.f && Stats.DriveSeconds > OsdsPreflightRules::FrameWarmupS)
 			{
 				Review.Event(FString::Printf(TEXT("hitch %.0f ms"), Ms), Stats.DriveSeconds);
 			}
@@ -1246,8 +1262,6 @@ void AOsdsPreflight::RequestFrame(APlayerController* Player)
 	}
 	PendingRotation = Player->PlayerCameraManager ? Player->PlayerCameraManager->GetCameraRotation() : FRotator::ZeroRotator;
 	bFramePending = true;
-	// The read-back and the JPEG slow the next frames: the frame-time rules do not judge them.
-	CaptureSkip = FMath::Max(CaptureSkip, 2);
 	if (Review.WantsShot())
 	{
 		if (AOsdsPlayerController* SimPlayer = Cast<AOsdsPlayerController>(Player))
@@ -1266,7 +1280,6 @@ void AOsdsPreflight::OnFrame(int32 Width, int32 Height, const TArray<FColor>& Pi
 		return;
 	}
 	bFramePending = false;
-	CaptureSkip = FMath::Max(CaptureSkip, 1);
 	// The JPEG on a worker thread: on the game thread it stalled the frame a person watches.
 	{
 		TArray<FColor> Copy = Pixels;
@@ -1422,7 +1435,7 @@ void AOsdsPreflight::Finish()
 	}
 	UE_LOG(LogOsdsPreflight, Display, TEXT("PREFLIGHT FRAMES road=%s car=%s mean=%.1fm/s %s"), *RoadName, *CarId, Stats.MeanSpeedMps, *FrameLine);
 
-	MeasureFrames(TimedFrameMs, Stats);
+	FrameTimes.Fill(Stats);
 	const FString Reasons = Judge(Stats);
 	const bool bPass = Reasons.IsEmpty();
 	Review.Finish(bPass ? TEXT("PASS") : TEXT("FAIL"), Reasons);
@@ -1447,7 +1460,7 @@ void AOsdsPreflight::Finish()
 		TEXT("  \"peak_rear_slip_deg\": %.1f, \"peak_yaw_dps\": %.1f, \"backwards_seconds\": %.2f, \"forced_spin\": %s,\n")
 		TEXT("  \"max_past_edge_m\": %.2f, \"past_edge_seconds\": %.2f,\n")
 		TEXT("  \"airborne_seconds\": %.2f, \"flipped_seconds\": %.2f, \"esc_seconds\": %.2f, \"esc_straight_seconds\": %.2f, \"esc_straight_longest_s\": %.2f,\n")
-		TEXT("  \"timed_frames\": %d, \"frame_p95_ms\": %.1f, \"frames_over_50ms\": %d, \"hitches_over_100ms\": %d,\n")
+		TEXT("  \"timed_frames\": %d, \"frame_p95_ms\": %.1f, \"game_p95_ms\": %.1f, \"worst_frame_ms\": %.1f, \"frames_over_50ms\": %d, \"hitches_over_100ms\": %d,\n")
 		TEXT("  \"reasons\": \"%s\"\n}\n"),
 		bPass ? TEXT("PASS") : TEXT("FAIL"), *RoadName, *CarId, *Place.ReplaceCharWithEscapedChar(),
 		Stats.DriveSeconds, Stats.DistanceM, Stats.MeanSpeedMps, Stats.OffRoadSeconds, B(Stats.bFellBack),
@@ -1460,7 +1473,7 @@ void AOsdsPreflight::Finish()
 		Stats.PeakRearSlipDeg, Stats.PeakYawDps, Stats.ReversedSeconds, B(Stats.bForcedSpin),
 		Stats.MaxOffRibbonM, Stats.OffRibbonSeconds,
 		Stats.AirborneSeconds, Stats.FlippedSeconds, Stats.EscSeconds, Stats.EscStraightSeconds, Stats.EscStraightLongestS,
-		Stats.TimedFrames, Stats.FrameP95Ms, Stats.SlowFrames, Stats.Hitches,
+		Stats.TimedFrames, Stats.FrameP95Ms, Stats.GameP95Ms, Stats.WorstFrameMs, Stats.SlowFrames, Stats.Hitches,
 		bPass ? TEXT("ok") : *Reasons);
 	FFileHelper::SaveStringToFile(Json, *FPaths::Combine(OutputDir, TEXT("preflight.json")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 

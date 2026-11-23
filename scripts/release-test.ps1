@@ -63,6 +63,8 @@ param(
     [string[]]$ForbiddenNames = @(-join [char[]](65, 97, 114, 111, 110)) # a private word, as character codes
 )
 
+# A game launched while another checkout builds waits on the UBT mutex in ValidatePlatforms; skip it (see check.ps1).
+$env:UE_SKIP_UBT_SDK_SETUP = '1'
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ReviewLib.ps1')
 . (Join-Path $PSScriptRoot 'RandomPlaces.ps1')

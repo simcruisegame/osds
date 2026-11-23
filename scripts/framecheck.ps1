@@ -30,6 +30,8 @@ param(
     [int]$LockTimeoutMinutes = 120
 )
 
+# A game launched while another checkout builds waits on the UBT mutex in ValidatePlatforms; skip it (see check.ps1).
+$env:UE_SKIP_UBT_SDK_SETUP = '1'
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'EditorLock.ps1')
 $Root = Split-Path -Parent $PSScriptRoot
