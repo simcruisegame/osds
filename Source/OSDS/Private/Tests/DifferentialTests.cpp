@@ -125,3 +125,129 @@ bool FOsdsDifferentialFixedAwdTest::RunTest(const FString&)
 }
 
 #endif
+
+// The pre-#48 split, copied verbatim from OsdsDynamics::SplitDriveTorqueToWheels at 588d2e2, kept here
+// as the reference the Differential module must equal exactly on identical inputs (the Bench lines
+// shift in the last bits only because the compiler fuses the same maths differently in a new file).
+#if WITH_DEV_AUTOMATION_TESTS
+namespace
+{
+	namespace Legacy
+	{
+		TPair<double, double> SplitAxleTorque(double AxleTorqueNm, double LeftWheelAngularSpeed, double RightWheelAngularSpeed,
+			double WheelInertiaKgM2, double DeltaTimeS, bool bIsDriveTorque, double BiasRatio)
+		{
+			const double HalfTorqueNm = AxleTorqueNm * 0.5;
+			if (DeltaTimeS <= 0.0 || BiasRatio <= 1.0)
+			{
+				return TPair<double, double>(HalfTorqueNm, HalfTorqueNm);
+			}
+			const double TransferLimitNm = FMath::Abs(HalfTorqueNm) * (BiasRatio - 1.0) / (BiasRatio + 1.0);
+			const double EqualizingTorqueNm = (RightWheelAngularSpeed - LeftWheelAngularSpeed) *
+				WheelInertiaKgM2 / (2.0 * DeltaTimeS);
+			const double TransferNm = FMath::Clamp(EqualizingTorqueNm, -TransferLimitNm, TransferLimitNm);
+			return TPair<double, double>(HalfTorqueNm + TransferNm, HalfTorqueNm - TransferNm);
+		}
+
+		void Split(const FOsdsCarDefinition& Car, double AxleTorqueNm, const double W[4], double DeltaTimeS, bool bIsDriveTorque, double Out[4])
+		{
+			for (int32 Index = 0; Index < 4; ++Index) { Out[Index] = 0.0; }
+			const double I = Car.WheelRotationalInertiaKgM2;
+			if (Car.DrivetrainLayout == TEXT("fwd"))
+			{
+				const TPair<double, double> Front = SplitAxleTorque(AxleTorqueNm, W[0], W[1], I, DeltaTimeS, bIsDriveTorque,
+					bIsDriveTorque ? Car.FrontDifferentialBiasRatio : 1.0);
+				Out[0] = Front.Key;
+				Out[1] = Front.Value;
+				return;
+			}
+			double RearTorqueNm = AxleTorqueNm;
+			if (Car.DrivetrainLayout == TEXT("awd"))
+			{
+				double FrontTorqueNm = AxleTorqueNm * Car.AwdFrontTorqueShareFraction;
+				RearTorqueNm = AxleTorqueNm * (1.0 - Car.AwdFrontTorqueShareFraction);
+				if (bIsDriveTorque && DeltaTimeS > 0.0 && Car.CenterDifferentialBiasRatio > 1.0)
+				{
+					const double TransferLimitNm = FMath::Abs(AxleTorqueNm) * 0.5 *
+						(Car.CenterDifferentialBiasRatio - 1.0) / (Car.CenterDifferentialBiasRatio + 1.0);
+					const double AxleSpeedDifference = (W[2] + W[3] - W[0] - W[1]) * I / DeltaTimeS;
+					const double TransferNm = FMath::Clamp(AxleSpeedDifference, -TransferLimitNm, TransferLimitNm);
+					FrontTorqueNm += TransferNm;
+					RearTorqueNm -= TransferNm;
+				}
+				const TPair<double, double> Front = SplitAxleTorque(FrontTorqueNm, W[0], W[1], I, DeltaTimeS, bIsDriveTorque,
+					bIsDriveTorque ? Car.FrontDifferentialBiasRatio : 1.0);
+				Out[0] = Front.Key;
+				Out[1] = Front.Value;
+			}
+			const TPair<double, double> Rear = SplitAxleTorque(RearTorqueNm, W[2], W[3], I, DeltaTimeS, bIsDriveTorque,
+				bIsDriveTorque ? Car.RearDifferentialBiasRatio : Car.RearDifferentialCoastBiasRatio);
+			Out[2] = Rear.Key;
+			Out[3] = Rear.Value;
+		}
+
+		double DrivenOmega(const FOsdsCarDefinition& Car, const double W[4])
+		{
+			if (Car.DrivetrainLayout == TEXT("fwd")) { return (W[0] + W[1]) * 0.5; }
+			if (Car.DrivetrainLayout == TEXT("awd"))
+			{
+				const double Share = Car.AwdFrontTorqueShareFraction;
+				return Share * (W[0] + W[1]) * 0.5 + (1.0 - Share) * (W[2] + W[3]) * 0.5;
+			}
+			return (W[2] + W[3]) * 0.5;
+		}
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsDifferentialMatchesLegacyTest, "OSDS.Vehicle.Differential.MatchesLegacy", DiffTestFlags)
+bool FOsdsDifferentialMatchesLegacyTest::RunTest(const FString&)
+{
+	// Four layouts: rwd, fwd, awd with an open centre, awd with a limited-slip centre.
+	struct FLayout { const TCHAR* Name; double CenterBias; };
+	const FLayout Layouts[4] = { { TEXT("rwd"), 1.0 }, { TEXT("fwd"), 1.0 }, { TEXT("awd"), 1.0 }, { TEXT("awd"), 2.5 } };
+	const double Biases[] = { 0.5, 1.0, 1.0000001, 1.5, 2.0, 3.0, 4.0 };
+	const double Shares[] = { 0.0, 0.35, 0.5, 1.0 };
+	const double Dts[] = { 0.0, 1.0 / 360.0, 1.0 / 720.0 };
+	uint32 Seed = 12345u;
+	auto Rand01 = [&Seed]() { Seed = Seed * 1664525u + 1013904223u; return static_cast<double>(Seed >> 8) / static_cast<double>(1u << 24); };
+	int32 Cases = 0;
+	int32 Mismatches = 0;
+	for (const FLayout& L : Layouts)
+	{
+		for (double FrontBias : Biases) for (double RearBias : Biases) for (double CoastBias : Biases) for (double Share : Shares)
+		{
+			FOsdsCarDefinition Car;
+			Car.DrivetrainLayout = L.Name;
+			Car.CenterDifferentialBiasRatio = L.CenterBias;
+			Car.FrontDifferentialBiasRatio = FrontBias;
+			Car.RearDifferentialBiasRatio = RearBias;
+			Car.RearDifferentialCoastBiasRatio = CoastBias;
+			Car.AwdFrontTorqueShareFraction = Share;
+			Car.WheelRotationalInertiaKgM2 = 0.9 + 0.2 * Rand01();
+			FOsdsDifferential Diff;
+			Diff.Configure(Car);
+			for (double Dt2 : Dts) for (int32 Drive = 0; Drive < 2; ++Drive) for (int32 Rep = 0; Rep < 3; ++Rep)
+			{
+				const double Torque = (Rand01() - 0.4) * 2000.0;
+				double W[4];
+				for (double& V : W) { V = Rand01() * 200.0 - 20.0; }
+				if (Rep == 2) { W[0] = W[1] = W[2] = W[3] = 55.5; }
+				FOsdsDifferentialInput In;
+				In.AxleTorqueNm = Torque;
+				for (int32 K = 0; K < 4; ++K) { In.WheelOmegaRadPerSecond[K] = W[K]; }
+				In.DeltaTimeS = Dt2;
+				In.bDrive = Drive != 0;
+				FOsdsDifferentialOutput Out;
+				Diff.Step(In, Out);
+				double Ref[4];
+				Legacy::Split(Car, Torque, W, Dt2, Drive != 0, Ref);
+				++Cases;
+				for (int32 K = 0; K < 4; ++K) { if (Out.WheelTorqueNm[K] != Ref[K]) { ++Mismatches; break; } }
+				if (Diff.DrivenOmega(W) != Legacy::DrivenOmega(Car, W)) { ++Mismatches; }
+			}
+		}
+	}
+	TestEqual(FString::Printf(TEXT("module equals the legacy split exactly on %d identical inputs"), Cases), Mismatches, 0);
+	return true;
+}
+#endif
