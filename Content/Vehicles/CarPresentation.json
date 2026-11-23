@@ -111,6 +111,22 @@
      ]
     },
     {
+     "note": "soft top header (black): the owner's top is folded behind the seats and the windscreen header is a thin strip in his photo, with no visor frame; the model's closed-top header bar (about 14 cm tall by 18 cm deep) and sun visors drew a thick dark band across the driver's view. Parts wholly inside this box (the model's header bar, 10 cm ahead to 4 cm behind the screen top). The rear-view mirror's black housing sits against it and goes too (the glass stays).",
+     "material": "black",
+     "box": [
+      [
+       -0.12,
+       -0.62,
+       1.05
+      ],
+      [
+       0.17,
+       0.62,
+       1.45
+      ]
+     ]
+    },
+    {
      "note": "soft top (black): the owner drives top down; parts wholly behind the windscreen header and above the door line, seats kept",
      "material": "black",
      "box": [
@@ -120,7 +136,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -136,7 +152,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -152,7 +168,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -168,7 +184,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -184,7 +200,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -200,7 +216,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
@@ -216,7 +232,7 @@
        0.75
       ],
       [
-       -0.01,
+       0.1,
        0.9,
        1.35
       ]
