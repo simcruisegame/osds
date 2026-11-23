@@ -829,6 +829,12 @@ void UOsdsCarPresentationComponent::TickComponent(float DeltaTime, ELevelTick Ti
 	UpdateDials(DeltaTime);
 }
 
+// Scale of the cabin fill light (look development, A/B with -DPCVars=osds.Cabin.FillScale=N).
+static TAutoConsoleVariable<float> CVarCabinFillScale(
+	TEXT("osds.Cabin.FillScale"), 1.0f,
+	TEXT("Multiplier on the light that stands in for the sky bounce inside the cabin (1 = the 2.x level; 3 to 4 lifts the dash visibly: measured 0.072 to 0.117 mean display luminance at 4, still below a real photograph)."),
+	ECVF_Default);
+
 void UOsdsCarPresentationComponent::UpdateCabinFill()
 {
 	if (!CabinFill) return;
@@ -839,7 +845,7 @@ void UOsdsCarPresentationComponent::UpdateCabinFill()
 	// of it is sky; a quarter of that reaches the dash through the openings. At 50 cm a point of
 	// I candela gives I / 0.25 lux, so I = 0.25 * 0.25 * 0.2 * E.
 	const double E = 2.5 * FMath::Pow(2.0, static_cast<double>(Environment->GetReferenceEV100()));
-	CabinFill->SetIntensity(static_cast<float>(0.0125 * E));
+	CabinFill->SetIntensity(static_cast<float>(0.0125 * E * FMath::Max(CVarCabinFillScale.GetValueOnGameThread(), 0.0f)));
 }
 
 void UOsdsCarPresentationComponent::SetMirrorsLive(bool bLive, USceneComponent* Parent, const FVector& RelativeEyeCm)
