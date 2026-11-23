@@ -669,7 +669,7 @@ Source: `Gameplay/OsdsGameMode`, `Vehicle/OsdsVehicle` (the seams), `Gameplay/Os
 | Setting (`Config/DefaultGame.ini`, `[/Script/OSDS.OsdsGameMode]`) | Default | Command line |
 |---|---|---|
 | `VehiclePawnClass` | `/Script/OSDS.OsdsVehicle` (the Chaos car); unset gives the shell's placeholder | — |
-| `StartCarId` | `nb1999` | `-OsdsCar=mustang65` |
+| `StartCarId` | `nb2001_lowered` (a remembered car is used only if Drivable; the picker holds Drivable cars in `picker_order`) | `-OsdsCar=mustang65` (any Car file) |
 | `StartRoad` | `Ocean Drive` | `-OsdsStartRoad=<name>` |
 | — | bundled Miami Beach | `-OsdsStart=lat,lon` (nearest public road; needs the atlas helper) |
 | — | real clock | `-OsdsUtc=2026-11-11T16:00:00Z` |

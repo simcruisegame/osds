@@ -567,6 +567,8 @@ bool FOsdsCarDefinitionLoader::ParseJson(const FString& JsonText, const FString&
 	OSDS_READ_STRING("make", Make);
 	OSDS_READ_STRING("body", Body);
 	OSDS_READ_STRING("model_scene", ModelScene);
+	OSDS_READ_BOOL("drivable", bDrivable);
+	OSDS_READ_INTEGER("picker_order", PickerOrder);
 	OSDS_READ_INTEGER("seats", SeatCount);
 	if (!OsdsCarData::ReadVector3IfPresent(*Root, TEXT("driver_eye"), Candidate.DriverEyeM, Path, OutError) ||
 		!OsdsCarData::ReadVector3IfPresent(*Root, TEXT("inertia"), Candidate.InertiaKgM2, Path, OutError) ||

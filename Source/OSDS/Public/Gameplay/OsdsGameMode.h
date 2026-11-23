@@ -93,7 +93,7 @@ public:
 
 	/** The car a drive starts in (data/cars/<id>.json). */
 	UPROPERTY(config, EditAnywhere, Category = "OSDS")
-	FString StartCarId = TEXT("nb1999");
+	FString StartCarId = TEXT("nb2001_lowered");
 
 	/** Road the bundled start puts the car on (Godot StartPool FALLBACK: Ocean Drive). */
 	UPROPERTY(config, EditAnywhere, Category = "OSDS")
