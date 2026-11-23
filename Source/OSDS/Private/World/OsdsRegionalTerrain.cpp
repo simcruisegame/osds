@@ -73,6 +73,11 @@ if (GrassField > 0.5)
 		c *= lerp(1.0, ml, 0.5 * herb) * lerp(float3(1, 1, 1), meso / ml, 0.25 * herb);
 		// cured grass: the same brightness, straw hue, a little lighter (dry blades reflect more)
 		c = lerp(c, dot(c, W) * float3(1.45, 1.05, 0.55) * 1.3, dr * herb * 0.7);
+		// Field parcels (FGF::Parcel, about 400 m a cell here, half of them split): the photograph
+		// is a summer one, so each field takes today's state: green, cured, stubble or tilled soil.
+		float3 ptint; float pamt, ptone, pkind, paxis;
+		gf.Parcel(p, 400.0 / K, 0.0, GrassDry, 1.0, ptint, pamt, ptone, pkind, paxis);
+		c = lerp(c * ptone, ptint * ptone * clamp(L / 0.1, 0.7, 1.3), pamt * herb * 0.9);
 	}
 }// Today's snow (MODIS Terra NDSI snow cover, 500 m): the photograph may be from summer.
 if (HasSnow > 0.5)

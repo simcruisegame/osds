@@ -148,6 +148,35 @@ struct FGF
 		meso = lerp(meso, float3(0.7, 0.8, 0.6), clover);
 		return meso; // the dry share dr is applied by the caller: lawn and hillside albedos differ
 	}
+	// Field parcels (Surface knowledge, #151): open land is a patchwork of fields, each in its own
+	// state. A seeded hash of the parcel cell (stable at a place, wraps with n cells a period; n 0:
+	// none) picks green (pasture, winter wheat), cured (dormant, dry), stubble or tilled soil; the
+	// season (dry 0..1) moves parcels from green toward cured and stubble. Open land: about 160 m (typical field strips and pivots; a section is 1.6 km)
+	// parcels (a quarter-mile, the US survey grid's 160-acre quarter-section is 805 m), half of them
+	// split in two; a built-up place: lot-sized parcels, green or dormant only. tint: the parcel's
+	// albedo (estimates: straw 0.20/0.155/0.085, stubble 0.24/0.19/0.105, tilled soil
+	// 0.09/0.065/0.045); amt: 1 where the parcel is not green; tone: a brightness multiplier
+	// 0.88-1.12 for every parcel; kind 0 green, 1 cured, 2 stubble, 3 tilled; axis: rows run along x
+	// (1) or y (0).
+	void Parcel(float2 p, float cell, float n, float dry, float open, out float3 tint, out float amt, out float tone, out float kind, out float axis)
+	{
+		FSC sc;
+		float2 c = floor(p / cell);
+		float nn = n;
+		if (open > 0.5 && sc.Hash(c, 301.0, nn) > 0.55) { c = floor(p / (cell * 0.5)); nn = n * 2.0; }
+		float4 hh = float4(sc.Hash(c, 311.0, nn), sc.Hash(c, 312.0, nn), sc.Hash(c, 313.0, nn), sc.Hash(c, 314.0, nn));
+		float pT = open > 0.5 ? 0.10 : 0.0;
+		float pS = open > 0.5 ? 0.35 * saturate(dry * 1.8) : 0.0;
+		float pC = lerp(0.7, 0.55, open) * dry;
+		kind = 0.0;
+		if (hh.x < pT) kind = 3.0;
+		else if (hh.x < pT + pS) kind = 2.0;
+		else if (hh.y < pC) kind = 1.0;
+		tint = kind > 2.5 ? float3(0.09, 0.065, 0.045) : (kind > 1.5 ? float3(0.24, 0.19, 0.105) : float3(0.20, 0.155, 0.085));
+		amt = kind > 0.5 ? 1.0 : 0.0;
+		tone = 0.88 + 0.24 * hh.z;
+		axis = hh.w > 0.5 ? 1.0 : 0.0;
+	}
 };
 )HLSL");
 		// The fine-detail layer (docs/research/world-detail-methods.md, "The AI detail kit"): eight
@@ -292,7 +321,28 @@ float3 baseColor = Cell.z > 0.5 ? lerp(shot, led, lead) : classColor;
 float3 grass = g1 * lerp(1.0, g2, 0.5);
 float fpx = length(fwidth(m)); // ground metres per pixel (outside the branch, so the derivative is defined)
 float2 dmx = ddx(m), dmy = ddy(m); // for the field noise's fetches inside the branches
-)HLSL" /* MSVC caps one literal at 16 KB */ R"HLSL(// Grass field (docs/research/world-detail-methods.md): a lawn is not one photograph. Three
+)HLSL" /* MSVC caps one literal at 16 KB */ R"HLSL(// Field parcels (FGF::Parcel): each field or lawn in its own state, rows and mow stripes near.
+float pamt = 0.0;
+// Open ground the photograph shows green (farmland, pasture: not in the mapped vegetation mask) is
+// a field too: its summer green is this parcel's state to replace.
+float fieldW = max(veg, bare * (Cell.z > 0.5 ? saturate((photo.g - max(photo.r, photo.b)) * 40.0) : 0.0));
+if (GrassField > 0.5 && fieldW > 0.01)
+{
+	FGF pf;
+	float3 ptint; float ptone, pkind, paxis;
+	float pcell = OpenShare > 0.5 ? sc.QP(160.0) : sc.QP(26.0);
+	pf.Parcel(m, pcell, 1664.0 / pcell, GrassDry, OpenShare, ptint, pamt, ptone, pkind, paxis);
+	// Rows (corn and soybeans are drilled 0.76 m apart, 30 inches) in stubble and tilled soil, and
+	// mower stripes (1.2 m, alternate lanes lie 6 % lighter) on lawns: only while a row is wider than
+	// four pixels, so they never shimmer; axis-aligned so they continue across tile borders.
+	float rc = paxis > 0.5 ? m.x : m.y;
+	float rowFade = saturate((0.19 - fpx) / 0.1);
+	float rows = 1.0 + (pkind > 1.5 ? (pkind > 2.5 ? 0.30 : 0.16) : 0.0) * cos(6.2832 * rc / sc.QP(0.76)) * rowFade;
+	float mowFade = saturate((0.3 - fpx) / 0.15);
+	float mow = OpenShare > 0.5 ? 1.0 : 1.0 + 0.06 * sign(cos(6.2832 * rc / sc.QP(1.2))) * mowFade;
+	baseColor = lerp(baseColor * ptone * mow, ptint * ptone * rows * lerp(0.8, 1.2, saturate(sl / 0.12)), pamt * saturate(fieldW * 1.5));
+}
+// Grass field (docs/research/world-detail-methods.md): a lawn is not one photograph. Three
 // sizes the eye reads: no-repeat micro texture (hex tiling: three rotated, offset lookups),
 // meso variation (clumps 0.3-1 m, patches of yellower or bluer grass 2-8 m, clover, dry
 // patches), and near the car real depth: eight shells of procedural blades marched in the
@@ -329,7 +379,7 @@ if (GrassField > 0.5 && veg > 0.01)
 	// meso: clumps, patches, clover, dry patches (GrassDry from the season; 0 = growing)
 	float clump, dryShare;
 	float3 meso = gf.Meso(FieldNoise, FieldNoiseSampler, gm, dmx, dmy, GrassDry, 1.0, 1.0, clump, dryShare, 1664.0);
-	meso = lerp(meso, float3(2.6, 1.6, 2.4), dryShare);
+	meso = lerp(meso, float3(2.6, 1.6, 2.4), dryShare * (1.0 - pamt));
 	grass = micro * meso;
 	// nearW: parallax blade shells within 22 m
 	float nearW = saturate((2200.0 - Depth) / 400.0);
@@ -1122,6 +1172,7 @@ return col;
 			AddInput(Custom, TEXT("GrainMean"), VectorParam(Material, TEXT("GrainMean"), FLinearColor(0.2f, 0.2f, 0.2f)));
 			AddInput(Custom, TEXT("GrassField"), ScalarParam(Material, TEXT("GrassField"), 0.f));
 			AddInput(Custom, TEXT("GrassDry"), ScalarParam(Material, TEXT("GrassDry"), 0.f));
+			AddInput(Custom, TEXT("OpenShare"), ScalarParam(Material, TEXT("OpenShare"), 1.f));
 			AddInput(Custom, TEXT("FieldNoise"), TextureParam(Material, TEXT("FieldNoise"), DefaultTexture));
 			AddInput(Custom, TEXT("CV"), AddExpression<UMaterialExpressionCameraVectorWS>(Material));
 			AddInput(Custom, TEXT("Depth"), AddExpression<UMaterialExpressionPixelDepth>(Material));

@@ -476,6 +476,19 @@ void AOsdsWorldTile::Install(const TSharedRef<FOsdsTileBuild>& InBuild, UOsdsWor
 			const float GrassDry = bGrassDryOverride ? GrassDryOverride : (InBuild->Context.IsValid() ? FMath::Clamp(InBuild->Context->GrassDry, 0.f, 1.f) : 0.f);
 			MID->SetScalarParameterValue(TEXT("GrassField"), bGrassField ? 1.f : 0.f);
 			MID->SetScalarParameterValue(TEXT("GrassDry"), GrassDry);
+			// Open land or built-up (field parcels, rows and mow stripes): the share of the tile's road
+			// sides whose land use is open or unmapped; 1 without a context record (the countryside).
+			{
+				float OpenShare = 1.f;
+				if (InBuild->Context.IsValid() && InBuild->Context->Cells.Num() > 0)
+				{
+					int32 Open = 0, All = 0;
+					for (const FOsdsCellContext& Cx : InBuild->Context->Cells)
+						for (int32 Side = 0; Side < 2; ++Side) { ++All; Open += (Cx.Sides[Side].LandUse.IsNone() || Cx.Sides[Side].LandUse == TEXT("open")) ? 1 : 0; }
+					OpenShare = All > 0 ? static_cast<float>(Open) / All : 1.f;
+				}
+				MID->SetScalarParameterValue(TEXT("OpenShare"), OpenShare);
+			}
 			// TINT (the place's own grass, soil, sand and paving hues): the scan's when there is one
 			// (an eye may have filled it), else the build's colour match; x1 without a photograph.
 			{
