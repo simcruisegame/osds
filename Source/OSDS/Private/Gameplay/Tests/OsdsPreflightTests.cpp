@@ -49,7 +49,11 @@ bool FOsdsPreflightJudgeTest::RunTest(const FString& Parameters)
 	S = Good(); S.OffRoadSeconds = 5.f; Fails(TEXT("off the road"), S, TEXT("left-the-road"));
 	S = Good(); S.bFellBack = true; Fails(TEXT("fell back to Miami Beach"), S, TEXT("fell-back"));
 	S = Good(); S.bViewCheckPassed = false; S.ViewCheckReasons = TEXT("a,b"); Fails(TEXT("the view check failed"), S, TEXT("viewcheck-fail(a+b)"));
-	S = Good(); S.DistanceM = 20.f; Fails(TEXT("the robot did not drive"), S, TEXT("robot-moved-only"));
+	S = Good(); S.DistanceM = 20.f; S.MeanSpeedMps = 0.4f; Fails(TEXT("the robot did not drive"), S, TEXT("robot-moved-only"));
+	// Slow frames are not a robot fault (#116): the sim clamps its step, so a 4 fps game covers 264 m
+	// in 60 s of wall time while the robot drives at its normal 11.6 m/s of simulated time.
+	S = Good(); S.DistanceM = 264.f; S.MeanSpeedMps = 11.6f;
+	TestFalse(TEXT("a slow-frame run at a normal simulated speed is not 'robot moved only'"), OsdsPreflightRules::Judge(S).Contains(TEXT("robot-moved-only")));
 	S = Good(); S.Frames = 40; Fails(TEXT("the recording failed"), S, TEXT("few-frames"));
 
 	S = Good(); S.CarPopIns = 2; S.Jolts = 4; S.SkySamples = 10; S.SkyWhitePercent = 90.f;

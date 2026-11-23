@@ -118,7 +118,9 @@ namespace OsdsPreflightRules
 	FString Judge(const FOsdsPreflightStats& S)
 	{
 		TArray<FString> R;
-		if (S.DistanceM < MinDistanceM) R.Add(FString::Printf(TEXT("robot-moved-only-%.0fm"), S.DistanceM));
+		// By simulated time (the mean of the speed samples), not wall-clock distance: a slow-frame game covers
+		// less ground in the same wall seconds without the robot being at fault (#116).
+		if (S.MeanSpeedMps < MinMeanSpeedMps) R.Add(FString::Printf(TEXT("robot-moved-only-%.1fm-s-(%.0fm)"), S.MeanSpeedMps, S.DistanceM));
 		if (S.OffRoadSeconds > MaxOffRoadSeconds) R.Add(FString::Printf(TEXT("left-the-road-%.1fs"), S.OffRoadSeconds));
 		if (S.bFellBack) R.Add(TEXT("start-fell-back-to-bundled-place"));
 		if (S.bStartByNearestRoad) R.Add(TEXT("start-by-nearest-road-rule"));
