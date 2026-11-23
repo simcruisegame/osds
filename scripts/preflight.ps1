@@ -252,13 +252,13 @@ foreach ($Road in $Roads) {
 $Failed = @($Rows | Where-Object { $_.Result -ne 'PASS' })
 $Verdict = if ($Failed.Count) { 'FAIL' } else { 'PASS' }
 $Md = @("# Pre-flight $Stamp", '', "Commit ``$Commit``, $($Rows.Count) runs of $Seconds s, time $Utc (test places: their own solar noon), seed $Seed. Result: **$Verdict** ($($Rows.Count - $Failed.Count) passed, $($Failed.Count) failed).", '',
-    '| Road | Car | Result | View | Distance (m) | Mean speed (m/s) | Off road (s) | Rear slip (deg) / backwards (s) | Past the edge (m / s) | Frame p95 (ms) / hitches | White sky (%) | Tile pop-in | Car pop-in | Flashes | Road steps (max cm) | Gaps | Jolts (at borders) | Stuck traffic | Video | Sheet | Review | Reasons |',
-    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+    '| Road | Car | Result | View | Distance (m) | Mean speed (m/s) | Off road (s) | Rear slip (deg) / backwards (s) | Past the edge (m / s) | Frame p95 (ms) / hitches | White sky (%) | Tile pop-in | Car pop-in | Flashes | Road steps (max cm) | Gaps | Edge lip mean / p95 / max (cm) | Edge jag rms / max (cm), reversals per 10 m (mesh edge offset cm) | Jolts (at borders) | Stuck traffic | Video | Sheet | Review | Reasons |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
 foreach ($R in $Rows) {
     $S = $R.Stats
     $Car = if ($CarNames.ContainsKey($R.Car)) { $CarNames[$R.Car] } else { $R.Car }
     if ($S) {
-        $Md += "| $($R.Road) | $Car | $($R.Result) | $($R.View) | $([int]$S.distance_m) | $($S.mean_speed_mps) | $($S.offroad_seconds) | $($S.peak_rear_slip_deg) / $($S.backwards_seconds) | $($S.max_past_edge_m) / $($S.past_edge_seconds) | $($S.frame_p95_ms) / $($S.hitches_over_100ms) | $($S.sky_white_percent) | $($S.tile_popins) | $($S.car_popins) | $($S.flash_frames) | $($S.road_steps) ($($S.max_step_cm)) | $($S.road_gaps) | $($S.jolts) ($($S.border_jolts)) | $($S.stuck_traffic) | [video]($($R.Video)) | [sheet]($($R.Sheet)) | [review]($($R.Review)) | $($R.Reasons) |"
+        $Md += "| $($R.Road) | $Car | $($R.Result) | $($R.View) | $([int]$S.distance_m) | $($S.mean_speed_mps) | $($S.offroad_seconds) | $($S.peak_rear_slip_deg) / $($S.backwards_seconds) | $($S.max_past_edge_m) / $($S.past_edge_seconds) | $($S.frame_p95_ms) / $($S.hitches_over_100ms) | $($S.sky_white_percent) | $($S.tile_popins) | $($S.car_popins) | $($S.flash_frames) | $($S.road_steps) ($($S.max_step_cm)) | $($S.road_gaps) | $($S.edge_lip_mean_cm) / $($S.edge_lip_p95_abs_cm) / $($S.edge_lip_max_cm) | $($S.edge_jag_rms_cm) / $($S.edge_jag_max_cm), $($S.edge_jag_reversals_per_10m) ($($S.edge_jag_mesh_edge_offset_cm)) | $($S.jolts) ($($S.border_jolts)) | $($S.stuck_traffic) | [video]($($R.Video)) | [sheet]($($R.Sheet)) | [review]($($R.Review)) | $($R.Reasons) |"
     } else {
         $Md += "| $($R.Road) | $Car | $($R.Result) | $($R.View) | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [review]($($R.Review)) | $($R.Reasons) |"
     }

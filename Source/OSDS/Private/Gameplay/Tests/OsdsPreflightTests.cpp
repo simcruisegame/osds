@@ -179,6 +179,58 @@ bool FOsdsPreflightStepsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPreflightEdgeLipTest, "OSDS.Gameplay.Preflight.EdgeLip", OsdsPreflightTest::Flags)
+bool FOsdsPreflightEdgeLipTest::RunTest(const FString& Parameters)
+{
+	FOsdsPreflightStats Stats;
+	OsdsPreflightRules::SummariseEdgeLip({}, Stats);
+	TestEqual(TEXT("no samples"), Stats.EdgeLipSamples, 0);
+	TestEqual(TEXT("and a zero mean"), Stats.EdgeLipMeanCm, 0.f);
+
+	// A raised slab: 12 cm proud on the left, 8 cm on the right, one 20 cm drop-off.
+	TArray<float> Lips;
+	for (int32 I = 0; I < 50; ++I) Lips.Add(I % 2 ? 12.f : 8.f);
+	Lips.Add(-20.f);
+	OsdsPreflightRules::SummariseEdgeLip(Lips, Stats);
+	TestEqual(TEXT("samples"), Stats.EdgeLipSamples, 51);
+	TestEqual(TEXT("largest lip"), Stats.EdgeLipMaxCm, 12.f);
+	TestEqual(TEXT("smallest (the drop-off)"), Stats.EdgeLipMinCm, -20.f);
+	TestTrue(TEXT("mean is about 9.4 cm"), FMath::Abs(Stats.EdgeLipMeanCm - 9.4f) < 0.2f);
+	TestEqual(TEXT("p95 of the absolute lip"), Stats.EdgeLipP95Cm, 12.f);
+
+	// A road in the terrain: flush, within a centimetre.
+	TArray<float> Flush = { 0.5f, -0.4f, 0.2f, 0.f };
+	OsdsPreflightRules::SummariseEdgeLip(Flush, Stats);
+	TestTrue(TEXT("a flush edge reads under 1 cm"), Stats.EdgeLipMaxCm < 1.f && Stats.EdgeLipMinCm > -1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPreflightEdgeJagTest, "OSDS.Gameplay.Preflight.EdgeJag", OsdsPreflightTest::Flags)
+bool FOsdsPreflightEdgeJagTest::RunTest(const FString& Parameters)
+{
+	FOsdsPreflightStats Stats;
+	OsdsPreflightRules::SummariseEdgeJag({}, {}, Stats);
+	TestEqual(TEXT("no samples"), Stats.EdgeJagSamples, 0);
+
+	// A smooth edge: 100 stations 0.5 m apart, drifting 0.1 cm per station.
+	TArray<FVector2f> Smooth, Stair;
+	for (int32 I = 0; I < 100; ++I)
+	{
+		Smooth.Add(FVector2f(0.5f * I, 0.1f * I * 0.01f));
+		// A stair-step edge: the join jumps 6 cm in and out every 2 m (4 stations).
+		Stair.Add(FVector2f(0.5f * I, (I / 4) % 2 ? 6.f : 0.f));
+	}
+	OsdsPreflightRules::SummariseEdgeJag(Smooth, {}, Stats);
+	TestTrue(TEXT("a smooth edge has near-zero rms"), Stats.EdgeJagRmsCm < 0.2f);
+	TestEqual(TEXT("and no reversals"), Stats.EdgeJagReversalsPer10m, 0.f);
+	OsdsPreflightRules::SummariseEdgeJag(Stair, {}, Stats);
+	TestTrue(TEXT("a stair-step edge scores a large rms"), Stats.EdgeJagRmsCm > 2.5f);
+	TestTrue(TEXT("and a 3 cm largest deviation from its mean line"), FMath::Abs(Stats.EdgeJagMaxCm - 3.f) < 0.3f);
+	TestTrue(TEXT("and the 3 cm mean offset is reported apart"), FMath::Abs(Stats.EdgeJagOffsetCm - 3.f) < 0.3f);
+	TestTrue(TEXT("and about 5 reversals per 10 m (a 4 m period)"), Stats.EdgeJagReversalsPer10m > 4.f && Stats.EdgeJagReversalsPer10m < 6.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPreflightFlashTest, "OSDS.Gameplay.Preflight.Flashes", OsdsPreflightTest::Flags)
 bool FOsdsPreflightFlashTest::RunTest(const FString& Parameters)
 {
