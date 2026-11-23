@@ -45,6 +45,8 @@ public class OSDS : ModuleRules
 			// Rendering resources, plus frame timing for the environment's graphics presets and perf sampler.
 			"RenderCore",
 			"RHI",
+			// Preflight frames (Gameplay/OsdsFrameGrab): the engine's asynchronous back-buffer readback.
+			"MovieSceneCapture",
 			// Live world (Live/): public real-time feeds over HTTP, and the local AI detail
 			// engine on Unreal's Neural Network Engine (the NNERuntimeORT plugin runs it).
 			"HTTP",

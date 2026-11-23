@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Async/Future.h"
+#include "Gameplay/OsdsFrameGrab.h"
 #include "Gameplay/OsdsReview.h"
 #include "OsdsPreflight.generated.h"
 
@@ -258,7 +259,7 @@ private:
 	void DriveTick(AOsdsPlayerController* Player, float DeltaSeconds);
 	void MeasureTick(AOsdsPlayerController* Player, float DeltaSeconds);
 	void RequestFrame(APlayerController* Player);
-	void OnFrame(int32 Width, int32 Height, const TArray<FColor>& Pixels);
+	void OnFrame(int32 Width, int32 Height, TArray<FColor>&& Pixels, const FOsdsGrabNote& Note);
 	void OnRebased(const FVector& OffsetCm);
 	void Finish();
 
@@ -281,7 +282,11 @@ private:
 
 	// Recording.
 	float FrameClock = 0.f;
-	bool bFramePending = false;
+	/** The one frame in flight to the async readback (issue #69). */
+	FOsdsGrabGate FrameGate;
+	FOsdsFrameGrab FrameGrab;
+	/** -OsdsPreflightFrameWidth=N: the widest frame kept (default 1920; 0 = native). */
+	int32 FrameMaxWidth = OsdsFrameGrab::DefaultMaxWidth;
 	/** -OsdsPreflightNoFrames: no screenshots, so the frame times are the game's own. */
 	bool bNoFrames = false;
 	/** -OsdsPreflightKmh=: drive at this speed (slower only for curves and cars), not the road's limit. */
@@ -311,10 +316,7 @@ private:
 	float OffRibbonNow = 0.f;
 	/** The next pose log time (index into the pose times). */
 	int32 PoseLogNext = 0;
-	FDelegateHandle FrameHandle;
 	int32 FrameIndex = 0;
-	TArray<FVector2D> PendingSky;
-	FRotator PendingRotation = FRotator::ZeroRotator;
 	FRotator LastFrameRotation = FRotator::ZeroRotator;
 	TArray<float> LastThumb;
 	TArray<float> FrameDiffs;

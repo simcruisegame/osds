@@ -257,6 +257,7 @@ void AOsdsPreflight::BeginPlay()
 	FParse::Value(Cmd, TEXT("OsdsPreflightSeconds="), DriveSeconds);
 	DriveSeconds = FMath::Clamp(DriveSeconds, 5.f, 600.f);
 	bNoFrames = FParse::Param(Cmd, TEXT("OsdsPreflightNoFrames"));
+	FParse::Value(Cmd, TEXT("OsdsPreflightFrameWidth="), FrameMaxWidth);
 	bForceSpin = FParse::Param(Cmd, TEXT("OsdsPreflightForceSpin"));
 	double Kmh = 0.0;
 	if (FParse::Value(Cmd, TEXT("OsdsPreflightKmh="), Kmh) && Kmh > 0.0)
@@ -314,11 +315,7 @@ void AOsdsPreflight::BeginPlay()
 
 void AOsdsPreflight::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (FrameHandle.IsValid())
-	{
-		UGameViewportClient::OnScreenshotCaptured().Remove(FrameHandle);
-		FrameHandle.Reset();
-	}
+	FrameGrab.Stop();
 	if (AOsdsWorldStreamer* Stream = RebaseStream.Get())
 	{
 		Stream->OnRebased.Remove(RebaseHandle);
@@ -663,7 +660,11 @@ void AOsdsPreflight::Tick(float DeltaSeconds)
 			}
 			RebaseStream = Stream;
 			RebaseHandle = Stream->OnRebased.AddUObject(this, &AOsdsPreflight::OnRebased);
-			FrameHandle = UGameViewportClient::OnScreenshotCaptured().AddUObject(this, &AOsdsPreflight::OnFrame);
+			if (!bNoFrames && !FrameGrab.Start(GetWorld(), FrameMaxWidth))
+			{
+				UE_LOG(LogOsdsPreflight, Warning, TEXT("Pre-flight: no game window to read frames from; running without frames"));
+				bNoFrames = true;
+			}
 			LastYawDeg = Pawn->GetActorRotation().Yaw;
 			Stage = EStage::Drive;
 			StageStarted = Now;
@@ -732,7 +733,16 @@ void AOsdsPreflight::Tick(float DeltaSeconds)
 		}
 		Review.Tick(*Player, Stats.DriveSeconds, DeltaSeconds, Stick);
 		FrameClock += DeltaSeconds;
-		if (!bNoFrames && FrameClock >= FrameIntervalS && !bFramePending)
+		{
+			// Frames that finished reading back since the last tick.
+			FOsdsGrabbedFrame Done;
+			while (FrameGrab.Poll(Done))
+			{
+				FrameGate.Delivered();
+				OnFrame(Done.Size.X, Done.Size.Y, MoveTemp(Done.Pixels), Done.Note);
+			}
+		}
+		if (!bNoFrames && FrameClock >= FrameIntervalS && FrameGate.CanRequest(FPlatformTime::Seconds()))
 		{
 			FrameClock = 0.f;
 			RequestFrame(Player);
@@ -1272,7 +1282,7 @@ void AOsdsPreflight::MeasureTick(AOsdsPlayerController* Player, float DeltaSecon
 void AOsdsPreflight::RequestFrame(APlayerController* Player)
 {
 	// Where the sky is: view rays that hit nothing (the car itself counts as a hit: its roof is not sky).
-	PendingSky.Reset();
+	FOsdsGrabNote Note;
 	int32 SizeX = 0, SizeY = 0;
 	Player->GetViewportSize(SizeX, SizeY);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(OsdsPreflightSky), false);
@@ -1286,12 +1296,12 @@ void AOsdsPreflight::RequestFrame(APlayerController* Player)
 			FHitResult Hit;
 			if (!GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * 200000.0, ECC_Visibility, Params))
 			{
-				PendingSky.Add(FVector2D(Screen.X / FMath::Max(SizeX, 1), Screen.Y / FMath::Max(SizeY, 1)));
+				Note.Sky.Add(FVector2D(Screen.X / FMath::Max(SizeX, 1), Screen.Y / FMath::Max(SizeY, 1)));
 			}
 		}
 	}
-	PendingRotation = Player->PlayerCameraManager ? Player->PlayerCameraManager->GetCameraRotation() : FRotator::ZeroRotator;
-	bFramePending = true;
+	Note.Rotation = Player->PlayerCameraManager ? Player->PlayerCameraManager->GetCameraRotation() : FRotator::ZeroRotator;
+	FrameGate.Requested(FPlatformTime::Seconds());
 	if (Review.WantsShot())
 	{
 		if (AOsdsPlayerController* SimPlayer = Cast<AOsdsPlayerController>(Player))
@@ -1299,32 +1309,20 @@ void AOsdsPreflight::RequestFrame(APlayerController* Player)
 			Review.PrepareShot(*SimPlayer, Stats.DriveSeconds);
 		}
 	}
-	FScreenshotRequest::RequestScreenshot(FPaths::Combine(OutputDir, TEXT("frames"), TEXT("request.png")), true, false);
+	// Read back on the GPU's schedule, not waited for: OnFrame runs when the pixels are in memory.
+	FrameGrab.Request(Note);
 }
 
-void AOsdsPreflight::OnFrame(int32 Width, int32 Height, const TArray<FColor>& Pixels)
+void AOsdsPreflight::OnFrame(int32 Width, int32 Height, TArray<FColor>&& Frame, const FOsdsGrabNote& Note)
 {
-	if (!bFramePending || Width < ThumbW || Height < ThumbH || Pixels.Num() < Width * Height)
+	if (Width < ThumbW || Height < ThumbH || Frame.Num() < Width * Height)
 	{
-		bFramePending = false;
 		return;
 	}
-	bFramePending = false;
-	// The JPEG on a worker thread: on the game thread it stalled the frame a person watches.
-	{
-		TArray<FColor> Copy = Pixels;
-		const FString JpegPath = FPaths::Combine(OutputDir, TEXT("frames"), FString::Printf(TEXT("%05d.jpg"), FrameIndex));
-		JpegJobs.Add(Async(EAsyncExecution::ThreadPool, [Copy = MoveTemp(Copy), Width, Height, JpegPath]()
-		{
-			TArray64<uint8> Jpeg;
-			if (FImageUtils::CompressImage(Jpeg, TEXT("jpg"), FImageView(Copy.GetData(), Width, Height), 85))
-			{
-				FFileHelper::SaveArrayToFile(Jpeg, *JpegPath);
-			}
-		}));
-		JpegJobs.RemoveAll([](const TFuture<void>& Job) { return Job.IsReady(); });
-	}
+	for (FColor& C : Frame) C.A = 255; // the back buffer's alpha is not a picture's
+	const TArray<FColor>& Pixels = Frame;
 	Review.OnFrame(Width, Height, Pixels);
+	const int32 ThisFrame = FrameIndex;
 	++FrameIndex;
 	Stats.Frames = FrameIndex;
 
@@ -1347,14 +1345,14 @@ void AOsdsPreflight::OnFrame(int32 Width, int32 Height, const TArray<FColor>& Pi
 		int32 Changed = 0;
 		for (int32 K = 0; K < Thumb.Num(); ++K) Changed += FMath::Abs(Thumb[K] - LastThumb[K]) > 40.f ? 1 : 0;
 		FrameDiffs.Add(100.f * Changed / Thumb.Num());
-		const FRotator Delta = (PendingRotation - LastFrameRotation).GetNormalized();
+		const FRotator Delta = (Note.Rotation - LastFrameRotation).GetNormalized();
 		FrameTurning.Add(FMath::Abs(Delta.Yaw) > 6.0 || FMath::Abs(Delta.Pitch) > 4.0);
 	}
 	LastThumb = MoveTemp(Thumb);
-	LastFrameRotation = PendingRotation;
+	LastFrameRotation = Note.Rotation;
 
 	// White sky: the mean of 3 x 3 pixels round each sky ray.
-	for (const FVector2D& UV : PendingSky)
+	for (const FVector2D& UV : Note.Sky)
 	{
 		const int32 CX = FMath::Clamp(FMath::RoundToInt32(UV.X * Width), 1, Width - 2);
 		const int32 CY = FMath::Clamp(FMath::RoundToInt32(UV.Y * Height), 1, Height - 2);
@@ -1369,6 +1367,18 @@ void AOsdsPreflight::OnFrame(int32 Width, int32 Height, const TArray<FColor>& Pi
 		SkyWhite += L / 9.f >= OsdsPreflightRules::WhiteLuma ? 1 : 0;
 		++Stats.SkySamples;
 	}
+
+	// The JPEG on a worker thread, and the buffer moved to it (no copy): the game thread never waits for the encode.
+	const FString JpegPath = FPaths::Combine(OutputDir, TEXT("frames"), FString::Printf(TEXT("%05d.jpg"), ThisFrame));
+	JpegJobs.Add(Async(EAsyncExecution::ThreadPool, [Buffer = MoveTemp(Frame), Width, Height, JpegPath]()
+	{
+		TArray64<uint8> Jpeg;
+		if (FImageUtils::CompressImage(Jpeg, TEXT("jpg"), FImageView(Buffer.GetData(), Width, Height), 85))
+		{
+			FFileHelper::SaveArrayToFile(Jpeg, *JpegPath);
+		}
+	}));
+	JpegJobs.RemoveAll([](const TFuture<void>& Job) { return Job.IsReady(); });
 }
 
 void AOsdsPreflight::Finish()
@@ -1381,10 +1391,10 @@ void AOsdsPreflight::Finish()
 		return;
 	}
 	Stage = EStage::Done;
-	if (FrameHandle.IsValid())
+	FrameGrab.Stop();
+	if (FrameGate.Lost() > 0)
 	{
-		UGameViewportClient::OnScreenshotCaptured().Remove(FrameHandle);
-		FrameHandle.Reset();
+		UE_LOG(LogOsdsPreflight, Warning, TEXT("Pre-flight: %d frame(s) never came back from the readback"), FrameGate.Lost());
 	}
 	using namespace OsdsPreflightRules;
 	Stats.DistanceM = static_cast<float>(PathM);

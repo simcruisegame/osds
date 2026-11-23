@@ -4,6 +4,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Gameplay/OsdsFrameGrab.h"
 #include "Gameplay/OsdsPreflight.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
@@ -145,8 +146,36 @@ bool FOsdsPreflightFrameWiringTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the drive tick records every frame"), Source.Contains(TEXT("FrameTimes.Record(")));
 	TestTrue(TEXT("the game thread time is read"), Source.Contains(TEXT("GGameThreadTime")));
 	TestTrue(TEXT("the result is filled from the recorder"), Source.Contains(TEXT("FrameTimes.Fill(Stats)")));
+	TestFalse(TEXT("Preflight no longer stalls the game thread with FScreenshotRequest"), Source.Contains(TEXT("FScreenshotRequest")));
+	TestTrue(TEXT("frames come from the async grabber"), Source.Contains(TEXT("FrameGrab.Request(")));
 	TestFalse(TEXT("frames a screenshot touched are not left out of the timing"), Source.Contains(TEXT("CaptureSkip")));
 	TestTrue(TEXT("the json carries the game-thread p95"), Source.Contains(TEXT("game_p95_ms")));
+	return true;
+}
+
+// Issue #69: the frame is read back at a size the run chooses, and one request is in flight at a time.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPreflightGrabSizeTest, "OSDS.Gameplay.Preflight.GrabSize", OsdsPreflightTest::Flags)
+bool FOsdsPreflightGrabSizeTest::RunTest(const FString& Parameters)
+{
+	using namespace OsdsFrameGrab;
+	TestEqual(TEXT("1080p is left alone at the default width"), FitSize(FIntPoint(1920, 1080), DefaultMaxWidth), FIntPoint(1920, 1080));
+	TestEqual(TEXT("ultrawide is scaled to the cap, aspect kept"), FitSize(FIntPoint(3440, 1440), DefaultMaxWidth), FIntPoint(1920, 804));
+	TestEqual(TEXT("a smaller window is never scaled up"), FitSize(FIntPoint(1280, 720), DefaultMaxWidth), FIntPoint(1280, 720));
+	TestEqual(TEXT("0 means native"), FitSize(FIntPoint(3440, 1440), 0), FIntPoint(3440, 1440));
+	const FIntPoint Odd = FitSize(FIntPoint(1001, 563), 0);
+	TestTrue(TEXT("sides are even for the encoder"), (Odd.X % 2) == 0 && (Odd.Y % 2) == 0);
+	TestEqual(TEXT("a degenerate window still gives a picture size"), FitSize(FIntPoint(0, 0), 1280), FIntPoint(2, 2));
+
+	FOsdsGrabGate Gate;
+	TestTrue(TEXT("first request is allowed"), Gate.CanRequest(0.0));
+	Gate.Requested(0.0);
+	TestFalse(TEXT("no second request while one is in flight"), Gate.CanRequest(0.5));
+	Gate.Delivered();
+	TestTrue(TEXT("allowed again once it is delivered"), Gate.CanRequest(0.6));
+	Gate.Requested(1.0);
+	TestFalse(TEXT("still waiting inside the timeout"), Gate.CanRequest(1.0 + FOsdsGrabGate::TimeoutS - 0.1));
+	TestTrue(TEXT("a lost request is given up after the timeout"), Gate.CanRequest(1.0 + FOsdsGrabGate::TimeoutS + 0.1));
+	TestEqual(TEXT("and counted"), Gate.Lost(), 1);
 	return true;
 }
 
