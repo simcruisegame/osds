@@ -4,7 +4,7 @@ This is the result of the 2026-11-23 retrospective. Read [ask-matt](https://www.
 
 ## The flow
 
-1. **Grill.** The Owner types `/grill-with-docs`, the agent asks, and the **Owner answers**: decisions are the Owner's, facts are the agent's. Every settled term goes into `GLOSSARY.md`, and every hard-to-reverse decision into `docs/adr/`. An agent never answers its own grilling questions.
+1. **Grill.** The Owner types `/grill-with-docs`, the agent asks, and the **Owner answers**: decisions are the Owner's, facts are the agent's. Every settled term goes into `GLOSSARY.md`, and every hard-to-reverse decision into `docs/adr/`. An agent never answers its own grilling questions. **Exception (Owner, 2026-11-23):** the Owner has delegated the Owner's role to the Coordinator session for grills, ticket approvals and the daily retro. When standing in, the Coordinator must first open fresh Ultra frames of the area (and get an `art-director` review) and ground each answer in what the frames show, so that what a player would notice comes from the frames rather than from the Owner pointing it out later.
 2. **Spec.** `/to-spec`, typed in the same context window as the grill, publishes to GitHub after agreeing the test seams.
 3. **Tickets.** `/to-tickets #<spec>`, typed in the same window. The Owner approves the breakdown at its quiz step. Tickets are never filed by hand: hand-filed tickets lose their blocking edges and their sizing.
 4. **Build.** **One ticket, one fresh session.** That session's first message is `/implement #<ticket>`. A ticket heading past about 100k tokens is too big: stop and split it.
