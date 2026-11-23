@@ -45,7 +45,7 @@ Start-Sleep -Milliseconds 500
 Assert-That (-not (Test-GpuTestLockHeld)) 'a lock whose holder ended is free'
 $script:GpuTestLockName = $Name
 
-# The build lock: held -> waits and names the holder; holder ended -> proceeds (issue #142).
+# The build lock: held -> waits and names the holder at once; holder ended -> proceeds (issue #142).
 $BName = "Global\OsdsBuildSelfTest$PID"
 $BHolder = Join-Path ([IO.Path]::GetTempPath()) "osds-build-lock-$PID.txt"
 Remove-Item $BHolder -ErrorAction SilentlyContinue
@@ -57,37 +57,77 @@ $Holder = Start-Job -ArgumentList $BName, $BHolder -ScriptBlock {
     $M = New-Object System.Threading.Mutex($false, $N)
     [void]$M.WaitOne()
     "pid $PID, other session, since now" | Set-Content $H
-    Start-Sleep -Seconds 6
+    Start-Sleep -Seconds 7
 }
 Start-Sleep -Seconds 2
-$Waited = Get-Date
-$Out = Enter-BuildLock -Name $BName -HolderFile $BHolder -PollSeconds 1 -TimeoutMinutes 0.05 -Why 'self-test' 6>&1 | Out-String
-Assert-That ($Out -match 'Waiting for build lock held by pid \d+, other session') 'a held build lock: waits and names the holder'
-Assert-That ($Out -match 'Gave up' -and -not $script:BuildLock) 'a build lock that stays held is given up, not taken'
+# 0.01 min = 0.6 s: a fractional timeout must not round down to "wait forever" or to zero tries.
+$Out = Enter-BuildLock -Name $BName -HolderFile $BHolder -PollSeconds 0.3 -TimeoutMinutes 0.01 -Why 'self-test' 6>&1 | Out-String
+Assert-That ($Out -match 'Waiting for build lock held by pid \d+, other session') 'a held build lock: says so at once and names the holder'
+Assert-That ($Out -match 'Gave up' -and -not $script:BuildLock) 'a build lock that stays held is given up after a fractional-minute timeout, not taken'
 $Out2 = Enter-BuildLock -Name $BName -HolderFile $BHolder -PollSeconds 1 -TimeoutMinutes 1 -Why 'self-test' 6>&1 | Out-String
 Assert-That ($Out2 -match 'Waiting for build lock' -and $Out2 -match 'Build lock taken' -and $script:BuildLock) 'holder ended: the waiting build proceeds'
 Exit-BuildLock $BHolder
 Assert-That ((Get-BuildLockHolder $BHolder) -eq 'unknown') 'a released build lock names nobody'
 Stop-Job $Holder -ErrorAction SilentlyContinue; Remove-Job $Holder -Force -ErrorAction SilentlyContinue
 Remove-Item $BHolder -ErrorAction SilentlyContinue
-Assert-That (Test-BuildRefusedByOtherBuild @('Build.bat is already running, waiting for existing script to terminate...') 4) 'exit 4 with "already running" is a queue case'
-Assert-That (-not (Test-BuildRefusedByOtherBuild @('error C2065: undeclared identifier') 6)) 'a compile error is a real failure'
-Assert-That (-not (Test-BuildRefusedByOtherBuild @('already running') 0)) 'a successful build is never retried'
 
-# A binary older than Source\ is stale (Preflight refuses it).
+# Only exit 4 with the "already running" line is a queue case; any other failure is real.
+$Running = @('Build.bat is already running, waiting for existing script to terminate...')
+Assert-That (Test-BuildRefusedByOtherBuild $Running 4) 'exit 4 with "already running" is a queue case'
+Assert-That (-not (Test-BuildRefusedByOtherBuild ($Running + 'error C2065: undeclared identifier') 6)) 'a compile error that also prints "already running" is a real failure'
+Assert-That (-not (Test-BuildRefusedByOtherBuild $Running 1)) '"already running" with exit 1 is a real failure'
+Assert-That (-not (Test-BuildRefusedByOtherBuild @('error C2065') 4)) 'exit 4 without "already running" is a real failure'
+Assert-That (-not (Test-BuildRefusedByOtherBuild $Running 0)) 'a successful build is never retried'
+
+# Invoke-LockedBuild with a fake Build.bat: retries the queue case, returns a real failure at once.
+$Fake = Join-Path ([IO.Path]::GetTempPath()) "osds-fake-build-$PID.cmd"
+$Count = Join-Path ([IO.Path]::GetTempPath()) "osds-fake-build-$PID.count"
+Remove-Item $Count, "$Count.seen" -ErrorAction SilentlyContinue
+Set-Content -Encoding ascii $Fake @"
+@echo off
+echo x>>"$Count"
+if not "%1"=="queue" ( echo error C2065: undeclared identifier & exit /b 6 )
+if exist "$Count.seen" exit /b 0
+echo seen>"$Count.seen"
+echo Build.bat is already running, waiting for existing script to terminate...
+exit /b 4
+"@
+$script:BuildLockName = "Global\OsdsBuildSelfTestB$PID"; $script:BuildLockHolderFile = $BHolder
+$Code = Invoke-LockedBuild -BuildBat $Fake -BuildArgs @('queue') -Why 'self-test' -TimeoutMinutes 1 -RetrySeconds 0.2 6>&1 | Where-Object { $_ -is [int] }
+Assert-That ($Code -eq 0 -and (@(Get-Content $Count).Count -eq 2)) 'a build refused once by another Build.bat is tried again and passes'
+Remove-Item $Count -ErrorAction SilentlyContinue
+$Code = Invoke-LockedBuild -BuildBat $Fake -BuildArgs @('fail') -Why 'self-test' -TimeoutMinutes 1 -RetrySeconds 0.2 6>&1 | Where-Object { $_ -is [int] }
+Assert-That ($Code -eq 6 -and (@(Get-Content $Count).Count -eq 1) -and -not $script:BuildLock) 'a real build failure is returned at once, once, and frees the lock'
+Remove-Item $Fake, $Count, "$Count.seen", $BHolder -ErrorAction SilentlyContinue
+
+# A binary older than the compiled sources is stale (Preflight refuses it); other files do not count.
 $Tmp = Join-Path ([IO.Path]::GetTempPath()) "osds-stale-$PID"
 New-Item -ItemType Directory -Force (Join-Path $Tmp 'Source\OSDS'), (Join-Path $Tmp 'Binaries\Win64') | Out-Null
 $Dll = Join-Path $Tmp 'Binaries\Win64\UnrealEditor-OSDS.dll'
 $Cpp = Join-Path $Tmp 'Source\OSDS\A.cpp'
-Set-Content $Cpp 'x'; Set-Content $Dll 'x'
+$Doc = Join-Path $Tmp 'Source\OSDS\notes.md'
+Set-Content $Cpp 'x'; Set-Content $Dll 'x'; Set-Content $Doc 'x'
 (Get-Item $Cpp).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(-10)
 (Get-Item $Dll).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(-5)
+(Get-Item $Doc).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(-20)
 Assert-That (-not (Get-StaleBinary -Root $Tmp).Stale) 'a binary newer than Source is current'
+(Get-Item $Doc).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(-1)
+Assert-That (-not (Get-StaleBinary -Root $Tmp).Stale) 'a newer .md under Source does not make the binary stale'
+$Json = Join-Path $Tmp 'Source\OSDS\data.json'; Set-Content $Json 'x'
+Assert-That (-not (Get-StaleBinary -Root $Tmp).Stale) 'a newer .json under Source does not make the binary stale'
 (Get-Item $Cpp).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(-1)
 $St = Get-StaleBinary -Root $Tmp
-Assert-That ($St.Stale -and $St.Reason -match 'older than' -and $St.Newest -eq $Cpp) 'a source file newer than the binary makes it stale'
+Assert-That ($St.Stale -and $St.Newest -eq $Cpp -and $St.Reason -match 'A\.cpp' -and $St.Reason -match 'UnrealEditor-OSDS\.dll') 'a .cpp newer than the binary makes it stale, and the reason names both'
+(Get-Item $Cpp).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(-10)
+$Build = Join-Path $Tmp 'Source\OSDS\OSDS.Build.cs'; Set-Content $Build 'x'
+Assert-That ((Get-StaleBinary -Root $Tmp).Stale) 'a newer .Build.cs makes it stale'
+Remove-Item $Build
 Remove-Item $Dll
 Assert-That ((Get-StaleBinary -Root $Tmp).Stale) 'a missing binary is stale'
+Set-Content $Dll 'x'
+Remove-Item (Join-Path $Tmp 'Source') -Recurse -Force
+$Gone = Get-StaleBinary -Root $Tmp
+Assert-That ($Gone.Stale -and $Gone.Reason -match 'cannot read') 'an unreadable Source folder fails closed with a message'
 Remove-Item $Tmp -Recurse -Force
 
 # Preflight's window size.
@@ -108,8 +148,6 @@ Assert-That ($Pre -match "\[string\]\`$Resolution = '1920x1080'") 'preflight.ps1
 Assert-That ($Pre -match 'Get-TestResolution \$Resolution' -and $Pre -notmatch '@\(Get-NativeResolution\)') 'preflight.ps1 uses Get-TestResolution, not the native size'
 Assert-That ($Pre -match 'timed_frames') 'preflight.ps1 fails a run that timed no frames'
 $Check = Get-Content (Join-Path $PSScriptRoot 'check.ps1') -Raw
-Assert-That ($Check -match 'Enter-BuildLock' -and $Check -match 'Exit-BuildLock') 'check.ps1 builds under the build lock'
-Assert-That ($Pre -match 'Get-StaleBinary' -and $Pre -match 'AllowStaleBinary') 'preflight.ps1 refuses a binary older than Source'
 Assert-That ($Check -match 'Test-GpuTestLockHeld' -and $Check -match '-MaxParallelActions=' -and $Check -match 'PriorityClass') 'check.ps1 throttles while a GPU test runs'
 
 if ($Failed -gt 0) { Write-Host "$Failed helper test(s) failed."; exit 1 }

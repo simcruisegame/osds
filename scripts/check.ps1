@@ -147,38 +147,22 @@ if (-not $NoBuild) {
             Write-Host 'NO BUILD WAS MADE: scripts\preflight.ps1 will refuse to run on the old binary until a build succeeds.'
             throw "Only $FreeGB GB free on $($Drive.Name): (a build needs about 12 GB). Free space first: scripts\clean-lane.ps1, or remove finished worktrees (git worktree remove)."
         }
-        $Impact = Get-LowImpactSettings -GpuTestRunning (Test-GpuTestLockHeld)
         $BuildArgs = @('OSDSEditor', 'Win64', 'Development', "-Project=$Project", '-WaitMutex', '-NoHotReloadFromIDE')
-        if ($Impact.Throttle) {
-            $BuildArgs += "-MaxParallelActions=$($Impact.MaxParallelActions)"
-            Write-Host "A GPU test is running: building at $($Impact.Priority) priority with at most $($Impact.MaxParallelActions) parallel actions."
-        }
-        # One build at a time on this PC: queue behind another session's build instead of
-        # failing with "Build.bat is already running" (exit 4). A real build failure still fails.
-        $LockStart0 = Get-Date
-        if (-not (Enter-BuildLock -TimeoutMinutes $LockTimeoutMinutes -Why "build on $Root")) { $Timing.LockWait = ((Get-Date) - $LockStart0).TotalSeconds; Write-CheckTime 'build-lock-timeout'; exit 1 }
-        $BuildStart = Get-Date
-        $BuildExit = 0
-        try {
+        # One build at a time on this PC: queue behind another session's build instead of failing
+        # with "Build.bat is already running" (exit 4). A real build failure still fails. The GPU-test
+        # throttle is read after the wait, since a game may have started or ended meanwhile (issue #69).
+        $Throttle = {
+            $Impact = Get-LowImpactSettings -GpuTestRunning (Test-GpuTestLockHeld)
             Set-CheckImpact $Impact
-            $BuildDeadline = (Get-Date).AddMinutes($LockTimeoutMinutes)
-            while ($true) {
-                Write-Host 'Building OSDSEditor (Win64 Development)...'
-                $BuildOut = @()
-                & $BuildBat @BuildArgs | ForEach-Object { Write-Host $_; $BuildOut += [string]$_ }
-                $BuildExit = $LASTEXITCODE
-                # A Build.bat started outside this script (an editor, another tool) can still hold Unreal's own lock.
-                if ((Test-BuildRefusedByOtherBuild $BuildOut $BuildExit) -and (Get-Date) -lt $BuildDeadline) {
-                    Write-Host "Waiting for build lock held by another Build.bat (exit $BuildExit); trying again in 30 s."
-                    Start-Sleep -Seconds 30
-                    continue
-                }
-                break
+            if ($Impact.Throttle) {
+                Write-Host "A GPU test is running: building at $($Impact.Priority) priority with at most $($Impact.MaxParallelActions) parallel actions."
+                "-MaxParallelActions=$($Impact.MaxParallelActions)"
             }
         }
-        finally { Set-CheckImpact (Get-LowImpactSettings -GpuTestRunning $false); Exit-BuildLock }
+        $BuildStart = Get-Date
+        try { $BuildExit = Invoke-LockedBuild -BuildBat $BuildBat -BuildArgs $BuildArgs -Why "build on $Root" -TimeoutMinutes $LockTimeoutMinutes -AfterLock $Throttle }
+        finally { Set-CheckImpact (Get-LowImpactSettings -GpuTestRunning $false) }
         $Timing.Build = ((Get-Date) - $BuildStart).TotalSeconds
-        $Timing.LockWait = ($BuildStart - $LockStart0).TotalSeconds
         if ($BuildExit -ne 0) { Write-Host 'BUILD FAILED'; Remove-Item $BuildStamp -ErrorAction SilentlyContinue; Write-CheckTime 'build-failed'; exit 1 }
         # Hash again after the build, in case a file changed while it ran (then the next run builds).
         New-Item -ItemType Directory -Force (Split-Path $BuildStamp) | Out-Null
