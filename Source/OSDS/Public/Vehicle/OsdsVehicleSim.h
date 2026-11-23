@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Templates/Function.h"
 #include "Vehicle/CarDefinition.h"
+#include "Vehicle/OsdsDifferential.h"
 
 /**
  * OSDS vehicle dynamics, independent of any engine object.
@@ -269,6 +270,7 @@ private:
 	double MotorTorqueNm(double Throttle, double Ratio, double SignDirection, double SpeedMps);
 
 	FOsdsCarDefinition Car;
+	FOsdsDifferential Differential;
 	FVector3d MountsLocalM[4];
 	FVector3d CenterOfMassLocalM = FVector3d::ZeroVector;
 	FVector3d ReferenceOriginLocalM = FVector3d::ZeroVector;
