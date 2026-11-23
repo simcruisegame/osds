@@ -42,3 +42,13 @@ Commons photographs: `python lab/realism/commons-near.py LAT LON [RADIUS_M]` lis
 | dragon | [Tail of the Dragon 2](https://commons.wikimedia.org/wiki/File:Tail_of_the_Dragon_2.jpg) (Wikimedia Commons; US 129, 18 April 2006) | CC BY 2.0 |
 | bixby | [Bixby Creek Bridge juli 2016](https://commons.wikimedia.org/wiki/File:Bixby_Creek_Bridge_juli_2016.jpg) (Wikimedia Commons; CA-1, 17 July 2016) | CC0 |
 | lummus | [Panoramax 4b6d216b](https://panoramax.xyz/#focus=pic&pic=4b6d216b-ae1c-48a8-b2ae-5d9558334f18), MatthiasMatthias | CC BY-SA 4.0 |
+
+### 3.0 pose set (20 poses)
+
+`poses.json` holds 12 fixed places (`"set": "fixed"`) and 8 seeded Random US places (`"set": "random"`, seed 30). Every pose is the position of a licensed Panoramax or Commons photograph, so its link, author and licence are in the file. Tools:
+
+- `python lab/realism/pick-poses.py fixed|random|near ...` finds Panoramax frames (daylight, free licence, from a street sequence). `random --seed N --exclude poses.json` draws the Random US set again for a new seed.
+- `python lab/realism/pano-view.py ID OUT.jpg` cuts a flat view out of a 360-degree frame; `realism.ps1` does it for poses whose photo has a `view`.
+- `scriptsealism.ps1 -Pose NAME` runs one pose; leave it out for all 20 (about 20 game starts: queue it on the GPU lock and do not run it while driving tests need the GPU).
+
+Photographs are 360-degree cuts or phone frames from many cameras, so tone and sky compare in kind, not to the point; judge the change between builds at the same pose.

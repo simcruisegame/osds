@@ -60,6 +60,7 @@ $Captures = Join-Path $Work "captures\$Stamp"
 New-Item -ItemType Directory -Force $Photos, $Captures | Out-Null
 
 # 1. The reference photographs (cached; links only in git).
+$Skip = @()
 foreach ($P in $Poses) {
     $Photo = Join-Path $Photos "$($P.name).jpg"
     if (Test-Path $Photo) { continue }
@@ -71,13 +72,24 @@ foreach ($P in $Poses) {
         continue
     }
     if ($P.photo.source -ne 'panoramax') { Write-Host "Put the photograph for $($P.name) at $Photo"; continue }
+    if ($P.photo.view) {
+        # A 360-degree frame: cut the flat view at the pose's heading (lab\realism\pano-view.py).
+        Write-Host "Cutting Panoramax 360 $($P.photo.id) for $($P.name)"
+        $V = $P.photo.view
+        & uv run --quiet --no-project --with numpy --with pillow python (Join-Path $Root 'lab\realism\pano-view.py') $P.photo.id $Photo `
+            --yaw $V.yaw --pitch $V.pitch --hfov $V.hfov --width $P.width --height $P.height | Out-Host
+        if (-not (Test-Path $Photo)) { Write-Host "Could not cut the photograph for $($P.name): skipped."; $Skip += $P.name; continue }
+        continue
+    }
     if (-not (Get-Command bun -ErrorAction SilentlyContinue)) { Write-Host 'Bun is needed to fetch the photographs (https://bun.com).'; exit 2 }
     Write-Host "Fetching Panoramax $($P.photo.id) for $($P.name)"
     & bun (Join-Path $Root 'lab\taste\scripts\panoramax-near.mjs') get $P.photo.id $Photos | Out-Null
     $Fetched = Join-Path $Photos "pano-$($P.photo.id).jpg"
-    if (-not (Test-Path $Fetched)) { Write-Host "Could not fetch the photograph for $($P.name)."; exit 1 }
+    if (-not (Test-Path $Fetched)) { Write-Host "Could not fetch the photograph for $($P.name): skipped."; $Skip += $P.name; continue }
     Move-Item -Force $Fetched $Photo
 }
+
+if ($Skip.Count) { $Poses = @($Poses | Where-Object { $Skip -notcontains $_.name }); Write-Host "Skipped (photograph host down): $($Skip -join ', ')" }
 
 # 2. The build.
 if (-not $NoBuild) {

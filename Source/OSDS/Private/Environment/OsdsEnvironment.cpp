@@ -13,6 +13,7 @@
 #include "Environment/OsdsDaylightModel.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 
@@ -423,6 +424,12 @@ void AOsdsEnvironment::SetArtificialIlluminanceLux(double Lux)
 	ApplyExposure();
 }
 
+// Motion blur strength: 0 = off (the 3.0 default: it smeared near objects at 28 mph, #99), 1 = the 2.x look.
+static TAutoConsoleVariable<float> CVarMotionBlurScale(
+	TEXT("osds.MotionBlur.Scale"), 0.0f,
+	TEXT("Motion blur strength, 0 (off, default) to 2; 1 is the 2.x look. Options #68 exposes it."),
+	ECVF_Default);
+
 void AOsdsEnvironment::ApplyExposure()
 {
 	if (!Camera)
@@ -488,7 +495,7 @@ void AOsdsEnvironment::ApplyExposure()
 	S.bOverride_MotionBlurTargetFPS = true;
 	S.MotionBlurTargetFPS = 0;
 	S.bOverride_MotionBlurAmount = true;
-	S.MotionBlurAmount = 0.15f;
+	S.MotionBlurAmount = 0.15f * FMath::Clamp(CVarMotionBlurScale.GetValueOnGameThread(), 0.0f, 2.0f);
 	S.bOverride_MotionBlurMax = true;
 	S.MotionBlurMax = 1.0f;
 
