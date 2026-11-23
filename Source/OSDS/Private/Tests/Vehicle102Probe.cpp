@@ -38,6 +38,7 @@ namespace
 		double Dt = 1.0 / 360.0;
 		double TargetSpeed = 27.8;
 		double RunS = 30.0;
+		double StartSpeed = 0.0;
 		double ControlHz = 0.0;   // 0: every step; else zero-order hold
 		double RangeRad = OsdsUnits::ToRadians(8.0);
 		int32 State = 0;
@@ -63,18 +64,19 @@ namespace
 			{
 				if (T >= 0.5)
 				{
-					C.Body.LinearVelocityMps = Forward * TargetSpeed;
+					const double V0 = StartSpeed > 0.0 ? StartSpeed : TargetSpeed;
+					C.Body.LinearVelocityMps = Forward * V0;
 					if (Mode == E102Mode::RobotOffsetStart) C.Body.PositionM.Y += 1.5;
 					C.bBodyStateChanged = true;
-					for (FOsdsWheelState& W : C.Sim.State.Wheels) W.AngularSpeedRadPerSecond = TargetSpeed / C.Sim.GetTireRadiusM();
+					for (FOsdsWheelState& W : C.Sim.State.Wheels) W.AngularSpeedRadPerSecond = V0 / C.Sim.GetTireRadiusM();
 					const FOsdsCarDefinition& Car = C.Sim.GetCar();
 					int32 Gear = Car.ForwardGearRatios.Num() - 1;
 					for (int32 G = 0; G < Car.ForwardGearRatios.Num(); ++G)
 					{
-						if (TargetSpeed / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[G] * Car.FinalDriveRatio * 60.0 / Tau102 < 4500.0) { Gear = G; break; }
+						if (V0 / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[G] * Car.FinalDriveRatio * 60.0 / Tau102 < 4500.0) { Gear = G; break; }
 					}
 					C.Sim.State.Gear = Gear;
-					C.Sim.State.EngineOmegaRadPerSecond = TargetSpeed / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[Gear] * Car.FinalDriveRatio;
+					C.Sim.State.EngineOmegaRadPerSecond = V0 / C.Sim.GetTireRadiusM() * Car.ForwardGearRatios[Gear] * Car.FinalDriveRatio;
 					C.Sim.State.EngineRpm = C.Sim.State.EngineOmegaRadPerSecond * 60.0 / Tau102;
 					State = 1; T = 0.0;
 					LastHeading = FMath::Atan2(Forward.Y, Forward.X);
@@ -147,10 +149,10 @@ namespace
 		}
 	};
 
-	F102Result Run102(const FOsdsCarDefinition& Car, E102Mode Mode, double Kmh, double RunS, double ControlHz)
+	F102Result Run102(const FOsdsCarDefinition& Car, E102Mode Mode, double Kmh, double RunS, double ControlHz, double StartKmh = 0.0)
 	{
 		TSharedRef<F102Driver> D = MakeShared<F102Driver>();
-		D->Mode = Mode; D->TargetSpeed = Kmh / 3.6; D->RunS = RunS; D->ControlHz = ControlHz;
+		D->Mode = Mode; D->TargetSpeed = Kmh / 3.6; D->RunS = RunS; D->ControlHz = ControlHz; D->StartSpeed = StartKmh / 3.6;
 		FOsdsVehicleBenchWorld World(OsdsShippingFixedStepS);
 		if (!World.IsValid() || World.SpawnVehicle(Car, FVector3d(0.0, 0.0, 0.15), [D](FOsdsVehicleDriverContext& C) { D->Step(C); }) == nullptr) return D->R;
 		World.RunUntil([&D]() { return D->bDone.load(); }, RunS + 5.0);
@@ -175,19 +177,26 @@ bool FOsdsVehicleStab102::RunTest(const FString& Parameters)
 	if (!OsdsLoadBenchCar(*this, TEXT("nb2001_lowered"), Base)) return false;
 	TestFalse(TEXT("ESC off"), Base.bStabilityControlEnabled);
 
-	struct FCase { const TCHAR* Name; E102Mode Mode; double Kmh; double Hz; };
+	struct FCase { const TCHAR* Name; E102Mode Mode; double Kmh; double Hz; double Mu = 1.0; double StartKmh = 0.0; };
 	const FCase Cases[] = {
 		{ TEXT("pulses"), E102Mode::Pulses, 100.0, 0.0 },
 		{ TEXT("lanechange"), E102Mode::LaneChange, 100.0, 0.0 },
 		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 66.0, 0.0 },
 		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 100.0, 0.0 },
 		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 100.0, 45.0 },
-		{ TEXT("robot_straight"), E102Mode::Robot, 100.0, 45.0 },
+		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 100.0, 8.0 },
+		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 66.0, 8.0 },
+		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 40.0, 8.0, 0.7, 18.0 },
+		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 40.0, 45.0, 0.7, 18.0 },
+		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 100.0, 45.0, 0.7 },
+		{ TEXT("robot_offset"), E102Mode::RobotOffsetStart, 100.0, 8.0, 0.7 },
 	};
 	for (const FCase& Case : Cases)
 	{
-		const F102Result R = Run102(Base, Case.Mode, Case.Kmh, 45.0, Case.Hz);
-		Log102(*this, TEXT("baseline"), Case.Name, Case.Kmh, Case.Hz, R);
+		FOsdsCarDefinition Car = Base;
+		Car.TmeasyPeakMuX *= Case.Mu; Car.TmeasyPeakMuY *= Case.Mu; Car.TmeasySlideMuX *= Case.Mu; Car.TmeasySlideMuY *= Case.Mu;
+		const F102Result R = Run102(Car, Case.Mode, Case.Kmh, 45.0, Case.Hz, Case.StartKmh);
+		Log102(*this, Case.Mu < 1.0 ? TEXT("mu0.7") : TEXT("baseline"), Case.Name, Case.Kmh, Case.Hz, R);
 		if (!TestTrue(TEXT("completed"), R.bCompleted)) continue;
 		TestTrue(FString::Printf(TEXT("%s %.0f km/h stays stable (peak beta %.1f deg < 10)"), Case.Name, Case.Kmh, R.PeakBetaDeg), R.PeakBetaDeg < 10.0);
 	}
