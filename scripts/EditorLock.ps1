@@ -252,7 +252,8 @@ function Invoke-LockedBuild {
     )
     if (-not (Enter-BuildLock -TimeoutMinutes $TimeoutMinutes -Why $Why)) { return 1 }
     try {
-        $Extra = if ($AfterLock) { @(& $AfterLock) } else { @() }
+        # @() around the whole thing: a single returned string must stay a one-item array (splatting a string splats its characters).
+        $Extra = @(if ($AfterLock) { & $AfterLock })
         $Deadline = (Get-Date).AddMinutes($TimeoutMinutes)
         while ($true) {
             Write-Host 'Building OSDSEditor (Win64 Development)...'

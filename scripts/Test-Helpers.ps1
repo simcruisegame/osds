@@ -103,6 +103,7 @@ Remove-Item $Count, "$Count.seen" -ErrorAction SilentlyContinue
 Set-Content -Encoding ascii $Fake @"
 @echo off
 echo x>>"$Count"
+echo %* >"$Count.args"
 if not "%1"=="queue" ( echo error C2065: undeclared identifier & exit /b 6 )
 if exist "$Count.seen" exit /b 0
 echo seen>"$Count.seen"
@@ -115,7 +116,10 @@ Assert-That ($Code -eq 0 -and (@(Get-Content $Count).Count -eq 2)) 'a build refu
 Remove-Item $Count -ErrorAction SilentlyContinue
 $Code = Invoke-LockedBuild -BuildBat $Fake -BuildArgs @('fail') -Why 'self-test' -TimeoutMinutes 1 -RetrySeconds 0.2 6>&1 | Where-Object { $_ -is [int] }
 Assert-That ($Code -eq 6 -and (@(Get-Content $Count).Count -eq 1) -and -not $script:BuildLock) 'a real build failure is returned at once, once, and frees the lock'
-Remove-Item $Fake, $Count, "$Count.seen", $BHolder -ErrorAction SilentlyContinue
+Remove-Item $Count, "$Count.seen" -ErrorAction SilentlyContinue
+$Code = Invoke-LockedBuild -BuildBat $Fake -BuildArgs @('queue', 'A') -AfterLock { '-MaxParallelActions=4' } -Why 'self-test' -TimeoutMinutes 1 -RetrySeconds 0.2 6>&1 | Where-Object { $_ -is [int] }
+Assert-That ((Get-Content "$Count.args" -Raw).Trim() -eq 'queue A -MaxParallelActions=4') 'one extra argument from -AfterLock reaches Build.bat whole (not split into characters)'
+Remove-Item $Fake, $Count, "$Count.seen", "$Count.args", $BHolder -ErrorAction SilentlyContinue
 
 # A binary older than the compiled sources is stale (Preflight refuses it); other files do not count.
 $Tmp = Join-Path ([IO.Path]::GetTempPath()) "osds-stale-$PID"
