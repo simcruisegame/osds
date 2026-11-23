@@ -9,6 +9,7 @@
 #include "Environment/OsdsEnvironment.h"
 #include "Environment/OsdsEnvironmentSubsystem.h"
 #include "GameFramework/Pawn.h"
+#include "Gameplay/OsdsRobotThrottle.h"
 #include "Gameplay/OsdsGameMode.h"
 #include "Gameplay/OsdsPlayerController.h"
 #include "Gameplay/OsdsReview.h"
@@ -921,7 +922,33 @@ void AOsdsPreflight::DriveTick(AOsdsPlayerController* Player, float DeltaSeconds
 	const double Error = TargetMps - Speed;
 	if (Error > 0.0)
 	{
-		Throttle = static_cast<float>(FMath::Clamp(0.2 + 0.35 * Error, 0.0, 1.0));
+		// The pedal a careful driver gives: eased for the surface, wheelspin, a sliding rear and the steering (#102).
+		const FOsdsDriveTelemetry& Drive = Player->GetTelemetry();
+		FOsdsRobotThrottleInput In;
+		In.SpeedErrorMps = Error;
+		In.Stick = Stick;
+		In.PreviousThrottle = LastThrottle;
+		In.DeltaSeconds = DeltaSeconds;
+		double MinGrip = 1.0, PeakK = 0.1;
+		int32 Driven = 0;
+		for (int32 W = 0; W < 4; ++W)
+		{
+			const FOsdsDriveWheelTelemetry& Wh = Drive.Wheels[W];
+			if (Wh.bContact)
+			{
+				if (Wh.bDriven)
+				{
+					In.DrivenSlipRatio = FMath::Max(In.DrivenSlipRatio, FMath::Abs(Wh.SlipRatio));
+					PeakK = Wh.PeakSlipRatio > 0.0 ? Wh.PeakSlipRatio : PeakK;
+					++Driven;
+				}
+				MinGrip = FMath::Min(MinGrip, Wh.SurfaceGrip);
+				if (W >= 2) In.RearSlipAngleDeg = FMath::Max(In.RearSlipAngleDeg, FMath::Abs(FMath::RadiansToDegrees(Wh.SlipAngleRad)));
+			}
+		}
+		In.PeakSlipRatio = PeakK;
+		In.SurfaceGrip = MinGrip;
+		Throttle = static_cast<float>(OsdsRobotThrottle::Compute(In));
 	}
 	else if (Error < -0.8 && Speed > 0.5)
 	{
@@ -949,6 +976,16 @@ void AOsdsPreflight::DriveTick(AOsdsPlayerController* Player, float DeltaSeconds
 		if (SlipDeg > 4.0) Throttle = 0.f;
 		else if (Used > 0.6) Throttle = FMath::Min(Throttle, 0.55f);
 	}
+	{ // [DEBUG-102]
+		const FOsdsDriveTelemetry& D = Player->GetTelemetry();
+		UE_LOG(LogOsdsPreflight, Display, TEXT("[DEBUG-102] t %.3f dt %.4f v %.2f tgt %.1f tx %.0f ty %.0f cx %.0f cy %.0f look %.1f lane %.2f alpha %.2f ff %.2f int %.2f yerr %.3f yaw %.3f stick %+.2f thr %.2f brk %.2f gear %d rpm %.0f | k %.3f %.3f %.3f %.3f sa %.1f %.1f %.1f %.1f fz %.0f %.0f %.0f %.0f sk %d %d %d %d"),
+			GetWorld()->GetTimeSeconds(), DeltaSeconds, Speed, TargetMps, Target.X, Target.Y, Car.X, Car.Y, LookM, LaneM, FMath::RadiansToDegrees(Alpha), FeedForward, SteerIntegral, YawError, YawRate, Stick, Throttle, Brake, D.Gear, D.EngineSpeedRpm,
+			D.Wheels[0].SlipRatio, D.Wheels[1].SlipRatio, D.Wheels[2].SlipRatio, D.Wheels[3].SlipRatio,
+			FMath::RadiansToDegrees(D.Wheels[0].SlipAngleRad), FMath::RadiansToDegrees(D.Wheels[1].SlipAngleRad), FMath::RadiansToDegrees(D.Wheels[2].SlipAngleRad), FMath::RadiansToDegrees(D.Wheels[3].SlipAngleRad),
+			D.Wheels[0].NormalLoadN, D.Wheels[1].NormalLoadN, D.Wheels[2].NormalLoadN, D.Wheels[3].NormalLoadN,
+			(int)D.Wheels[0].SurfaceKind, (int)D.Wheels[1].SurfaceKind, (int)D.Wheels[2].SurfaceKind, (int)D.Wheels[3].SurfaceKind);
+	}
+	LastThrottle = Throttle;
 	TelemetryClock += DeltaSeconds;
 	if (TelemetryClock >= 0.25f)
 	{

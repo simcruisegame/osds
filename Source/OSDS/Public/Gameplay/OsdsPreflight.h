@@ -293,6 +293,7 @@ private:
 	/** The robot's felt yaw rate (low-passed) and its last stick, for a smooth hand. */
 	double SmoothedYawRate = 0.0;
 	float LastStick = 0.f;
+	float LastThrottle = 0.f;
 	/** Every drive frame's total and game-thread time; the rules judge those after the warm-up. */
 	FOsdsFrameTimes FrameTimes;
 	/** Every drive frame's real time (ms), for the log summary. */
