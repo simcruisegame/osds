@@ -70,6 +70,11 @@ public:
 	UPROPERTY()
 	TObjectPtr<UTexture2D> BlankTexture;
 
+	/** The road texture pool beyond AsphaltTexture (data/knowledge/surface/road.json), up to 4, and their mean luminances. */
+	UPROPERTY()
+	TArray<TObjectPtr<UTexture2D>> RoadPool;
+	FLinearColor RoadPoolMeans = FLinearColor(0.2f, 0.2f, 0.2f, 0.2f);
+
 	FLinearColor AsphaltMean = FLinearColor(0.2f, 0.2f, 0.2f);
 	FLinearColor GrassMean = FLinearColor(0.2f, 0.2f, 0.2f);
 	FLinearColor SandMean = FLinearColor(0.2f, 0.2f, 0.2f);

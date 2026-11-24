@@ -4,6 +4,8 @@ The short version of each release, newest first. Every release has full notes in
 
 ## 3.0 (in progress)
 
+**Asphalt that reads as a road, not a grey sheet** (#150): two polished wheel paths per lane, drip oil down the lane centre, ravelled lane edges, utility-cut patches, a pool of five photographed asphalts (Poly Haven, CC0) picked per 98 m stretch and per Tile, each Tile's own road age (lighter and chalkier when old and in dry climates), and chipped, dirty lane markings. The rules are the first Surface knowledge table, `data/knowledge/surface/road.json`, with the source of every number.
+
 **Motion blur is back:** the gentle 2.x motion blur (`osds.MotionBlur.Scale` now defaults to 1; set it to 0 to turn it off). Car captures still switch it off on purpose.
 
 **Bridges hold across tile seams:** a deck whose road row lost its bridge flag at a tile border (Mackinac) now continues at deck height instead of dropping to the water.

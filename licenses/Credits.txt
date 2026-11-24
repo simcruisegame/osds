@@ -37,6 +37,7 @@ https://creativecommons.org/licenses/by/4.0/
 Asphalt Floor and Kloofendal 48d Partly Cloudy from Poly Haven, CC0. https://polyhaven.com/license
 Grass Ground (data/art/ground/grass-detail.jpg, its diffuse map resized to 640 px) from Poly Haven, CC0. https://polyhaven.com/a/grass_ground
 Sandy Gravel 02 by Dario Barresi (data/art/ground/mineral-ground.png, maps resampled and packed) from Poly Haven, CC0. https://polyhaven.com/a/sandy_gravel_02
+Road texture pool (data/art/ground/road-asphalt_01, _03, _05, _06.jpg, 1K diffuse maps) from Poly Haven, CC0: Asphalt 01 and Asphalt 03 by Dario Barresi and Charlotte Baglioni, Asphalt 05 by Amal Kumar, Asphalt 06 by Jan Martens. https://polyhaven.com/a/asphalt_01
 Representative building facades from Free Urban Textures by Scouser, CC0.
 https://opengameart.org/content/free-urban-textures-buildings-apartments-shop-fronts
 Foliage derived from paramecij's vegetation base texture pack, CC0.

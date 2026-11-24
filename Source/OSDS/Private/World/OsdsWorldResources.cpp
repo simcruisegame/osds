@@ -1,6 +1,7 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "World/OsdsWorldResources.h"
+#include "World/OsdsSurfaceKnowledge.h"
 #include "Rendering/OsdsShaderSafety.h"
 
 #include "Async/ParallelFor.h"
@@ -461,15 +462,52 @@ const float3 W = float3(0.2126, 0.7152, 0.0722);
 FSC sc; // SeamCode
 float2 m = LP.xy * 0.01 + Anchor.xy;
 float meanL = max(dot(AsphaltMean.rgb, W), 0.001);
-float2 uv = m / sc.QP(2.6);
-float a = dot(Texture2DSample(Asphalt, AsphaltSampler, uv).rgb, W) / meanL;
-float ax = dot(Texture2DSample(Asphalt, AsphaltSampler, uv + float2(0.0012, 0.0)).rgb, W) / meanL;
-float ay = dot(Texture2DSample(Asphalt, AsphaltSampler, uv + float2(0.0, 0.0012)).rgb, W) / meanL;
+// The texture pool (Surface knowledge, data/knowledge/surface/road.json): a road stretch (97.9 m cells
+// on the wrapped world grid, so the choice continues across Tile borders) draws one of five
+// photographed asphalts, an orientation (four quarter turns) and a scale from its hash and the
+// Tile's PoolSeed; a second, half-cell-shifted draw takes over where a slow noise field says so, so
+// stretches meet along an organic line, never a straight seam. Each member is normalised by its mean.
+float2 uA, uAx, uAy, uB, uBx, uBy;
+float ixA, ixB, toneA, toneB;
+{
+	const float Pn = round(1664.0 / 97.0);
+	float2 ca = floor(m / (1664.0 / Pn)), cb = floor(m / (1664.0 / Pn) + 0.5);
+	float hA = sc.Hash(ca, RoadSeed * 977.0 + 1.0, Pn), hB = sc.Hash(cb, RoadSeed * 977.0 + 2.0, Pn);
+	float rA = sc.Hash(ca, RoadSeed * 977.0 + 3.0, Pn), rB = sc.Hash(cb, RoadSeed * 977.0 + 4.0, Pn);
+	float sA = sc.Hash(ca, RoadSeed * 977.0 + 5.0, Pn), sB = sc.Hash(cb, RoadSeed * 977.0 + 6.0, Pn);
+	ixA = min(floor(hA * 5.0), 4.0); ixB = min(floor(hB * 5.0), 4.0);
+	toneA = 0.9 + 0.2 * sc.Hash(ca, RoadSeed * 977.0 + 7.0, Pn); toneB = 0.9 + 0.2 * sc.Hash(cb, RoadSeed * 977.0 + 8.0, Pn);
+	float tA = lerp(1.9, 3.4, sA), tB = lerp(1.9, 3.4, sB);
+	float kA = floor(rA * 4.0), kB = floor(rB * 4.0);
+	float e = 0.003;
+	float2 pA = m / sc.QP(tA), pB = m / sc.QP(tB);
+	float2 eA = float2(e, 0.0) / sc.QP(tA), fA = float2(0.0, e) / sc.QP(tA), eB = float2(e, 0.0) / sc.QP(tB), fB = float2(0.0, e) / sc.QP(tB);
+	// quarter turn k: (x, y) -> (x, y), (-y, x), (-x, -y), (y, -x)
+	#define RP_TURN(k, v) ((k) < 0.5 ? (v) : ((k) < 1.5 ? float2(-(v).y, (v).x) : ((k) < 2.5 ? -(v) : float2((v).y, -(v).x))))
+	uA = RP_TURN(kA, pA) + hA * 7.0; uAx = RP_TURN(kA, pA + eA) + hA * 7.0; uAy = RP_TURN(kA, pA + fA) + hA * 7.0;
+	uB = RP_TURN(kB, pB) + hB * 7.0; uBx = RP_TURN(kB, pB + eB) + hB * 7.0; uBy = RP_TURN(kB, pB + fB) + hB * 7.0;
+	#undef RP_TURN
+}
+float2 dAx = ddx(uA), dAy = ddy(uA), dBx = ddx(uB), dBy = ddy(uB);
+float aA, axA, ayA, aB, axB, ayB;
+#define RP_L(T, S, uv, dx, dy) dot(Texture2DSampleGrad(T, S, uv, dx, dy).rgb, W)
+#define RP_PICK(ix, u0, ux, uy, dx, dy, a, a1, a2) 	[branch] if (ix < 0.5) { a = RP_L(Asphalt, AsphaltSampler, u0, dx, dy) / meanL; a1 = RP_L(Asphalt, AsphaltSampler, ux, dx, dy) / meanL; a2 = RP_L(Asphalt, AsphaltSampler, uy, dx, dy) / meanL; } 	else if (ix < 1.5) { a = RP_L(Pool1, Pool1Sampler, u0, dx, dy) / PoolMeans.x; a1 = RP_L(Pool1, Pool1Sampler, ux, dx, dy) / PoolMeans.x; a2 = RP_L(Pool1, Pool1Sampler, uy, dx, dy) / PoolMeans.x; } 	else if (ix < 2.5) { a = RP_L(Pool2, Pool2Sampler, u0, dx, dy) / PoolMeans.y; a1 = RP_L(Pool2, Pool2Sampler, ux, dx, dy) / PoolMeans.y; a2 = RP_L(Pool2, Pool2Sampler, uy, dx, dy) / PoolMeans.y; } 	else if (ix < 3.5) { a = RP_L(Pool3, Pool3Sampler, u0, dx, dy) / PoolMeans.z; a1 = RP_L(Pool3, Pool3Sampler, ux, dx, dy) / PoolMeans.z; a2 = RP_L(Pool3, Pool3Sampler, uy, dx, dy) / PoolMeans.z; } 	else { a = RP_L(Pool4, Pool4Sampler, u0, dx, dy) / PoolMeans.w; a1 = RP_L(Pool4, Pool4Sampler, ux, dx, dy) / PoolMeans.w; a2 = RP_L(Pool4, Pool4Sampler, uy, dx, dy) / PoolMeans.w; }
+RP_PICK(ixA, uA, uAx, uAy, dAx, dAy, aA, axA, ayA)
+RP_PICK(ixB, uB, uBx, uBy, dBx, dBy, aB, axB, ayB)
+#undef RP_PICK
+#undef RP_L
+float2 mixq = m / sc.QP(37.0);
+float mixn = dot(Texture2DSample(Asphalt, AsphaltSampler, mixq + 0.19).rgb, W) / meanL;
+float wB = smoothstep(0.88, 1.12, mixn + 0.35 * (sc.Hash(floor(m / sc.QP(41.0)), RoadSeed * 977.0 + 9.0, round(1664.0 / 41.0)) - 0.5));
+float a = lerp(aA, aB, wB), ax = lerp(axA, axB, wB), ay = lerp(ayA, ayB, wB);
+float stretchTone = lerp(toneA, toneB, wB);
+float stretchWarm = lerp(ixA, ixB, wB);
 float macro = dot(Texture2DSample(Asphalt, AsphaltSampler, m / sc.QP(23.0) + 0.41).rgb, W) / meanL;
 float macro2 = dot(Texture2DSample(Asphalt, AsphaltSampler, m / sc.QP(61.0) + 0.77).rgb, W) / meanL;
 float v = lerp(1.0, macro, 0.30) * lerp(1.0, macro2, 0.25);
-float fine = lerp(1.0, a, 0.45);
-float3 col = Tint.rgb * fine * v;
+float fine = lerp(1.0, a, lerp(0.38, 0.6, RoadAge));
+// Age (Pomerantz et al. 2000: new asphalt reflects about 0.05, worn 0.10 to 0.15) and the stretch's own tone.
+float3 col = Tint.rgb * RoadScale * fine * v * stretchTone;
 float3 gravel = float3(0.26, 0.23, 0.19) * lerp(1.0, a, 1.0);
 col = lerp(col, gravel, VC.r);
 Roughness = saturate(0.80 + 0.10 * (1.0 - a) + 0.05 * VC.r);
@@ -484,7 +522,7 @@ col = lerp(col, float3(0.40, 0.39, 0.36) * lerp(1.0, a, 0.25) * lerp(1.0, macro,
 col *= lerp(1.0, lerp(0.62, 0.45, concreteTrack), VC.b * track);
 Roughness = lerp(Roughness, lerp(0.86, 0.9, concreteTrack), track);
 Roughness = lerp(Roughness, 0.66, VC.b * track);
-// Sealed cracks ("tar snakes"): on the older stretches of a paved road, thin meandering lines of
+)HLSL" /* MSVC caps one literal at 16 KB */ R"HLSL(// Sealed cracks ("tar snakes"): on the older stretches of a paved road, thin meandering lines of
 // black crack sealant, a few metres apart. Drawn as the 0.5 contour of a two-octave value noise,
 // 2.4 cm wide, filtered by the pixel's footprint (coverage, not aliasing) and faded out where a
 // pixel covers more than a few centimetres, so they shimmer neither near nor far. Arithmetic only.
@@ -503,7 +541,7 @@ Roughness = lerp(Roughness, 0.66, VC.b * track);
 	#undef SC_VN
 	#undef SC_TH
 }
-// CARLA road decals, stamped by rule on a world-space grid so they hold still and need no
+)HLSL" /* MSVC caps one literal at 16 KB */ R"HLSL(// CARLA road decals, stamped by rule on a world-space grid so they hold still and need no
 // placement data: each 6 m cell may carry one stamp (alligator cracking, a crack-sealing patch, a
 // stain, or a long crack), turned and offset by the cell's hash, more of them on older stretches
 // (macro2, as the tar snakes) and none on the gravel edge. A stamp stays inside its cell.
@@ -553,7 +591,69 @@ if (RoadDecalsOn > 0.5)
 	}
 	Roughness = saturate(Roughness + decRough);
 }
-float3 g = float3(-(ax - a), -(ay - a), 0.0) * Bump;
+)HLSL" /* MSVC caps one literal at 16 KB */ R"HLSL(// Lane wear (Surface knowledge, road table): the ribbon gives each pixel its lane coordinate u (0..n
+// across the travelled lanes; UV1.x is the class's wear, 0 where there is no lane information).
+// Tyres polish and darken two wheel paths per lane, drip oil down the lane centre between them,
+// and leave the lane edges ravelled and lighter; the paths are filtered over the pixel so they
+// never shimmer. Strength scales with the road class and the Tile's road age.
+float bumpK = 1.0;
+{
+	float wear = UV1.x * lerp(0.55, 1.0, RoadAge) * (1.0 - VC.r) * (VA < 0.75 ? 0.0 : 1.0);
+	[branch] if (wear > 0.001)
+	{
+		float u = UV0.x, nl = UV0.y, lw = max(UV1.y, 0.5);
+		float inLane = smoothstep(-0.04, 0.04, u) * smoothstep(-0.04, 0.04, nl - u);
+		float p = frac(u);
+		float dl = abs(p - 0.5) * lw;
+		float fwl = max(fwidth(u) * lw, 1e-3);
+		float cw = WheelPath.x, hw = WheelPath.y + fwl, oh = WheelPath.z + fwl;
+		float wheel = exp(-pow((dl - cw) / hw, 2.0)) * inLane * saturate(1.0 - 0.35 * fwl);
+		// Oil: drips in patches along the lane (slow noise), never a continuous stripe.
+		float patch = smoothstep(0.35, 0.8, dot(Texture2DSample(Asphalt, AsphaltSampler, m / sc.QP(5.3) + 0.53).rgb, W) / meanL * 0.5 + 0.5 * dot(Texture2DSample(Asphalt, AsphaltSampler, m / sc.QP(1.7) + 0.11).rgb, W) / meanL - 0.3);
+		float oil = exp(-pow(dl / oh, 2.0)) * inLane * patch * saturate(1.0 - 0.5 * fwl);
+		// Ravelled edges: the outer lane edges and, weaker, the lane joints.
+		float outer = saturate(1.0 - min(u, nl - u) * lw / 0.45) * inLane;
+		float joint = smoothstep(0.42, 0.5, abs(p - 0.5)) * 0.35 * inLane;
+		float edge = max(outer, joint);
+		float k = wear;
+		col *= lerp(1.0, 0.78, wheel * k);
+		col *= lerp(1.0, 0.66, oil * k);
+		col *= 1.0 + 0.18 * edge * lerp(0.5, 1.0, RoadAge);
+		Roughness = saturate(Roughness - 0.10 * wheel * k - 0.14 * oil * k + 0.07 * edge);
+		bumpK = lerp(1.0, 0.45, saturate(wheel * k)) * lerp(1.0, 1.5, edge);
+		// Utility-cut patches (a trench dug and filled, about 1.2 m wide and 3 to 5 m long, lying along or across
+		// the lane): cells of 22 m, oriented by the road's own direction (the world gradient of u).
+		float2 dmx = ddx(m), dmy = ddy(m);
+		float det = dmx.x * dmy.y - dmx.y * dmy.x;
+		[branch] if (abs(det) > 1e-12 && inLane > 0.5)
+		{
+			float2 gm = float2(ddx(u) * dmy.y - ddy(u) * dmx.y, dmx.x * ddy(u) - dmy.x * ddx(u)) / det;
+			float2 ac = gm / max(length(gm), 1e-6), al = float2(-ac.y, ac.x);
+			const float Pn = round(1664.0 / 22.0);
+			float2 cell = floor(m / (1664.0 / Pn));
+			float h0 = sc.Hash(cell, RoadSeed * 977.0 + 21.0, Pn);
+			float chance = 0.10 * k * lerp(0.4, 1.4, RoadAge);
+			[branch] if (h0 < chance)
+			{
+				float h1 = sc.Hash(cell, RoadSeed * 977.0 + 22.0, Pn), h2 = sc.Hash(cell, RoadSeed * 977.0 + 23.0, Pn), h3 = sc.Hash(cell, RoadSeed * 977.0 + 24.0, Pn);
+				float2 ctr = (cell + 0.2 + 0.6 * float2(h1, h2)) * (1664.0 / Pn);
+				float2 q = float2(dot(m - ctr, al), dot(m - ctr, ac));
+				float2 hf = h3 < 0.5 ? float2(2.1, 0.62) : float2(0.62, 1.7);
+				float2 dd = abs(q) - hf;
+				float fp = max(length(fwidth(m)), 1e-4);
+				float inside = saturate(0.5 - max(dd.x, dd.y) / fp);
+				float seal = saturate(0.5 - (abs(max(dd.x, dd.y) + 0.02)) / fp) ;
+				float fresh = 1.0 - saturate(RoadAge * 1.2 * (0.4 + 0.6 * h1));
+				float tone = lerp(0.82, 0.55, fresh) * (0.9 + 0.2 * h2);
+				col = lerp(col, col * tone * lerp(1.0, 0.8, 1.0 - a), inside);
+				col = lerp(col, Tint.rgb * 0.3, seal * 0.85);
+				Roughness = lerp(Roughness, lerp(0.72, 0.9, 1.0 - fresh), inside);
+				bumpK *= lerp(1.0, 0.5, inside);
+			}
+		}
+	}
+}
+float3 g = float3(-(ax - a), -(ay - a), 0.0) * Bump * bumpK;
 // The AI detail kit (DetailKitCode): aggregate and cracks up close; the gravel edge is soil.
 {
 	FDK dk; float2 dn;
@@ -604,9 +704,21 @@ float meanL = max(dot(GrainMean.rgb, W), 0.001);
 float a = dot(Texture2DSample(Grain, GrainSampler, m / sc.QP(2.6)).rgb, W) / meanL;
 float worn = dot(Texture2DSample(Grain, GrainSampler, m / sc.QP(9.0) + 0.61).rgb, W) / meanL;
 float keep = saturate(0.55 + 0.45 * a) * saturate(0.8 + 0.2 * worn);
-Roughness = 0.6 + 0.2 * (1.0 - keep);
+// Worn markings (road table): thermoplastic and paint chip away in flakes, more on an older road, and the
+// bare asphalt shows through; the flakes are two octaves of the asphalt photograph (centimetres),
+// filtered by the pixel so they never shimmer. Dirt greys the rest.
+float px = max(length(fwidth(m)), 1e-4);
+float f1 = dot(Texture2DSample(Grain, GrainSampler, m / sc.QP(0.45) + 0.37).rgb, W) / meanL;
+float f2 = dot(Texture2DSample(Grain, GrainSampler, m / sc.QP(0.11) + 0.83).rgb, W) / meanL;
+float flake = f1 * 0.6 + f2 * 0.4 + 0.25 * (worn - 1.0);
+float chipT = lerp(0.62, 0.86, RoadAge);
+float chip = smoothstep(chipT - 0.1, chipT + 0.1, 1.0 - flake + 0.3 * RoadAge) * (1.0 - smoothstep(0.02, 0.12, px));
+float3 paint = VC.rgb * keep;
+paint = lerp(paint, paint * float3(0.82, 0.78, 0.72), 0.25 + 0.35 * RoadAge);
+paint = lerp(paint, float3(0.05, 0.05, 0.05), saturate(chip * (0.35 + 0.65 * RoadAge)));
+Roughness = lerp(0.6 + 0.2 * (1.0 - keep), 0.85, chip * RoadAge);
 Nrm = normalize(VN);
-return VC.rgb * keep;
+return paint;
 )HLSL");
 
 		const TCHAR* WaterCode = TEXT(R"HLSL(
@@ -1136,6 +1248,19 @@ return col;
 			AddInput(Custom, TEXT("Tint"), VectorParam(Material, TEXT("Tint"), FLinearColor(0.085f, 0.083f, 0.08f)));
 			AddInput(Custom, TEXT("Bump"), ScalarParam(Material, TEXT("Bump"), 0.25f));
 			AddInput(Custom, TEXT("Wet"), ScalarParam(Material, TEXT("Wet"), 0.f));
+			// The road table (OsdsSurface): lane coordinate and wear from the ribbon (UV0, UV1), the texture pool, the
+			// Tile's age, albedo scale and pool seed, the wheel path and oil strip widths.
+			AddInput(Custom, TEXT("UV0"), TexCoord(Material, 0));
+			AddInput(Custom, TEXT("UV1"), TexCoord(Material, 1));
+			AddInput(Custom, TEXT("Pool1"), TextureParam(Material, TEXT("Pool1"), DefaultTexture));
+			AddInput(Custom, TEXT("Pool2"), TextureParam(Material, TEXT("Pool2"), DefaultTexture));
+			AddInput(Custom, TEXT("Pool3"), TextureParam(Material, TEXT("Pool3"), DefaultTexture));
+			AddInput(Custom, TEXT("Pool4"), TextureParam(Material, TEXT("Pool4"), DefaultTexture));
+			AddInput(Custom, TEXT("PoolMeans"), VectorParam(Material, TEXT("PoolMeans"), FLinearColor(0.2f, 0.2f, 0.2f, 0.2f)));
+			AddInput(Custom, TEXT("RoadAge"), ScalarParam(Material, TEXT("RoadAge"), 0.5f));
+			AddInput(Custom, TEXT("RoadScale"), ScalarParam(Material, TEXT("RoadScale"), 1.f));
+			AddInput(Custom, TEXT("RoadSeed"), ScalarParam(Material, TEXT("RoadSeed"), 0.f));
+			AddInput(Custom, TEXT("WheelPath"), VectorParam(Material, TEXT("WheelPath"), FLinearColor(0.75f, 0.34f, 0.16f, 0.f)));
 			{
 				// CARLA's road decal masks (CC-BY 4.0, Static/FX/Decals/Road): alligator cracking, crack
 				// sealing, a stain and a single long crack, stamped along every road by rule in
@@ -1167,6 +1292,7 @@ return col;
 			Custom->Code = FString(SeamCode) + PaintCode;
 			AddInput(Custom, TEXT("Grain"), TextureParam(Material, TEXT("Grain"), DefaultTexture));
 			AddInput(Custom, TEXT("GrainMean"), VectorParam(Material, TEXT("GrainMean"), FLinearColor(0.2f, 0.2f, 0.2f)));
+			AddInput(Custom, TEXT("RoadAge"), ScalarParam(Material, TEXT("RoadAge"), 0.5f));
 			break;
 		case EOsdsTileLayer::Building:
 		case EOsdsTileLayer::Props:
@@ -1358,6 +1484,22 @@ void UOsdsWorldResources::Initialise()
 		return CreateTexture(this, Name, Pixels, W, H, true, true);
 	};
 	AsphaltTexture = LoadDetail(TEXT("data/art/ground/asphalt.jpg"), TEXT("T_OsdsAsphalt"), AsphaltMean);
+	// The road texture pool (Surface knowledge, road table): members 1..4 beyond the asphalt above; a missing file falls back
+	// to the asphalt, so the pool never breaks a road.
+	{
+		const TArray<FString>& Pool = OsdsSurface::PoolTextures();
+		float Means[4] = { 0.2f, 0.2f, 0.2f, 0.2f };
+		RoadPool.Reset();
+		for (int32 k = 0; k < 4; ++k)
+		{
+			FLinearColor Mean(0.2f, 0.2f, 0.2f);
+			UTexture2D* T = Pool.IsValidIndex(k + 1) ? LoadDetail(Pool[k + 1], *FString::Printf(TEXT("T_OsdsRoadPool%d"), k + 1), Mean) : nullptr;
+			if (!T) { T = AsphaltTexture; Mean = AsphaltMean; }
+			RoadPool.Add(T);
+			Means[k] = FMath::Max(0.001f, Mean.R * 0.2126f + Mean.G * 0.7152f + Mean.B * 0.0722f);
+		}
+		RoadPoolMeans = FLinearColor(Means[0], Means[1], Means[2], Means[3]);
+	}
 	GrassTexture = LoadDetail(TEXT("data/art/ground/grass-detail.jpg"), TEXT("T_OsdsGrass"), GrassMean);
 	SandTexture = LoadDetail(TEXT("data/art/ground/mineral-ground.png"), TEXT("T_OsdsSand"), SandMean);
 	// The AI detail kit (lab/detail-kit, docs/research/world-detail-methods.md): albedo ratios and
