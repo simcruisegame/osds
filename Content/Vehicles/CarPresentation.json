@@ -1010,6 +1010,53 @@
     "chevrolet"
    ]
   },
+  "porsche992": {
+   "model": "data/art/traffic/porsche992-318cfb72/scene.gltf",
+   "fit_note": "Fitted from the model's own geometry (python, ticket #47): the front is the model's -X end (manifest flip true); wheelbase 2.322 model units = 2.45 m, scale 1.055. All four wheels are one 'Rims' node, so the rig cuts them by the ground contacts and tyre surfaces (Rubber_Rough = tyre). The driver sits on the left (instrument cluster at vehicle y about -0.37 m, x about +0.25 m, z 0.73-0.81 m). STILL TO DO from frames: steering_wheel, dials (rpm, speed), role_areas for the lamps (glass shared with the windows), the remaining lettering (911, Carrera S, sills, dash, hub centre caps checked) and driver_eye.",
+   "credit": "\"Porsche 911 992 Carrera S\" by Nieve5677 (https://sketchfab.com/niev), CC BY 4.0",
+   "steering_ratio": 15.0,
+   "steering_ratio_source": "15.0:1 on centre, variable to about 12.25:1 off centre (Porsche 992 Carrera S, as recorded in lab/cars/porsche992-research.md).",
+   "paint": {
+    "name": "Carmine Red",
+    "base": "#a1141c",
+    "metallic": 0.0,
+    "base_roughness": 0.3,
+    "flake": 0.0,
+    "clear_coat_roughness": 0.03,
+    "orange_peel": 0.2,
+    "source": "Porsche Carmine Red (84A), a solid red like the model's Carpaint_Simple_Ruby; the hex is matched by eye to a photograph (estimate)."
+   },
+   "roles": {
+    "Carpaint_Simple_Ruby": "paint",
+    "black": "trim_gloss",
+    "black22": "trim_gloss",
+    "Glass_Clear": "glass",
+    "Rubber_Rough": "tyre",
+    "Iron_Clean_Distorted": "brake_disc",
+    "material": "brake_caliper",
+    "Rims__0": "hidden",
+    "Chrome_Clean": "chrome",
+    "Chrome_Clean2": "chrome",
+    "Chrome_Clean22": "chrome",
+    "Leather_Uph3_Red": "leather",
+    "Leather_Uph3_Black": "leather",
+    "07_-_Default3243": "interior_plastic",
+    "07_-_Default": "authored",
+    "04_-_Default": "plate",
+    "05_-_Default": "authored",
+    "07_-_Default222": "authored",
+    "07_-_Default34342": "gauge",
+    "07_-_Default34341": "gauge",
+    "07_-_Default343412": "gauge",
+    "07_-_D1": "gauge",
+    "07_-_Default3434": "gauge"
+   },
+   "badges": [
+    "porsche",
+    {"note": "crest on the front lid (the 05_-_Default part at the nose)", "material": "05_-_Default", "box": [[1.95, -0.1, 0.5], [2.15, 0.1, 0.7]]},
+    {"note": "PORSCHE lettering on the rear light bar and the tail script above it (chrome parts wholly inside)", "material": "Chrome_Clean2", "box": [[-2.35, -0.36, 0.6], [-2.05, 0.36, 0.85]]}
+   ]
+  },
   "model3": {
    "model": "data/art/traffic/model3-3a602469/scene.gltf",
    "engine_sound": {"layout": "electric", "motor": {"pole_pairs": 3, "slots": 54, "pinion_teeth": 23, "max_rpm": 17000, "gain": 1.0}, "source": "Tesla rear drive unit: a 6-pole (3 pole pairs), 54-slot interior permanent magnet motor (secondary sources); 9.04:1 reduction. The pinion's tooth count and all levels are estimates."},

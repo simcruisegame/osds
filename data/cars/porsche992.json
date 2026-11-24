@@ -169,6 +169,24 @@
  },
  "static_mu": 1.1,
  "reference_corner_load_n": 3762.1,
- "model_scene": "data/art/cars/porsche992/NOT-YET-MODELLED.gltf",
- "_model_note": "No model yet (ticket #41). model_scene is a placeholder because the loader requires a non-empty value; the Cars spec replaces it with the fitted model. Physics fields beyond the draft are left to the Handling thread (#35)."
+ "model_scene": "data/art/traffic/porsche992-318cfb72/scene.gltf",
+ "model_rig": {
+  "fit": true
+ },
+ "collision_box": [
+  1.8,
+  0.5,
+  4.4
+ ],
+ "collision_box_y": 0.62,
+ "mount_height_m": 0.578,
+ "static_length_m": 0.22,
+ "driver_eye": [
+  -0.37,
+  1.0,
+  0.05
+ ],
+ "_model_note": "Model fit (ticket #47): Sketchfab 'Porsche 911 992 Carrera S' by Nieve5677 (CC BY 4.0). collision_box is 1.80 x 0.50 x 4.40 m, inside the real 1.852 x 4.519 m body (Porsche 992 specifications; the box height and collision_box_y 0.62 are estimates, like the C8's). Hub height is the free tyre radius 0.358 m (rim 21 in, 305 mm x 0.30 sidewall, from this file) = mount_height_m 0.578 - static_length_m 0.22 (static_length_m is an estimate). driver_eye is an estimate (left-hand drive, eye 1.0 m above the road, at the axle midpoint) to be checked against cockpit frames. Physics fields beyond the draft are left to the Handling thread (#35).",
+ "drivable": true,
+ "picker_order": 4
 }

@@ -25,7 +25,7 @@ namespace
 
 	const TArray<FString>& Picker()
 	{
-		static const TArray<FString> List = { TEXT("nb2001_lowered"), TEXT("meridian_z"), TEXT("mini15s") };
+		static const TArray<FString> List = { TEXT("nb2001_lowered"), TEXT("meridian_z"), TEXT("mini15s"), TEXT("porsche992") };
 		return List;
 	}
 }
@@ -41,6 +41,7 @@ bool FOsdsCarPickerListTest::RunTest(const FString& Parameters)
 		MakeCar(TEXT("nb1999"), false, 0),
 		MakeCar(TEXT("meridian_z"), true, 2),
 		MakeCar(TEXT("nb2001_lowered"), true, 1),
+		MakeCar(TEXT("porsche992"), true, 4),
 	};
 	TArray<const FOsdsCarDefinition*> Pointers;
 	for (const FOsdsCarDefinition& Car : Cars) Pointers.Add(&Car);
@@ -64,8 +65,8 @@ bool FOsdsCarPickerDataTest::RunTest(const FString& Parameters)
 	TArray<const FOsdsCarDefinition*> Pointers;
 	for (const FOsdsCarDefinition& Car : Cars) Pointers.Add(&Car);
 
-	// Porsche and Audi join from their own fit tickets; until then the picker holds three.
-	TestEqual(TEXT("data/cars flags the Miata, Corvette and Mini"), OsdsCarPicker::DrivableIdsInPickerOrder(Pointers), Picker());
+	// The Audi joins from its own fit ticket; until then the picker holds four.
+	TestEqual(TEXT("data/cars flags the Miata, Corvette, Mini and Porsche 911"), OsdsCarPicker::DrivableIdsInPickerOrder(Pointers), Picker());
 	for (const FOsdsCarDefinition& Car : Cars)
 	{
 		if (Car.Id == TEXT("nb1999") || Car.Id == TEXT("camaro87"))

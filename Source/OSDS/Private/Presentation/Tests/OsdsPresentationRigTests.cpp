@@ -448,6 +448,38 @@ bool FOsdsPresentationRigC8Test::RunTest(const FString& Parameters)
 	return true;
 }
 
+// The 2020 Porsche 911 Carrera S (992.1): one "Rims" node holds all four wheels, so they are cut by
+// geometry; the cabin is modelled (no textures), so the wheel turns on its column and the tachometer
+// and speedometer are drawn dials. No Porsche mark may remain (crest, lettering).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPresentationRigPorsche992Test, "OSDS.Presentation.Rig.Porsche992", Flags)
+bool FOsdsPresentationRigPorsche992Test::RunTest(const FString& Parameters)
+{
+	FLoaded L;
+	if (LoadAndRig(*this, TEXT("porsche992"), L))
+	{
+		CheckRig(*this, TEXT("porsche992"), L);
+		TestFalse(TEXT("porsche992 wheels are found by geometry (one Rims node)"), L.Rigged.bNamedWheels);
+		for (int32 W = 0; W < 4; ++W)
+		{
+			TestTrue(FString::Printf(TEXT("porsche992 wheel %d has triangles"), W), L.Rigged.Wheels[W].NumTriangles() > 100);
+		}
+		TestTrue(TEXT("porsche992 front hubs ahead of the rear"), L.Rigged.HubsCm[0].X > L.Rigged.HubsCm[2].X && L.Rigged.HubsCm[1].X > L.Rigged.HubsCm[3].X);
+		TestTrue(TEXT("porsche992 has a steering wheel part"), L.Rigged.bHasSteeringWheel && L.Rigged.SteeringWheel.NumTriangles() > 0);
+		bool bRpm = false, bSpeed = false;
+		for (const FOsdsRiggedCar::FDial& Dial : L.Rigged.Dials)
+		{
+			const FString What = L.Profile.Dials.IsValidIndex(Dial.Spec) ? L.Profile.Dials[Dial.Spec].Quantity : FString();
+			bRpm |= What == TEXT("rpm");
+			bSpeed |= What == TEXT("speed_mph");
+		}
+		TestTrue(TEXT("porsche992 has an rpm readout"), bRpm);
+		TestTrue(TEXT("porsche992 has a speed readout"), bSpeed);
+		TestTrue(TEXT("porsche992 badge areas removed triangles (crest and lettering)"), L.Rigged.BadgeTrianglesRemoved > 0);
+		TestTrue(TEXT("porsche992 is Drivable"), L.Car.bDrivable && L.Car.PickerOrder == 4);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsPresentationRolesTest, "OSDS.Presentation.Roles.Guess", Flags)
 bool FOsdsPresentationRolesTest::RunTest(const FString& Parameters)
 {

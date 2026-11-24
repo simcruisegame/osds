@@ -197,6 +197,24 @@
       "branded": [
         "chevrolet"
       ]
+    },
+    {
+      "id": "porsche992-318cfb72",
+      "uid": "318cfb7279a94e8f96095ec0236f02ad",
+      "kind": "porsche992",
+      "length_m": 4.519,
+      "flip": true,
+      "scene": "data/art/traffic/porsche992-318cfb72/scene.gltf",
+      "title": "Porsche 911 992 Carrera S",
+      "author": "Nieve5677",
+      "author_url": "https://sketchfab.com/niev",
+      "licence": "CC BY 4.0",
+      "source_url": "https://sketchfab.com/3d-models/porsche-911-992-carrera-s-318cfb7279a94e8f96095ec0236f02ad",
+      "faces": 531686,
+      "fetched": "2026-11-23",
+      "branded": [
+        "porsche"
+      ]
     }
   ]
 }
