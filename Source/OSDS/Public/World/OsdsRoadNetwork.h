@@ -153,6 +153,20 @@ namespace OsdsLanes
 	 * k widths to the driver's left of RightLaneCentreM.
 	 */
 	OSDS_API void TravelLanes(const FString& Class, double HalfW, int32 Travel, const FParking& Parking, int32& OutCount, double& OutWidthM);
+	/**
+	 * The travelled lanes of one station in lateral metres from the ribbon centre (+R): the left edge of
+	 * the first lane, how many lanes lie across the whole carriageway (both directions on a two-way
+	 * road) and their width. The lane coordinate u = (L - OriginM) / WidthM runs 0..Count across the
+	 * travelled lanes; frac(u) is the position in a lane. Parking lanes lie outside 0..Count.
+	 */
+	struct FLaneFrame
+	{
+		double OriginM = 0.0;
+		double WidthM = 3.2;
+		int32 Count = 1;
+		double U(double L) const { return (L - OriginM) / WidthM; }
+	};
+	OSDS_API FLaneFrame LaneFrame(const FString& Class, double HalfW, int32 Travel, const FParking& Parking);
 }
 
 /** Cross-section geometry beyond the paved edge (metres). */

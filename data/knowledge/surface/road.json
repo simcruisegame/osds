@@ -1,0 +1,34 @@
+{
+  "table": "road",
+  "adr": "docs/adr/0006-detail-in-shading-not-geometry.md",
+  "note": "First Surface knowledge table. Rows are rules for the road surface; later tickets add rows (kerb, sidewalk, ground). Every number names its source or is marked (estimate).",
+  "class_wear": {
+    "value": { "motorway": 1.0, "trunk": 1.0, "primary": 0.95, "secondary": 0.8, "tertiary": 0.65, "residential": 0.45, "unclassified": 0.45, "service": 0.3, "default": 0.5 },
+    "source": "(estimate) rank of traffic volume by OSM highway class; wear scales the wheel-path and oil-strip strength"
+  },
+  "wheel_path": {
+    "centre_from_lane_centre_m": 0.75,
+    "half_width_m": 0.34,
+    "source": "(estimate) US passenger-car track width is 1.5 to 1.65 m, so each wheel path centres about 0.75 to 0.8 m from the lane centre; FHWA pavement-distress surveys place the wheel paths in the same two bands"
+  },
+  "oil_strip": {
+    "half_width_m": 0.16,
+    "source": "(estimate) drip band between the wheel paths of a lane, about the width of an engine bay's oil pan"
+  },
+  "age": {
+    "range": [0.15, 0.95],
+    "albedo_multiplier_new": 0.62,
+    "albedo_multiplier_old": 1.45,
+    "source": "Pomerantz et al., Lawrence Berkeley National Laboratory, 'Paving Materials for Heat Island Mitigation' (2000): new asphalt solar reflectance about 0.05, oxidised and worn about 0.10 to 0.15; the multipliers scale the 0.085 base tint to that span",
+    "per_tile": "age = range[0] + (range[1] - range[0]) * hash(TileSeed): roads are resurfaced on a 10 to 20 year cycle (estimate), so neighbouring tiles differ"
+  },
+  "dry_climate": {
+    "bleach": 0.18,
+    "source": "(estimate) strong sun and little rain oxidise binder faster, so dry-climate roads (GrassDry near 1) read lighter and greyer"
+  },
+  "pool": {
+    "textures": ["data/art/ground/asphalt.jpg", "data/art/ground/road-asphalt_01.jpg", "data/art/ground/road-asphalt_03.jpg", "data/art/ground/road-asphalt_05.jpg", "data/art/ground/road-asphalt_06.jpg"],
+    "stretch_m": 96,
+    "source": "Poly Haven, CC0 (credited in CREDITS.md); a stretch picks one member, an orientation and a scale from its hash"
+  }
+}

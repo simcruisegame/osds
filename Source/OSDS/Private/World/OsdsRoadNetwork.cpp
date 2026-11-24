@@ -512,6 +512,26 @@ namespace OsdsLanes
 		OutWidthM = FMath::Max(0.5, FMath::Min(Lane, (Travelled - 0.8) / OutCount));
 	}
 
+	FLaneFrame LaneFrame(const FString& Class, double HalfW, int32 Travel, const FParking& Park)
+	{
+		FLaneFrame Out;
+		int32 PerWay = 1;
+		TravelLanes(Class, HalfW, Travel, Park, PerWay, Out.WidthM);
+		if (Travel == 0)
+		{
+			// Lanes run outward from the centre line on each half, inside any parking lane.
+			Out.Count = 2 * PerWay;
+			Out.OriginM = -PerWay * Out.WidthM;
+		}
+		else
+		{
+			// Ribbon frame: parking on the -R side pushes the travelled lanes toward +R, whichever way they run.
+			Out.Count = PerWay;
+			Out.OriginM = 0.5 * (Park.Left - Park.Right) - 0.5 * PerWay * Out.WidthM;
+		}
+		return Out;
+	}
+
 	double RightLaneCentreM(const FString& Class, double HalfW, int32 Travel, const FParking& Park)
 	{
 		const double Lane = LaneWidthM(Class);

@@ -116,6 +116,7 @@ The car physics are calibrated against published road tests (Car and Driver, Mot
 | Asset | Maker | Licence |
 |---|---|---|
 | Asphalt Floor, Grass Ground, Sandy Gravel 02 (Dario Barresi), Jølcham Oak Bark 01, Pine Tree 01 | [Poly Haven](https://polyhaven.com/) | [CC0](https://polyhaven.com/license) |
+| Road texture pool: Asphalt 01 (Dario Barresi, Charlotte Baglioni), Asphalt 03 (Dario Barresi, Charlotte Baglioni), Asphalt 05 (Amal Kumar), Asphalt 06 (Jan Martens); 1K diffuse maps in `data/art/ground/road-asphalt_*.jpg` | [Poly Haven](https://polyhaven.com/) | [CC0](https://polyhaven.com/license) |
 | Sky: Kloofendal 48d Partly Cloudy, Kloofendal 43d Clear (Greg Zaal) | [Poly Haven](https://polyhaven.com/) | CC0 |
 | Street oak mesh | [Innerscene](https://www.innerscene.com/tools/library/3d-parts/oak-street-tree-detailed-leaves-a273fef9) | CC0 |
 | Building facades | ["Free Urban Textures"](https://opengameart.org/content/free-urban-textures-buildings-apartments-shop-fronts) by Scouser, OpenGameArt | CC0 |

@@ -8,6 +8,7 @@
 #include "Presentation/OsdsPresentationProfile.h"
 #include "Presentation/OsdsLowBeamPattern.h"
 #include "World/OsdsRoadNetwork.h"
+#include "World/OsdsSurfaceKnowledge.h"
 #include "World/OsdsTileDetail.h"
 
 namespace
@@ -30,6 +31,62 @@ bool FOsdsLowBeamPatternTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("under 1 % high above the road"), Relative(5.0, 0.0) < 0.01 && Relative(5.0, 10.0) < 0.01);
 	// The foreground is dimmer than the throw, so the near road does not dazzle the driver.
 	TestTrue(TEXT("foreground dimmer than the hot spot"), Relative(-15.0, 0.0) < 0.5 * Relative(-1.4, 2.5));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsLaneFrameTest, "OSDS.World.LaneFrame", WorldDetailTestFlags)
+bool FOsdsLaneFrameTest::RunTest(const FString& Parameters)
+{
+	using namespace OsdsLanes;
+	// Ocean Drive: one 3.2 m lane between two parking lanes, centred: the lane spans u 0..1 around L = 0.
+	const FParking Ocean = Parking(TEXT("tertiary"), 5.0, 1, true, true);
+	const FLaneFrame O = LaneFrame(TEXT("tertiary"), 5.0, 1, Ocean);
+	TestEqual(TEXT("one lane"), O.Count, 1);
+	TestEqual(TEXT("lane width"), O.WidthM, 3.2, 1e-9);
+	TestEqual(TEXT("lane centre at u 0.5"), O.U(0.0), 0.5, 1e-9);
+	TestTrue(TEXT("parking is outside 0..Count"), O.U(-4.0) < 0.0 && O.U(4.0) > static_cast<double>(O.Count));
+	// A two-way residential street, 6.4 m wide, no parking: one lane each way, the centre line at u = 1.
+	const FLaneFrame R = LaneFrame(TEXT("residential"), 3.2, 0, FParking());
+	TestEqual(TEXT("two lanes across"), R.Count, 2);
+	TestEqual(TEXT("centre line between the lanes"), R.U(0.0), 1.0, 1e-9);
+	// A two-way primary road, 21.6 m: two lanes each way, the centre line at u = 2.
+	const FLaneFrame P = LaneFrame(TEXT("primary"), 10.8, 0, FParking());
+	TestEqual(TEXT("four lanes across"), P.Count, 4);
+	TestEqual(TEXT("centre line at u 2"), P.U(0.0), 2.0, 1e-9);
+	// Parking on the -R side only moves the one-way lane toward +R, whichever way it runs.
+	FParking Left; Left.Left = 2.4;
+	for (int32 Travel : { 1, -1 })
+	{
+		const FLaneFrame F = LaneFrame(TEXT("residential"), 3.2, Travel, Left);
+		TestTrue(*FString::Printf(TEXT("lane centre sits toward +R (travel %d)"), Travel), F.U(1.2 / 1.0) > 0.0 && F.OriginM > -F.WidthM);
+		TestEqual(*FString::Printf(TEXT("its centre is (parking) 1.2 m off the carriageway centre (travel %d)"), Travel), F.U(1.2), 0.5 * F.Count, 1e-9);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOsdsRoadSurfaceTableTest, "OSDS.World.RoadSurfaceKnowledge", WorldDetailTestFlags)
+bool FOsdsRoadSurfaceTableTest::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("data/knowledge/surface/road.json loads"), OsdsSurface::TableLoaded());
+	TestTrue(TEXT("a motorway wears more than a service road"), OsdsSurface::ClassWear(TEXT("motorway")) > OsdsSurface::ClassWear(TEXT("service")));
+	float Centre = 0.f, Half = 0.f, Oil = 0.f;
+	OsdsSurface::WheelPathM(Centre, Half, Oil);
+	TestTrue(TEXT("wheel paths sit between the lane centre and the lane line, the oil strip inside them"), Centre > Oil && Centre + Half < 1.6f && Half > 0.f);
+	TestTrue(TEXT("a pool of several textures"), OsdsSurface::PoolTextures().Num() >= 4);
+	// Stable for a seed, different across seeds, biased by the climate.
+	const OsdsSurface::FRoadPlace A = OsdsSurface::RoadPlace(1234u, 0.f), A2 = OsdsSurface::RoadPlace(1234u, 0.f);
+	TestTrue(TEXT("stable per seed"), A.Age == A2.Age && A.AlbedoScale == A2.AlbedoScale && A.PoolSeed == A2.PoolSeed);
+	TSet<int32> Ages;
+	for (uint32 Seed = 1; Seed <= 64; ++Seed)
+	{
+		const OsdsSurface::FRoadPlace P = OsdsSurface::RoadPlace(Seed * 2654435761u, 0.f);
+		TestTrue(TEXT("age in range"), P.Age >= 0.f && P.Age <= 1.f && P.PoolSeed >= 0.f && P.PoolSeed < 1.f);
+		Ages.Add(FMath::FloorToInt(P.Age * 10.f));
+	}
+	TestTrue(TEXT("tiles differ in age"), Ages.Num() >= 6);
+	TestTrue(TEXT("a dry climate reads lighter"), OsdsSurface::RoadPlace(77u, 1.f).AlbedoScale > OsdsSurface::RoadPlace(77u, 0.f).AlbedoScale);
+	const OsdsSurface::FRoadPlace X = OsdsSurface::RoadPlace(3u, 0.f), Y = OsdsSurface::RoadPlace(4u, 0.f);
+	TestTrue(TEXT("older roads read lighter (oxidised binder)"), (X.Age < Y.Age) == (X.AlbedoScale < Y.AlbedoScale));
 	return true;
 }
 

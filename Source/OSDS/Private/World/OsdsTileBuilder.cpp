@@ -12,6 +12,7 @@
 #include "World/OsdsStreetFurniture.h"
 #include "World/OsdsCellContext.h"
 #include "World/OsdsRoadCheck.h"
+#include "World/OsdsSurfaceKnowledge.h"
 #include "World/OsdsScan.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -967,7 +968,28 @@ namespace OsdsTileBuilder
 			}
 			// Vertex colour R: gravel (the asphalt shader's rural-shoulder gravel) on an unpaved road.
 			const int32 FirstVertex = Asphalt.Positions.Num();
+			// The asphalt layer's texture coordinates (Surface knowledge, the road table): UV0 = (lane
+			// coordinate u across the travelled lanes, the lane count), UV1 = (wear 0..1 by road class, lane
+			// width m). Wear 0 marks a vertex with no lane information (unpaved, track, pads, corners).
+			Asphalt.UV0.SetNumZeroed(FirstVertex);
+			Asphalt.UV1.SetNumZeroed(FirstVertex);
 			EmitStrip(Asphalt, Rows, { FVector::UpVector }, FLinearColor(Ribbon.bUnpaved ? 1.f : 0.f, 0.f, 0.f, 1.f), true);
+			if (Asphalt.Positions.Num() == FirstVertex + NS * 5)
+			{
+				const float ClassWear = (Ribbon.bUnpaved || Ribbon.bTrack) ? 0.f : OsdsSurface::ClassWear(Ribbon.Class);
+				auto KerbedAt = [&Ribbon](int32 Side, int32 i) { return Ribbon.Sides[Side].Edge.IsValidIndex(i) && Ribbon.Sides[Side].Edge[i] != EOsdsRoadEdge::Rural; };
+				for (int32 i = 0; i < NS; ++i)
+				{
+					const FOsdsRibbonStation& St = Ribbon.St[i];
+					const OsdsLanes::FParking Park = OsdsLanes::Parking(Ribbon.Class, St.HalfW, St.Travel, KerbedAt(0, i), KerbedAt(1, i));
+					const OsdsLanes::FLaneFrame Frame = OsdsLanes::LaneFrame(Ribbon.Class, St.HalfW, St.Travel, Park);
+					for (int32 c = 0; c < 5; ++c)
+					{
+						Asphalt.UV0.Add(FVector2D(Frame.U(FOsdsRibbonStation::ColumnOffset(c) * St.HalfW), Frame.Count));
+						Asphalt.UV1.Add(FVector2D(ClassWear, Frame.WidthM));
+					}
+				}
+			}
 			// A race track's surface (the asphalt shader): alpha 0.5 for racing asphalt, 0.25 for a
 			// concrete track (Bristol, Dover), 1 on every road; B the rubbered-in groove across the width, darkest a little
 			// inside the middle on the racing surface, a light trace down a pit lane.
@@ -1301,6 +1323,12 @@ namespace OsdsTileBuilder
 			}
 		}
 
+		// Pads, skirts and corners carry no lane information (wear 0).
+		{
+			FOsdsMeshData& A = B.Layer(EOsdsTileLayer::Asphalt);
+			A.UV0.SetNumZeroed(A.Positions.Num());
+			A.UV1.SetNumZeroed(A.Positions.Num());
+		}
 		// ---------------------------------------------------------------- markings
 		{
 			FOsdsMeshData& Paint = B.Layer(EOsdsTileLayer::Paint);

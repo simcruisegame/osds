@@ -1,6 +1,7 @@
 // Copyright OSDS contributors. All Rights Reserved.
 
 #include "World/OsdsWorldTile.h"
+#include "World/OsdsSurfaceKnowledge.h"
 #include "Vehicle/OsdsSurfaceKind.h"
 
 #include "World/OsdsCellContext.h"
@@ -467,6 +468,24 @@ void AOsdsWorldTile::Install(const TSharedRef<FOsdsTileBuild>& InBuild, UOsdsWor
 			MID->SetVectorParameterValue(TEXT("GrainMean"), Resources->AsphaltMean);
 			MID->SetVectorParameterValue(TEXT("AsphaltMean"), Resources->AsphaltMean);
 			MID->SetScalarParameterValue(TEXT("Lights"), LightsOn);
+			// The road table (Surface knowledge): this Tile's road age, albedo, pool seed (stable per TileSeed, biased by the
+			// climate's dryness) and the texture pool.
+			{
+				const uint32 Seed = InBuild->Context.IsValid() && InBuild->Context->TileSeed != 0 ? InBuild->Context->TileSeed : HashCombine(GetTypeHash(TileId.X), GetTypeHash(TileId.Y));
+				const float Dry = InBuild->Context.IsValid() ? InBuild->Context->GrassDry : 0.f;
+				const OsdsSurface::FRoadPlace Road = OsdsSurface::RoadPlace(Seed, Dry);
+				float Centre = 0.75f, Half = 0.34f, Oil = 0.16f;
+				OsdsSurface::WheelPathM(Centre, Half, Oil);
+				MID->SetScalarParameterValue(TEXT("RoadAge"), Road.Age);
+				MID->SetScalarParameterValue(TEXT("RoadScale"), Road.AlbedoScale);
+				MID->SetScalarParameterValue(TEXT("RoadSeed"), Road.PoolSeed);
+				MID->SetVectorParameterValue(TEXT("WheelPath"), FLinearColor(Centre, Half, Oil, 0.f));
+				MID->SetVectorParameterValue(TEXT("PoolMeans"), Resources->RoadPoolMeans);
+				for (int32 k = 0; k < 4; ++k)
+				{
+					if (Resources->RoadPool.IsValidIndex(k) && Resources->RoadPool[k]) MID->SetTextureParameterValue(*FString::Printf(TEXT("Pool%d"), k + 1), Resources->RoadPool[k]);
+				}
+			}
 			// The grass field (world-detail-methods.md): on unless -OsdsNoGrassField; the dry
 			// share comes from the tile's context record (Köppen class and month), and
 			// -OsdsGrassDry=0..1 overrides it.
