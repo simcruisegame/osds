@@ -424,10 +424,10 @@ void AOsdsEnvironment::SetArtificialIlluminanceLux(double Lux)
 	ApplyExposure();
 }
 
-// Motion blur strength: 0 = off (the 3.0 default: it smeared near objects at 28 mph, #99), 1 = the 2.x look.
+// Motion blur strength: 1 = the 2.x look (MotionBlurAmount 0.15, the default; the Owner asked for it back), 0 = off (it smeared near objects at 28 mph, #99).
 static TAutoConsoleVariable<float> CVarMotionBlurScale(
-	TEXT("osds.MotionBlur.Scale"), 0.0f,
-	TEXT("Motion blur strength, 0 (off, default) to 2; 1 is the 2.x look. Options #68 exposes it."),
+	TEXT("osds.MotionBlur.Scale"), 1.0f,
+	TEXT("Motion blur strength, 0 to 2: 1 = the 2.x look, the default; 0 = off; Options #68 will expose it."),
 	ECVF_Default);
 
 void AOsdsEnvironment::ApplyExposure()

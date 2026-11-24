@@ -4,6 +4,8 @@ The short version of each release, newest first. Every release has full notes in
 
 ## 3.0 (in progress)
 
+**Motion blur is back:** the gentle 2.x motion blur (`osds.MotionBlur.Scale` now defaults to 1; set it to 0 to turn it off). Car captures still switch it off on purpose.
+
 **Bridges hold across tile seams:** a deck whose road row lost its bridge flag at a tile border (Mackinac) now continues at deck height instead of dropping to the water.
 
 **Race tracks** (the race-tracks team):
